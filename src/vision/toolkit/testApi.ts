@@ -97,7 +97,7 @@ export function createToolkitTestApi(ctx: Pick<GameContext, 'camera'>, vision: V
       const common = { level: o.level, opacity: o.opacity, facing: o.facing };
       let entry: Entry;
       let halfW = size / 2;
-      let halfH = size / 2;
+      const halfH = size / 2;
       const place = (obj: THREE.Object3D, l: VisionLayer): THREE.Object3D => {
         obj.position.copy(pos);
         obj.quaternion.copy(cam.quaternion);
@@ -126,7 +126,7 @@ export function createToolkitTestApi(ctx: Pick<GameContext, 'camera'>, vision: V
           break;
         }
         case 'glyph': {
-          const g = createGlyphSprite({ ...common, text: o.text ?? '42', height: size * 0.78 });
+          const g = createGlyphSprite({ ...common, text: o.text ?? '42', height: size * 0.78, maxChars: 16 });
           halfW = Math.max(halfW, g.width / 2);
           entry = single(g);
           break;

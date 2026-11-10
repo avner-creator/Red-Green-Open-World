@@ -271,7 +271,7 @@ export interface GlyphSpriteOptions {
   maxChars?: number;
   level?: number;
   opacity?: number;
-  /** Default 'billboard'. 'ground' lies flat facing up (reads from the -Z side). */
+  /** Default 'billboard'. 'ground' lies flat facing up, upright for a viewer on the +Z side looking towards −Z. */
   facing?: Facing;
 }
 
@@ -317,7 +317,7 @@ export function createGlyphSprite(opts: GlyphSpriteOptions = {}): GlyphSpriteBlo
     uv.fill(0);
     lay.quads.forEach((q, i) => {
       const p = i * 12;
-      // Wall/billboard: XY plane. Ground: XZ plane, text reading from -Z towards +Z... i.e. up = -Z.
+      // Wall/billboard: XY plane. Ground: XZ plane with the top of the text towards −Z.
       const put = (k: number, x: number, y: number): void => {
         if (facing === 'ground') {
           pos[p + k * 3] = x;

@@ -117,7 +117,7 @@ export function planeGeometry(width: number, height: number, facing: Facing): TH
   return g;
 }
 
-/** Billboards are drawn after other layer objects of the same depth order (cosmetic only). */
+/** Mesh for a layer: never casts or receives shadows. */
 export function layerMesh(geo: THREE.BufferGeometry, mat: THREE.Material, name: string): THREE.Mesh {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = name;
