@@ -35,8 +35,10 @@ export const AIM_JITTER = 0.25;
 export const LOB_START_Y = 0.75;
 /** A lob crosses the contestant at chest height. */
 export const LOB_CROSS_Y = 1.0;
+/** Added to a friend's carnival skill when deciding a dodge (0: their usual, beatable selves). */
+export const FRIEND_BONUS = 0;
 /** Seconds a ball keeps going after it passed (then it's gone). */
-export const FLY_ON = 0.8;
+export const FLY_ON = 0.4;
 
 export interface BallPlan {
   /** 0 = player, 1/2 = friends. */

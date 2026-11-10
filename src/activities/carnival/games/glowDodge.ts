@@ -19,6 +19,7 @@ import {
   BALL_R,
   DURATION,
   FLY_ON,
+  FRIEND_BONUS,
   FRIEND_HALF,
   FRIEND_LANE_X,
   FRIEND_Z,
@@ -42,8 +43,6 @@ import {
 import type { BallKind, BallPlan, Hop, P3, Threat } from './dodgeLogic';
 
 const CAP = 14;
-/** Friends try a bit harder than their usual carnival skill (still beatable). */
-const FRIEND_BONUS = 0.1;
 /** Friends react this long before a lob arrives. */
 const FRIEND_REACT = 0.5;
 /** Tunnel mouths at the back wall (one per lane). */
@@ -147,7 +146,7 @@ export function createGlowDodge(env: GameEnv): BoothGame {
         ballAt(b.plan, b.s, p);
         o.position.set(p.x, p.y, p.z);
         const after = b.s - b.plan.dur;
-        if (after > FLY_ON - 0.3) scale = r * Math.max(0.01, (FLY_ON - after) / 0.3);
+        if (after > FLY_ON - 0.25) scale = r * Math.max(0.01, (FLY_ON - after) / 0.25);
         // Grow out of the tunnel mouth.
         if (b.s < 0.15) scale *= Math.max(0.05, b.s / 0.15);
       }
@@ -202,7 +201,8 @@ export function createGlowDodge(env: GameEnv): BoothGame {
   // ── Attract mode (near the booth, no round): an occasional roller in a random lane.
   const idleRng = makeRng(23);
   let idleWait = 1.5;
-  const idleLane = { center: 0, half: PLAYER_HALF, z: PLAYER_Z + 1.2 };
+  // Attract balls stop at the tent mouth (they never roll out at the camera).
+  const idleLane = { center: 0, half: PLAYER_HALF, z: -0.2 };
 
   // ── Round state.
   let lanes: Lane[] = [];
@@ -221,7 +221,7 @@ export function createGlowDodge(env: GameEnv): BoothGame {
     id: 'glowDodge',
     duration: DURATION,
     thresholds: [10, 15],
-    camera: { distance: 3.6, height: 1.0, fov: 62, lookAhead: 0 },
+    camera: { distance: 3.9, height: 2.3, fov: 64, lookAhead: 0 },
     aimLimits: null,
     how: ['dodge', 'jump'],
     idle(dt) {

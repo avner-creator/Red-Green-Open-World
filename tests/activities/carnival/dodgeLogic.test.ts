@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BALL_R,
   DURATION,
+  FRIEND_BONUS,
   GRACE,
   PLAYER_HALF,
   PLAYER_Z,
@@ -166,9 +167,9 @@ describe('glow dodge round', () => {
     for (const [i, skill] of RIVAL_SKILLS.entries()) {
       const brain = new RivalBrain(skill, makeRng(40 + i));
       let ok = 0;
-      for (let n = 0; n < 1000; n++) if (brain.roll(0.1)) ok++;
+      for (let n = 0; n < 1000; n++) if (brain.roll(FRIEND_BONUS)) ok++;
       // ~17 balls a round → a friend scores well under the 3-star line.
-      expect((ok / 1000) * 17).toBeLessThan(12);
+      expect((ok / 1000) * 17).toBeLessThan(10.5);
     }
   });
 });
