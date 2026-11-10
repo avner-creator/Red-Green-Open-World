@@ -36,7 +36,7 @@ function getRenderer(): THREE.WebGLRenderer | null {
   try {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = SIZE;
-    const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+    const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true, powerPreference: 'low-power' });
     r.setPixelRatio(1);
     r.setSize(SIZE, SIZE, false);
     r.setClearColor(0x000000, 0);
@@ -282,10 +282,10 @@ export function previewFor(item: ShopItem): string | null {
 }
 
 /** Give every gear item that has a picture a `preview()` (emotes use the UI icon). */
-export function withPreviews(items: readonly ShopItem[]): ShopItem[] {
+export function withPreviews(items: readonly ShopItem[], enabled: () => boolean = () => true): ShopItem[] {
   const out = items.map((it): ShopItem => {
     if (it.slot === 'emote') return it;
-    return { ...it, preview: () => previewFor(it) };
+    return { ...it, preview: () => (enabled() ? previewFor(it) : null) };
   });
   total = out.filter((i) => i.preview).length;
   return out;

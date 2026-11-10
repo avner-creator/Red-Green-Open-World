@@ -28,6 +28,8 @@ export interface GearTestApi {
   emote(): string | null;
   /** Play an emote now (equipped one when omitted); false if it cannot start. */
   playEmote(itemId?: string): boolean;
+  /** Switch real shop previews on or off (off by default in test mode: `preview()` then returns null). */
+  enablePreviews(on: boolean): void;
 }
 
 declare global {
@@ -37,7 +39,9 @@ declare global {
 }
 
 export function createGear(ctx: GameContext): GameSystem {
-  ctx.economy.registerItems(withPreviews(GEAR_CATALOG));
+  // Real previews cost seconds on a software renderer: in test mode they are opt-in.
+  let previewsOn = !ctx.testMode;
+  ctx.economy.registerItems(withPreviews(GEAR_CATALOG, () => previewsOn));
 
   const applier = createApplier(ctx);
   const trails = createTrails(ctx);
@@ -61,6 +65,9 @@ export function createGear(ctx: GameContext): GameSystem {
       ribbonSamples: () => trails.ribbonSamples(),
       emote: () => emotes.playing(),
       playEmote: (id) => emotes.play(id),
+      enablePreviews: (on) => {
+        previewsOn = on;
+      },
     };
   }
 

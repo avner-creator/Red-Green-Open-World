@@ -221,6 +221,7 @@ test('screenshots: gear on the robot and every trail (full / R / G)', async () =
 
 test('shop previews: hats give distinct PNG pictures; contact sheet of all of them (full / R / G)', async () => {
   const r = await page.evaluate(async () => {
+    window.__rgGear!.enablePreviews(true);
     const eco = window.__rg!.ctx.economy;
     const t0 = performance.now();
     const a = eco.item('hat-propeller')!.preview!();
@@ -256,6 +257,7 @@ test('shop previews: hats give distinct PNG pictures; contact sheet of all of th
   expect(r.same).toBe(true);
   expect(r.nulls).toBe(0);
   expect(r.n).toBeGreaterThanOrEqual(22);
+  await page.evaluate(() => window.__rgGear!.enablePreviews(false));
   console.log(`preview: first ${r.first.toFixed(0)} ms, then ${r.rest.toFixed(0)} ms each (${r.n} items)`);
   const buf = Buffer.from(r.sheet.slice(r.sheet.indexOf(',') + 1), 'base64');
   const png = PNG.sync.read(buf);
