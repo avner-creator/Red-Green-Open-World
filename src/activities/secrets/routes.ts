@@ -96,16 +96,18 @@ function rooftops(h: HeightFn): RouteDef {
   return { id: 'rooftops', stones: [...climbA, ...climbB, ...cross], pedestal: ped, start: { x: back + 1.8, z: flat.z + 7.5 }, walks: [roof] };
 }
 
-/** A spiral beside the giant trampoline (on its road side) to a floating pedestal 12 m up. */
+/** A spiral beside the giant trampoline to a floating pedestal 12 m up. */
 function trampoline(h: HeightFn): RouteDef {
   const t = ANCHORS.trampoline;
-  const cx = t.x - 16;
-  const cz = t.z - 5;
+  // A clear lawn south of the mat (no trees or fences within ~7 m; checked by the e2e overlap test).
+  const cx = t.x - 1;
+  const cz = t.z + 17;
   const g = h(cx, cz);
   const R = 3.4;
-  const stones = helixStones(cx, cz, g + 0.55, g + 11.4, R, { startAngle: Math.PI * 0.5, dir: 1 });
+  // Start on the mat side, away from the park paths, so the low stones are off any line a car takes.
+  const stones = helixStones(cx, cz, g + 0.55, g + 11.4, R, { startAngle: -Math.PI * 0.5, dir: 1 });
   const ped: Pedestal = { x: cx, y: g + 12.1, z: cz, r: PED_R, floating: true, post: 0 };
-  return { id: 'trampoline', stones, pedestal: ped, start: { x: cx, z: cz + R + 1.5 }, walks: [] };
+  return { id: 'trampoline', stones, pedestal: ped, start: { x: cx, z: cz - R - 1.5 }, walks: [] };
 }
 
 /** From the beach path's end, out over the bay to the floating lake platform. */
@@ -142,13 +144,13 @@ function lighthouse(h: HeightFn): RouteDef {
   const gallery = y + 1.1 + 13.2;
   const r0 = 4.9;
   const r1 = 3.3;
-  // Start on the east side (where the north path arrives), climb counter-clockwise seen from above.
+  // Start on the south side (clear of where the north path ends, east), climbing round via the east.
   const yTop = gallery + 4.75;
   const pinchFrom = (gallery + 1.6 - (y + 0.55)) / (yTop - (y + 0.55));
   const radius = (t: number): number => (t <= pinchFrom ? r0 : r0 + (r1 - r0) * Math.min(1, (t - pinchFrom) / (1 - pinchFrom)));
-  const stones = helixStones(a.x, a.z, y + 0.55, yTop, radius, { startAngle: 0.15, dir: -1 });
+  const stones = helixStones(a.x, a.z, y + 0.55, yTop, radius, { startAngle: Math.PI / 2, dir: -1 });
   const ped: Pedestal = { x: a.x, y: gallery + 5.35, z: a.z, r: PED_R, floating: true, post: 0 };
-  return { id: 'lighthouse', stones, pedestal: ped, start: { x: a.x + r0 + 2.2, z: a.z + 0.7 }, walks: [] };
+  return { id: 'lighthouse', stones, pedestal: ped, start: { x: a.x - 0.8, z: a.z + r0 + 2.2 }, walks: [] };
 }
 
 export function buildRoutes(h: HeightFn): RouteDef[] {

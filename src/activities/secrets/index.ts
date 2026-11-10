@@ -452,13 +452,15 @@ export function createSecrets(ctx: GameContext): Secrets {
       const levelOk = Math.abs(pp.y - (def.y + 0.0)) < 1.6;
       d.selected = playing && !d.lock.opened && levelOk ? buttonAt(l.x, l.z) : -1;
 
-      // Door slide and wobble.
+      // Door wobble (wrong press) and opening.
       if (d.openT > 0 && d.openT < 1) d.openT = Math.min(1, d.openT + dt / 1.5);
       if (d.wobble > 0) d.wobble = Math.max(0, d.wobble - dt * 2.4);
       const w = d.wobble * d.wobble;
       const wob = Math.sin(time * 38) * 0.06 * w;
-      d.model.door.position.set(-VAULT.slide * easeInOut(d.openT) + wob, d.openT > 0 ? Math.sin(Math.min(1, d.openT) * Math.PI) * 0.05 : 0, 0);
-      d.buttons.door.position.x = d.model.door.position.x;
+      // Opening: a little shudder, then the door sinks into the floor like a portcullis.
+      const shudder = d.openT > 0 && d.openT < 0.2 ? Math.sin(time * 60) * 0.03 : 0;
+      d.model.door.position.set(wob + shudder, -VAULT.sink * easeInOut(Math.max(0, (d.openT - 0.12) / 0.88)), 0);
+      d.buttons.door.position.set(d.model.door.position.x, VAULT.buttonY + d.model.door.position.y, 0);
       d.buttons.door.visible = d.openT < 0.98;
       d.buttons.tiles.visible = !d.lock.opened;
       d.sign.root.visible = !d.lock.opened;

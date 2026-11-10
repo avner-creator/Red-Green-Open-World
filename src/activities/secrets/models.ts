@@ -176,7 +176,8 @@ export function buildPedestal(r: number, floating: boolean, post: number): Pedes
   }
   let ring: THREE.Mesh | null = null;
   if (floating) {
-    add(new THREE.ConeGeometry(r * 0.8, 1.1, 24).rotateX(Math.PI).translate(0, -0.48 - 0.55, 0), stone);
+    add(new THREE.ConeGeometry(r * 0.8, 1.1, 24).rotateX(Math.PI).translate(0, -0.48 - 0.55, 0), cream);
+    add(new THREE.TorusGeometry(r * 0.62, 0.05, 6, 40).rotateX(Math.PI / 2).translate(0, -0.85, 0), gold, false);
     const glow = new THREE.MeshBasicMaterial({ color: 0xfff1b0, transparent: true, opacity: 0.85, toneMapped: false });
     mats.push(glow);
     ring = add(new THREE.TorusGeometry(r * 0.88, 0.06, 6, 48).rotateX(Math.PI / 2).translate(0, -0.5, 0), glow, false);
@@ -222,8 +223,8 @@ export const VAULT = {
   outerHalfW: 6.4,
   outerTop: 7.2,
   outerBack: -8.6,
-  /** Sideways slide when it opens. */
-  slide: 4.7,
+  /** How far the door sinks into the floor when it opens. */
+  sink: 3.9,
 } as const;
 
 export interface VaultModel {
