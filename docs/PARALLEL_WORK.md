@@ -389,3 +389,64 @@ is hurt. Unit tests for scoring/AI maths; one Playwright e2e per attraction (`?t
 > (bright objects need dark outlines against the sky). Both rides keep gem pickup working at
 > speed (segment tests), cost a ticket after the first free flight per session, and hand the
 > player back on the ground in walk mode. Batch each vehicle to ≤ 8 draws with a shadow proxy.
+
+## Stream P — red-green depth pass (branch `agent/glasses-depth`, orchestrated: Fable 5.2 + Opus/Sonnet builders)
+
+> You are the orchestrator for Stream P of Red-Green Open World; other sessions are building the
+> rest at the same time. Read `docs/DIRECTIVES.md` (you write no code; builders are Opus/Sonnet
+> subagents, never Fable, never fork; the red-green system must be complete and excellent; no
+> health or medical wording anywhere), `CLAUDE.md` (the red-green rule), `docs/HANDOFF.md`,
+> `docs/BUILD_PLAN.md`, and `docs/GAME_DESIGN.md` — your scope is the whole "Red-green depth
+> pass" section: more kinds of play that make the player want to use the weaker eye. Also read
+> `src/vision/` (compositor, `VisionLayer.WeakOnly`/`StrongOnly`, `createGlowMaterial`,
+> `createLayerMaterial`, calibration), `tests/e2e/vision.spec.ts` (canvas-readback channel
+> tests), and how gems, chests and (if merged) secrets use the layers.
+>
+> **Phase 1 — start now, new files only** (`src/vision/` additions by `dichoptic-engineer`;
+> a new folder `src/activities/glasses/` by `activities-designer` or an Opus builder; UI in new
+> files under `src/ui/` by `ui-designer`):
+> 1. Vision toolkit: reusable, tested building blocks on the layers — animated weak/strong
+>    rings and reticles, world-space text/number sprites for a layer, half-symbol pairs
+>    (one half per eye that complete each other), red-green dot pictures (a different dot
+>    pattern per channel with a hidden shape that appears only with both eyes; generator +
+>    material), tier presets (size / brightness / speed), a per-layer fade so objects can get
+>    fainter smoothly, and a debug overlay for tests. Layer objects must stay depth-tested
+>    against the world, never leak into the other channel or blue, and cost little.
+> 2. Standalone mini-mechanics in `src/activities/glasses/`, placed with
+>    `ctx.world.heightAt`/`isLand` near the plaza and existing anchors (no anchor changes):
+>    **Glow-flies** (catch drifting weak-eye fireflies by running through them; faster and
+>    fainter ones worth more), **Pip's lost toys** (follow a weak-eye paw-print trail to a
+>    both-eye toy; works without the buddy code), **Odd one out pedestals** (three weak-eye
+>    shapes, press the button under the different one; detail gets finer after hits and coarser
+>    after misses within a session), **Line-up targets** (a weak-eye reticle that follows the
+>    camera aim; hold it on a strong-eye target for a second to pop it), **Half-symbol gates**
+>    (two halves, one per eye, show which of three arches to run through), **Dot-picture signs**
+>    (the hidden shape is the answer to a nearby both-eye three-button pedestal).
+>    Each pays gems through `ctx.profile.earn` if the economy is on `main` (code defensively),
+>    has a wordless pictogram board, and never reveals a weak-eye position to the strong eye
+>    through the main scene, the HUD or a positional sound.
+> 3. Adaptive challenge (grown-up setting, off by default, behind the existing gate; labels in
+>    plain game words such as "Auto challenge"): a gentle per-session staircase that nudges
+>    weak-eye object brightness/size down and the other eye's dimmer up after successes and
+>    back after misses, clamped to the calibrated limits in settings, never changing the saved
+>    calibration itself. Plus a grown-up-only end-of-session summary screen (counts by kind and
+>    tier, hit rates, in neutral words; no advice, no claims). Additive settings fields only.
+>
+> **Phase 2 — after `main` contains the economy and the merged attractions** (rebase first;
+> coordinate through `docs/streams/glasses-depth.md`; additive changes, smallest diffs in other
+> owners' folders): weave the toolkit into what exists — weak-eye perfect-bounce ring on the
+> trampoline, parachute-open ring and gem-through-strong-hoop bonus in the skydive, boost-pad
+> timing on the buggy/race if present, weak-eye skill-ready ring and combo number over the hero,
+> a "real gem among fakes" variant at a few gem spots, dot-picture prize codes at the Gear Shack.
+> Each as a small, optional, clearly rewarded layer on top of the existing fun.
+>
+> Quality bar: every mechanic is obvious to an 8-year-old from its pictogram board, fun without
+> reading, and impossible to do with the weak eye shut — add an automated proof for each: with
+> the weak layer hidden (`setLayerVisible`) the strong-channel frame carries no information that
+> identifies the answer (compare frames across different answers), and the canvas-readback
+> channel test holds for all 4 lens/eye combinations. Performance: each mechanic ≤ 6 draw calls,
+> idle when the player is far. Work on branch `agent/glasses-depth` (subagent worktrees merged
+> into it), change `src/types.ts` additively only, rebase on `origin/main` at least hourly, push
+> often (plain push), keep `npm run verify` green, write `docs/streams/glasses-depth.md` (what
+> was built, interface additions, how to test, what phase 2 touched), and tell the project owner
+> when phase 1 and then phase 2 are ready to merge.
