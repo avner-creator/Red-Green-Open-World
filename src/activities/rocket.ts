@@ -11,7 +11,7 @@ import { arcPoint, solveLaunch } from './ballistics';
 import { launchStars } from './bounceLogic';
 import { NET, ROCKET } from './constants';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
-import type { Confetti } from './chests/confetti';
+import type { ThrillConfetti } from './thrillConfetti';
 import { buildNet, buildRocketPad } from './rocketModels';
 import type { NetModel, RocketPadModel } from './rocketModels';
 import { findNetSite } from './rocketSite';
@@ -51,7 +51,7 @@ interface PadState {
   collider: ReturnType<GameContext['physics']['addStaticCylinder']>;
 }
 
-export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Confetti): RocketPads {
+export function createRocketPads(ctx: GameContext, flight: Flight, confetti: ThrillConfetti): RocketPads {
   const world = ctx.world;
   const anchor = world.anchors.launchPads;
   const ax = anchor.position.x;
@@ -260,7 +260,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Con
       const on = i === active && flameT > 0.05;
       for (const fl of p.model.flames) {
         fl.visible = on;
-        if (on) fl.scale.setScalar(0.6 + flameT * 1.4 + Math.sin(p.arrow * 40) * 0.12);
+        if (on) fl.scale.setScalar(0.4 + flameT * 0.9 + Math.sin(p.arrow * 40) * 0.08);
       }
     });
 

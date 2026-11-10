@@ -4,7 +4,7 @@
  */
 import type { GameContext } from '../types';
 import type * as THREE from 'three';
-import { Confetti } from './chests/confetti';
+import { ThrillConfetti } from './thrillConfetti';
 import { getFlight } from './flight';
 import { createBouncePads } from './pads';
 import { createRocketPads, setLaunchGate } from './rocket';
@@ -39,7 +39,7 @@ export interface Thrills {
 export function createThrills(ctx: GameContext): Thrills {
   thrillSpots.length = 0;
   const flight = getFlight(ctx);
-  const confetti = new Confetti();
+  const confetti = new ThrillConfetti();
   ctx.scene.add(confetti.group);
   const trampoline = createTrampoline(ctx, flight, confetti);
   const pads = createBouncePads(ctx, flight, trampoline);

@@ -354,14 +354,6 @@ test('screenshots: trampoline peak, rocket pad, landing net', async () => {
     rg.step(1 / 60, 1, true);
   });
   await save('rocket-flight');
-  await page.evaluate(() => {
-    const rg = window.__rg!;
-    for (let i = 0; i < 60 * 8; i++) {
-      rg.step(1 / 60, 1, false);
-      if (rg.ctx.player.mode === 'walk') break;
-    }
-    rg.step(1 / 60, 10, false);
-  });
   // The moment of landing (confetti) in the real camera view.
   await page.evaluate(() => {
     const rg = window.__rg!;

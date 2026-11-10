@@ -149,21 +149,21 @@ export function buildRocketPad(): RocketPadModel {
 
   // Thruster cones at the back (glowing orange, bright in both channels) with flame sprites.
   const flames: THREE.Sprite[] = [];
-  const coneGeo = keep(new THREE.CylinderGeometry(0.42, 0.95, 1.7, 20));
+  const coneGeo = keep(new THREE.CylinderGeometry(0.3, 0.7, 1.2, 20));
   const coneMat = std(0xff8a1f, { emissive: 0xff6a10, emissiveIntensity: 0.9, roughness: 0.4 });
-  const nozzleGeo = keep(new THREE.TorusGeometry(0.44, 0.1, 8, 20).rotateX(Math.PI / 2));
+  const nozzleGeo = keep(new THREE.TorusGeometry(0.31, 0.08, 8, 20).rotateX(Math.PI / 2));
   const nozzleMat = std(DARK, { metalness: 0.4 });
   const flameMat = keep(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
   for (const s of [-1, 1]) {
     const cone = new THREE.Mesh(coneGeo, coneMat);
-    cone.position.set(s * 1.05, 0.95, -ROCKET.padRadius - 0.95);
-    cone.rotation.x = -0.35;
+    cone.position.set(s * 0.95, 0.7, -ROCKET.padRadius - 0.6);
+    cone.rotation.x = -0.5;
     cone.castShadow = true;
     const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
-    nozzle.position.set(0, 0.85, 0);
+    nozzle.position.set(0, 0.6, 0);
     cone.add(nozzle);
     const flame = new THREE.Sprite(flameMat.clone());
-    flame.position.set(0, 1.5, 0);
+    flame.position.set(0, 1.05, 0);
     flame.scale.setScalar(0.1);
     flame.visible = false;
     cone.add(flame);
@@ -261,18 +261,25 @@ export function buildNet(): NetModel {
   group.add(dome);
 
   // Tall pole with a striped flag so the net is visible across the park.
-  const pole = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.1, 0.14, 13, 10)), keep(new THREE.MeshStandardMaterial({ color: BRIGHT, roughness: 0.5 })));
-  pole.position.set(R + 0.9, 6.5, 0);
-  pole.castShadow = true;
-  const ball = new THREE.Mesh(keep(new THREE.SphereGeometry(0.32, 14, 10)), keep(new THREE.MeshStandardMaterial({ color: YELLOW, roughness: 0.4 })));
-  ball.position.set(R + 0.9, 13.1, 0);
+  const pole = new THREE.Group();
+  const poleGeo = keep(new THREE.CylinderGeometry(0.2, 0.24, 1.45, 12));
+  const poleA = keep(new THREE.MeshStandardMaterial({ color: BRIGHT, roughness: 0.5 }));
+  const poleB = keep(new THREE.MeshStandardMaterial({ color: NAVY, roughness: 0.5 }));
+  for (let i = 0; i < 9; i++) {
+    const seg = new THREE.Mesh(poleGeo, i % 2 === 0 ? poleA : poleB);
+    seg.position.set(R + 0.9, 0.72 + i * 1.45, 0);
+    seg.castShadow = true;
+    pole.add(seg);
+  }
+  const ball = new THREE.Mesh(keep(new THREE.SphereGeometry(0.5, 14, 10)), keep(new THREE.MeshStandardMaterial({ color: YELLOW, roughness: 0.4 })));
+  ball.position.set(R + 0.9, 13.3, 0);
   const flag = new THREE.Group();
-  flag.position.set(R + 0.9, 12.2, 0);
-  const flagGeo = keep(new THREE.PlaneGeometry(3.4, 1.6, 6, 1));
+  flag.position.set(R + 0.9, 11.9, 0);
+  const flagGeo = keep(new THREE.PlaneGeometry(4.6, 2.2, 6, 1));
   const f1 = new THREE.Mesh(flagGeo, keep(new THREE.MeshStandardMaterial({ color: YELLOW, side: THREE.DoubleSide, roughness: 0.6 })));
-  f1.position.set(1.7, 0, 0);
-  const f2 = new THREE.Mesh(keep(new THREE.PlaneGeometry(1.1, 1.6)), keep(new THREE.MeshStandardMaterial({ color: NAVY, side: THREE.DoubleSide, roughness: 0.6 })));
-  f2.position.set(0.9, 0, 0.01);
+  f1.position.set(2.3, 0, 0);
+  const f2 = new THREE.Mesh(keep(new THREE.PlaneGeometry(1.5, 2.2)), keep(new THREE.MeshStandardMaterial({ color: NAVY, side: THREE.DoubleSide, roughness: 0.6 })));
+  f2.position.set(1.0, 0, 0.01);
   flag.add(f1, f2);
   group.add(pole, ball, flag);
 

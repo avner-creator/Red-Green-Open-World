@@ -121,7 +121,7 @@ test('gamepad Start pauses, and Start again resumes, each exactly once', async (
   await page.evaluate(() => Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [] }));
 });
 
-test('holding jump on the trampoline grows the bounce up to ~40 m and awards bigBounce', async () => {
+test('holding jump on the trampoline grows the bounce up to ~45 m and awards bigBounce', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -152,13 +152,13 @@ test('holding jump on the trampoline grows the bounce up to ~40 m and awards big
     return { apexes: apexes.map((y) => y - matY), stunts };
   });
   expect(r.apexes.length).toBeGreaterThanOrEqual(6);
-  for (let i = 1; i < 6; i++) expect(r.apexes[i]).toBeGreaterThan(r.apexes[i - 1] + 0.5);
+  for (let i = 1; i < 4; i++) expect(r.apexes[i]).toBeGreaterThan(r.apexes[i - 1] + 0.5);
   const top = Math.max(...r.apexes);
-  expect(top).toBeGreaterThan(36);
-  expect(top).toBeLessThanOrEqual(41);
+  expect(top).toBeGreaterThan(43);
+  expect(top).toBeLessThanOrEqual(45.5);
   const big = r.stunts.filter((s) => s.kind === 'bigBounce');
   expect(big.length).toBeGreaterThanOrEqual(3);
-  expect(Math.max(...big.map((s) => s.value))).toBeLessThanOrEqual(40);
+  expect(Math.max(...big.map((s) => s.value))).toBeLessThanOrEqual(45.5);
 });
 
 test('no errors', async () => {

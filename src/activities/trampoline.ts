@@ -10,7 +10,7 @@ import type { GameContext } from '../types';
 import { BOUNCE, MAT } from './constants';
 import { ThresholdAwards, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
-import type { Confetti } from './chests/confetti';
+import type { ThrillConfetti } from './thrillConfetti';
 import { thrillSpots } from './thrillSpots';
 
 const RINGS = 24;
@@ -34,7 +34,7 @@ export interface Trampoline {
   dispose(): void;
 }
 
-export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Confetti): Trampoline {
+export function createTrampoline(ctx: GameContext, flight: Flight, confetti: ThrillConfetti): Trampoline {
   const anchor = ctx.world.anchors.trampoline;
   const cx = anchor.position.x;
   const cz = anchor.position.z;
@@ -294,7 +294,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Con
     camera() {
       const f = Math.min(1, Math.max(0, (ctx.player.position.y - matTopY) / BOUNCE.maxHeight));
       const e = f * (2 - f); // ease-out: the pull-back is already obvious at 15 m
-      return { distance: CAMERA.distance + e * 26, height: CAMERA.height + e * 16, fov: CAMERA.fov + e * 30 };
+      return { distance: CAMERA.distance + e * 15, height: CAMERA.height + e * 9, fov: CAMERA.fov + e * 24 };
     },
     onEnd() {
       chainApex = 0;

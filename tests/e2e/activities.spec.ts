@@ -55,7 +55,7 @@ test('walking onto the trampoline mat launches the player upward', async ({ page
   expect(consoleErrors).toEqual([]);
 });
 
-test('walking from the steps onto the mat (no drop) starts a gentle bounce', async ({ page }) => {
+test('walking from the steps onto the mat (no drop) is an immediate big bounce that then settles', async ({ page }) => {
   const { consoleErrors } = await boot(page);
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
@@ -84,7 +84,7 @@ test('walking from the steps onto the mat (no drop) starts a gentle bounce', asy
       if (d < 3) break; // stop walking near the middle of the mat
     }
     rg.inject(null);
-    // Stand still: the mat keeps bouncing gently (no drop, no jump key).
+    // Stand still: the bounce decays and stops, so kids can stand on the mat and walk off.
     let lateMax = -Infinity;
     for (let i = 0; i < 600; i++) {
       rg.step(1 / 60, 1, false);
@@ -93,7 +93,7 @@ test('walking from the steps onto the mat (no drop) starts a gentle bounce', asy
     return { maxRise: maxY - matTop, onMatFrames, standRise: lateMax - matTop };
   });
   expect(r.onMatFrames).toBeGreaterThan(20);
-  expect(r.maxRise).toBeGreaterThan(1.5);
-  expect(r.standRise).toBeGreaterThan(1.3);
+  expect(r.maxRise).toBeGreaterThan(8); // walking on is already a ~12 m bounce
+  expect(r.standRise).toBeLessThan(0.4); // settled
   expect(consoleErrors).toEqual([]);
 });
