@@ -14,6 +14,11 @@ import type { GameContext, Quality, TestApi } from './types';
 
 const params = new URLSearchParams(location.search);
 const testMode = params.get('test') === '1';
+/**
+ * Test mode only: `&quality=low|medium|high` sets the boot quality (e2e tests that don't judge
+ * visuals run at Low: no shadow map, thinner scatter, about half the SwiftShader frame cost).
+ */
+const testQuality = testMode ? params.get('quality') : null;
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(`unhandledrejection: ${String(e.reason)}`));
@@ -27,6 +32,7 @@ async function boot(): Promise<void> {
 
   const events = createEventBus();
   const settings = createSettings(events);
+  if (testQuality === 'low' || testQuality === 'medium' || testQuality === 'high') settings.set({ quality: testQuality });
   const session = createSession(events, settings);
   const audio = createAudio({ settings, events, testMode });
 

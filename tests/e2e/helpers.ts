@@ -2,8 +2,13 @@ import { writeFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 
-/** Load the game in test mode and wait until it has rendered a frame. Collects console errors. */
+/**
+ * Load the game in test mode and wait until it has rendered a frame. Collects console errors.
+ * Boots at Low quality (no shadow map: ~2x faster frames on SwiftShader) unless `query` names a
+ * `quality=`; tests that judge the look of the lit world pass `&quality=medium`.
+ */
 export async function boot(page: Page, query = ''): Promise<{ consoleErrors: string[] }> {
+  if (!query.includes('quality=')) query += '&quality=low';
   const consoleErrors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text());

@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 import { boot, lumaStdDev, shot } from './helpers';
 
 test('boots, renders a frame, starts a session, no console errors', async ({ page }) => {
-  const { consoleErrors } = await boot(page);
+  // The one smoke boot at the shipped default quality (Medium: shadows, full post).
+  const { consoleErrors } = await boot(page, '&quality=medium');
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.freeze(true);

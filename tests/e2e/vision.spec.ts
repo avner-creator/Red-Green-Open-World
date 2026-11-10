@@ -44,7 +44,8 @@ async function frame(layers: { weak: boolean; strong: boolean }): Promise<PNG> {
 
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
-  ({ consoleErrors } = await boot(page));
+  // Channel isolation is judged in the real lit world at the default quality.
+  ({ consoleErrors } = await boot(page, '&quality=medium'));
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.freeze(true);

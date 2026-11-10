@@ -165,10 +165,19 @@ test.describe('ui', () => {
     await boot(page);
     await page.getByTestId('grownups').click();
     const hold = page.getByTestId('gate-hold');
+    await expect(hold).toBeVisible();
+    // The hold timer runs on game frames (dt-clamped), so drive it with deterministic 1/60 s
+    // steps instead of wall-clock time: SwiftShader frames take far longer than 1/60 s.
+    await page.evaluate(() => window.__rg!.freeze(true));
     const box = (await hold.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await expect(page.getByTestId('settings')).toBeVisible({ timeout: 15_000 });
+    // 2.5 s of holding is not enough...
+    await page.evaluate(() => window.__rg!.step(1 / 60, 150, false));
+    await expect(page.getByTestId('settings')).toBeHidden();
+    // ...3 s is.
+    await page.evaluate(() => window.__rg!.step(1 / 60, 40));
+    await expect(page.getByTestId('settings')).toBeVisible();
     await page.mouse.up();
   });
 });
