@@ -92,11 +92,16 @@ export function createNav(host: NavHost): Nav {
     host.root.classList.toggle('nav-kb', on);
   };
   window.addEventListener('pointerdown', () => setKb(false), true);
+  // Esc acts on key-up, but only if its key-down also happened while a menu layer was open: the
+  // Esc that pauses the game (or closes the calibration overlay, or breaks pointer lock) must not
+  // also close the menu that its own key-down opened.
+  let escDownInMenu = false;
 
   window.addEventListener(
     'keydown',
     (ev) => {
       const layer = host.layer();
+      if (ev.code === 'Escape' && !ev.repeat) escDownInMenu = !!layer;
       if (!layer) return;
       const dir = KEY_DIRS[ev.code];
       const active = document.activeElement;
@@ -122,7 +127,10 @@ export function createNav(host: NavHost): Nav {
     'keyup',
     (ev) => {
       // Esc acts on key-up so the same press can't also reach the game's own pause input.
-      if (ev.code === 'Escape' && host.layer()) host.back();
+      if (ev.code !== 'Escape') return;
+      const act = escDownInMenu;
+      escDownInMenu = false;
+      if (act && host.layer()) host.back();
     },
     true,
   );

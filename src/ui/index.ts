@@ -99,7 +99,8 @@ export function createUi(ctx: GameContext): UiApi {
   function render(): void {
     const t = top();
     for (const s of all) s.el.classList.toggle('on', s === t);
-    hud.setVisible(phase() === 'playing' || phase() === 'paused');
+    // The calibration pattern needs the whole screen: no HUD on top of it.
+    hud.setVisible((phase() === 'playing' || phase() === 'paused') && !calibrating);
     root.dataset.phase = phase();
     const open = menuOpen();
     if (open && !wasMenu) {

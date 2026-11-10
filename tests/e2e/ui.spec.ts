@@ -97,8 +97,32 @@ test.describe('ui', () => {
     expect(s.quality).toBe('high');
     expect(s.eye.weakEye).toBe('right');
     expect(await page.evaluate(() => localStorage.getItem('rgow.settings.v1'))).toContain('"high"');
+    // Calibration (src/vision) takes over the screen; settings hide until it closes.
+    const calOpen = (): Promise<boolean> => page.evaluate(() => window.__rgVision!.calibrationOpen());
     await page.getByTestId('calibrate').click();
-    await expect(page.getByTestId('settings')).toBeVisible(); // stub calibration closes at once
+    expect(await calOpen()).toBe(true);
+    const cal = page.getByRole('dialog', { name: 'Glasses calibration' });
+    await expect(cal).toBeVisible();
+    await expect(page.getByTestId('settings')).toBeHidden();
+    await expect(page.getByTestId('timer')).toBeHidden(); // no HUD over the test pattern
+    expect(await page.evaluate(() => window.__rg!.ctx.ui.menuOpen)).toBe(true);
+    expect(await page.evaluate(() => document.querySelector('.rgv-cal')!.contains(document.activeElement))).toBe(true);
+    await save(page, 'calibration');
+    // Esc closes only the calibration: back to settings (focused), still paused.
+    await page.keyboard.press('Escape');
+    expect(await calOpen()).toBe(false);
+    await expect(cal).toHaveCount(0);
+    await expect(page.getByTestId('settings')).toBeVisible();
+    expect(await page.evaluate(() => document.querySelector('[data-testid="settings"]')!.contains(document.activeElement))).toBe(true);
+    await step(page, 3);
+    expect(await page.evaluate(() => window.__rg!.state().phase)).toBe('paused');
+    // The Done button works the same way.
+    await page.getByTestId('calibrate').click();
+    await page.getByRole('button', { name: 'Done' }).click();
+    expect(await calOpen()).toBe(false);
+    await expect(page.getByTestId('settings')).toBeVisible();
+    await step(page, 3);
+    expect(await page.evaluate(() => window.__rg!.state().phase)).toBe('paused');
     await page.getByTestId('settings-done').click();
     await expect(page.getByTestId('resume')).toBeVisible();
     await page.evaluate(() => window.__rg!.ctx.settings.reset());

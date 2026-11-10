@@ -4,7 +4,7 @@
  * velocity, airPeak.
  */
 import * as THREE from 'three';
-import { TRAMPOLINE } from '../config';
+import { CAMERA, TRAMPOLINE } from '../config';
 import type { GameContext } from '../types';
 import { BOUNCE, MAT } from './constants';
 import { ThresholdAwards, nextBounceApex, speedFromApex } from './bounceLogic';
@@ -219,7 +219,7 @@ export function createTrampoline(ctx: GameContext): Trampoline {
     // Camera pulls back with height while a chain is running.
     if (chainApex > 0) {
       const f = Math.min(1, Math.max(0, (player.position.y - matTopY) / TRAMPOLINE.maxHeight));
-      ctx.cameraRig.setOverride({ distance: 6.5 + f * 16, height: 2.2 + f * 8, fov: 60 + f * 14 });
+      ctx.cameraRig.setOverride({ distance: CAMERA.distance + f * 16, height: CAMERA.height + f * 8, fov: CAMERA.fov + f * 14 });
       cameraSet = true;
     }
 

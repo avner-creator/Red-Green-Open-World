@@ -19,7 +19,7 @@ async function run(page: Page, frames: number): Promise<{ y: number[]; grounded:
     const y: number[] = [];
     const grounded: boolean[] = [];
     for (let i = 0; i < n; i++) {
-      rg.step(1 / 60, 1);
+      rg.step(1 / 60, 1, false);
       y.push(p.position.y);
       grounded.push(p.grounded);
     }
@@ -69,7 +69,7 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
     let maxPeak = 0;
     let modeDuring = '';
     for (let i = 0; i < 400; i++) {
-      rg.step(1 / 60, 1);
+      rg.step(1 / 60, 1, false);
       maxPeak = Math.max(maxPeak, p.airPeak);
       if (i === 60) modeDuring = p.mode;
       if (p.grounded && i > 10) break;

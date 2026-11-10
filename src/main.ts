@@ -81,11 +81,15 @@ async function boot(): Promise<void> {
   resize();
 
   let frames = 0;
+  let prevPhase = session.state.phase;
   const update = (dt: number): void => {
     const phase = session.state.phase;
     ctx.input.setGameplayEnabled(phase === 'playing' && !ctx.ui.menuOpen);
     ctx.input.update(dt);
-    if (phase === 'playing' && ctx.input.state.pausePressed) session.pause();
+    // A pause press queued while a menu was open (e.g. the Esc / Start that just resumed) must not
+    // pause again on the first playing frame.
+    if (phase === 'playing' && prevPhase === 'playing' && ctx.input.state.pausePressed) session.pause();
+    prevPhase = phase;
     if (phase === 'playing' || phase === 'title') {
       session.update(dt);
       ctx.physics.step(dt);
@@ -123,9 +127,9 @@ async function boot(): Promise<void> {
       freeze(f) {
         frozen = f;
       },
-      step(dt = FIXED_DT, n = 1) {
+      step(dt = FIXED_DT, n = 1, draw = true) {
         for (let i = 0; i < n; i++) update(dt);
-        render(dt);
+        if (draw) render(dt);
       },
       render() {
         render(0);

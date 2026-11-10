@@ -431,8 +431,11 @@ export interface TestApi {
   ctx: GameContext;
   /** Stop the real-time loop; frames then only advance via `step`. */
   freeze(frozen: boolean): void;
-  /** Advance `n` fixed frames of `dt` seconds and render (works while frozen). */
-  step(dt?: number, n?: number): void;
+  /**
+   * Advance `n` fixed frames of `dt` seconds (works while frozen). Only the last frame is rendered,
+   * and only when `render` is true (default); pass false for fast simulation-only stepping.
+   */
+  step(dt?: number, n?: number, render?: boolean): void;
   /** Render the current state again without advancing time. */
   render(): void;
   start(): void;

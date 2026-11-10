@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 
@@ -10,12 +11,26 @@ export async function boot(page: Page, query = ''): Promise<{ consoleErrors: str
   page.on('pageerror', (e) => consoleErrors.push(String(e)));
   await page.goto(`/?test=1${query}`);
   await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
+  // The boot overlay fades out (~0.5 s) and is then removed; never screenshot it half-faded.
+  await page.waitForSelector('#boot', { state: 'detached', timeout: 10_000 });
   return { consoleErrors };
 }
 
-/** Screenshot the page and decode it. */
+/** Screenshot the page (canvas + DOM, CSS animations stopped) and decode it. */
 export async function shot(page: Page, path?: string): Promise<PNG> {
-  const buf = await page.screenshot({ path, type: 'png' });
+  const buf = await page.screenshot({ path, type: 'png', animations: 'disabled', caret: 'hide' });
+  return PNG.sync.read(buf);
+}
+
+/**
+ * Read back only the WebGL canvas (what the dichoptic compositor wrote), without the DOM HUD on
+ * top. Test mode sets `preserveDrawingBuffer`, so this is the last rendered frame. Use this for
+ * channel-exact assertions: DOM menus/HUD animate independently of the frozen game loop.
+ */
+export async function canvasShot(page: Page, path?: string): Promise<PNG> {
+  const url = await page.evaluate(() => (document.getElementById('game') as HTMLCanvasElement).toDataURL('image/png'));
+  const buf = Buffer.from(url.slice(url.indexOf(',') + 1), 'base64');
+  if (path) writeFileSync(path, buf);
   return PNG.sync.read(buf);
 }
 

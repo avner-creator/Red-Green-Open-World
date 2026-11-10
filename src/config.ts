@@ -26,7 +26,7 @@ export const PLAYER = {
   radius: 0.35,
 } as const;
 
-export const CAMERA = { distance: 6.5, height: 2.2, fov: 60, near: 0.1, far: 1500 } as const;
+export const CAMERA = { distance: 5.5, height: 2.2, fov: 60, near: 0.1, far: 1500 } as const;
 
 export const FIXED_DT = 1 / 60;
 export const MAX_FRAME_DT = 1 / 20;

@@ -1,12 +1,16 @@
 /**
  * Dichoptic channel tests: the same frozen frame rendered with and without layer objects.
  * WeakOnly objects must change the weak channel and leave the strong channel and blue
- * bit-identical; StrongOnly objects the mirror image. All 4 lens/eye combinations.
+ * bit-identical; StrongOnly objects the mirror image. All 4 lens/eye combinations, for simple
+ * test objects and for the real Glow Gems from src/activities (instanced gems, halos, burst).
+ *
+ * Frames are read back from the WebGL canvas (the compositor's output), not page screenshots:
+ * the DOM HUD/tutorial on top animates on its own clock, independent of the frozen game loop.
  */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import type { PNG } from 'pngjs';
-import { boot, channelDiff, shot } from './helpers';
+import { boot, canvasShot, channelDiff } from './helpers';
 import { VisionLayer } from '../../src/types';
 import type { EyeSettings } from '../../src/types';
 
@@ -24,7 +28,7 @@ const COMBOS: Array<{ eye: Pick<EyeSettings, 'leftLens' | 'weakEye'>; weak: 'r' 
 
 const maxOf = (d: ReturnType<typeof channelDiff>, c: 'r' | 'g' | 'b'): number => (c === 'r' ? d.maxR : c === 'g' ? d.maxG : d.maxB);
 
-/** Set layer visibility, re-render the same frozen frame, screenshot. */
+/** Set layer visibility, re-render the same frozen frame, read the canvas back. */
 async function frame(layers: { weak: boolean; strong: boolean }): Promise<PNG> {
   await page.evaluate(
     ({ weak, strong, W, S }) => {
@@ -35,20 +39,18 @@ async function frame(layers: { weak: boolean; strong: boolean }): Promise<PNG> {
     },
     { ...layers, W: VisionLayer.WeakOnly, S: VisionLayer.StrongOnly },
   );
-  return shot(page);
+  return canvasShot(page);
 }
 
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   ({ consoleErrors } = await boot(page));
-  // The boot overlay fades out over ~0.5 s; wait so it can't differ between screenshots.
-  await page.waitForSelector('#boot', { state: 'detached', timeout: 10_000 });
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.freeze(true);
     rg.start();
     rg.step(1 / 60, 20);
-    // Deterministic layer objects in front of the camera (plus the stub world's gems).
+    // Deterministic layer objects in front of the camera (plus the real gems in view).
     const v = window.__rgVision!;
     v.addTestObject({ layer: 'weak', distance: 6, size: 1, offsetX: -1.6, offsetY: 0.4 });
     v.addTestObject({ layer: 'weak', distance: 8, size: 1.2, offsetX: 0, offsetY: 2.2 }); // over the sky
@@ -78,6 +80,52 @@ for (const combo of COMBOS) {
     expect(ds.maxB).toBe(0);
   });
 }
+
+test('real Glow Gems (instanced gems, halos, collect burst) touch only the weak channel, all 4 combos', async () => {
+  const setup = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    window.__rgVision!.removeTestObjects();
+    const home = ctx.player.position.clone();
+    const g = ctx.world.gemSpots[2].position;
+    const yaw = Math.atan2(g.x - home.x, g.z - home.z); // face the gem field
+    let bursts = 0;
+    const off = ctx.events.on('gem:collected', () => bursts++);
+    // Collect the far gem (pickup tests the chest, ~0.85 m above the feet) to start a burst...
+    rg.teleport(g.x, g.y - 0.85, g.z);
+    rg.step(1 / 60, 2, false);
+    // ...then look at it from where we were while the burst is still expanding (0.55 s).
+    rg.teleport(home.x, home.y, home.z, yaw);
+    rg.step(1 / 60, 8);
+    off();
+    return { bursts, gems: rg.state().gems, left: ctx.world.gemSpots.length - rg.state().gems };
+  });
+  expect(setup.bursts).toBe(1);
+  expect(setup.left).toBeGreaterThan(0);
+
+  for (const combo of COMBOS) {
+    await page.evaluate((eye) => window.__rg!.setEye(eye), combo.eye);
+    const withGems = await frame({ weak: true, strong: true });
+    const noGems = await frame({ weak: false, strong: true });
+    const d = channelDiff(withGems, noGems);
+    expect(d[combo.weak], `${combo.eye.leftLens}/${combo.eye.weakEye}`).toBeGreaterThan(400);
+    expect(maxOf(d, combo.strong), `${combo.eye.leftLens}/${combo.eye.weakEye}`).toBe(0);
+    expect(d.maxB).toBe(0);
+  }
+  // Half-way through the burst there is more weak-layer coverage than after it ends (burst seen).
+  await page.evaluate(() => window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' }));
+  const during = channelDiff(await frame({ weak: true, strong: true }), await frame({ weak: false, strong: true }));
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.ctx.player.teleport(rg.ctx.player.position.clone(), rg.ctx.player.yaw);
+    rg.step(1 / 60, 40, false); // burst over (0.55 s); gems keep spinning
+    rg.step(1 / 60, 1);
+  });
+  const after = channelDiff(await frame({ weak: true, strong: true }), await frame({ weak: false, strong: true }));
+  expect(during.r).toBeGreaterThan(after.r);
+  expect(after.maxG).toBe(0);
+  expect(after.maxB).toBe(0);
+});
 
 test('strong-eye contrast changes only the strong channel; crosstalk limit caps the weak delta', async () => {
   await page.evaluate(() => window.__rg!.setEye({ leftLens: 'red', weakEye: 'left', strongContrast: 1, crosstalkLimit: 1 }));
@@ -139,7 +187,9 @@ test('calibration pattern goes through the same maths', async () => {
     rg.render();
   });
   expect(await page.evaluate(() => window.__rgVision!.calibrationOpen())).toBe(true);
-  const img = await shot(page, 'test-results/vision-calibration.png');
+  // The pattern is canvas output; read it back without the DOM (here the HUD is up, because this
+  // test opens calibration directly instead of through the paused settings screen).
+  const img = await canvasShot(page, 'test-results/vision-calibration.png');
   const px = (x: number, y: number): [number, number, number] => {
     const i = (Math.round(y) * img.width + Math.round(x)) * 4;
     return [img.data[i], img.data[i + 1], img.data[i + 2]];
