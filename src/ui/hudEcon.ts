@@ -10,7 +10,7 @@ import { comboFraction, deltaText, missionFraction, missionText, popKindFor } fr
 import type { EconTracker } from './econState';
 import { outfitIcon } from './glyphs';
 import { icon } from './icons';
-import { itemPicture } from './itemArt';
+import { createPictureQueue, itemPicture, picturePending, swapInPicture } from './itemArt';
 import type { UiIconName } from './icons';
 import { createWalletChip } from './wallet';
 
@@ -142,6 +142,8 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
     }
   };
 
+  const pics = createPictureQueue();
+
   // A mega gem and its wallet change arrive as two events (either order): pair them up.
   let megaAt = -1e9;
   let megaPop: { at: number } | null = null;
@@ -187,7 +189,12 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
     }),
     ctx.events.on('item:unlocked', (e) => {
       if (e.source !== 'chest') return;
-      moment('unlock', itemPicture(ctx.economy.item(e.itemId), itemIcon(ctx, e.itemId)), [h('span', 'src', {}, icon('chest'))]);
+      // Never wait for a picture: cached one or the icon now, the picture swapped in if it comes in time.
+      const it = ctx.economy.item(e.itemId);
+      const fb = itemIcon(ctx, e.itemId);
+      moment('unlock', itemPicture(it, fb), [h('span', 'src', {}, icon('chest'))]);
+      const badge = moments.querySelector<HTMLElement>('.moment.unlock .badge');
+      if (it && badge && picturePending(it)) pics.request(it, () => swapInPicture(badge, it, fb));
     }),
     ctx.events.on('session:phase', (e) => {
       if (e.phase === 'playing' && e.previous !== 'paused') {

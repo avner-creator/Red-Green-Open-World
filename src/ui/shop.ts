@@ -11,7 +11,7 @@ import { h, retrigger } from './dom';
 import { CATEGORY_ICON, cardState, missingGems, shopCategories, SLOT_ICON, wardrobeGroups } from './econ';
 import type { CardState } from './econ';
 import { icon } from './icons';
-import { itemPicture } from './itemArt';
+import { createPictureQueue, itemPicture, picturePending, swapInPicture } from './itemArt';
 import type { Screen } from './screens';
 import { createWalletChip } from './wallet';
 
@@ -29,7 +29,11 @@ const CELEBRATE_MS = 1900;
 export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void): ShopScreen {
   const wallet = createWalletChip(ctx, 'shopw', mode === 'shop' ? 'shop-wallet' : 'wardrobe-wallet');
   const close = h('button', 'b d sm close', { type: 'button', 'aria-label': 'Close', 'data-testid': `${mode}-close` }, icon('close'));
-  close.addEventListener('click', onClose);
+  const doClose = (): void => {
+    pics.clear();
+    onClose();
+  };
+  close.addEventListener('click', doClose);
   const tabs = h('div', 'tabs stabs', { role: 'tablist' });
   const head = h('div', 'head t', {}, icon(mode === 'shop' ? 'shop' : 'backpack'));
   const grid = h('div', `sgrid ${mode}`, { 'data-testid': `${mode}-grid` });
@@ -79,17 +83,23 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
     ctx.audio.play('fanfare');
   };
 
-  /** The item's picture (preview image, else swatch + icon), built only when shown. */
+  /**
+   * The item's picture: a cached preview at once, else swatch + icon now and the preview later
+   * (queued, one per tick: the first preview() can take seconds on a slow GPU).
+   */
+  const pics = createPictureQueue(() => el.classList.contains('on'));
   const art = (it: ShopItem, cls: string): HTMLElement => {
     const pic = itemPicture(it, it.icon);
     const isImg = pic.tagName === 'IMG';
-    return h(
+    const span = h(
       'span',
       `${cls} ${isImg ? 'has-pic' : ''}`.trim(),
       { style: it.swatch && !isImg ? `--sw:${it.swatch}` : '' },
       it.swatch && !isImg ? h('span', 'sw') : null,
       pic,
     );
+    if (picturePending(it)) pics.request(it, () => swapInPicture(span, it, it.icon));
+    return span;
   };
 
   const card = (it: ShopItem): HTMLButtonElement => {
@@ -162,6 +172,7 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
 
   /** Redraw the grid; keep focus on `focusId`'s card (or the same index) and play `anim` on it. */
   function render(focusId: string | null, anim?: string): void {
+    pics.clear(); // a new view: only its own cards get pictures, in grid order (top rows first)
     const activeIdx = [...grid.querySelectorAll('.card')].indexOf(document.activeElement as Element);
     const catalog = ctx.economy.catalog;
     grid.replaceChildren();

@@ -57,8 +57,9 @@ test.describe('economy ui', () => {
     await page.getByTestId('play').click();
     expect(await phase(page)).toBe('playing');
 
-    // Fixture items with rendered pictures (preview() is called lazily, only when a card is built),
-    // and one without a picture (it keeps its icon).
+    // Fixture items with rendered pictures, in their own tab (the real catalog leaves 'character'
+    // empty) so they never queue behind slow real previews; one has no picture (keeps its icon).
+    // preview() is only called once a card is shown, asynchronously.
     await page.evaluate(() => {
       const calls: string[] = [];
       (window as unknown as { __previewCalls: string[] }).__previewCalls = calls;
@@ -104,10 +105,10 @@ test.describe('economy ui', () => {
         return draw(kind);
       };
       window.__rg!.ctx.economy.registerItems([
-        { id: 'fx-hat', category: 'outfit', slot: 'head', name: 'Party hat', icon: 'hat', price: 12, preview: pic('fx-hat', 'hat') },
-        { id: 'fx-cape', category: 'outfit', slot: 'back', name: 'Hero cape', icon: 'cape', price: 99, preview: pic('fx-cape', 'cape') },
-        { id: 'fx-specs', category: 'outfit', slot: 'face', name: 'Pink specs', icon: 'glasses', price: 0, chestOnly: true, preview: pic('fx-specs', 'specs') },
-        { id: 'fx-plain', category: 'outfit', slot: 'face', name: 'Plain specs', icon: 'glasses', price: 7, preview: () => null },
+        { id: 'fx-hat', category: 'character', slot: 'head', name: 'Party hat', icon: 'hat', price: 12, preview: pic('fx-hat', 'hat') },
+        { id: 'fx-cape', category: 'character', slot: 'back', name: 'Hero cape', icon: 'cape', price: 99, preview: pic('fx-cape', 'cape') },
+        { id: 'fx-specs', category: 'character', slot: 'face', name: 'Pink specs', icon: 'glasses', price: 0, chestOnly: true, preview: pic('fx-specs', 'specs') },
+        { id: 'fx-plain', category: 'character', slot: 'face', name: 'Plain specs', icon: 'glasses', price: 7, preview: () => null },
       ]);
     });
     expect(await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls.length)).toBe(0);
@@ -183,9 +184,8 @@ test.describe('economy ui', () => {
     await expect(page.getByTestId('shop')).toBeVisible();
     expect(await phase(page)).toBe('paused');
     expect(await page.evaluate(() => window.__rg!.ctx.ui.menuOpen)).toBe(true);
-    // Only categories with items get a tab (no 'character' items yet).
     await expect(page.getByTestId('shop-tab-outfit')).toBeVisible();
-    await expect(page.getByTestId('shop-tab-character')).toHaveCount(0);
+    await expect(page.getByTestId('shop-tab-character')).toBeVisible();
     const fits = async (): Promise<boolean> =>
       page.evaluate(() => {
         const r = document.querySelector('[data-testid="shop"]')!.getBoundingClientRect();
@@ -194,26 +194,23 @@ test.describe('economy ui', () => {
       });
     expect(await fits()).toBe(true);
     await save(page, 'shop');
-    // Item pictures: an <img> where a preview exists, the icon where it does not.
     const card = (id: string) => page.locator(`[data-testid="shop"] [data-testid="shop-card"][data-item="${id}"]`);
+    const chestId = await page.evaluate(() => window.__rg!.ctx.economy.catalog.find((i) => i.chestOnly && i.category === 'outfit')!.id);
+    await expect(card('hat-crown')).toHaveAttribute('data-state', 'poor');
+    await expect(card(chestId)).toHaveAttribute('data-state', 'chest');
+    // Item pictures: the icon at once, then an <img> where a preview exists; the icon where not.
+    await page.getByTestId('shop-tab-character').click();
+    expect(await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls.length)).toBeLessThanOrEqual(1);
     await expect(card('fx-hat').locator('img.pic')).toHaveCount(1);
     await expect(card('fx-plain').locator('img')).toHaveCount(0);
     await expect(card('fx-plain').locator('.pv .ic')).toHaveCount(1);
     await expect(card('fx-cape')).toHaveAttribute('data-state', 'poor');
     await expect(card('fx-specs')).toHaveAttribute('data-state', 'chest');
-    await page.evaluate(() => {
-      const g = document.querySelector('[data-testid="shop-grid"]')!;
-      g.scrollTop = g.scrollHeight;
-    });
+    await expect(card('fx-specs').locator('img.pic')).toHaveCount(1);
     await save(page, 'shop-pictures');
-    await page.evaluate(() => (document.querySelector('[data-testid="shop-grid"]')!.scrollTop = 0));
     await page.setViewportSize({ width: 667, height: 375 });
     expect(await fits()).toBe(true);
     await page.setViewportSize({ width: 640, height: 360 });
-
-    const chestId = await page.evaluate(() => window.__rg!.ctx.economy.catalog.find((i) => i.chestOnly && i.category === 'outfit')!.id);
-    await expect(card('hat-crown')).toHaveAttribute('data-state', 'poor');
-    await expect(card(chestId)).toHaveAttribute('data-state', 'chest');
 
     // Buy: wallet drops, unlock moment, owned + worn.
     const w0 = await wallet(page);
@@ -228,6 +225,7 @@ test.describe('economy ui', () => {
     expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('fx-hat');
 
     // Too expensive / chest-only: nothing happens to the wallet.
+    await page.getByTestId('shop-tab-outfit').click();
     await card('hat-crown').click();
     await card(chestId).click();
     expect(await wallet(page)).toBe(w0 - 12);

@@ -260,5 +260,7 @@ export const ECON_CSS = `
 .rg .card.s-chest .pv .pic{filter:brightness(0) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 calc(var(--u)*1.2) rgba(255,255,255,.7))}
 .rg .celebrate .badge .pic{position:relative;width:80%;height:80%;animation:rg-wig 1.1s ease-in-out .85s infinite;filter:drop-shadow(0 calc(var(--u)*1) calc(var(--u)*1) rgba(0,0,0,.7))}
 .rg .moment .badge .pic{width:82%;height:82%}
+.rg .pic.pic-in{animation:rg-picin .35s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes rg-picin{from{opacity:0;transform:scale(.5)}}
 .rg .stk .pic{width:2.1em;height:2.1em;filter:drop-shadow(0 calc(var(--u)*.3) calc(var(--u)*.4) rgba(0,0,0,.5))}
 `;
