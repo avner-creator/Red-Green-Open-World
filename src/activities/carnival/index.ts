@@ -292,7 +292,7 @@ export function createCarnival(ctx: GameContext): Carnival {
     ctx.events.emit('ui:toast', { icon: 'gem', text: `+${r.gems}` });
     ctx.audio.play(r.won ? 'fanfare' : 'chest');
     const burst = boothWorld(a.id, 0, 2.2, 0.4);
-    fx.confetti.burst(burst, r.won ? 140 : 60);
+    fx.burst(burst, r.won ? 140 : 60);
     keepers.cheer(a.id, true);
     a.round.playerAct(r.won ? 'dance' : 'cheer', 3);
     // Friends are good sports: whoever won dances, everyone else cheers.

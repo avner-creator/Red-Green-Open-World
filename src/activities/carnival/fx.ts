@@ -94,13 +94,17 @@ class PuffPool {
 }
 
 export class CarnivalFx {
-  readonly confetti = new ThrillConfetti();
+  private readonly confetti = new ThrillConfetti();
   private readonly puffMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x777777, roughness: 0.8 });
   private readonly weakMat = createLayerMaterial(1);
   private readonly puffs = new PuffPool(this.puffMat);
   private readonly weakPuffs = new PuffPool(this.weakMat);
 
+  /** Seconds the confetti stays drawn after the last burst (hidden when idle: no draw call). */
+  private confettiLife = 0;
+
   constructor(private readonly ctx: GameContext) {
+    this.confetti.group.visible = false;
     ctx.scene.add(this.confetti.group);
     ctx.scene.add(this.puffs.mesh);
     ctx.vision.add(this.weakPuffs.mesh, VisionLayer.WeakOnly);
@@ -116,8 +120,22 @@ export class CarnivalFx {
     this.weakPuffs.burst(p, count, size);
   }
 
+  /** Both-eye confetti burst (world position). */
+  burst(p: THREE.Vector3, count: number): void {
+    this.confetti.burst(p, count);
+    this.confetti.group.visible = true;
+    this.confettiLife = 4;
+  }
+
   update(dt: number): void {
-    this.confetti.update(dt);
+    if (this.confettiLife > 0) {
+      this.confettiLife -= dt;
+      this.confetti.update(dt);
+      if (this.confettiLife <= 0) {
+        this.confetti.clear();
+        this.confetti.group.visible = false;
+      }
+    }
     this.puffs.update(dt);
     this.weakPuffs.update(dt);
   }
