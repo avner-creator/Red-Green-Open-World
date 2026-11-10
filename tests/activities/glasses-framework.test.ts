@@ -37,8 +37,12 @@ describe('glasses rewards', () => {
     const ctx = fakeCtx();
     expect(pay(ctx, 2.4)).toBe(false);
     expect(ctx.emitted).toEqual([['ui:toast', { icon: 'gem', text: '+2' }]]);
-    const odd = fakeCtx({ earn: 'nope' });
-    expect(pay(odd, 1)).toBe(false);
+    const broken = fakeCtx({
+      earn: () => {
+        throw new Error('full');
+      },
+    });
+    expect(pay(broken, 1)).toBe(false);
     const zero = fakeCtx({ earn: () => {} });
     expect(pay(zero, 0)).toBe(false);
     expect(zero.emitted).toEqual([]);
