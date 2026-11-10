@@ -6,8 +6,16 @@ export const ODD = {
     [0, -3.0],
     [2.6, -2.2],
   ] as readonly (readonly [number, number])[],
-  /** Height of the weak-eye shapes above each pedestal's ground. */
-  shapeHeight: 2.35,
+  /** Height of the panel centre (and its weak-eye shape) above each pedestal's ground. */
+  shapeHeight: 2.5,
+  /** Dark both-eye panel behind each shape (identical on all three): radius, rim, thickness, backward tilt. */
+  panelRadius: 0.7,
+  rimRadius: 0.8,
+  panelDepth: 0.08,
+  panelTilt: 0.16,
+  poleRadius: 0.07,
+  /** The shape sits this far in front of the panel face. */
+  shapeLift: 0.05,
   /** Pedestal parts (heights above the ground). */
   baseHeight: 0.18,
   baseSize: 1.2,
@@ -26,7 +34,7 @@ export const ODD = {
   /** Staircase top (levels 0..maxLevel). */
   maxLevel: 7,
   /** Shape size (outer, metres) from level 2 down to the floor at maxLevel. */
-  size: { base: 1.0, floor: 0.62 },
+  size: { base: 1.0, floor: 0.75 },
   /** Ring gap (metres) from level 2 down to the floor at maxLevel. */
   gap: { base: 0.3, floor: 0.11 },
   /** The challenge's size scale never shrinks the shapes below this factor (keeps them solvable). */

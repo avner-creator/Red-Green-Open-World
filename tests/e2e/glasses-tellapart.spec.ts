@@ -84,6 +84,11 @@ test('odd one out: weak shapes touch only the weak channel; answer hidden from t
     window.__rg!.step(1 / 60, 2, false);
   });
   expect(await page.evaluate(() => window.__rgGlasses!.active('oddone'))).toBe(true);
+  await page.evaluate(() => {
+    window.__rgGlasses!.force('oddone', { level: 7, answer: 2 });
+    window.__rg!.step(1 / 60, 1);
+  });
+  await save('oddone', 'approach-level7');
   await standAtOddOne(1.9, 0.12);
   await page.evaluate(() => window.__rgGlasses!.force('oddone', { level: 0, answer: 1 }));
   await page.evaluate(() => window.__rg!.render());
@@ -107,6 +112,10 @@ test('odd one out: weak shapes touch only the weak channel; answer hidden from t
     window.__rg!.render();
   });
   await save('oddone', 'level2');
+  // From the buttons, at the finest level.
+  await page.evaluate(() => window.__rgGlasses!.force('oddone', { level: 7, answer: 0 }));
+  await standAtOddOne(1.05);
+  await save('oddone', 'buttons-level7');
 });
 
 test('odd one out: a hit and a miss through the button prompts; the staircase moves', async () => {

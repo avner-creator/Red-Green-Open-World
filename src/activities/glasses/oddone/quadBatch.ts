@@ -28,9 +28,14 @@ export interface QuadBatchOptions {
   /** Fragment shader (declares the `v<Name>` varyings and `vP` itself). */
   fragmentShader: string;
   uniforms: Record<string, THREE.IUniform>;
+  /**
+   * Lay every quad flat in one world plane (in-plane `right`/`up` unit vectors) instead of facing
+   * the camera. `vP` x/y then run along `right`/`up`.
+   */
+  plane?: { right: THREE.Vector3; up: THREE.Vector3 };
 }
 
-function vertexShader(floats: readonly string[]): string {
+function vertexShader(floats: readonly string[], plane: boolean): string {
   const decl = floats.map((f) => `attribute float a${f};\nvarying float v${f};`).join('\n');
   const pass = floats.map((f) => `  v${f} = a${f};`).join('\n');
   return /* glsl */ `
@@ -38,6 +43,7 @@ attribute vec3 aCenter;
 attribute vec2 aCorner;
 attribute float aScale;
 uniform float halfSize;
+${plane ? 'uniform vec3 planeRight;\nuniform vec3 planeUp;' : ''}
 varying vec2 vUv;
 varying vec2 vP;
 ${decl}
@@ -45,8 +51,13 @@ void main() {
   vUv = aCorner * 0.5 + 0.5;
   vP = aCorner * halfSize;
 ${pass}
-  vec4 mv = modelViewMatrix * vec4(aCenter, 1.0);
-  mv.xy += aCorner * halfSize * aScale;
+${
+    plane
+      ? `  vec2 o = aCorner * halfSize * aScale;
+  vec4 mv = modelViewMatrix * vec4(aCenter + planeRight * o.x + planeUp * o.y, 1.0);`
+      : `  vec4 mv = modelViewMatrix * vec4(aCenter, 1.0);
+  mv.xy += aCorner * halfSize * aScale;`
+  }
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -75,11 +86,12 @@ export function createQuadBatch(o: QuadBatchOptions): QuadBatch {
     geo.setAttribute(`a${f}`, a);
   }
   geo.setIndex(index);
+  const uniforms = o.plane ? { ...o.uniforms, planeRight: { value: o.plane.right.clone() }, planeUp: { value: o.plane.up.clone() } } : o.uniforms;
   const material = layerShaderMaterial({
     name: o.name,
-    uniforms: o.uniforms,
+    uniforms,
     fragmentShader: o.fragmentShader,
-    vertexShader: vertexShader(o.floats),
+    vertexShader: vertexShader(o.floats, !!o.plane),
     billboard: false,
   });
   const mesh = layerMesh(geo, material, o.name);

@@ -13,6 +13,9 @@ const CAP = 0xf3ead6;
 const BAND = 0xf3ead6;
 const BUTTON = 0xffd84a;
 const BUTTON_RIM = 0x262840;
+/** Panel face: dark neutral grey (display ≈ 0.2, equal R and G, like the toolkit's DOT_BOARD_GREY). */
+const PANEL = 0x333333;
+const RIM = 0xe8e0cc;
 
 function painted(geo: THREE.BufferGeometry, hex: number): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -41,6 +44,22 @@ export function pedestalGeometry(): THREE.BufferGeometry {
   const cap = new THREE.CylinderGeometry(ODD.capRadius, ODD.capRadius * 0.94, ODD.capHeight, 24);
   cap.translate(0, ODD.capBottom + ODD.capHeight / 2, 0);
   parts.push(painted(cap, CAP));
+  // Pole and the dark round "screen" every weak-eye shape sits on (identical on all three).
+  const top = ODD.capBottom + ODD.capHeight;
+  const poleTop = ODD.shapeHeight - ODD.panelRadius * 0.6;
+  const pole = new THREE.CylinderGeometry(ODD.poleRadius, ODD.poleRadius * 1.3, poleTop - top, 12);
+  pole.translate(0, top + (poleTop - top) / 2, 0);
+  parts.push(painted(pole, BODY));
+  const disc = (r: number, depth: number, z: number, hex: number): THREE.BufferGeometry => {
+    const g = new THREE.CylinderGeometry(r, r, depth, 48);
+    g.rotateX(Math.PI / 2);
+    g.translate(0, 0, z);
+    g.rotateX(-ODD.panelTilt);
+    g.translate(0, ODD.shapeHeight, 0);
+    return painted(g, hex);
+  };
+  parts.push(disc(ODD.rimRadius, ODD.panelDepth, 0, RIM));
+  parts.push(disc(ODD.panelRadius, ODD.panelDepth, 0.012, PANEL));
   const merged = mergeGeometries(parts, false);
   for (const p of parts) p.dispose();
   if (!merged) throw new Error('oddone: pedestal merge failed');
@@ -59,6 +78,17 @@ export function buttonGeometry(): THREE.BufferGeometry {
   if (!merged) throw new Error('oddone: button merge failed');
   return merged;
 }
+
+/** World frame of a panel face for pedestals facing `facingYaw`: in-plane right/up and the outward normal. */
+export function panelFrame(facingYaw: number): { right: THREE.Vector3; up: THREE.Vector3; normal: THREE.Vector3 } {
+  const t = ODD.panelTilt;
+  const toWorld = (x: number, y: number, z: number): THREE.Vector3 =>
+    new THREE.Vector3(x * Math.cos(facingYaw) + z * Math.sin(facingYaw), y, -x * Math.sin(facingYaw) + z * Math.cos(facingYaw));
+  return { right: toWorld(1, 0, 0), up: toWorld(0, Math.cos(t), -Math.sin(t)), normal: toWorld(0, Math.sin(t), Math.cos(t)) };
+}
+
+/** Distance from the panel centre to the front of its face, along the normal. */
+export const PANEL_FACE = ODD.panelDepth / 2 + 0.012;
 
 export interface PedestalSet {
   readonly pedestals: THREE.InstancedMesh;
@@ -90,17 +120,17 @@ export function createPedestals(base: readonly THREE.Vector3[], facingYaw: numbe
   const btn = new THREE.Matrix4();
   const pose = (i: number, squash: number, wobble: number, flash: number, time: number): void => {
     const b = base[i];
-    const tilt = wobble > 0 ? Math.sin(time * 26 + i) * 0.09 * wobble : 0;
+    // A wrong press shakes the pedestal with a quick twist about its own axis, so the panel stays
+    // behind its floating shape.
+    const twist = wobble > 0 ? Math.sin(time * 26 + i) * 0.08 * wobble : 0;
     d.position.copy(b);
-    d.rotation.set(tilt * 0.6, facingYaw, tilt, 'YXZ');
-    d.scale.set(1 + 0.05 * squash, 1 - 0.04 * squash, 1 + 0.05 * squash);
+    d.rotation.set(0, facingYaw + twist, 0);
+    d.scale.set(1, 1, 1);
     d.updateMatrix();
     pedestals.setMatrixAt(i, d.matrix);
     // The button rides on the (possibly wobbling) pedestal top: same pose, no pedestal scale.
     const top = ODD.capBottom + ODD.capHeight;
-    d.scale.set(1, 1, 1);
-    d.updateMatrix();
-    btn.makeScale(1 + 0.25 * squash, Math.max(0.25, 1 - 0.7 * squash), 1 + 0.25 * squash).setPosition(0, top * (1 - 0.04 * squash), 0);
+    btn.makeScale(1 + 0.25 * squash, Math.max(0.25, 1 - 0.7 * squash), 1 + 0.25 * squash).setPosition(0, top, 0);
     buttons.setMatrixAt(i, btn.premultiply(d.matrix));
     const k = 1 + 1.5 * flash;
     pedestals.setColorAt(i, c.setRGB(k, k, k));
