@@ -7,7 +7,8 @@ import type { CameraApi, GameContext, InputState } from '../../types';
 import { driveTriggers } from '../input';
 import { clamp, DRIVE, engineSound } from './car-math';
 import { createCarModel } from './car-model';
-import { NO_CONTROLS, createCarSim, restHeight, type CarControls, type CarEnv } from './car-sim';
+import { CAR, NO_CONTROLS, createCarSim, restHeight, type CarControls, type CarEnv } from './car-sim';
+import { createDust } from './dust';
 import { isPaved, nearestRoad } from './surface';
 import type { VehicleInternal } from './types';
 
@@ -36,6 +37,41 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   const model = createCarModel();
   ctx.scene.add(model.root);
   ctx.scene.add(model.blob);
+  const dust = createDust();
+  ctx.scene.add(dust.mesh);
+  let dustAcc = 0;
+  let seed = 1;
+  /** Deterministic jitter (test mode stays reproducible). */
+  const rnd = (): number => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647 - 0.5;
+  };
+  const wheelWorld = new THREE.Vector3();
+  const dustVel = new THREE.Vector3();
+  const side = new THREE.Vector3();
+
+  /** Puffs from the rear tyres: off-road speed, power-slides and landings. */
+  function kickDust(dt: number, landed: number): void {
+    side.set(-1, 0, 0).applyQuaternion(sim.quaternion);
+    const slip = Math.abs(sim.velocity.dot(side));
+    const speed = Math.abs(sim.forwardSpeed);
+    let rate = 0;
+    if (!sim.onRoad && speed > 3) rate += speed * 1.1;
+    if (slip > 2) rate += slip * 5;
+    if (Math.abs(controls.throttle) > 0.5 && speed < 5 && driven) rate += 6;
+    let burst = landed > 3 ? 6 : 0;
+    dustAcc += rate * dt;
+    while (dustAcc >= 1 || burst > 0) {
+      if (burst > 0) burst--;
+      else dustAcc -= 1;
+      const w = sim.wheels[2 + (seed & 1)];
+      if (!w.contact) continue;
+      wheelWorld.set(w.local.x, w.local.y - w.length - CAR.wheelRadius * 0.7, w.local.z).applyQuaternion(sim.quaternion).add(sim.position);
+      dustVel.copy(sim.velocity).multiplyScalar(0.25).add(tmp.set(rnd() * 1.6, 0.8 + rnd(), rnd() * 1.6));
+      dust.emit(wheelWorld, dustVel, 0.8 + rnd() * 0.35 + Math.min(0.6, slip * 0.06));
+    }
+    dust.update(dt);
+  }
 
   const env: CarEnv = {
     heightAt: (x, z) => ctx.world.heightAt(x, z),
@@ -145,6 +181,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     }
 
     sync();
+    kickDust(dt, ev.landed);
     const p = pitch.step(clamp(-sim.accelLong * 0.0055, -0.075, 0.075), dt);
     const r = roll.step(clamp(sim.accelLat * 0.0062, -0.11, 0.11), dt);
     const h = heave.step(0, dt);
@@ -235,6 +272,8 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       if (engineOn) ctx.audio.setLoop('engine', 0);
       model.root.removeFromParent();
       model.blob.removeFromParent();
+      dust.mesh.removeFromParent();
+      dust.dispose();
       model.dispose();
       sim.dispose();
     },
