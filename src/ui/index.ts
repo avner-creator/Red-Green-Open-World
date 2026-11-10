@@ -8,6 +8,7 @@ import { h } from './dom';
 import { icon } from './icons';
 import { setCharacterAccess } from './characterAccess';
 import { applyStoredCharacter, createCharacterSelect } from './characterSelect';
+import { createGlassesSummary } from './glasses/summaryScreen';
 import { createGate } from './gateScreen';
 import type { GateScreen } from './gateScreen';
 import { createHud } from './hud';
@@ -81,6 +82,7 @@ export function createUi(ctx: GameContext): UiApi {
   const credits = createCredits({ back: pop });
   const settings = createSettings(ctx, {
     onClose: pop,
+    onSummary: () => (stack.push(glassesSummary), render()),
     onCalibrate: () => {
       calibrating = true;
       render();
@@ -90,7 +92,8 @@ export function createUi(ctx: GameContext): UiApi {
       });
     },
   });
-  const gate: GateScreen = createGate(() => {
+  const glassesSummary = createGlassesSummary(ctx, { back: pop });
+  const gate: GateScreen =createGate(() => {
     stack.pop();
     stack.push(settings);
     render();
@@ -113,6 +116,8 @@ export function createUi(ctx: GameContext): UiApi {
   const skillChip = createSkillChip(ctx);
   const tutorial = createTutorial(ctx);
   const touch = createTouchUi(ctx);
+  all.push(glassesSummary);
+  root.append(glassesSummary.el);
 
   const phase = (): SessionPhase => ctx.session.state.phase;
   const base = (): Screen | null => {
