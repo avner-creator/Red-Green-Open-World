@@ -1,13 +1,11 @@
 /** Pure bounce maths (no three, no DOM) so it can be unit tested. */
-import { PLAYER, TRAMPOLINE } from '../config';
-import { BOUNCE, PADS } from './constants';
+import { PLAYER } from '../config';
+import { BOUNCE, BOUNCE_STARS, PADS } from './constants';
 
-export const BOUNCE_THRESHOLDS: readonly { height: number; stars: number }[] = [
-  { height: 10, stars: 1 },
-  { height: 20, stars: 1 },
-  { height: 30, stars: 2 },
-  { height: 40, stars: 3 },
-];
+export const BOUNCE_THRESHOLDS: readonly { height: number; stars: number }[] = BOUNCE_STARS.map((height, i) => ({
+  height,
+  stars: i + 1,
+}));
 
 export function apexFromSpeed(speed: number, gravity: number = PLAYER.gravity): number {
   return (speed * speed) / (2 * gravity);
@@ -24,16 +22,14 @@ export function flightTime(apex: number, gravity: number = PLAYER.gravity): numb
 
 /**
  * Apex of the next trampoline bounce, or 0 when the bounce stops.
- * `prev` is the previous apex of the chain (0 = chain not running).
+ * `prev` is the previous apex of the chain (0 = chain not running: walking on, or dropping in).
  */
 export function nextBounceApex(prev: number, held: boolean, airPeak = 0): number {
-  const max = TRAMPOLINE.maxHeight;
   if (prev <= 0) {
     const fall = Math.min(BOUNCE.maxFromFall, airPeak * BOUNCE.fromFallShare);
-    const base = Math.max(TRAMPOLINE.firstBounce * (held ? 1 : BOUNCE.gentleFirst), held ? fall : 0);
-    return Math.min(base, max);
+    return Math.min(Math.max(BOUNCE.firstBounce, fall), BOUNCE.maxHeight);
   }
-  if (held) return Math.min(prev * TRAMPOLINE.growth, max);
+  if (held) return Math.min(prev * BOUNCE.growth, BOUNCE.maxHeight);
   const next = prev * BOUNCE.releaseDecay;
   return next < BOUNCE.stopBelow ? 0 : next;
 }
@@ -95,4 +91,14 @@ export function padLocalPositions(count: number, spacing: number): { x: number; 
     out.push({ x: arcR * Math.sin(a), z: arcR * Math.cos(a) - arcR });
   }
   return out;
+}
+
+/** Stars for a rocket launch: one for the landing, one per rotation landed cleanly (max 3). */
+export function launchStars(rotations: number, upright: boolean): number {
+  return Math.min(3, 1 + (upright ? Math.min(2, rotations) : 0));
+}
+
+/** Stars for one completed trick rotation (the n-th of the flight). */
+export function trickStars(n: number): number {
+  return n >= 3 ? 2 : 1;
 }

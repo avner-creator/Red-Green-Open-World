@@ -307,6 +307,20 @@ export interface PlayerApi {
    * move. Outfits follow. Reset to 0, 0 automatically when an external controller is released.
    */
   setTilt(pitch: number, roll: number): void;
+  /**
+   * Visual-only extra rotation of the avatar about its body centre (flips, spins), or null to
+   * clear. Composes with `setTilt`: the tilt is the outer rotation, this one is applied inside the
+   * tilted body frame. Feet `position`, yaw, collider and pickup points don't move; outfits follow.
+   * Ignored during a flop. Cleared automatically when an external controller is released, on
+   * respawn, on flop and when entering a vehicle.
+   */
+  setVisualRotation(q: THREE.Quaternion | null): void;
+  /**
+   * Visual-only extra squash (-) / stretch (+) on top of the built-in landing spring: height
+   * scales by 1 + s, width by 1 - s / 2 (clamped to -0.9..2). 0 clears. Same reset rules as
+   * `setVisualRotation`.
+   */
+  setVisualStretch(s: number): void;
   /** What the player is riding/driving, if anything. */
   readonly vehicle: VehicleApi | null;
 }
@@ -374,6 +388,10 @@ export interface Anchor {
   yaw: number;
   /** Clear radius the world keeps free of props. */
   radius: number;
+  /** Optional landing/aim spot that belongs to this anchor (launchPads: the rocket landing net). */
+  target?: THREE.Vector3;
+  /** Clear radius around `target`, metres. */
+  targetRadius?: number;
 }
 
 export type AnchorName =

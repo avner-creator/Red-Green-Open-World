@@ -1,37 +1,38 @@
 /**
- * Activities: Glow Gems, the giant trampoline and the bounce pads.
- * One module per activity; pure logic lives in gemLogic.ts and bounceLogic.ts.
+ * Activities: Glow Gems, both-eye chests, the balloon skydive and the thrill rides (giant
+ * trampoline, bounce pads, rocket pads). One module per activity; pure logic lives in *Logic.ts.
  */
 import type { GameContext, GameSystem } from '../types';
 import { createChests } from './chests';
 import { createGear } from './gear';
 import { createGems } from './gems';
-import { createBouncePads } from './pads';
-import { createTrampoline } from './trampoline';
 import { createSkydive } from './skydive';
+import { createThrills } from './thrills';
+
+export { setLaunchGate } from './rocket';
+export { thrillSpots } from './thrillSpots';
 
 export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const gems = createGems(ctx);
-  const trampoline = createTrampoline(ctx);
-  const pads = createBouncePads(ctx);
+  const thrills = createThrills(ctx);
   const chests = createChests(ctx);
   const gear = createGear(ctx);
   const skydive = createSkydive(ctx);
   return {
     update(dt) {
+      // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
+      // see the player's final position for this frame.
       if (ctx.session.state.phase === 'playing') {
-        trampoline.update(dt);
-        pads.update(dt);
+        thrills.update(dt);
       }
+      skydive.update(dt);
       gems.update(dt);
       chests.update(dt);
       gear.update(dt);
-      skydive.update(dt);
     },
     dispose() {
       gems.dispose();
-      trampoline.dispose();
-      pads.dispose();
+      thrills.dispose();
       chests.dispose();
       gear.dispose?.();
       skydive.dispose();
