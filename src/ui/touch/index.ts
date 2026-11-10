@@ -222,6 +222,8 @@ export function createTouchUi(ctx: GameContext): TouchUi {
         setIcon(flopIcon, fl);
       }
       sprint.setAttribute('aria-pressed', String(c.sprint));
+      // An activity's own action prompt (skydive: jump out, open the chute) means "press jump".
+      jump.classList.toggle('cue', !!root.querySelector('.rg-sky-prompt.on'));
 
       // First-play hints until the player has both moved and looked.
       if (hintT >= 0) {

@@ -156,7 +156,7 @@ test.describe('touch', () => {
     expect(consoleErrors).toEqual([]);
   });
 
-  test('portrait asks to rotate, keyboard hides the touch HUD', async ({ page }) => {
+  test('portrait asks to rotate, keyboard hides the touch HUD; skydive by touch', async ({ page }) => {
     await boot(page);
     await startByTouch(page);
     await page.setViewportSize({ width: 375, height: 667 });
@@ -173,6 +173,52 @@ test.describe('touch', () => {
     await page.keyboard.press('KeyW');
     await step(page, 2);
     await expect(page.getByTestId('touch-hud')).toBeHidden();
+
+    // Skydive with the same controls: Use boards the balloon, the jump button (cued) jumps out,
+    // the stick steers the fall, and the landing hands back walk mode.
+    const cdp = await page.context().newCDPSession(page);
+    await page.evaluate(() => {
+      const rg = window.__rg!;
+      const a = rg.ctx.world.anchors.balloon.position;
+      rg.teleport(a.x + 1.7, rg.ctx.world.heightAt(a.x, a.z) + 0.4, a.z, -Math.PI / 2);
+      rg.step(1 / 60, 10, false);
+    });
+    // Any touch brings the touch HUD back after the keyboard hid it.
+    await touch(cdp, 'touchStart', [{ x: 333, y: 120 }]);
+    await touch(cdp, 'touchEnd', []);
+    await step(page, 1);
+    await expect(page.getByTestId('touch-hud')).toBeVisible();
+    await expect(page.getByTestId('touch-use')).toHaveClass(/ready/);
+    await page.getByTestId('touch-use').tap({ force: true }); // it pulses while ready
+    await step(page, 1);
+    expect(await page.evaluate(() => window.__rg!.ctx.player.mode)).toBe('external');
+    // Ride up until the "jump out" prompt shows.
+    await page.waitForFunction(() => {
+      window.__rg!.step(1 / 30, 15, false);
+      return !!document.querySelector('.rg-sky-prompt.on');
+    }, undefined, { polling: 50, timeout: 60_000 });
+    await step(page, 12);
+    await step(page, 1, true);
+    await expect(page.getByTestId('touch-jump')).toHaveClass(/cue/);
+    await save(page, 'phone-skydive-prompt');
+    await page.getByTestId('touch-jump').tap({ force: true });
+    await step(page, 30);
+    const fall0 = await page.evaluate(() => {
+      const p = window.__rg!.ctx.player;
+      return { vy: p.velocity.y, x: p.position.x, z: p.position.z };
+    });
+    expect(fall0.vy).toBeLessThan(-3);
+    await touch(cdp, 'touchStart', [{ x: 120, y: 290 }]);
+    await touch(cdp, 'touchMove', [{ x: 200, y: 290 }]);
+    await step(page, 60);
+    await touch(cdp, 'touchEnd', []);
+    const fall1 = await page.evaluate(() => window.__rg!.ctx.player.position);
+    expect(Math.hypot(fall1.x - fall0.x, fall1.z - fall0.z)).toBeGreaterThan(3);
+    await page.waitForFunction(() => {
+      window.__rg!.step(1 / 30, 30, false);
+      return window.__rg!.ctx.player.mode === 'walk';
+    }, undefined, { polling: 50, timeout: 60_000 });
+    expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   });
 });
 

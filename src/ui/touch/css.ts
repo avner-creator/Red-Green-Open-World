@@ -74,6 +74,9 @@ body,#game{touch-action:none}
 /* touch mode tweaks for the shared HUD: no key caps, room for the pause button, safe areas */
 .rg.touch-on .tut{display:none!important}
 .rg.touch-on .prompt .cap,.rg.touch-on .prompt .gp{display:none}
+.rg.touch-on .rg-sky-prompt .key{display:none}
+.rg .tbtn.jump.cue{animation:rg-tcue .7s ease-in-out infinite alternate}
+@keyframes rg-tcue{to{box-shadow:0 0 0 calc(var(--tl)*.8) #fff,0 0 0 calc(var(--tl)*3) #000,0 0 0 calc(var(--tl)*4.4) #fff}}
 .rg.touch-on .toasts{top:calc(var(--u)*15 + env(safe-area-inset-top,0px))}
 .rg.touch-on .pill.gems,.rg.touch-on .pill.stars{margin-left:env(safe-area-inset-left,0px);margin-top:env(safe-area-inset-top,0px)}
 .rg.touch-on .timer{margin-right:env(safe-area-inset-right,0px);margin-top:env(safe-area-inset-top,0px)}

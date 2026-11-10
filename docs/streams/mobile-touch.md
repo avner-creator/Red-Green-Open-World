@@ -1,6 +1,8 @@
 # Stream A: touch and mobile controls (branch `agent/mobile-touch`)
 
-Status: **done, ready to merge.** `npm run verify` is green (43 e2e tests, including 3 new touch tests).
+Status: **done, ready to merge.** The branch has the latest `main` merged in (skydive and music
+included), and `npm run verify` is green there: 206 unit tests and 45 e2e tests (3 are new touch
+tests) in 3.7 min.
 
 ## What was built
 
@@ -27,7 +29,8 @@ Status: **done, ready to merge.** `npm run verify` is green (43 e2e tests, inclu
     sounds the horn).
   - First-play hints, with no text: the stick ring pulses and a hand plus an eye swipe on the look
     side, until the player has moved and looked (8 s max).
-  - In touch mode, the keyboard tutorial and the key caps in the HUD prompt are hidden.
+  - In touch mode, the keyboard tutorial and the key caps in the HUD prompt and the skydive prompt
+    are hidden. While the skydive's own action prompt is up, the jump button pulses as a cue.
 - **Phone plumbing** (`platform.ts`):
   - Portrait shows a rotate-phone icon overlay (no text) and pauses play.
   - A `visualViewport` resize re-runs main's resize.
@@ -70,10 +73,9 @@ The UI reaches core through `touchControls(ctx.input)` (WeakMap, same pattern as
    const q = settings.get().quality;
    const cap = testMode ? 1 : touchPixelRatioCap(q, matchMedia('(pointer: coarse)').matches && isPhoneViewport(w, h));
    ```
-3. **Skydive merge (`agent/integrate-skydive`)**: its `prompt.show(..., input.device === 'gamepad')`
-   draws key caps. In touch mode, hide those caps (e.g. `.rg.touch-on <its prompt> .cap{display:none}`),
-   or give the skydive prompt the HUD `.prompt` class. Skydive steering already works, because it
-   reads `moveX/moveY/jumpPressed`.
+3. The skydive prompt is handled from `src/ui/touch/css.ts` (`.rg.touch-on .rg-sky-prompt .key`
+   is hidden) and `index.ts` (the jump cue looks for `.rg-sky-prompt.on`). If skydive renames that
+   class, update both places.
 
 ## Tests
 
@@ -84,14 +86,17 @@ The UI reaches core through `touchControls(ctx.input)` (WeakMap, same pattern as
   - Phone 667×375: tap Play; drag the stick and the player moves more than 2 m; a second finger
     turns the camera; tap jump fires `player:jump`; sprint toggles; pause and resume by touch; the
     gate hold works by touch; settings fit on screen.
-  - Portrait: the overlay appears and the game pauses; back in landscape, a key hides the touch HUD.
+  - Portrait: the overlay appears and the game pauses; back in landscape, a key hides the touch HUD
+    and a touch brings it back.
+  - Skydive by touch: tap Use at the balloon, wait for the jump-out prompt (the jump button is
+    cued), tap jump, steer the free fall with the stick (more than 3 m sideways), and land back in
+    walk mode.
   - Tablet 1024×768: HUD; walk to the buggy, tap Use to get in, the stick drives it (speed above
     3 m/s), tap Use to get out.
 - Screenshots (full / R / G) in `test-results/touch/`: `phone-hud`, `phone-stick`, `phone-pause`,
-  `phone-settings`, `phone-settings-game`, `phone-portrait`, `tablet-title`, `tablet-hud`,
+  `phone-settings`, `phone-settings-game`, `phone-portrait`, `phone-skydive-prompt`, `tablet-title`, `tablet-hud`,
   `tablet-driving`. All controls read clearly in both channels.
-- Cost: the e2e suite gets about 50 s longer (the full suite was already about 4 min on this
-  container).
+- Cost: about 1 min of the 3.7 min e2e run.
 
 ## Not verified
 
