@@ -117,9 +117,9 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
     const bz = pz + Math.sin(r) * 15.2;
     bench(k, bx, bz, dir(bx, bz, px, pz));
   }
-  // (−5° and 60° gave way to Scoops' light poles and the Carnival Island fingerpost; −152° moved to
+  // (−5° gave way to Scoops' light poles; −152° moved to
   // −145° to clear the Foam Lava gate.)
-  for (const a of [-145, -110, -70, 124, 174]) {
+  for (const a of [-145, -110, -70, 60, 124, 174]) {
     const r = THREE.MathUtils.degToRad(a);
     lamp(k, px + Math.cos(r) * 17.5, pz + Math.sin(r) * 17.5);
   }

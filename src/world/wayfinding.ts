@@ -49,11 +49,12 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
     rows: [['balloon', 'bouncePads', 'trampoline'], ['garage'], ['launchPads'], ['landingRings']],
     hang: ['bouncePads', 'trampoline'],
   },
-  // Carnival Island post: on the plaza's south-east rim, right of the spawn camera's line of sight
+  // Carnival Island post: on the plaza's south-east rim, right of the spawn camera's line of sight and
+  // clear of the first chest's lock view
   // (the plaza post is left of it), so both read from the spawn view. Arms in three rows; the race arm
   // points straight away from the camera, so it also carries a hanging disc.
   {
-    x: 8.75, z: 13.2, scale: 1, stripe: true,
+    x: 8, z: 14.8, scale: 1, stripe: true,
     targets: ['raceStart', 'foamCourse', 'dinoRing', 'iceCream', 'bubbleArena', 'dragonRoost', 'carnivalRow', 'airstrip'],
     rows: [['raceStart', 'foamCourse', 'dinoRing'], ['iceCream', 'bubbleArena', 'dragonRoost'], ['carnivalRow', 'airstrip']],
     hang: ['raceStart'],
