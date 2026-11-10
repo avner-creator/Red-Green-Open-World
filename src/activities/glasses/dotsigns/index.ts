@@ -24,6 +24,7 @@ import {
   nextTier,
   pivotMatrix,
   remapUv,
+  layoutSite,
   siteFrame,
   squashCurve,
   wobbleCurve,
@@ -48,7 +49,8 @@ const SWATCHES = {
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
-  const frame = siteFrame(site);
+  const lay = layoutSite(site);
+  const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
     const w = frame.toWorld(lx, lz);
     return env.groundAt(w.x, w.z) - site.y;
@@ -102,13 +104,13 @@ export function create(env: MechanicEnv): Mechanic {
     parts[`btn${i}`] = [rim, face];
   });
   const body = createPartMesh(parts, material, 'glasses:dotsigns');
-  body.mesh.position.set(site.x, site.y, site.z);
-  body.mesh.rotation.y = site.yaw;
+  body.mesh.position.set(lay.x, site.y, lay.z);
+  body.mesh.rotation.y = lay.yaw;
   body.mesh.updateMatrixWorld(true);
   env.add(body.mesh, VisionLayer.Both);
 
   // ───────────── colliders ─────────────
-  const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), site.yaw);
+  const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lay.yaw);
   const colliders: ReturnType<typeof ctx.physics.addStaticBox>[] = [];
   const addBox = (lx: number, ly: number, lz: number, hx: number, hy: number, hz: number): void => {
     const w = frame.toWorld(lx, lz);
@@ -371,7 +373,7 @@ export function create(env: MechanicEnv): Mechanic {
         lastResult,
         confetti: confetti.live,
         gemsPerTier: { ...DOT_GEMS },
-        yaw: site.yaw,
+        yaw: lay.yaw,
         buttons: btnWorld.map((b) => ({ x: b.x, y: b.y, z: b.z })),
         // Where to stand to press each button (in front of the pedestal).
         stand: D.buttonX.map((x) => pt(x, D.pedZ + D.pedD / 2 + 0.45)),

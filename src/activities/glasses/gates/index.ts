@@ -29,6 +29,7 @@ import {
   pivotMatrix,
   quadGeo,
   remapUv,
+  layoutSite,
   siteFrame,
   squashCurve,
   wobbleCurve,
@@ -102,7 +103,8 @@ function drawPlate(g: CanvasRenderingContext2D, ready: boolean): void {
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
-  const frame = siteFrame(site);
+  const lay = layoutSite(site);
+  const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
     const w = frame.toWorld(lx, lz);
     return env.groundAt(w.x, w.z) - site.y;
@@ -113,7 +115,7 @@ export function create(env: MechanicEnv): Mechanic {
   const material = createSiteMaterial(atlas);
   const U = (n: keyof typeof SWATCHES) => atlas.swatchUv(n);
   const archBase = GATES.archX.map((x) => Math.min(ground(x - GATES.outerHalf + 0.2, GATES.archZ), ground(x + GATES.outerHalf - 0.2, GATES.archZ)));
-  const signBase = Math.min(ground(-GATES.signLegX, GATES.signZ), ground(GATES.signLegX, GATES.signZ));
+  const signBase = ground(0, GATES.signZ);
   const plateBase = ground(0, GATES.plateZ);
   const apex = GATES.straight + GATES.outerHalf;
 
@@ -139,25 +141,22 @@ export function create(env: MechanicEnv): Mechanic {
     list.push(quadGeo(GATES.plaque, GATES.plaque, x, py, z - 0.085, atlas.cellUv(i), true));
     parts[`arch${i}`] = list;
   });
-  // The sign: two legs, a wooden frame, the dark panel, a roof cap.
+  // The sign: a lectern in front of the plate (one stout post, a wooden frame, the dark panel,
+  // a roof cap), leaning back a little so it faces the camera that looks down over the hero.
+  const signCentre = new THREE.Vector3(0, signBase + GATES.signY, GATES.signZ);
   {
     const z = GATES.signZ;
-    const y = signBase + GATES.signY;
-    const top = y + GATES.signFrame / 2;
-    const list: THREE.BufferGeometry[] = [];
-    for (const sx of [-1, 1]) {
-      const legH = top - signBase + GATES.sink;
-      list.push(boxGeo(0.26, legH, 0.26, sx * GATES.signLegX, signBase - GATES.sink + legH / 2, z - 0.2, U('woodDark')));
-      list.push(boxGeo(0.44, 0.5, 0.44, sx * GATES.signLegX, signBase + 0.1, z - 0.2, U('stoneDark')));
-    }
-    list.push(boxGeo(GATES.signFrame, GATES.signFrame, 0.16, 0, y, z, U('wood')));
-    list.push(boxGeo(GATES.signPanel, GATES.signPanel, 0.04, 0, y, z + 0.09, U('panel')));
-    list.push(boxGeo(GATES.signFrame + 0.36, 0.14, 0.5, 0, top + 0.07, z - 0.05, U('woodDark')));
-    // Small gold studs at the frame corners.
-    for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-      list.push(boxGeo(0.12, 0.12, 0.05, cx * (GATES.signFrame / 2 - 0.09), y + cy * (GATES.signFrame / 2 - 0.09), z + 0.1, U('gold')));
-    }
-    parts.sign = list;
+    const tilted = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateX(-GATES.signTilt).translate(0, signCentre.y, z);
+    const half = GATES.signFrame / 2;
+    const postH = signCentre.y - signBase + GATES.sink;
+    parts.sign = [
+      boxGeo(0.3, postH, 0.3, 0, signBase - GATES.sink + postH / 2, z - 0.12, U('woodDark')),
+      boxGeo(0.62, 0.4, 0.62, 0, signBase + 0.08, z - 0.12, U('stoneDark')),
+      tilted(boxGeo(GATES.signFrame, GATES.signFrame, 0.16, 0, 0, 0, U('wood'))),
+      tilted(boxGeo(GATES.signPanel, GATES.signPanel, 0.04, 0, 0, 0.09, U('panel'))),
+      tilted(boxGeo(GATES.signFrame + 0.3, 0.13, 0.46, 0, half + 0.065, -0.05, U('woodDark'))),
+      ...([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([cx, cy]) => tilted(boxGeo(0.11, 0.11, 0.05, cx * (half - 0.08), cy * (half - 0.08), 0.1, U('gold')))),
+    ];
   }
   // The start plate: a dark rim and a round face with feet and an arrow.
   {
@@ -168,13 +167,13 @@ export function create(env: MechanicEnv): Mechanic {
     parts.plate = [rim, face];
   }
   const body = createPartMesh(parts, material, 'glasses:gates');
-  body.mesh.position.set(site.x, site.y, site.z);
-  body.mesh.rotation.y = site.yaw;
+  body.mesh.position.set(lay.x, site.y, lay.z);
+  body.mesh.rotation.y = lay.yaw;
   body.mesh.updateMatrixWorld(true);
   env.add(body.mesh, VisionLayer.Both);
 
   // ───────────── colliders ─────────────
-  const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), site.yaw);
+  const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lay.yaw);
   const colliders: ReturnType<typeof ctx.physics.addStaticBox>[] = [];
   const addBox = (lx: number, ly: number, lz: number, hx: number, hy: number, hz: number): void => {
     const w = frame.toWorld(lx, lz);
@@ -190,20 +189,16 @@ export function create(env: MechanicEnv): Mechanic {
     const y2 = y0 + GATES.plaqueY + GATES.plaque / 2;
     addBox(x, (y1 + y2) / 2, GATES.archZ, GATES.outerHalf, (y2 - y1) / 2, GATES.depth / 2 + 0.05);
   });
-  {
-    const y = signBase + GATES.signY;
-    const top = y + GATES.signFrame / 2;
-    for (const sx of [-1, 1]) addBox(sx * GATES.signLegX, (signBase - GATES.sink + top) / 2, GATES.signZ - 0.2, 0.15, (top - signBase + GATES.sink) / 2, 0.15);
-    addBox(0, y, GATES.signZ, GATES.signFrame / 2, GATES.signFrame / 2, 0.12);
-  }
+  addBox(0, (signBase - GATES.sink + signCentre.y + GATES.signFrame / 2) / 2, GATES.signZ - 0.05, GATES.signFrame / 2, (signCentre.y + GATES.signFrame / 2 - signBase + GATES.sink) / 2, 0.2);
 
   // ───────────── the two halves (weak layer + strong layer, exactly registered) ─────────────
-  const signPos = frame.toWorld(0, GATES.signZ + 0.08 + 0.02 + 0.03);
-  const signY = site.y + signBase + GATES.signY;
+  const signPos = frame.toWorld(0, GATES.signZ);
+  const signY = site.y + signCentre.y;
   const makeRoot = (): THREE.Group => {
     const g = new THREE.Group();
     g.position.set(signPos.x, signY, signPos.z);
-    g.rotation.y = site.yaw;
+    // Yaw, then the sign's lean in its own frame (the same transform as the panel).
+    g.rotation.set(-GATES.signTilt, lay.yaw, 0, 'YXZ');
     return g;
   };
   const weakRoot = makeRoot();
@@ -213,6 +208,9 @@ export function create(env: MechanicEnv): Mechanic {
   // Both blocks are LEFT halves; a half on the right is the mirror image (scale.x = −1).
   const weakHalf: HalfSymbolBlock = createHalfSymbol({ shape: 'round', side: 'left', size: 1, facing: 'wall' });
   const strongHalf: HalfSymbolBlock = createHalfSymbol({ shape: 'round', side: 'left', size: 1, facing: 'wall' });
+  // 2 cm in front of the panel face (panel face at z = 0.11 in the sign's frame).
+  weakHalf.object.position.z = 0.13;
+  strongHalf.object.position.z = 0.13;
   weakRoot.add(weakHalf.object);
   strongRoot.add(strongHalf.object);
   env.add(weakRoot, VisionLayer.WeakOnly);
@@ -447,7 +445,7 @@ export function create(env: MechanicEnv): Mechanic {
         confetti: confetti.live,
         gemsPerTier: { ...GATE_GEMS },
         tierPreset: { ...TIERS[tier] },
-        yaw: site.yaw,
+        yaw: lay.yaw,
         plate: pt(0, GATES.plateZ),
         // Points just in front of / behind each opening (world), for tests.
         arches: GATES.archX.map((x) => ({ front: pt(x, GATES.archZ + 0.7), back: pt(x, GATES.archZ - 0.7), around: pt(x + GATES.outerHalf + 0.6, GATES.archZ - 0.7) })),
