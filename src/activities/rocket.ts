@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three';
 import type { GameContext } from '../types';
+import { PLAYER } from '../config';
 import { arcPoint, solveLaunch } from './ballistics';
 import { launchStars } from './bounceLogic';
 import { NET, ROCKET } from './constants';
@@ -238,7 +239,11 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
     const pos = ctx.player.position;
     for (let i = 0; i < pads.length; i++) {
       const p = pads[i];
-      if (Math.hypot(pos.x - p.x, pos.z - p.z) < ROCKET.padRadius - 0.1 && Math.abs(pos.y - p.y) < 0.7) return i;
+      const d = Math.hypot(pos.x - p.x, pos.z - p.z);
+      if (d < ROCKET.padRadius - 0.1 && Math.abs(pos.y - p.y) < 0.7) return i;
+      // The pad top is higher than the walk step, so running into its side also counts as
+      // stepping on (launchFrom puts the player on top for the wind-up).
+      if (d < ROCKET.padRadius + PLAYER.radius + 0.15 && pos.y > p.y - ROCKET.padTop - 0.3 && pos.y < p.y + 0.7) return i;
     }
     return -1;
   }

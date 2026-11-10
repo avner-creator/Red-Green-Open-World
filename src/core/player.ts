@@ -10,7 +10,7 @@ import { GROUP_AVATAR, groups } from './physics';
 import { angleDelta, approachVec2, cameraRelative, canJump, damp, integrateVertical } from './motion-math';
 import { createPlayerFx } from './player-fx';
 import { createPlayerModel } from './player-model';
-import { CONTROLLER, MOVE } from './tuning';
+import { ANIM, CONTROLLER, MOVE } from './tuning';
 
 const HALF = (PLAYER.height - 2 * PLAYER.radius) / 2;
 const CENTRE = HALF + PLAYER.radius;
@@ -459,9 +459,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     if (!grounded && airTime > 0.12) return playAnim(velocity.y > 0 ? 'jump' : 'fall');
     if (ctx.session.state.phase === 'title') return playAnim('wave');
     if (hs < 0.35) return playAnim('idle');
-    const runFrom = (PLAYER.walkSpeed + PLAYER.sprintSpeed) / 2;
-    if (hs < runFrom) return playAnim('walk', Math.min(1.5, Math.max(0.55, hs / 3.2)));
-    playAnim('run', Math.min(1.4, Math.max(0.8, hs / 7.5)));
+    const clampRate = (v: number, r: readonly [number, number]): number => Math.min(r[1], Math.max(r[0], v));
+    if (hs < ANIM.runFrom) return playAnim('walk', clampRate(hs / ANIM.walkClipSpeed, ANIM.walkRate));
+    playAnim('run', clampRate(hs / ANIM.runClipSpeed, ANIM.runRate));
   }
 
   /** In a vehicle: hop into the seat, then ride along with it (position feeds gem pickup). */

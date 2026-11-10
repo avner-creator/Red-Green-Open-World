@@ -24,9 +24,23 @@ export const SKY = {
   /** Canopy descent and glide speeds. */
   canopySink: 5,
   canopyGlide: 9,
-  /** Canopy turn rate at full stick and the gentle hands-off homing towards the rings, rad/s. */
+  /** Canopy turn rate at full stick and the hands-off homing turn rate towards the rings, rad/s. */
   canopyTurn: 1.1,
-  canopyAssistTurn: 0.35,
+  canopyAssistTurn: 0.9,
+  /**
+   * Hands-off canopy autopilot: with spare height it flies beside the rings (up to this many
+   * radians off the bearing) to burn height in a spiral, then turns straight in.
+   */
+  assistMaxOffset: 1.45,
+  /** Spare glide metres per radian of offset. */
+  assistOffsetScale: 14,
+  /** Hands-off freefall drift along the gem trail: at most this much of a full stick. */
+  freefallAssist: 0.45,
+  /** Stick below this counts as no input for the assist. */
+  assistDeadZone: 0.15,
+  /** Seconds without input before the assist eases back in, and how fast it does (1/s). */
+  assistReturnDelay: 1,
+  assistReturnRate: 2.5,
   /** How fast the jolt brakes the fall towards the canopy sink speed, 1/s. */
   canopyBrake: 5,
   /** Flare: below this height above the surface sink and glide are cut. */
@@ -123,11 +137,85 @@ export interface CanopyState {
   yaw: number;
   /** Turn rate actually applied last step (for banking), rad/s. */
   turn: number;
+  /** Hands-off assist weight 0..1 (default 1) and seconds since the last stick input. */
+  assist?: number;
+  idle?: number;
+}
+
+/** Hands-off assist state shared by freefall and canopy. */
+export interface AssistState {
+  assist?: number;
+  idle?: number;
+}
+
+/**
+ * Update the hands-off assist weight: any stick input blends it out at once (by its magnitude,
+ * so full stick is full manual control); after `assistReturnDelay` s of no input it eases back.
+ * Returns the weight 0..1.
+ */
+export function updateAssist(a: AssistState, stick: number, dt: number): number {
+  let w = a.assist ?? 1;
+  if (stick > SKY.assistDeadZone) {
+    a.idle = 0;
+    w = Math.min(w, 1 - Math.min(1, stick));
+  } else {
+    a.idle = (a.idle ?? 0) + dt;
+    if (a.idle >= SKY.assistReturnDelay) w += (1 - w) * follow(SKY.assistReturnRate, dt);
+  }
+  a.assist = w;
+  return w;
+}
+
+/**
+ * Gentle hands-off freefall drift towards `target` (the next gem of the trail, or the rings):
+ * just enough horizontal speed to arrive over it as the fall reaches its height, capped at
+ * `freefallAssist` of a full stick.
+ */
+export function freefallAssistSteer(pos: V3, vel: V3, target: V3 | null): { x: number; z: number } {
+  if (!target) return { x: 0, z: 0 };
+  const dx = target.x - pos.x;
+  const dz = target.z - pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.3) return { x: 0, z: 0 };
+  const dy = pos.y - target.y;
+  const tReach = dy > 0 ? dy / Math.max(SKY.terminal * 0.5, -vel.y) : 0.5;
+  const want = Math.min(SKY.freefallAssist, d / tReach / SKY.steerSpeed);
+  return { x: (dx / d) * want, z: (dz / d) * want };
+}
+
+/** The next point of a trail (sorted highest first) still below a body at height `y`. */
+export function nextBelow<T extends V3>(trail: readonly T[], y: number): T | null {
+  for (const p of trail) if (p.y < y) return p;
+  return null;
+}
+
+/** Horizontal metres the canopy can still glide from `heightAboveSurface` (incl. the flare). */
+export function canopyRange(heightAboveSurface: number): number {
+  const above = Math.max(0, heightAboveSurface - SKY.flareHeight);
+  const flare = Math.min(heightAboveSurface, SKY.flareHeight);
+  return (above / SKY.canopySink) * SKY.canopyGlide + (flare / SKY.flareSink) * SKY.flareGlide;
+}
+
+/**
+ * Hands-off canopy heading: straight at `home` when the height just suffices, otherwise offset
+ * to the side the canopy is already turning (a spiral that burns spare height over the rings).
+ */
+export function canopyAssistHeading(pos: V3, yaw: number, home: { x: number; z: number }, heightAboveSurface: number): number {
+  const dx = home.x - pos.x;
+  const dz = home.z - pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 1) return yaw;
+  const bearing = Math.atan2(dx, dz);
+  const spare = canopyRange(heightAboveSurface) - d;
+  const offset = Math.max(0, Math.min(SKY.assistMaxOffset, spare / SKY.assistOffsetScale));
+  const side = angleTo(bearing, yaw) >= 0 ? 1 : -1;
+  return bearing + side * offset;
 }
 
 /**
  * One canopy step. The canopy flies forward along `yaw`; the stick (camera-relative) sets a wanted
- * heading, with no input it gently homes towards `home` (the landing rings). Vertical speed eases
+ * heading. Hands-off (see `updateAssist`) an autopilot homes in on `home` (the landing rings),
+ * spiralling down over them while it has height to spare. Vertical speed eases
  * to the sink rate (the opening jolt brakes a fast fall); `heightAboveSurface` triggers the flare.
  */
 export function stepCanopy(
@@ -140,21 +228,11 @@ export function stepCanopy(
   dt: number,
 ): void {
   const stick = Math.min(1, Math.hypot(steer.x, steer.z));
-  let want = st.yaw;
-  let rate = 0;
-  if (stick > 0.15) {
-    want = Math.atan2(steer.x, steer.z);
-    rate = SKY.canopyTurn * stick;
-  } else if (home) {
-    const dx = home.x - pos.x;
-    const dz = home.z - pos.z;
-    if (Math.hypot(dx, dz) > 1.5) {
-      want = Math.atan2(dx, dz);
-      rate = SKY.canopyAssistTurn;
-    }
-  }
-  const d = angleTo(st.yaw, want);
-  const turn = Math.max(-rate, Math.min(rate, d / Math.max(dt, 1e-4)));
+  const w = updateAssist(st, stick, dt);
+  const turnTo = (want: number, rate: number): number => Math.max(-rate, Math.min(rate, angleTo(st.yaw, want) / Math.max(dt, 1e-4)));
+  const manual = stick > SKY.assistDeadZone ? turnTo(Math.atan2(steer.x, steer.z), SKY.canopyTurn * stick) : 0;
+  const assist = home && w > 0 ? turnTo(canopyAssistHeading(pos, st.yaw, home, heightAboveSurface), SKY.canopyAssistTurn) : 0;
+  const turn = manual * (1 - w) + assist * w;
   st.turn = turn;
   st.yaw += turn * dt;
   const flare = heightAboveSurface < SKY.flareHeight;

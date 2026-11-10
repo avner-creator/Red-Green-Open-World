@@ -463,6 +463,48 @@ test('trampoline: held bounces reach ~45 m, a flip poses the avatar (outfit atta
   expect(r.mode).toBe('walk');
 });
 
+test('sprinting onto the mat and letting go stays on the mat until the bounce settles', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const a = ctx.world.anchors.trampoline;
+    const c = window.__rgThrills!.trampoline();
+    const dist = 14; // from the steps: ~5 m of run-up reaches full sprint
+    const x = a.position.x + Math.sin(a.yaw) * dist;
+    const z = a.position.z + Math.cos(a.yaw) * dist;
+    rg.teleport(x, ctx.world.heightAt(x, z) + 0.2, z, a.yaw + Math.PI);
+    rg.step(1 / 60, 30, false);
+    rg.inject({ moveY: 1, sprint: true });
+    let topSpeed = 0;
+    let onMat = false;
+    for (let i = 0; i < 60 * 6 && !onMat; i++) {
+      rg.step(1 / 60, 1, false);
+      topSpeed = Math.max(topSpeed, Math.hypot(ctx.player.velocity.x, ctx.player.velocity.z));
+      // Let go the moment the bounce starts (held W in the air would be a front flip).
+      if (ctx.player.mode === 'external') onMat = true;
+    }
+    rg.inject(null);
+    // Every touch-down after the take-off must be on the mat (radius 9 m).
+    let maxDist = 0;
+    let airborne = false;
+    for (let i = 0; i < 60 * 12; i++) {
+      rg.step(1 / 60, 1, false);
+      const p = ctx.player.position;
+      const low = p.y - c.y < 0.3;
+      if (!low) airborne = true;
+      if (airborne && low) maxDist = Math.max(maxDist, Math.hypot(p.x - c.x, p.z - c.z));
+    }
+    const p = ctx.player.position;
+    return { topSpeed, onMat, maxDist, endDist: Math.hypot(p.x - c.x, p.z - c.z), h: p.y - c.y, mode: ctx.player.mode };
+  });
+  expect(r.topSpeed).toBeGreaterThan(9);
+  expect(r.onMat).toBe(true);
+  expect(r.maxDist).toBeLessThan(7.5);
+  expect(r.endDist).toBeLessThan(8);
+  expect(r.h).toBeLessThan(0.5);
+  expect(r.mode).toBe('walk');
+});
+
 test('bounce-pad chain ends on the trampoline', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
@@ -470,12 +512,22 @@ test('bounce-pad chain ends on the trampoline', async () => {
     const th = window.__rgThrills!;
     const c = th.trampoline();
     const pad0 = th.spots().find((s) => s.tag === 'pad0')!;
-    rg.teleport(pad0.x, pad0.y - 2.5 + 0.05, pad0.z, 0);
+    const pad1 = th.spots().find((s) => s.tag === 'pad1')!;
+    // Sprint run-up onto the first pad from behind (the new 11 m/s sprint).
+    const d = Math.hypot(pad0.x - pad1.x, pad0.z - pad1.z);
+    const ux = (pad0.x - pad1.x) / d;
+    const uz = (pad0.z - pad1.z) / d;
+    const sx = pad0.x + ux * 10;
+    const sz = pad0.z + uz * 10;
+    rg.teleport(sx, ctx.world.heightAt(sx, sz) + 0.2, sz, Math.atan2(-ux, -uz));
+    rg.step(1 / 60, 30, false);
+    rg.inject({ moveY: 1, sprint: true });
     let onMat = false;
     let wentExternal = false;
     for (let i = 0; i < 60 * 25; i++) {
       rg.step(1 / 60, 1, false);
       const p = ctx.player.position;
+      if (ctx.player.mode === 'external' && !wentExternal) rg.inject(null);
       if (ctx.player.mode === 'external') wentExternal = true;
       if (wentExternal && Math.hypot(p.x - c.x, p.z - c.z) < 5 && Math.abs(p.y - c.y) < 0.6) onMat = true;
       if (onMat && ctx.player.mode === 'walk' && ctx.player.grounded) break;
@@ -504,7 +556,15 @@ test('rocket: E mid-flight does nothing, lands on the net, camera and pose reset
     };
     const pad = info.pads[1];
     rg.step(1 / 60, 120, false); // cooldown
-    rg.teleport(pad.x, pad.y + 0.05, pad.z, 0);
+    // Sprint run-up onto the middle pad from the side away from the net.
+    const dn = Math.hypot(info.net.x - pad.x, info.net.z - pad.z);
+    const sx = pad.x - ((info.net.x - pad.x) / dn) * 10;
+    const sz = pad.z - ((info.net.z - pad.z) / dn) * 10;
+    rg.teleport(sx, ctx.world.heightAt(sx, sz) + 0.2, sz, Math.atan2(info.net.x - pad.x, info.net.z - pad.z));
+    rg.step(1 / 60, 30, false);
+    rg.inject({ moveY: 1, sprint: true });
+    for (let i = 0; i < 60 * 4 && ctx.player.mode !== 'external'; i++) rg.step(1 / 60, 1, false);
+    rg.inject(null);
     let pressedE = false;
     let modeAfterE = '';
     let landed = false;

@@ -3,6 +3,13 @@ import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 
 /**
+ * Screenshots taken only for humans to look at (menus, wearables) are slow on SwiftShader
+ * (6-11 s each), so they are opt-in: `RG_SHOTS=1` (npm run shots:ui). Functional assertions
+ * always run.
+ */
+export const SHOTS = process.env.RG_SHOTS === '1';
+
+/**
  * Load the game in test mode and wait until it has rendered a frame. Collects console errors.
  * Boots at Low quality (no shadow map: ~2x faster frames on SwiftShader) unless `query` names a
  * `quality=`; tests that judge the look of the lit world pass `&quality=medium`.

@@ -26,7 +26,10 @@ export const BOUNCE = {
   /** A big fall onto the mat starts higher: this share of the fall, bounded by `maxFromFall`. */
   fromFallShare: 0.4,
   maxFromFall: 30,
-  /** Horizontal speed kept through a bounce, and its cap. */
+  /**
+   * Horizontal speed kept through a bounce, and its cap. Low since the 6.5 / 11 m/s walk/sprint:
+   * a kid who runs on and lets go must not drift off the far side (recentre pulls back too).
+   */
   keepHorizontal: 0.5,
   maxHorizontal: 7,
   /** Bounces at or below this apex let the move keys walk you across the mat. */
