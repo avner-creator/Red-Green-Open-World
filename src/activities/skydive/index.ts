@@ -67,6 +67,7 @@ export function createSkydive(ctx: GameContext): Skydive {
   ctx.scene.add(model.root);
 
   const padGroup = new THREE.Group();
+  padGroup.name = 'balloonPad';
   padGroup.position.copy(pad);
   ctx.scene.add(padGroup);
   const padDisposables: { dispose(): void }[] = [];

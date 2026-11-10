@@ -39,6 +39,7 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
   const disposables: { dispose(): void }[] = [];
   const colliders: ReturnType<typeof ctx.physics.addStaticCylinder>[] = [];
   const root = new THREE.Group();
+  root.name = 'bouncePads';
   ctx.scene.add(root);
 
   const baseGeo = new THREE.CylinderGeometry(PADS.radius + 0.25, PADS.radius + 0.35, PADS.top, 24);

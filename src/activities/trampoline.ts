@@ -77,6 +77,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   };
 
   const root = new THREE.Group();
+  root.name = 'trampoline';
   root.position.set(cx, groundY, cz);
   root.rotation.y = anchor.yaw;
   ctx.scene.add(root);
