@@ -22,8 +22,11 @@ export const BOUNCE = {
   /** A big fall onto the mat starts higher: this share of airPeak, bounded by `maxFromFall`. */
   fromFallShare: 0.4,
   maxFromFall: 20,
-  /** Horizontal speed kept through a bounce. */
-  keepHorizontal: 0.8,
+  /**
+   * Horizontal speed kept through a bounce (the stick adds air control on top). Lower since the
+   * 6.5 m/s walk: a kid who runs on and lets go must not drift off the far side of the mat.
+   */
+  keepHorizontal: 0.55,
   maxHorizontal: 7,
   /** Minimum seconds between two bounces. */
   cooldown: 0.25,

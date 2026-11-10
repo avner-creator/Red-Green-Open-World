@@ -10,7 +10,21 @@ import { BALLOON, CAMERA } from '../../config';
 import type { ExternalController, GameContext, InputState } from '../../types';
 import { BALLOON_DIMS, createBalloonModel } from './balloonModel';
 import { createCanopyModel } from './canopyModel';
-import { SKY, ascentHeight, easeInOut, follow, glideStars, ringStars, shouldOpenChute, stepCanopy, stepFreefall, stickToWorld } from './flight';
+import {
+  SKY,
+  ascentHeight,
+  easeInOut,
+  follow,
+  freefallAssistSteer,
+  glideStars,
+  nextBelow,
+  ringStars,
+  shouldOpenChute,
+  stepCanopy,
+  stepFreefall,
+  stickToWorld,
+  updateAssist,
+} from './flight';
 import type { CanopyState, V3 } from './flight';
 import { createWindStreaks } from './fx';
 import { createActionPrompt } from './prompt';
@@ -40,6 +54,8 @@ export function createSkydive(ctx: GameContext): Skydive {
   // Drift target at the top: right above the first (highest) skydive gem, else a little along the
   // route to the rings.
   const trail = ctx.world.gemSpots.filter((s) => s.tag === 'skydive').map((s) => s.position);
+  /** The trail highest first: hands-off freefall drifts from gem to gem. */
+  const trailDown = [...trail].sort((a, b) => b.y - a.y);
   const highest = trail.reduce<THREE.Vector3 | null>((best, p) => (!best || p.y > best.y ? p : best), null);
   const drift = new THREE.Vector2(pad.x, pad.z).addScaledVector(toRings.clone().normalize(), 6);
   if (highest && Math.hypot(highest.x - pad.x, highest.z - pad.z) < 30) drift.set(highest.x, highest.z);
@@ -148,6 +164,7 @@ export function createSkydive(ctx: GameContext): Skydive {
   const curChest = new THREE.Vector3();
   const velVec = new THREE.Vector3();
   const homeXZ = { x: ringAnchor.x, z: ringAnchor.z };
+  const ringTarget: V3 = { x: ringAnchor.x, y: ctx.world.heightAt(ringAnchor.x, ringAnchor.z), z: ringAnchor.z };
 
   const surfaceBelow = (x: number, y: number, z: number): { y: number; water: boolean } => {
     const terrain = ctx.world.heightAt(x, z);
@@ -248,6 +265,8 @@ export function createSkydive(ctx: GameContext): Skydive {
     enterPhase('freefall');
     startReturn();
     fallT = 0;
+    canopyState.assist = 1;
+    canopyState.idle = SKY.assistReturnDelay;
     // Face the next part of the trail (or the rings) and hop over the rim.
     const yaw = Math.atan2(ringAnchor.x - balloonPos.x, ringAnchor.z - balloonPos.z);
     player.yaw = yaw;
@@ -383,6 +402,13 @@ export function createSkydive(ctx: GameContext): Skydive {
         case 'freefall': {
           fallT += dt;
           const steer = stickToWorld(input.moveX, input.moveY, ctx.cameraRig.yaw);
+          // Hands-off: drift gently along the gem trail (blended out by any stick input).
+          const w = updateAssist(canopyState, Math.hypot(steer.x, steer.z), dt);
+          if (w > 0) {
+            const assist = freefallAssistSteer(pos, vel, nextBelow(trailDown, pos.y + 0.85) ?? ringTarget);
+            steer.x += assist.x * w;
+            steer.z += assist.z * w;
+          }
           stepFreefall(pos, vel, steer, dt);
           const surf = surfaceBelow(pos.x, pos.y, pos.z);
           const agl = pos.y - surf.y;
@@ -405,7 +431,9 @@ export function createSkydive(ctx: GameContext): Skydive {
           player.setAnimation('fall');
           const speed = Math.hypot(vel.x, vel.y, vel.z);
           const sf = Math.min(1, speed / SKY.terminal);
-          ctx.cameraRig.setOverride({ distance: 6, height: 3.6, fov: CAMERA.fov + 20 * sf, lookAhead: 0.3 });
+          // Hero framing: behind and above (~40° down) so the spread-eagle pose reads, with the
+          // trail ahead, the island below and the horizon at the top of the frame.
+          ctx.cameraRig.setOverride({ distance: 4.6, height: 3.9, fov: CAMERA.fov + 6 + 6 * sf, lookAhead: 0.3, yawOffset: 0 });
           ctx.audio.setLoop('wind', 0.25 + 0.75 * sf, 0.8 + 0.6 * sf);
           streaks.update(dt, player.position, velVec.set(vel.x, vel.y, vel.z), sf);
           if (fallT > SKY.chuteLockout) prompt.show('chute', input.device === 'gamepad', null);

@@ -64,8 +64,8 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
   const walk = await run(page, 60);
   await page.evaluate(() => window.__rg!.inject(null));
   const walked = Math.hypot(walk.pos[0] - start.x, walk.pos[2] - start.z);
-  expect(walked).toBeGreaterThan(3);
-  expect(walked).toBeLessThan(5);
+  expect(walked).toBeGreaterThan(5.6); // 6.5 m/s, minus ~0.1 s of acceleration
+  expect(walked).toBeLessThan(6.6);
   // Stayed glued to the ground the whole way (no hops or sinking on the heightfield).
   expect(walk.grounded.every(Boolean)).toBe(true);
   const afterWalk = await page.evaluate(() => {
@@ -74,17 +74,45 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
   });
   expect(Math.abs(afterWalk)).toBeLessThan(0.1);
 
-  // Jump: rises ~1.28 m (7.5²/2·22) and lands again.
+  // Jump: rises ~1.38 m (7.8²/2·22) and lands again.
   const before = await run(page, 30);
   const groundY = before.pos[1];
   await page.evaluate(() => window.__rg!.inject({ jump: true, jumpPressed: true }));
   const jump = await run(page, 90);
   await page.evaluate(() => window.__rg!.inject(null));
   const peak = Math.max(...jump.y) - groundY;
-  expect(peak).toBeGreaterThan(1.1);
-  expect(peak).toBeLessThan(1.45);
+  expect(peak).toBeGreaterThan(1.2);
+  expect(peak).toBeLessThan(1.55);
   expect(jump.grounded[5]).toBe(false);
   expect(jump.grounded[jump.grounded.length - 1]).toBe(true);
+
+  // Sprint: reaches 11 m/s fast, and a running jump carries well over 5-6 m (takeoff → landing).
+  const sprint = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const p = rg.ctx.player;
+    // Along the open park road east of the plaza (the island walk below uses it too).
+    rg.teleport(12, rg.ctx.world.heightAt(12, -7) + 0.1, -7, Math.atan2(16, -7));
+    rg.step(1 / 60, 10, false);
+    rg.inject({ moveY: 1, sprint: true });
+    rg.step(1 / 60, 12, false);
+    const speedAt02 = Math.hypot(p.velocity.x, p.velocity.z);
+    rg.step(1 / 60, 30, false);
+    const top = Math.hypot(p.velocity.x, p.velocity.z);
+    const x0 = p.position.x;
+    const z0 = p.position.z;
+    rg.inject({ moveY: 1, sprint: true, jump: true, jumpPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject({ moveY: 1, sprint: true, jump: true });
+    let frames = 0;
+    while (!p.grounded && frames++ < 120) rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    return { speedAt02, top, dist: Math.hypot(p.position.x - x0, p.position.z - z0) };
+  });
+  console.log(`sprint ${sprint.top.toFixed(2)} m/s, running jump ${sprint.dist.toFixed(2)} m`);
+  expect(sprint.speedAt02).toBeGreaterThan(10);
+  expect(sprint.top).toBeCloseTo(11, 1);
+  expect(sprint.dist).toBeGreaterThan(6);
+  expect(sprint.dist).toBeLessThan(9);
 
   // Launch to a 40 m apex (trampoline): v = sqrt(2·g·h).
   const launch = await page.evaluate(() => {
