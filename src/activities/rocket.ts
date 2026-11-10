@@ -77,7 +77,20 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
     keepClear,
   };
   const padCentre = { x: ax + sin * -2, z: az + cos * -2 };
-  const found = findNetSite(siteWorld, padCentre, anchor.yaw);
+  // The world reserves a cleared landing spot (anchor.target); search only when it has none.
+  const target = anchor.target;
+  const found: NetSite | null = target
+    ? {
+        x: target.x,
+        z: target.z,
+        groundY: world.heightAt(target.x, target.z),
+        distance: Math.hypot(target.x - padCentre.x, target.z - padCentre.z),
+        heading: Math.atan2(target.x - padCentre.x, target.z - padCentre.z),
+        shortened: false,
+      }
+    : findNetSite(siteWorld, padCentre, anchor.yaw);
+  // The net fits inside the reserved spot (scaled down from NET.radius when needed).
+  const netRadius = Math.min(NET.radius, anchor.targetRadius ?? NET.radius);
   // No flat landing anywhere: fall back to 20 m straight ahead (reported through `info`).
   const site: NetSite = found ?? {
     x: padCentre.x + sin * 20,
@@ -98,10 +111,11 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
   const net: NetModel = buildNet();
   net.group.position.set(site.x, site.groundY, site.z);
   net.group.rotation.y = site.heading + Math.PI; // pole on the side facing the pads
+  net.group.scale.set(netRadius / NET.radius, 1, netRadius / NET.radius);
   root.add(net.group);
   disposables.push(net);
   const netHalf = (netLandY - site.groundY + 0.4) / 2;
-  colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(site.x, netLandY - netHalf, site.z), netHalf, NET.radius));
+  colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(site.x, netLandY - netHalf, site.z), netHalf, netRadius));
 
   // 3. The pads, side by side across the anchor's local X, all facing the net.
   const pads: PadState[] = [];
@@ -284,7 +298,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
   }
 
   const info: RocketInfo = {
-    net: { x: site.x, z: site.z, landY: netLandY, radius: NET.radius, shortened: site.shortened, distance: site.distance },
+    net: { x: site.x, z: site.z, landY: netLandY, radius: netRadius, shortened: site.shortened, distance: site.distance },
     pads: pads.map((p) => ({ x: p.x, y: p.y, z: p.z })),
   };
 

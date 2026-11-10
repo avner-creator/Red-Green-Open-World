@@ -62,7 +62,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   for (const [name, a] of Object.entries(ANCHORS) as [AnchorName, (typeof ANCHORS)[AnchorName]][]) {
     anchors[name] = { position: new THREE.Vector3(a.x, a.y ?? heightAt(a.x, a.z), a.z), yaw: a.yaw, radius: a.radius };
   }
-  // Extra data (not in the Anchor type): where the rocket-pad flight should land (the landing net).
+  // Where the rocket-pad flight should land (the landing net).
   Object.assign(anchors.launchPads, {
     target: new THREE.Vector3(LAUNCH_NET.x, heightAt(LAUNCH_NET.x, LAUNCH_NET.z), LAUNCH_NET.z),
     targetRadius: LAUNCH_NET.radius,

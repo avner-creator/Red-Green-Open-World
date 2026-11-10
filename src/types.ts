@@ -359,6 +359,10 @@ export interface Anchor {
   yaw: number;
   /** Clear radius the world keeps free of props. */
   radius: number;
+  /** Optional landing/aim spot that belongs to this anchor (launchPads: the rocket landing net). */
+  target?: THREE.Vector3;
+  /** Clear radius around `target`, metres. */
+  targetRadius?: number;
 }
 
 export type AnchorName =
