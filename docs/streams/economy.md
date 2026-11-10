@@ -280,4 +280,6 @@ export interface EconomyApi {
 
 ## 6. Last verify
 
-See the last commit message of this file for the date and numbers of the final `npm run verify`.
+Final `npm run verify` on commit `7f16908` (this branch with `origin/main` at `ed6ada6` merged
+in, 0 commits behind main at that moment): typecheck and lint clean, **420 unit tests in 41
+files passed, build OK, 96 e2e tests passed** (8.4 min on the software renderer).
