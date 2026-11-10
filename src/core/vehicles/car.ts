@@ -7,7 +7,6 @@ import type { CameraApi, GameContext, InputState } from '../../types';
 import { driveTriggers } from '../input';
 import { clamp, DRIVE, engineSound } from './car-math';
 import { createCarModel } from './car-model';
-import { shadowProxyWatcher } from '../shadow-proxy';
 import { CAR, NO_CONTROLS, createCarSim, restHeight, type CarControls, type CarEnv } from './car-sim';
 import { createDust } from './dust';
 import { isPaved, nearestRoad } from './surface';
@@ -40,7 +39,6 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   ctx.scene.add(model.blob);
   const dust = createDust();
   ctx.scene.add(dust.mesh);
-  const watchShadows = shadowProxyWatcher(ctx.scene);
   /** Detail level: the lighter geometry set beyond LOD_FAR m (back within LOD_NEAR), unless driven. */
   const LOD_FAR = 34;
   const LOD_NEAR = 30;
@@ -192,7 +190,6 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     const r = roll.step(clamp(sim.accelLat * 0.0062, -0.11, 0.11), dt);
     const h = heave.step(0, dt);
     model.update(sim.wheels, p, r, clamp(h, -0.12, 0.15));
-    watchShadows(dt);
     const camDist = ctx.camera.position.distanceTo(sim.position);
     far = !driven && (far ? camDist > LOD_NEAR : camDist > LOD_FAR);
     model.setDetail(!far);

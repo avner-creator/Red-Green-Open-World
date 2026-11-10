@@ -6,7 +6,7 @@
  *
  * Render cost (see scripts/perf-report.mjs): everything static is merged into two meshes (the
  * clearcoat paint, and one "parts" mesh whose colour / roughness / metalness / glow ride on vertex
- * attributes), the four wheels and the four fenders are one instanced mesh each, plus instanced
+ * attributes, `vertex-finish.ts`), the four wheels and the four fenders are one instanced mesh each, plus instanced
  * A-arms and coil-overs: 6 draws. None of them casts a shadow; a low-poly shadow proxy does
  * (`shadow-proxy.ts`). A lighter geometry set is swapped in at a distance (`setDetail`).
  *
@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { asShadowProxy } from '../shadow-proxy';
+import { finish, finishMaterial, plainGeometry, type Finish } from '../vertex-finish';
 import { CAR, STATIC_LENGTH } from './car-sim';
 
 export const DEFAULT_PAINT = 0xffbd2e;
@@ -41,22 +42,12 @@ export interface CarModel {
 
 // ───────────────────────────── finishes (per-vertex material) ─────────────────────────────
 
-interface Finish {
-  color: number;
-  rough: number;
-  metal: number;
-  /** Emissive colour × intensity; `lamp` ones follow setLights. */
-  emissive?: number;
-  glow?: number;
-  lamp?: boolean;
-}
-
 const TRIM: Finish = { color: 0x24272d, rough: 0.62, metal: 0.15 };
 const CAGE: Finish = { color: 0x2c3036, rough: 0.3, metal: 0.8 };
 const CHROME: Finish = { color: 0xe9ebef, rough: 0.16, metal: 1 };
 const RUBBER: Finish = { color: 0x1a1b1d, rough: 0.9, metal: 0 };
 const RIM: Finish = { color: 0xd8dce2, rough: 0.26, metal: 1 };
-const LAMP: Finish = { color: 0xffffff, rough: 0.2, metal: 0, emissive: 0xfff0cf, glow: 2.2, lamp: true };
+const LAMP: Finish = { color: 0xffffff, rough: 0.2, metal: 0, emissive: 0xfff0cf, glow: 2.2, switched: true };
 const TAIL: Finish = { color: 0x5a0d08, rough: 0.3, metal: 0, emissive: 0xff2a14, glow: 1.2 };
 const SPRING: Finish = { color: 0xff6a2a, rough: 0.35, metal: 0.5 };
 const ARM: Finish = { color: 0x33373e, rough: 0.4, metal: 0.7 };
@@ -65,36 +56,7 @@ const LAMP_OFF = 0.15 / 2.2;
 
 // ───────────────────────────── geometry helpers ─────────────────────────────
 
-/** Keep only position/normal and make non-indexed so anything can be merged. */
-function norm(g: THREE.BufferGeometry): THREE.BufferGeometry {
-  const n = g.index ? g.toNonIndexed() : g;
-  for (const name of Object.keys(n.attributes)) if (name !== 'position' && name !== 'normal') n.deleteAttribute(name);
-  if (!n.attributes.normal) n.computeVertexNormals();
-  if (n !== g) g.dispose();
-  return n;
-}
-
-const tmpColor = new THREE.Color();
-
-/** Bake a finish into vertex attributes: `color` (linear), `rm` (roughness, metalness), `emit`. */
-function finish(g: THREE.BufferGeometry, f: Finish): THREE.BufferGeometry {
-  const n = norm(g);
-  const count = n.attributes.position.count;
-  const color = new Float32Array(count * 3);
-  const rm = new Float32Array(count * 2);
-  const emit = new Float32Array(count * 4);
-  tmpColor.setHex(f.color);
-  const e = new THREE.Color(f.emissive ?? 0).multiplyScalar(f.glow ?? 0);
-  for (let i = 0; i < count; i++) {
-    color.set([tmpColor.r, tmpColor.g, tmpColor.b], i * 3);
-    rm.set([f.rough, f.metal], i * 2);
-    emit.set([e.r, e.g, e.b, f.lamp ? 1 : 0], i * 4);
-  }
-  n.setAttribute('color', new THREE.BufferAttribute(color, 3));
-  n.setAttribute('rm', new THREE.BufferAttribute(rm, 2));
-  n.setAttribute('emit', new THREE.BufferAttribute(emit, 4));
-  return n;
-}
+const norm = (g: THREE.BufferGeometry): THREE.BufferGeometry => plainGeometry(g);
 
 function merge(parts: THREE.BufferGeometry[], plain = false): THREE.BufferGeometry {
   const m = mergeGeometries(plain ? parts.map(norm) : parts, false);
@@ -255,24 +217,6 @@ function paintMaterial(): THREE.MeshPhysicalMaterial {
       );
   };
   m.customProgramCacheKey = () => 'rg-car-paint';
-  return m;
-}
-
-/** One standard material for all the unpainted parts: colour, roughness, metalness, glow per vertex. */
-function partsMaterial(lamp: { value: number }): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 1 });
-  m.onBeforeCompile = (shader) => {
-    shader.uniforms.uLamp = lamp;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 rm;\nattribute vec4 emit;\nvarying vec2 vRM;\nvarying vec4 vEmit;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRM = rm;\nvEmit = emit;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uLamp;\nvarying vec2 vRM;\nvarying vec4 vEmit;')
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = vRM.x;')
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = vRM.y;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance = vEmit.rgb * mix(1.0, uLamp, vEmit.a);');
-  };
-  m.customProgramCacheKey = () => 'rg-car-parts';
   return m;
 }
 
@@ -502,16 +446,17 @@ function springGeometry(l: Lod): THREE.BufferGeometry {
 
 // ───────────────────────────── shadow proxy ─────────────────────────────
 
-/** Low-poly silhouette of the body, cage, seat and engine (body space). */
+/** Low-poly silhouette of the body, cage, seat and engine (body space), kept just inside the real
+ * surfaces so a lit surface never shadows itself. */
 function bodyProxyGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [extrudeProfile(TUB, -0.52, 0.52, 0, 2, 0)];
   for (const s of [1, -1]) {
     const x0 = s > 0 ? 0.46 : -0.66;
     parts.push(extrudeProfile(SILL, x0, x0 + 0.2, 0, 2, 0));
   }
-  parts.push(...cageTubes(0.05, 0.3, 4, false));
-  parts.push(new THREE.BoxGeometry(0.6, 0.85, 0.12).translate(0, 0.5, -0.66));
-  parts.push(new THREE.BoxGeometry(0.6, 0.3, 0.45).translate(0, 0.6, -1.1));
+  parts.push(...cageTubes(0.034, 0.3, 4, false));
+  parts.push(new THREE.BoxGeometry(0.5, 0.8, 0.08).translate(0, 0.5, -0.66));
+  parts.push(new THREE.BoxGeometry(0.5, 0.18, 0.36).translate(0, 0.58, -1.1));
   return merge(parts, true);
 }
 
@@ -521,10 +466,10 @@ function cornerProxyGeometry(front: boolean): THREE.BufferGeometry {
   const s = new THREE.Shape();
   s.absarc(0, 0, r0 + 0.07, Math.PI * 0.14, Math.PI * 0.86, false);
   s.absarc(0, 0, r0, Math.PI * 0.86, Math.PI * 0.14, true);
-  const w = CAR.wheelWidth + 0.1;
+  const w = CAR.wheelWidth + 0.06;
   const fender = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false, curveSegments: 4 }).translate(0, 0, -w / 2).rotateY(Math.PI / 2);
   fender.rotateX(front ? 0.22 : -0.2);
-  const tyre = new THREE.CylinderGeometry(CAR.wheelRadius, CAR.wheelRadius, CAR.wheelWidth, 10).rotateZ(Math.PI / 2);
+  const tyre = new THREE.CylinderGeometry(CAR.wheelRadius - 0.035, CAR.wheelRadius - 0.035, CAR.wheelWidth - 0.04, 10).rotateZ(Math.PI / 2);
   return merge([tyre, fender], true);
 }
 
@@ -596,7 +541,7 @@ export function createCarModel(): CarModel {
   const paint = paintMaterial();
   // Fenders share the paint but not the hood stripes (their local space is centred on the wheel).
   const fenderPaint = new THREE.MeshPhysicalMaterial({ color: DEFAULT_PAINT, metalness: 0.25, roughness: 0.34, clearcoat: 1, clearcoatRoughness: 0.07 });
-  const parts = partsMaterial(lampLevel);
+  const parts = finishMaterial('rg-car-parts', lampLevel);
   const mats = [paint, fenderPaint, parts];
   const hi = buildSet(HI);
   const lo = buildSet(LO);

@@ -4,6 +4,7 @@
  * holds a weak-eye-only bonus gem (vision layer only: no main-scene glow, light or particles).
  */
 import * as THREE from 'three';
+import { asShadowProxy } from '../../core/shadow-proxy';
 import { createGlowMaterial } from '../../vision';
 import { VisionLayer } from '../../types';
 import type { GameContext } from '../../types';
@@ -173,25 +174,43 @@ export function createLandingRings(ctx: GameContext, approach: THREE.Vector2): L
     return { center: p, normal, collected: false };
   });
 
+  // Hoops: one instanced mesh for the striped tori, one for the end caps, one shadow proxy (3 draws).
   const hoopGeo = keep(hoopGeometry());
   const hoopMat = keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.05 }));
   const capGeo = keep(new THREE.SphereGeometry(HOOPS.tube * 1.25, 14, 10));
   const capMat = keep(new THREE.MeshStandardMaterial({ color: 0x1b2a55, roughness: 0.5 }));
-  const hoopMeshes: THREE.Group[] = hoops.map((hp) => {
-    const g = new THREE.Group();
+  const hoopMesh = new THREE.InstancedMesh(hoopGeo, hoopMat, hoops.length);
+  const capMesh = new THREE.InstancedMesh(capGeo, capMat, hoops.length * 2);
+  const hoopProxy = asShadowProxy(new THREE.InstancedMesh(keep(new THREE.TorusGeometry(HOOPS.radius, HOOPS.tube * 0.85, 5, 32)), undefined, hoops.length));
+  for (const m of [hoopMesh, capMesh, hoopProxy]) group.add(m);
+  keep(hoopMesh);
+  keep(capMesh);
+  keep(hoopProxy);
+  /** Per-hoop frame (bobs) and its spinning torus. */
+  const hoopMeshes = hoops.map((hp) => {
+    const g = new THREE.Object3D();
     g.position.copy(hp.center);
     g.lookAt(hp.center.clone().add(hp.normal));
-    const m = new THREE.Mesh(hoopGeo, hoopMat);
-    m.castShadow = true;
-    g.add(m);
-    for (const s of [-1, 1]) {
-      const cap = new THREE.Mesh(capGeo, capMat);
-      cap.position.set(s * HOOPS.radius, 0, 0);
-      g.add(cap);
-    }
-    group.add(g);
-    return g;
+    return { frame: g, spin: new THREE.Object3D() };
   });
+  const capOffsets = [new THREE.Vector3(-HOOPS.radius, 0, 0), new THREE.Vector3(HOOPS.radius, 0, 0)];
+  const hm = new THREE.Matrix4();
+  const cm = new THREE.Matrix4();
+  const placeHoops = (): void => {
+    hoopMeshes.forEach(({ frame, spin }, i) => {
+      frame.updateMatrix();
+      spin.updateMatrix();
+      hm.multiplyMatrices(frame.matrix, spin.matrix);
+      hoopMesh.setMatrixAt(i, hm);
+      hoopProxy.setMatrixAt(i, hm);
+      capOffsets.forEach((o, k) => capMesh.setMatrixAt(i * 2 + k, cm.copy(frame.matrix).multiply(hm.makeTranslation(o.x, o.y, o.z))));
+    });
+    for (const m of [hoopMesh, capMesh, hoopProxy]) {
+      m.instanceMatrix.needsUpdate = true;
+      m.computeBoundingSphere();
+    }
+  };
+  placeHoops();
 
   // Weak-eye-only bonus gems in the hoop centres (vision layer, never in ctx.scene).
   const gemGeo = keep(buildGemGeometry());
@@ -219,10 +238,11 @@ export function createLandingRings(ctx: GameContext, approach: THREE.Vector2): L
     hoops,
     update(dt) {
       time += dt;
-      hoopMeshes.forEach((g, i) => {
-        g.position.y = hoops[i].center.y + Math.sin(time * 1.1 + i) * 0.12;
-        (g.children[0] as THREE.Mesh).rotation.z = time * 0.25 + i;
+      hoopMeshes.forEach(({ frame, spin }, i) => {
+        frame.position.y = hoops[i].center.y + Math.sin(time * 1.1 + i) * 0.12;
+        spin.rotation.z = time * 0.25 + i;
       });
+      placeHoops();
       markers.forEach((mk, i) => {
         mk.gem.rotation.y = time * 1.6 + i;
         mk.group.position.y = hoops[i].center.y + Math.sin(time * 2 + i) * 0.18;
