@@ -130,12 +130,6 @@ export const MEGA = {
   pickupRadius: 2.2,
   /** Player chest height above the feet (the pickup test point). */
   chestAboveFeet: 0.85,
-  /** Beyond the last bounce pad, along the push direction, metres. */
-  padsAhead: 7,
-  /** Over the launch pads: heights above the ground and the horizontal reach, metres. */
-  launchLow: 13,
-  launchHigh: 24,
-  launchAhead: 14,
   /** Buggy line: metres in front of the garage (the road runs there) and sideways offsets. */
   roadFront: 9,
   roadOffsets: [-16, 0, 16] as readonly number[],
@@ -143,6 +137,10 @@ export const MEGA = {
   /** Skydive megas: positions along the balloon-to-rings descent (0..1) and sideways offset, metres. */
   skyT: [0.3, 0.55, 0.8] as readonly number[],
   skySide: 3,
+  /** Keep mega gems at least this far (m) from every normal gem. */
+  minGemGap: 3.5,
+  /** Most mega gems the layer can hold (instanced mesh capacity). */
+  capacity: 20,
   /** Pop-in animation after a respawn, seconds. */
   popSeconds: 0.6,
   /** Burst size multiplier (on the weak layer) compared with a normal gem. */

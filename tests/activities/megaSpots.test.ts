@@ -39,13 +39,31 @@ for (const [name, a] of Object.entries(ANCHORS) as [AnchorName, (typeof ANCHORS)
   anchors[name] = { position: new THREE.Vector3(a.x, a.y ?? heightAt(a.x, a.z), a.z), yaw: a.yaw, radius: a.radius };
 }
 
+// Stand-ins for what main's thrills publish (the real ones need the physics world): the trampoline
+// column, the pad arcs and the rocket arc, all high above the ground.
+function fakeThrill(dx = 0, dz = 0) {
+  const t = anchors.trampoline.position;
+  const b = anchors.bouncePads.position;
+  const l = anchors.launchPads.position;
+  const g = (x: number, z: number): number => heightAt(x, z);
+  return [
+    { tag: 'trampoline15', x: t.x + dx, y: g(t.x, t.z) + 16, z: t.z + dz },
+    { tag: 'trampoline30', x: t.x + dx, y: g(t.x, t.z) + 31, z: t.z + dz },
+    { tag: 'trampoline45', x: t.x + dx, y: g(t.x, t.z) + 46, z: t.z + dz },
+    { tag: 'padArc1', x: b.x + dx, y: g(b.x, b.z) + 15, z: b.z + dz },
+    { tag: 'padArc2', x: b.x + 4 + dx, y: g(b.x, b.z) + 25, z: b.z + dz },
+    { tag: 'rocket1', x: l.x + dx, y: g(l.x, l.z) + 30, z: l.z + dz },
+    { tag: 'rocket3', x: l.x + 9 + dx, y: g(l.x, l.z) + 30, z: l.z + dz },
+  ];
+}
+
 describe('mega gem spots', () => {
-  const spots = computeMegaSpots(anchors, heightAt);
+  const spots = computeMegaSpots(anchors, heightAt, fakeThrill());
 
   it('there are 8 to 14, in every themed group', () => {
     expect(spots.length).toBeGreaterThanOrEqual(8);
     expect(spots.length).toBeLessThanOrEqual(14);
-    for (const tag of ['trampoline', 'pads', 'launch', 'road', 'skydive']) {
+    for (const tag of ['trampoline', 'pads', 'rocket', 'road', 'skydive']) {
       expect(spots.some((s) => s.tag === tag), tag).toBe(true);
     }
   });
@@ -55,7 +73,7 @@ describe('mega gem spots', () => {
     for (const k of Object.keys(anchors) as AnchorName[]) {
       moved[k] = { ...anchors[k], position: anchors[k].position.clone().add(new THREE.Vector3(5, 0, 7)) };
     }
-    const b = computeMegaSpots(moved, (x, z) => heightAt(x - 5, z - 7));
+    const b = computeMegaSpots(moved, (x, z) => heightAt(x - 5, z - 7), fakeThrill(5, 7).map((t) => ({ ...t, y: t.y })));
     spots.forEach((s, i) => {
       expect(b[i].x - s.x).toBeCloseTo(5, 5);
       expect(b[i].z - s.z).toBeCloseTo(7, 5);

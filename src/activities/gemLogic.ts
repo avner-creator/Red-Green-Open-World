@@ -46,7 +46,7 @@ export class GemField {
   private nearTimer = 0;
 
   constructor(
-    readonly spots: readonly Vec3[],
+    readonly spots: Vec3[],
     private readonly opts: GemFieldOptions,
   ) {
     this.collected = spots.map(() => false);
@@ -55,6 +55,14 @@ export class GemField {
 
   get total(): number {
     return this.spots.length;
+  }
+
+  /** Add a gem spot after construction (mega gems that wait for the rides to be built). */
+  addSpot(p: Vec3): number {
+    this.spots.push(p);
+    this.collected.push(false);
+    this.respawnIn.push(0);
+    return this.spots.length - 1;
   }
 
   reset(): void {

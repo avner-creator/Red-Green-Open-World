@@ -4,6 +4,7 @@
  * the game context.
  */
 import type { EconomyApi, GameContext, GameSystem } from '../../types';
+import { setLaunchGate } from '../rocket';
 import { createKiosk } from './kiosk';
 import { mulberry32 } from './missions';
 import { createEconomyRules, type GemPickupSink } from './rules';
@@ -20,9 +21,13 @@ export function createEconomy(ctx: GameContext): Economy {
     play: (name) => ctx.audio.play(name),
   });
   const kiosk = createKiosk(ctx);
+  // Rocket pads charge a ticket once per real launch (the pad calls the gate only when a launch
+  // would start, then the player hops off, so a denial is reported once per approach).
+  setLaunchGate(() => rules.payTicket('rocketPad'));
   const disposeRules = rules.dispose;
   rules.dispose = () => {
     kiosk.dispose();
+    setLaunchGate(null);
     disposeRules();
   };
   return rules;

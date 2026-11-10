@@ -3,9 +3,8 @@
  * hard-coded world coordinates. They sit where the attractions carry the player, so the fun and
  * the eye work go together.
  */
-import { PADS, MAT, MEGA } from '../constants';
-import { padLocalPositions } from '../bounceLogic';
-import { BALLOON, TRAMPOLINE } from '../../config';
+import { MEGA } from '../constants';
+import { BALLOON } from '../../config';
 import type { Anchor, AnchorName } from '../../types';
 
 export interface MegaSpot {
@@ -18,63 +17,41 @@ export interface MegaSpot {
 type Anchors = Readonly<Record<AnchorName, Anchor>>;
 type HeightFn = (x: number, z: number) => number;
 
-/** Typical apexes of the trampoline's growing bounces (first, then x growth each time). */
-export function trampolinePeaks(): number[] {
-  const out: number[] = [];
-  let a: number = TRAMPOLINE.firstBounce;
-  for (let i = 0; i < 12 && a < TRAMPOLINE.maxHeight; i++) {
-    out.push(Math.min(a, TRAMPOLINE.maxHeight));
-    a *= TRAMPOLINE.growth;
-  }
-  out.push(TRAMPOLINE.maxHeight);
+/** What main's thrills publish (`thrillSpots`): world positions on the real ride trajectories. */
+export interface ThrillLike {
+  tag: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * Pick the mega gems that ride along a real trajectory: where the trampoline's big bounces peak,
+ * the tops of the two bigger pad-to-pad arcs, and two on the rocket arc either side of its apex.
+ * The positions come from the thrill modules (so they follow their numbers); missing tags are skipped.
+ */
+export function thrillMegas(thrill: readonly ThrillLike[]): MegaSpot[] {
+  const by = new Map(thrill.map((t) => [t.tag, t]));
+  const out: MegaSpot[] = [];
+  const take = (tag: string, group: string, dy = 0): void => {
+    const t = by.get(tag);
+    if (t) out.push({ x: t.x, y: t.y + dy, z: t.z, tag: group });
+  };
+  // Trampoline apexes are 12, 18, 27, 40, 45 m: 15 m is passed by every big bounce, 30 m by the
+  // last two, and the top one sits just under the 45 m cap.
+  take('trampoline15', 'trampoline', 3);
+  take('trampoline30', 'trampoline');
+  take('trampoline45', 'trampoline', -1.5);
+  take('padArc1', 'pads');
+  take('padArc2', 'pads');
+  take('rocket1', 'rocket');
+  take('rocket3', 'rocket');
   return out;
 }
 
-export function computeMegaSpots(anchors: Anchors, heightAt: HeightFn): MegaSpot[] {
-  const spots: MegaSpot[] = [];
+export function computeMegaSpots(anchors: Anchors, heightAt: HeightFn, thrill: readonly ThrillLike[] = []): MegaSpot[] {
+  const spots: MegaSpot[] = thrillMegas(thrill);
   const add = (x: number, y: number, z: number, tag: string): void => void spots.push({ x, y, z, tag });
-  // The player's chest is about this far above the feet; the pickup test uses the chest.
-  const chest = MEGA.chestAboveFeet;
-
-  // 1. Above the trampoline: the peaks of the 5th, 7th and 9th-ish bounces (the big ones).
-  const t = anchors.trampoline.position;
-  const matTop = heightAt(t.x, t.z) + MAT.top;
-  const peaks = trampolinePeaks();
-  for (const k of [peaks.length - 5, peaks.length - 3, peaks.length - 1]) {
-    const apex = peaks[Math.max(0, k)];
-    add(t.x, matTop + apex * 0.92 + chest, t.z, 'trampoline');
-  }
-
-  // 2. Bounce pads: between the 2nd and 3rd pad (peak of the 6 m launch) and beyond the last
-  // pad (peak of the 10 m launch, carried forward).
-  const bp = anchors.bouncePads;
-  const sin = Math.sin(bp.yaw);
-  const cos = Math.cos(bp.yaw);
-  const local = padLocalPositions(PADS.heights.length, PADS.spacing);
-  const world = local.map((l) => {
-    const x = bp.position.x + l.x * cos + l.z * sin;
-    const z = bp.position.z - l.x * sin + l.z * cos;
-    return { x, z, top: heightAt(x, z) + PADS.top };
-  });
-  const last = world.length - 1;
-  if (last >= 2) {
-    const a = world[last - 1];
-    const b = world[last];
-    add((a.x + b.x) / 2, a.top + PADS.heights[last - 1] * 0.9 + chest, (a.z + b.z) / 2, 'pads');
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const len = Math.hypot(dx, dz) || 1;
-    const ahead = MEGA.padsAhead;
-    const px = b.x + (dx / len) * ahead;
-    const pz = b.z + (dz / len) * ahead;
-    add(px, b.top + PADS.heights[last] * 0.9 + chest, pz, 'pads');
-  }
-
-  // 3. Mid-air over the launch pads: where a big launch would carry you.
-  const lp = anchors.launchPads;
-  const lGround = heightAt(lp.position.x, lp.position.z);
-  add(lp.position.x, lGround + MEGA.launchLow, lp.position.z, 'launch');
-  add(lp.position.x + Math.sin(lp.yaw) * MEGA.launchAhead, lGround + MEGA.launchHigh, lp.position.z + Math.cos(lp.yaw) * MEGA.launchAhead, 'launch');
 
   // 4. A line along the road in front of the garage, for the buggy.
   const g = anchors.garage;

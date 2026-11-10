@@ -10,6 +10,7 @@ import type { GameContext } from '../types';
 import { GEM_FX, MEGA } from './constants';
 import { buildMegaGemGeometry } from './economy/megaGem';
 import { computeMegaSpots } from './economy/megaSpots';
+import { thrillSpots } from './thrillSpots';
 import { hasPickupSink } from './economy/rules';
 import { GemField } from './gemLogic';
 
@@ -93,13 +94,15 @@ export interface Gems {
 
 export function createGems(ctx: GameContext): Gems {
   const normalSpots = ctx.world.gemSpots.map((s) => s.position);
-  const megaDefs = computeMegaSpots(ctx.world.anchors, (x, z) => ctx.world.heightAt(x, z));
-  const megaTags = megaDefs.map((d) => d.tag);
-  const megaSpots = megaDefs.map((s) => new THREE.Vector3(s.x, s.y, s.z));
+  // Mega gems are placed once the rides exist (the rocket arc is only known after the first
+  // update of the thrills), see `initMegas`.
+  const megaTags: string[] = [];
+  const megaSpots: THREE.Vector3[] = [];
+  let megasReady = false;
   const n = normalSpots.length;
-  const m = megaSpots.length;
-  const total = n + m;
-  const spots = [...normalSpots, ...megaSpots];
+  let m = 0;
+  let total = n;
+  const spots: THREE.Vector3[] = [...normalSpots];
   const field = new GemField(spots, {
     pickupRadius: GEMS.pickupRadius,
     nearRadius: GEMS.nearRadius,
@@ -123,8 +126,9 @@ export function createGems(ctx: GameContext): Gems {
   const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
   const gems = new THREE.InstancedMesh(gemGeo, gemMat, Math.max(1, n));
-  const megas = new THREE.InstancedMesh(megaGeo, megaMat, Math.max(1, m));
-  const halos = new THREE.InstancedMesh(haloGeo, haloMat, Math.max(1, total + GEM_FX.maxBursts));
+  const megas = new THREE.InstancedMesh(megaGeo, megaMat, MEGA.capacity);
+  megas.count = 0;
+  const halos = new THREE.InstancedMesh(haloGeo, haloMat, n + MEGA.capacity + GEM_FX.maxBursts);
   const sparks = new THREE.InstancedMesh(sparkGeo, sparkMat, GEM_FX.maxBursts * GEM_FX.particles);
   for (const mesh of [gems, megas, halos, sparks]) {
     mesh.frustumCulled = false;
@@ -163,6 +167,29 @@ export function createGems(ctx: GameContext): Gems {
     ctx.session.setTotals({ gems: total });
   }
 
+  /** Place the mega gems (first update while playing: thrills are built by then). */
+  function initMegas(): void {
+    megasReady = true;
+    const defs = computeMegaSpots(
+      ctx.world.anchors,
+      (x, z) => ctx.world.heightAt(x, z),
+      thrillSpots.map((t) => ({ tag: t.tag, x: t.position.x, y: t.position.y, z: t.position.z })),
+    ).slice(0, MEGA.capacity);
+    for (const d of defs) {
+      const v = new THREE.Vector3(d.x, d.y, d.z);
+      // Never sit on top of a normal gem (a world gem can hang in the same column): slide up.
+      for (let tries = 0; tries < 4 && normalSpots.some((g) => g.distanceTo(v) < MEGA.minGemGap); tries++) v.y += MEGA.minGemGap;
+      megaSpots.push(v);
+      megaTags.push(d.tag);
+      field.addSpot(v);
+      age.push(99);
+    }
+    m = defs.length;
+    total = n + m;
+    megas.count = m;
+    ctx.session.setTotals({ gems: total });
+  }
+
   function respawned(list: number[]): void {
     for (const i of list) {
       age[i] = 0;
@@ -173,7 +200,7 @@ export function createGems(ctx: GameContext): Gems {
   function drawBursts(): void {
     for (let b = 0; b < GEM_FX.maxBursts; b++) {
       const burst = bursts[b];
-      const flashIdx = total + b;
+      const flashIdx = n + MEGA.capacity + b;
       if (!burst) {
         halos.setMatrixAt(flashIdx, zero);
         for (let p = 0; p < GEM_FX.particles; p++) sparks.setMatrixAt(b * GEM_FX.particles + p, zero);
@@ -209,6 +236,7 @@ export function createGems(ctx: GameContext): Gems {
   function update(dt: number): void {
     time += dt;
     const playing = ctx.session.state.phase === 'playing';
+    if (playing && !megasReady) initMegas();
     if (playing !== wasPlaying) {
       havePrev = false;
       wasPlaying = playing;
@@ -277,7 +305,9 @@ export function createGems(ctx: GameContext): Gems {
 
   if (ctx.testMode) {
     window.__rgEconomy = {
-      megaSpots: megaSpots.map((v, i) => ({ x: v.x, y: v.y, z: v.z, tag: megaTags[i] })),
+      get megaSpots() {
+        return megaSpots.map((v, i) => ({ x: v.x, y: v.y, z: v.z, tag: megaTags[i] }));
+      },
       gemSpotCount: n,
       forceRespawn: () => respawned(field.respawnAll()),
     };
