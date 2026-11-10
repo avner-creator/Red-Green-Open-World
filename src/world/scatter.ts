@@ -376,7 +376,7 @@ export interface Scatter {
  * to `thin` × base at the far edge (the ground underneath has the grass colour, so it isn't missed).
  */
 const GRASS: Record<Quality, { far: number; density: number; near: number; mid: number; thin: number }> = {
-  low: { far: 24, density: 0.4, near: 0, mid: 6, thin: 0.35 },
+  low: { far: 24, density: 0.4, near: 0, mid: 0, thin: 0.35 },
   medium: { far: 36, density: 0.7, near: 7, mid: 15, thin: 0.4 },
   high: { far: 58, density: 1, near: 9, mid: 22, thin: 0.4 },
 };
@@ -412,14 +412,15 @@ export function buildScatter(
   group.name = 'scatter';
   const all = { low: 1, medium: 1, high: 1 };
   const inf = { low: 1e9, medium: 1e9, high: 1e9 };
-  const treeLod = { low: 45, medium: 62, high: 100 };
+  const treeLod = { low: 32, medium: 62, high: 100 };
+  // Bushes and rocks on Low draw only their light mesh (one draw each instead of a near/far pair).
   const defs: SpeciesDef[] = [
     { name: 'oak', near: oakGeo(false), far: oakGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },
     { name: 'pine', near: pineGeo(false), far: pineGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },
     { name: 'palm', near: palmGeo(false), far: palmGeo(true), mat: mats.foliage, shadow: true, density: all, lod: treeLod, max: inf, size: 4 },
-    { name: 'bush', near: bushGeo(false), far: bushGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.5, medium: 0.85, high: 1 }, lod: { low: 30, medium: 50, high: 70 }, max: { low: 110, medium: 170, high: 230 }, size: 1.5 },
-    { name: 'rockA', near: rockGeo(301, false), far: rockGeo(301, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
-    { name: 'rockB', near: rockGeo(302, false), far: rockGeo(302, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
+    { name: 'bush', near: bushGeo(false), far: bushGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.5, medium: 0.85, high: 1 }, lod: { low: -Infinity, medium: 50, high: 70 }, max: { low: 110, medium: 170, high: 230 }, size: 1.5 },
+    { name: 'rockA', near: rockGeo(301, false), far: rockGeo(301, true), mat: mats.rock, shadow: true, density: all, lod: { low: -Infinity, medium: 55, high: 80 }, max: inf, size: 3 },
+    { name: 'rockB', near: rockGeo(302, false), far: rockGeo(302, true), mat: mats.rock, shadow: true, density: all, lod: { low: -Infinity, medium: 55, high: 80 }, max: inf, size: 3 },
     { name: 'grass', near: tuftGeo(21, 12), far: cardGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: { low: 4, medium: 6, high: 10 }, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
     { name: 'flower', near: flowerGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: inf, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
   ];
@@ -636,6 +637,7 @@ export function buildScatter(
     }
     const commit = (L: Lod, n: number): void => {
       L.mesh.count = n;
+      L.mesh.visible = n > 0;
       L.mesh.instanceMatrix.clearUpdateRanges();
       L.mesh.instanceMatrix.addUpdateRange(0, n * 16);
       L.mesh.instanceMatrix.needsUpdate = true;
@@ -648,7 +650,10 @@ export function buildScatter(
     };
     commit(near, nn);
     if (far) commit(far, nf);
-    if (sp.proxy) sp.proxy.count = nn;
+    if (sp.proxy) {
+      sp.proxy.count = nn;
+      sp.proxy.visible = nn > 0;
+    }
   };
 
   /**
@@ -659,6 +664,7 @@ export function buildScatter(
   const counts = [0, 0, 0];
   const commitN = (L: Lod, n: number): void => {
     L.mesh.count = n;
+    L.mesh.visible = n > 0;
     L.mesh.instanceMatrix.clearUpdateRanges();
     L.mesh.instanceMatrix.addUpdateRange(0, n * 16);
     L.mesh.instanceMatrix.needsUpdate = true;

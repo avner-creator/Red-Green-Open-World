@@ -43,6 +43,8 @@ export const STATIC_MAX_DIST: Record<Quality, readonly number[]> = {
 const PROXY_MIN_R = 0.3;
 const PROXY_MIN_H = 0.12;
 const PROXY_MAX_DIST: readonly number[] = [Infinity, 120, 45, 22, 0];
+/** Proxy parts smaller than this (radius, m) with more than 12 triangles cast as their box. */
+const PROXY_BOX_R = 1;
 
 const tmpColor = new THREE.Color();
 const tmpBox = new THREE.Box3();
@@ -206,7 +208,18 @@ export class Batcher {
     if (!b) this.buckets.set(key, (b = []));
     b.push(part);
     // Shadow proxy: big enough, not flat, on a material that casts.
-    if (!NO_SHADOW.has(key) && r >= PROXY_MIN_R && tmpS.y >= PROXY_MIN_H) this.proxyParts.push(part);
+    // Small detailed parts (posts, knobs, finials) cast through their oriented box: same footprint
+    // at shadow-map resolution, a fraction of the triangles.
+    if (!NO_SHADOW.has(key) && r >= PROXY_MIN_R && tmpS.y >= PROXY_MIN_H) {
+      if (r < PROXY_BOX_R && n > 36) {
+        tmpBox.setFromBufferAttribute(geo.attributes.position as THREE.BufferAttribute);
+        const bs = tmpBox.getSize(new THREE.Vector3());
+        const bc = tmpBox.getCenter(new THREE.Vector3());
+        const bx = new THREE.BoxGeometry(Math.max(bs.x, 0.01), Math.max(bs.y, 0.01), Math.max(bs.z, 0.01)).translate(bc.x, bc.y, bc.z).toNonIndexed();
+        if (matrix) bx.applyMatrix4(matrix);
+        this.proxyParts.push({ geo: bx, cell: part.cell, cls: part.cls });
+      } else this.proxyParts.push(part);
+    }
     this.triangles += n / 3;
   }
 
