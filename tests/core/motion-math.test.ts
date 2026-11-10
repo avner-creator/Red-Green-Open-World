@@ -6,8 +6,11 @@ import {
 import { flopPose } from '../../src/core/player-fx';
 
 describe('jump maths', () => {
-  it('normal jump apex is about 1.3 m', () => {
-    expect(apexHeight(PLAYER.jumpSpeed, PLAYER.gravity)).toBeCloseTo(1.278, 2);
+  it('normal jump apex is about 1.4 m and a sprint jump flies 7-8 m', () => {
+    expect(apexHeight(PLAYER.jumpSpeed, PLAYER.gravity)).toBeCloseTo(1.383, 2);
+    const airTime = (2 * PLAYER.jumpSpeed) / PLAYER.gravity;
+    expect(PLAYER.sprintSpeed * airTime).toBeGreaterThan(6);
+    expect(PLAYER.sprintSpeed * airTime).toBeLessThan(8.5);
   });
   it('speedForApex inverts apexHeight', () => {
     const v = speedForApex(TRAMPOLINE.maxHeight, PLAYER.gravity);
