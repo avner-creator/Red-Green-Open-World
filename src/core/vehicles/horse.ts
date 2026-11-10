@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import type { CameraApi, GameContext, InputState } from '../../types';
+import { driveTriggers } from '../input';
 import { GROUP_AVATAR, GROUP_VEHICLE, groups } from '../physics';
 import { createHorseModel, type HorseAnim } from './horse-model';
 import {
@@ -264,7 +265,9 @@ export function createHorse(
     let sprint = false;
     if (input) {
       mountT += dt;
-      throttle = input.moveY;
+      // Gamepad: the triggers ride like the buggy's pedals (RT also counts as Shift → gallop).
+      const trig = driveTriggers(ctx.input);
+      throttle = clamp(input.moveY + trig.accelerate - trig.brake, -1, 1);
       steer = input.moveX;
       sprint = input.sprint;
       if (input.flopPressed) ctx.audio.play('neigh', { pitch: 0.9 + rnd() * 0.25 });
