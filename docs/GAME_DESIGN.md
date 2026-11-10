@@ -122,3 +122,73 @@ gems must be the thing every kid *wants*, because wanting them is what makes the
     livelier generative score.
 11. **Touch/mobile controls**: planned for v2 unless a parallel workstream delivers them (see
     docs/PARALLEL_WORK.md).
+
+## Carnival Island pass (owner playtest 2, 2026-11-11) — overrides earlier sections where they differ
+
+**Owner's verdict**: a big improvement, but a young child gets no direction; the HUD numbers have
+no meaning; the start screen is unclear; the characters aren't cute or relatable enough; the world
+has empty space and props that do nothing; there should be more cute, funny things to do than
+jumping, driving and skydiving.
+
+**Theme**: the island is **Carnival Island**, a wild, silly fun-fair. You arrive with your best
+friend and spend gems on rides, games, treats and ever sillier gear. The repo and wordmark keep
+"Red-Green Open World"; in the game the place is called Carnival Island.
+
+1. **A buddy who talks to you.** A small, very cute companion (a puppy called **Pip**) runs beside
+   you, rides on the buggy, dives with you, reacts to everything (yips, spins, sad ears, zoomies)
+   and *talks*: a speech bubble with one pictogram and at most six simple words, plus a cute
+   synthesized "gibberish" voice (no recorded speech, no reading required: the pictogram carries
+   the meaning). Pip is the tutorial, the hint system and the storyteller. Pip never reveals where
+   a weak-eye object is ("I smell gems near here!" is fine; pointing is not).
+2. **A story with goals.** Pip's opening (under 60 s, skippable): "Welcome to Carnival Island!
+   The Glow Gems only show up in your magic glasses. Let's grab some and try every ride!" Then a
+   guided first loop: follow Pip to a gem → the wallet lights up → Pip leads you to the Gear Shack
+   (buy your first silly hat) → the trampoline → "now you choose!". After that a **Fun Pass**
+   (stamp card) replaces the abstract mission cards: one stamp per attraction tried, per game
+   won, per chest opened; stamps fill rows that pay gem jackpots and unlock the day's grand prize.
+   The end screen shows the stamp card. Goals are always visible as "next stamp" on the HUD with
+   Pip nudging toward it.
+3. **Everything explains itself.** First time each HUD element matters, Pip points at it and says
+   what it is (wallet = gems to spend, stars = tricks, clock = sunset is closing time, compass =
+   rides). Tapping/clicking any HUD chip, or pressing H, makes Pip explain it again. Each
+   attraction's first visit gets a 3-second Pip demo. Locked things say why and what to do:
+   a locked chest shows "find the key" (key pictogram + Pip sniffing), a ride you can't afford
+   shows how many more gems you need.
+4. **Chests open from any side.** The key is still weak-eye-only. The both-eye part becomes a
+   symbol lock: three big symbol buttons ring the chest (visible to both eyes, reachable from any
+   direction); the *right* symbol floats above the chest for the strong eye only. Step on the
+   right button with the key and it opens; a wrong one just wobbles and giggles.
+5. **A clearer start.** Title: big friendly "PLAY" with Pip waving, your current hero standing next
+   to it, wallet shown; three clearly labelled big tiles with pictures (Heroes, Gear, Grown-ups).
+   No unexplained small buttons. Hero select cards say in pictures what the hero's trick is.
+6. **Controls always findable.** A persistent, small "keys" badge in a HUD corner that opens the
+   controls card (keyboard/gamepad/touch), context prompts next to whatever you can use, and Pip
+   reminding you of a key the first time it is useful.
+7. **Cuter, more relatable heroes.** Bigger eyes and heads, expressive idle animations (look at
+   camera, wave, giggle), a happy reaction to every reward, each with a one-line "about me" and a
+   signature silly move. If the current models can't get there, replace or restyle them (CC0).
+8. **More cute, funny things to do** (each a small attraction with a gem prize, free the first
+   time each session, then a ticket; every one has a **glasses twist** so the weaker eye does the
+   important work):
+   - **Carnival games row** in the village: balloon pop (the prize balloons are weak-eye-only),
+     ring toss, duck pond (lucky ducks marked for the weak eye), strength bell (ground-pound it),
+     foam-ball dodge tent at dusk (the incoming glow balls are weak-eye-only), ball scramble
+     ("hungry hippos": scoop balls in 30 s; golden weak-eye balls count triple). You play against
+     your friends (the other heroes, as cheerful AI rivals).
+   - **Scoops, the ice-cream shop**: build your own cone (scoops, sauces, silly toppings: gummy
+     worms, popcorn, a pickle…), the secret topping only shows in the weak eye; eating it gives a
+     funny 30-second effect (giant head, tiny hero, rainbow trail, super speed, moon-jump).
+   - **Bubble Ball arena**: everyone is in a giant inflatable bubble; bump, roll, flip upside
+     down, play 3-a-side soccer with a huge ball; bonus goals light up for the weak eye.
+   - **Dino Sumo ring**: wobbly inflatable dinosaur suits; bump friends out of the pool-noodle
+     ring and pop hanging water balloons with your tail (weak-eye balloons soak everyone).
+   - **Foam Lava course**: a backyard obstacle run over foam "lava" on floats, bins and balance
+     blocks, with foam cannons, slides and a soapy slip-and-slide; the safe secret shortcut tiles
+     are weak-eye-only. Falling in = a foamy comic flop and a bubble beard.
+   - **Buggy workshop and race**: silly upgrades (monster wheels, spring bumper, bubble exhaust,
+     rocket boost, musical horns, a rubber-duck roof) and a race against a friend on a track
+     where boost pads and the best racing line glow for the weak eye.
+   All non-violent: nothing is a weapon, nobody is hurt, everything is foam, bubbles, water
+   balloons and bouncing.
+9. **No dead props.** Anything that looks usable does something small (benches to sit on, the
+   fountain to splash in, stalls that hand you a balloon, doors that knock back).

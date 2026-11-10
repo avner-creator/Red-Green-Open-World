@@ -259,3 +259,102 @@ folder and registers itself with one line, so merges stay trivial.
 > WebGL-missing screen (launch Chromium without GPU flags), context-loss recovery
 > (`WEBGL_lose_context`), and tab-hidden pause; keep the suite's total time flat. Notes with the
 > before/after table in `docs/streams/boot-loading.md`.
+
+## Carnival Island streams J–N (owner playtest 2; each is one Opus 5.5 session)
+
+Common rules for J–N, in addition to "Rules for every stream": read the "Carnival Island pass"
+section of `docs/GAME_DESIGN.md`. Each attraction lives in its own NEW folder under
+`src/activities/` and registers with one line in `src/activities/index.ts`. **Site**: use
+`ctx.world.anchors[<name>]` if the main build has added it (names below); until then, pick a flat
+land spot yourself with `ctx.world.heightAt`/`isLand` near the stated place, clear of roads and
+existing anchor radii, and build your own ground pad and local dressing inside your radius only
+(report the coordinates you used in your notes file). **Friends**: rival/teammate AIs are the
+other heroes from `src/core/characters/catalog.ts` loaded with `loadCharacter` (cheerful, a bit
+clumsy, never mean; they should lose to an 8-year-old who tries). **Glasses twist**: the bonus
+elements named in the brief are registered ONLY with `ctx.vision.add(obj, VisionLayer.WeakOnly)`
+(brightness-only materials from `src/vision`), never hinted in the main scene, HUD or by a
+position-revealing sound, and each stream adds a canvas-readback channel test like
+`tests/e2e/vision.spec.ts` (weak-eye objects change only the weak channel for all 4 lens/eye
+combinations). **Economy** (on `main` after Stream C merges; code defensively if absent): pay
+prizes with `ctx.profile.earn(n, 'mission')`, first play per session free then a 3-gem ticket via
+`ctx.profile.spend`, never lock a child with 0 gems out of everything. **Feel**: start with E at
+a booth/gate, a 3-2-1 with pictograms, 30–60 s rounds, big juicy feedback (squash/stretch,
+confetti in brightness-safe colours, `ctx.audio.play` of existing SfxName values, camera
+override), a result jingle with stars, instant replay or exit, R always leaves safely. Emit
+`stunt` events for stars and a custom done signal through `ui:toast`. Controls work on keyboard,
+gamepad and touch through `ctx.input.state` only. Performance: ≤ ~12 draw calls and ≤ 40k
+triangles per attraction when idle, shadow proxies on layer 7, nothing updates when the player
+is far away. Non-violent: foam, bubbles, water balloons, bouncing; nothing is a weapon and nobody
+is hurt. Unit tests for scoring/AI maths; one Playwright e2e per attraction (`?test=1&quality=low`,
+`step(dt, n, false)`) that plays a full round to a result; screenshots full/R/G in
+`test-results/<stream>/`; notes in `docs/streams/<stream>.md`.
+
+## Stream J — carnival games row (branch `agent/carnival-games`, folder `src/activities/carnival/`)
+
+> Site: anchor `carnivalRow` (the village main street by the plaza, among the houses). Build a row
+> of five striped booths with a friendly AI stall-keeper each, all playable against 1–2 friends:
+> (1) **Balloon Pop**: throw soft beanbags at a wall of bobbing balloons; ordinary balloons are
+> both-eye, the prize balloons are weak-eye-only and worth 3×; aim with the camera, Space/E to
+> throw, generous aim assist. (2) **Ring Toss**: lob hoops onto wobbling pegs; charge-and-release
+> power bar. (3) **Duck Pond**: scoop floating rubber ducks with a net; the lucky ducks carry a
+> weak-eye-only mark on their back. (4) **Strength Bell**: time a press (or a hero's ground-pound)
+> to send the puck up the tower to ring the bell; 5 height tiers with silly labels as pictograms.
+> (5) **Glow Dodge tent**: a dark tent with neon tape lines where soft foam balls roll and lob
+> toward you; dodge for 30 s — the glowing balls are weak-eye-only, their shadows are not drawn,
+> a hit is a soft bonk and a giggle. (6) if time allows, **Ball Scramble**: lie on a wheeled board,
+> get launched into a ball pit, trap balls under a basket for 30 s; golden weak-eye balls count
+> triple. Prizes: gems plus plush-toy trinkets that appear on a shelf at the row.
+
+## Stream K — Scoops, the ice-cream shop (branch `agent/ice-cream`, folder `src/activities/scoops/`)
+
+> Site: anchor `iceCream` (the existing ice-cream shop prop in the village; replace/upgrade it
+> with a proper open-fronted parlour and a counter you walk up to). E at the counter opens a
+> 3D build-your-own-cone station: pick cone, stack up to 5 scoops (physics wobble — a too-tall
+> cone leans and can topple comically), sauces, and silly toppings (gummy worms, popcorn, a
+> pickle, a rubber duck, sprinkles cannon); a recipe card from a friend asks for a specific
+> cone by pictures for bonus gems; the **secret topping of the day** is weak-eye-only on the
+> shelf. Eating the cone (big chomp animation) gives a funny 30-second effect chosen by the
+> toppings: giant head, tiny hero, rainbow trail, super speed, moon-jump, bubble burps. Friends
+> queue up and react to your creation. Keyboard, gamepad and touch (tap/drag) controls.
+
+## Stream L — Bubble Ball arena and Dino Sumo ring (branch `agent/bumper-arena`, folders `src/activities/bubbleball/`, `src/activities/dinosumo/`)
+
+> Sites: anchors `bubbleArena` (a grassy field near the Bouncy Park) and `dinoRing` (next to it).
+> **Bubble Ball**: the hero and five friends each wear a giant transparent inflatable bubble
+> (legs free); arcade physics for bumping, rolling, flipping upside down and bouncing back up;
+> 3-a-side soccer with a huge light ball, two inflatable goals, 60 s matches, kick-off, goal
+> celebrations; bonus goal rings that appear in mid-air are weak-eye-only and score double.
+> **Dino Sumo**: everyone wears a wobbly inflatable dinosaur suit (procedural, with a big clumsy
+> tail and delayed secondary motion); a pool-noodle ring; bump friends out of the circle (they
+> roll away giggling and waddle back), swing your tail (Space) to pop hanging water balloons —
+> ordinary ones splash you, the weak-eye-only ones soak everybody and score triple. Use Rapier
+> dynamic bodies or a simple custom circle-collision solver; nobody is hurt, everything bounces.
+
+## Stream M — Foam Lava course (branch `agent/foam-lava`, folder `src/activities/foamlava/`)
+
+> Site: anchor `foamCourse` (the open ground between the plaza and the lake). A backyard-style
+> obstacle run across a sea of soapy foam "lava": pool floats that tip, upside-down bins,
+> balance blocks, a wobbly plank bridge, a rope swing, a slip-and-slide chute, foam cannons that
+> puff across the path on a rhythm, a bubble machine finale. Timed run with a friend ghost to
+> beat, three medal times, checkpoints. The **secret shortcut tiles** and a few **safe-in-the-
+> foam stepping stones** are weak-eye-only (visual on the WeakOnly layer with real invisible
+> colliders). Falling into the foam = a comic flop, a bubble beard on the hero for 10 s, respawn
+> at the last checkpoint with no penalty beyond time. Foam is a nice cheap shader (animated
+> bubbly surface, both-eye, brightness-readable), with foam particles when you splash.
+
+## Stream N — buggy workshop and race (branch `agent/buggy-race`, folders `src/activities/workshop/`, `src/activities/race/`)
+
+> Sites: the existing `garage` anchor (workshop) and anchor `raceStart` (on the road loop by the
+> garage). **Workshop**: E at the lift opens a turntable view of the buggy with silly upgrades
+> bought with gems (read how `src/core/vehicles/` builds the buggy and `VehicleApi`; if
+> `src/activities/gear/` from the economy stream is on `main`, add the items to its catalog and
+> applier instead of inventing a parallel one): monster wheels (bigger, bouncier), spring bumper
+> (bigger comic bounces), bubble exhaust, rocket boost (a short burst on the skill key), musical
+> horns, a rubber-duck roof ornament, confetti cannon; visual parts attach to the buggy and
+> gameplay effects go through small additive hooks you may add to `src/core/vehicles/` (list
+> them). **Race**: a 60–90 s lap on the island roads against one or two friends in their own
+> buggies (simple waypoint AI with rubber-banding so it is always close), start lights by
+> pictogram, checkpoints as inflatable arches, mini-map-free (use the arches and chevrons),
+> podium celebration. **Glasses twist**: boost pads and a glowing best racing line are
+> weak-eye-only; hitting three boosts in a row gives a rocket surge. Bumping rivals is bouncy and
+> comic. Works with every hero in the seat.
