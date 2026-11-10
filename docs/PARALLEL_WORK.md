@@ -55,3 +55,35 @@ with an `ASSETS.md` row.
 > say so. Do not wire the characters into the player controller or UI (the main build does
 > that); just make the catalog and assets correct and documented in
 > `docs/streams/characters.md`.
+
+## Which model for which stream
+
+- Streams A and B are single-builder jobs: run each as **one Opus 5.5 session**, no orchestrator.
+- Stream C is a multi-part block: run it with **Fable 5.2 as orchestrator** and Opus/Sonnet
+  subagents as builders (the same rules as `docs/DIRECTIVES.md` §1).
+
+## Stream C — economy, shop and missions (branch `agent/economy`, orchestrated)
+
+> You are the orchestrator for one workstream of Red-Green Open World; another orchestrator
+> session is building the rest on `main` at the same time. Read `docs/DIRECTIVES.md`, `CLAUDE.md`,
+> `docs/HANDOFF.md`, `docs/BUILD_PLAN.md` and `docs/GAME_DESIGN.md` — your scope is items 1–4 of
+> the "Fun and motivation pass": gems as money with a persistent wallet, mega gems, combo
+> streaks, respawning gems, the Gear Shack shop kiosk on the plaza plus a wardrobe in the pause
+> menu, ride tickets (balloon 5 gems with the first ride per session free; rocket pads 3), and
+> three wordless mission cards per session with gem bonuses. You write no code yourself: use the
+> named subagents in `.claude/agents/` (integrator for `src/types.ts`/`src/main.ts`/`src/config.ts`
+> and a new `src/profile.ts` localStorage profile; activities-designer for gem values, respawn,
+> combos, tickets and missions in `src/activities/`; ui-designer for wallet HUD, shop, wardrobe,
+> mission cards and the end screen; world-artist for the kiosk model at the plaza;
+> dichoptic-engineer only if the vision layer needs a change; qa-playtester at the end).
+> Shared-interface rule: change `src/types.ts` **additively only** (new optional fields, new
+> events, new interfaces such as `ProfileApi`/`ShopItem`/`Mission`), never rename or remove, and
+> list every addition in `docs/streams/economy.md` so the other orchestrator can merge cleanly.
+> Do not touch: character select, trampoline/pads/rocket-pad physics, wayfinding, music, touch
+> controls (other streams). Mega gems, wallet numbers and shop items must never reveal weak-eye
+> object positions to the strong eye; mega gems are weak-eye-only like normal gems, and the
+> channel-separation e2e must cover them. Rebase on `origin/main` at least every hour and before
+> you finish. Work on branch `agent/economy` (subagent worktrees merged into it), push often
+> (plain push), keep `npm run verify` green on it, and when done write `docs/streams/economy.md`
+> (what was built, interface additions, how to test) and tell the project owner the branch is
+> ready to merge.
