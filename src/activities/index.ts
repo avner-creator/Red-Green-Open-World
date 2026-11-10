@@ -8,6 +8,7 @@ import { createGear } from './gear';
 import { createGems } from './gems';
 import { createBouncePads } from './pads';
 import { createTrampoline } from './trampoline';
+import { createSkydive } from './skydive';
 
 export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const gems = createGems(ctx);
@@ -15,6 +16,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const pads = createBouncePads(ctx);
   const chests = createChests(ctx);
   const gear = createGear(ctx);
+  const skydive = createSkydive(ctx);
   return {
     update(dt) {
       if (ctx.session.state.phase === 'playing') {
@@ -24,6 +26,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       gems.update(dt);
       chests.update(dt);
       gear.update(dt);
+      skydive.update(dt);
     },
     dispose() {
       gems.dispose();
@@ -31,6 +34,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       pads.dispose();
       chests.dispose();
       gear.dispose?.();
+      skydive.dispose();
     },
   };
 }

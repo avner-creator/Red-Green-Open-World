@@ -11,7 +11,7 @@
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../types';
-import type { GameContext, Interactable, OutfitSlot, VehicleApi } from '../../types';
+import type { GameContext, Interactable } from '../../types';
 import { segmentSphereHit } from '../gemLogic';
 import { Confetti } from './confetti';
 import { buildChest, CHEST } from './chestModel';
@@ -19,9 +19,7 @@ import type { ChestModel } from './chestModel';
 import { buildKey, buildLock } from './lockModel';
 import type { KeyModel, LockModel } from './lockModel';
 import { CHEST_RULES, ChestLock, Loadout, keyCandidates, keyholeSide, onKeyholeSide, pickKeySpot, rightSymbol, sideDirection } from './logic';
-import { CAR_FALLBACK_COLOR, OUTFITS, PAINT_COLORS, outfitForChest } from './outfits';
-import { buildWearable } from './wearables';
-import type { Wearable } from './wearables';
+import { OUTFITS, outfitForChest } from './outfits';
 
 export { OUTFITS } from './outfits';
 
@@ -34,6 +32,8 @@ export interface ChestInfo {
   key: [number, number, number];
   keyState: 'ground' | 'carried' | 'used';
   open: boolean;
+  /** Where the key model is drawn right now (follows the player while carried). */
+  keyNow: [number, number, number];
 }
 
 /** Test hook (`window.__rgChests`, only with `?test=1`). */
@@ -95,9 +95,6 @@ export function createChests(ctx: GameContext): Chests {
   const confetti = new Confetti();
   ctx.scene.add(confetti.group);
   const loadout = new Loadout();
-  const worn = new Map<OutfitSlot, { wearable: Wearable; remove: () => void; pop: number }>();
-  const carApplied = new Map<VehicleApi, number>();
-  let carColor: number | null = null;
   let time = 0;
   let placedAll = false;
   const prev = new THREE.Vector3();
@@ -108,6 +105,8 @@ export function createChests(ctx: GameContext): Chests {
   const entries: Entry[] = [];
   const tmp = new THREE.Vector3();
   const tmp2 = new THREE.Vector3();
+  /** Player feet last frame: carried keys follow in the player's frame (no lag at freefall speed). */
+  const lastPlayer = new THREE.Vector3();
 
   for (let i = 0; i < n; i++) {
     const spot = spots[i];
@@ -241,54 +240,24 @@ export function createChests(ctx: GameContext): Chests {
     confetti.burst(tmp);
   }
 
+  /**
+   * Give the outfit to the player for good: it goes into the saved profile and is worn through the
+   * gear applier (`item:equipped`), so there is one way to put things on. `loadout` only tells this
+   * session whether the outfit is new to it (for the `outfit:unlocked` event and the counter).
+   */
   function equip(outfitId: string): void {
     const def = OUTFITS.find((o) => o.id === outfitId);
     if (!def) return;
     const res = loadout.equip(def);
-    if (def.slot === 'head' || def.slot === 'back' || def.slot === 'face') {
-      const old = worn.get(def.slot);
-      if (old) {
-        old.remove();
-        old.wearable.dispose();
-        worn.delete(def.slot);
-      }
-      const wearable = buildWearable(def.id);
-      if (wearable) {
-        const remove = ctx.player.attach(def.slot, wearable.object);
-        wearable.object.scale.setScalar(0.001);
-        worn.set(def.slot, { wearable, remove, pop: 0 });
-      }
-    } else if (def.slot === 'carColor') {
-      carColor = PAINT_COLORS[def.id] ?? null;
-      syncCars();
-    }
+    ctx.profile.unlock(def.id, 'chest');
+    ctx.profile.equip(def.slot, def.id);
     if (res.unlocked) ctx.events.emit('outfit:unlocked', { outfitId: def.id });
     ctx.events.emit('outfit:equipped', { outfitId: def.id, slot: def.slot });
   }
 
-  /** Cars may be created later or be replaced: keep every car in the chosen paint. */
-  function syncCars(): void {
-    if (carColor === null) return;
-    for (const v of ctx.vehicles.all) {
-      if (v.kind !== 'car' || carApplied.get(v) === carColor) continue;
-      v.setColor(carColor);
-      carApplied.set(v, carColor);
-    }
-  }
-
   function resetAll(): void {
+    // Worn outfits and paints are saved in the profile and stay between sessions (see ../gear).
     loadout.reset();
-    for (const w of worn.values()) {
-      w.remove();
-      w.wearable.dispose();
-    }
-    worn.clear();
-    carColor = null;
-    for (const v of carApplied.keys()) {
-      const def = v.object.userData.defaultColor as THREE.ColorRepresentation | undefined;
-      v.setColor(def ?? CAR_FALLBACK_COLOR);
-    }
-    carApplied.clear();
     confetti.clear();
     for (const e of entries) {
       e.lock.reset();
@@ -345,8 +314,8 @@ export function createChests(ctx: GameContext): Chests {
       } else if (e.lock.key === 'carried') {
         const slot = carried.indexOf(e);
         const a = time * 2.3 + (slot * Math.PI * 2) / Math.max(1, carried.length);
-        tmp.set(ctx.player.position.x + Math.cos(a) * 0.9, ctx.player.position.y + 1.6 + Math.sin(time * 3 + slot) * 0.07, ctx.player.position.z + Math.sin(a) * 0.9);
-        kg.position.lerp(tmp, 1 - Math.exp(-10 * dt));
+        tmp.set(Math.cos(a) * 0.9, 1.6 + Math.sin(time * 3 + slot) * 0.07, Math.sin(a) * 0.9);
+        kg.position.sub(lastPlayer).lerp(tmp, 1 - Math.exp(-10 * dt)).add(ctx.player.position);
         kg.scale.setScalar(0.34);
         e.keyModel.body.rotation.y = time * 3;
         e.keyModel.body.rotation.z = 0;
@@ -392,18 +361,9 @@ export function createChests(ctx: GameContext): Chests {
 
     prev.copy(cur);
     havePrev = true;
+    lastPlayer.copy(ctx.player.position);
     confetti.update(dt);
 
-    // Wearables.
-    const speed = Math.hypot(ctx.player.velocity.x, ctx.player.velocity.z);
-    for (const w of worn.values()) {
-      if (w.pop < 1) {
-        w.pop = Math.min(1, w.pop + dt / 0.5);
-        w.wearable.object.scale.setScalar(Math.max(0.001, easeOutBack(w.pop)));
-      }
-      w.wearable.update?.(dt, speed);
-    }
-    syncCars();
   }
 
   // ───────────── test hooks ─────────────
@@ -420,6 +380,7 @@ export function createChests(ctx: GameContext): Chests {
           key: [e.keyPos.x, e.keyPos.y, e.keyPos.z],
           keyState: e.lock.key,
           open: e.lock.opened,
+          keyNow: [e.keyModel.group.position.x, e.keyModel.group.position.y, e.keyModel.group.position.z],
         })),
       sidePoint(i, side, dist = 1.9) {
         const e = entries[i];

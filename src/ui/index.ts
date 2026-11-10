@@ -14,6 +14,7 @@ import type { Actions, Screen } from './screens';
 import { createSettings } from './settingsScreen';
 import { createShop } from './shop';
 import { createTutorial } from './tutorial';
+import { createWayfinding } from './wayfinding';
 
 export function createUi(ctx: GameContext): UiApi {
   injectCss();
@@ -97,7 +98,8 @@ export function createUi(ctx: GameContext): UiApi {
     stack.push(settings);
     render();
   }, pop);
-  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe];
+  const wayfinding = createWayfinding(ctx, { pause, open: (s) => (stack.push(s), render()), back: pop });
+  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe, wayfinding.screen];
   for (const s of all) root.append(s.el);
   const hud = createHud(ctx, tracker);
   const tutorial = createTutorial(ctx);
@@ -179,6 +181,7 @@ export function createUi(ctx: GameContext): UiApi {
       if (shown === wardrobe) wardrobe.update(dt);
       if (shown === title) title.wallet.update(dt);
       hud.update(dt);
+      wayfinding.update(dt);
       tutorial.update(dt, phase() === 'playing');
     },
     get menuOpen(): boolean {

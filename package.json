@@ -12,6 +12,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "shots:channels": "node scripts/shots-channels.mjs",
+    "shots:ui1080": "node scripts/shots-ui-1080.mjs",
+    "shots:skydive": "node scripts/shots-skydive.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e"
   },
   "dependencies": {

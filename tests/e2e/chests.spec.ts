@@ -162,7 +162,11 @@ test('key, wrong side stays closed, right side opens with the outfit; restart re
   expect((await info())[0].open).toBe(true);
   expect(await log()).toEqual(['key:chest0', 'opened:chest0:hat-explorer', 'unlocked:hat-explorer', 'equipped:hat-explorer:head']);
 
-  // Restart: closed again, key back, nothing worn.
+  // The outfit is saved in the profile and worn through the gear applier.
+  expect(await page.evaluate(() => window.__rgGear!.attached().head)).toBe('hat-explorer');
+  expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat-explorer'))).toBe(true);
+
+  // Restart: closed again, key back; the saved outfit stays on (it persists between sessions).
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.start();
@@ -171,6 +175,7 @@ test('key, wrong side stays closed, right side opens with the outfit; restart re
   const again = await page.evaluate(() => ({ s: window.__rg!.state(), c: window.__rgChests!.info()[0] }));
   expect(again.s.chests).toBe(0);
   expect(again.s.outfits).toEqual([]);
+  expect(await page.evaluate(() => window.__rgGear!.attached().head)).toBe('hat-explorer');
   expect(again.c.open).toBe(false);
   expect(again.c.keyState).toBe('ground');
   expect(await page.evaluate(() => window.__rg!.state().chestsTotal)).toBe(6);
@@ -189,7 +194,7 @@ test('the key lives only in the weak channel and the lock only in the strong cha
     const len = Math.hypot(dx, dz);
     const px = c.key[0] + (dx / len) * 3.5;
     const pz = c.key[2] + (dz / len) * 3.5;
-    await stand(px, pz, yawToward(px, pz, c.key[0], c.key[2]));
+    await stand(px, pz, yawToward(px, pz, c.key[0], c.key[2]), false); // frame() renders
     const all = await frame({ weak: true, strong: true });
     const noWeak = await frame({ weak: false, strong: true });
     const dw = channelDiff(all, noWeak);
@@ -199,17 +204,13 @@ test('the key lives only in the weak channel and the lock only in the strong cha
 
     // Lock view: at the keyhole side, 3 m out, looking at the chest.
     const [lx, lz] = await page.evaluate(([i, s]) => window.__rgChests!.sidePoint(i, s, 3.2), [0, c.keyholeSide]);
-    await stand(lx, lz, yawToward(lx, lz, c.position[0], c.position[2]));
+    await stand(lx, lz, yawToward(lx, lz, c.position[0], c.position[2]), false);
     const withLock = await frame({ weak: true, strong: true });
     const noStrong = await frame({ weak: true, strong: false });
     const ds = channelDiff(withLock, noStrong);
     expect(ds[combo.strong], `lock ${combo.eye.weakEye}`).toBeGreaterThan(150);
     expect(maxOf(ds, combo.weak)).toBe(0);
     expect(ds.maxB).toBe(0);
-
-    // The chest itself (main scene) never changes with either layer: same pixels where both are off.
-    const none = await frame({ weak: false, strong: false });
-    expect(channelDiff(none, none).maxR).toBe(0);
   }
   await page.evaluate(() => {
     const rg = window.__rg!;

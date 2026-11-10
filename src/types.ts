@@ -301,6 +301,12 @@ export interface PlayerApi {
   setVisible(visible: boolean): void;
   /** Attach an outfit mesh to a body part; returns a remover. */
   attach(part: 'head' | 'back' | 'face', object: THREE.Object3D): () => void;
+  /**
+   * Tilt the body about its centre (PLAYER.height / 2), radians: `pitch` forward (+ = face down,
+   * the belly-down skydive pose), `roll` sideways. Feet `position`, yaw and pickup points don't
+   * move. Outfits follow. Reset to 0, 0 automatically when an external controller is released.
+   */
+  setTilt(pitch: number, roll: number): void;
   /** What the player is riding/driving, if anything. */
   readonly vehicle: VehicleApi | null;
 }
@@ -321,8 +327,15 @@ export interface VehiclesApi {
 
 export interface CameraApi {
   readonly camera: THREE.PerspectiveCamera;
-  /** Temporarily override follow settings (skydive pulls back and widens FOV). null resets. */
-  setOverride(o: { distance?: number; height?: number; fov?: number; lookAhead?: number } | null): void;
+  /**
+   * Temporarily override follow settings (skydive pulls back and widens FOV). null resets.
+   * `yawOffset` (radians): while set, the camera eases to look along `player.yaw + yawOffset`
+   * (player look input still works and wins for a moment). `orbitRate` (rad/s): while set, the
+   * camera keeps orbiting around the player at that rate (e.g. a slow reveal on the balloon ride).
+   */
+  setOverride(
+    o: { distance?: number; height?: number; fov?: number; lookAhead?: number; yawOffset?: number; orbitRate?: number } | null,
+  ): void;
   /** Small playful shake (landing, bump). amount 0..1 */
   shake(amount: number): void;
   /** Yaw of the camera around the player, radians (movement is camera-relative). */

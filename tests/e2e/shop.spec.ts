@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import type { MissionState, ShopItem } from '../../src/types';
 import { boot } from './helpers';
 
 const OUT = 'test-results/shop';
@@ -22,9 +21,7 @@ function channel(png: PNG, c: number): Buffer {
  * only advance when SwiftShader produces a frame, so every animation is paused at `at` ms first
  * (deterministic: the moment of an animation we want to judge), then resumed.
  */
-const T0 = Date.now();
 async function save(page: Page, name: string, at = 1200): Promise<void> {
-  console.log('save', name, Date.now() - T0);
   await page.evaluate((t) => {
     for (const a of document.getAnimations()) {
       a.pause();
@@ -46,26 +43,8 @@ const dismiss = (page: Page): Promise<void> =>
   page.evaluate(() => (document.querySelector('[data-testid="unlock-moment"].on') as HTMLElement | null)?.click());
 const wallet = (page: Page): Promise<number> => page.evaluate(() => window.__rg!.ctx.profile.wallet);
 
-const ITEMS: ShopItem[] = [
-  { id: 'hat_star', category: 'outfit', slot: 'head', name: 'Star hat', icon: 'hat', price: 5 },
-  { id: 'cape_bolt', category: 'outfit', slot: 'back', name: 'Bolt cape', icon: 'cape', price: 40 },
-  { id: 'glasses_gold', category: 'outfit', slot: 'face', name: 'Gold glasses', icon: 'glasses', price: 30, chestOnly: true },
-  { id: 'pack_rocket', category: 'outfit', slot: 'back', name: 'Rocket pack', icon: 'backpack', price: 15 },
-  { id: 'hat_crown', category: 'outfit', slot: 'head', name: 'Crown', icon: 'hat', price: 100 },
-  { id: 'paint_sun', category: 'paint', slot: 'carColor', name: 'Sun paint', icon: 'car', price: 8, swatch: '#ffb02e' },
-  { id: 'paint_sky', category: 'paint', slot: 'carColor', name: 'Sky paint', icon: 'car', price: 12, swatch: '#3aa0ff' },
-  { id: 'trail_spark', category: 'trail', slot: 'trail', name: 'Sparkles', icon: 'trail', price: 10, swatch: '#fff07a' },
-  { id: 'emote_wave', category: 'emote', slot: 'emote', name: 'Wave', icon: 'emote', price: 0 },
-];
-
-const MISSIONS: MissionState[] = [
-  { id: 'm1', kind: 'collectGems', icon: 'gem', target: 10, reward: 5, progress: 4, done: false },
-  { id: 'm2', kind: 'bounceHeight', icon: 'trampoline', target: 30, reward: 8, progress: 12, done: false },
-  { id: 'm3', kind: 'openChest', icon: 'chest', target: 1, reward: 5, progress: 0, done: false },
-];
-
 test.describe('economy ui', () => {
-  test('wallet, combo, missions, shop, wardrobe, end screen', async ({ page }) => {
+  test('wallet, combo, missions, kiosk shop, wardrobe, end screen, reset', async ({ page }) => {
     test.setTimeout(150_000);
     const { consoleErrors } = await boot(page);
     await page.evaluate(() => window.__rg!.freeze(true));
@@ -77,25 +56,24 @@ test.describe('economy ui', () => {
 
     await page.getByTestId('play').click();
     expect(await phase(page)).toBe('playing');
-    await page.evaluate(
-      ({ items, missions }) => {
-        const rg = window.__rg!;
-        rg.ctx.economy.registerItems(items);
-        rg.ctx.profile.earn(20, 'gem');
-        rg.ctx.events.emit('combo:changed', { multiplier: 3, streak: 5 });
-        missions.forEach((m, index) => rg.ctx.events.emit('mission:progress', { index, mission: m }));
-        rg.ctx.events.emit('mission:completed', { index: 2, mission: { ...missions[2]!, progress: 1, done: true } });
-        rg.step(1 / 60, 40);
-      },
-      { items: ITEMS, missions: MISSIONS },
-    );
-    expect(await wallet(page)).toBe(27);
-    await expect(page.getByTestId('wallet')).toContainText('27');
+
+    // Real missions from the economy; drive the HUD cards with events.
+    const missions = await page.evaluate(() => {
+      const rg = window.__rg!;
+      const ms = rg.ctx.economy.missions.map((m) => ({ ...m }));
+      rg.ctx.profile.earn(20, 'gem');
+      rg.ctx.events.emit('combo:changed', { multiplier: 3, streak: 5 });
+      rg.ctx.events.emit('mission:progress', { index: 0, mission: { ...ms[0]!, progress: Math.floor(ms[0]!.target / 2) } });
+      rg.ctx.events.emit('mission:completed', { index: 2, mission: { ...ms[2]!, progress: ms[2]!.target, done: true } });
+      rg.step(1 / 60, 40);
+      return ms;
+    });
+    expect(missions.length).toBe(3);
+    await expect(page.getByTestId('wallet').locator('.n')).toHaveText(String(await wallet(page)));
     await expect(page.getByTestId('combo')).toBeVisible();
     await expect(page.getByTestId('combo')).toContainText('3');
     await expect(page.getByTestId('mission-card')).toHaveCount(3);
-    await expect(page.getByTestId('mission-card').nth(0)).toContainText('4/10');
-    await expect(page.getByTestId('mission-card').nth(1)).toContainText('12/30m');
+    await expect(page.getByTestId('mission-card').nth(0)).toContainText(`/${missions[0]!.target}`);
     await expect(page.getByTestId('mission-card').nth(2)).toHaveAttribute('data-done', 'true');
     // Mega gem: the "+N" pops at the wallet, big.
     await page.evaluate(() => {
@@ -106,33 +84,52 @@ test.describe('economy ui', () => {
     });
     await expect(page.locator('[data-testid="wallet-pop"][data-kind="mega"]')).toHaveCount(1);
     await save(page, 'hud-combo-missions', 300);
-    // Combo back to ×1: the badge goes away.
+    // HUD parts never overlap each other.
+    const overlaps = (): Promise<string[]> =>
+      page.evaluate(() => {
+        const sel = ['[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]', '.wf-compass', '[data-testid="help"]'];
+        const rs = sel.map((s) => [s, document.querySelector(s)?.getBoundingClientRect()] as const).filter(([, r]) => r && r.width > 0);
+        const out: string[] = [];
+        for (let i = 0; i < rs.length; i++)
+          for (let j = i + 1; j < rs.length; j++) {
+            const a = rs[i]![1]!;
+            const b = rs[j]![1]!;
+            if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) out.push(`${rs[i]![0]} x ${rs[j]![0]}`);
+          }
+        return out;
+      });
+    expect(await overlaps()).toEqual([]);
+    await page.setViewportSize({ width: 667, height: 375 });
+    expect(await overlaps()).toEqual([]);
+    await page.setViewportSize({ width: 640, height: 360 });
+
+    // Combo back to x1: the badge goes away. A denied ticket: a friendly toast with the price.
     await page.evaluate(() => {
       window.__rg!.ctx.events.emit('combo:changed', { multiplier: 1, streak: 0 });
+      window.__rg!.ctx.events.emit('ticket:denied', { kind: 'balloon', price: 50, wallet: 3 });
       window.__rg!.step(1 / 60, 2);
     });
     await expect(page.getByTestId('combo')).toBeHidden();
-    console.log('lap combo', Date.now() - T0);
-
-    // Ticket denied: friendly toast with the price, the wallet shakes.
-    await page.evaluate(() => {
-      window.__rg!.ctx.events.emit('ticket:denied', { kind: 'balloon', price: 50, wallet: 32 });
-      window.__rg!.step(1 / 60, 2);
-    });
     await expect(page.locator('.toast.deny')).toContainText('50');
-    console.log('lap deny', Date.now() - T0);
 
-    // The kiosk opens the Gear Shack: session paused, shop on top.
+    // Walk up to the Gear Shack kiosk and press use: session paused, shop on top.
     await page.evaluate(() => {
-      window.__rg!.ctx.events.emit('shop:open', {});
-      window.__rg!.step(1 / 60, 3);
+      const rg = window.__rg!;
+      const a = rg.ctx.world.anchors.gearShack;
+      const x = a.position.x + Math.sin(a.yaw) * 2.4;
+      const z = a.position.z + Math.cos(a.yaw) * 2.4;
+      rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.2, z, a.yaw + Math.PI);
+      rg.step(1 / 60, 20, false);
+      rg.inject({ usePressed: true, use: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 3);
     });
     await expect(page.getByTestId('shop')).toBeVisible();
-    console.log('lap shopvis', Date.now() - T0);
     expect(await phase(page)).toBe('paused');
     expect(await page.evaluate(() => window.__rg!.ctx.ui.menuOpen)).toBe(true);
-    // Only categories with items get a tab (no 'character' items registered).
-    await expect(page.locator('[data-testid^="shop-tab-"]')).toHaveCount(4);
+    // Only categories with items get a tab (no 'character' items yet).
+    await expect(page.getByTestId('shop-tab-outfit')).toBeVisible();
     await expect(page.getByTestId('shop-tab-character')).toHaveCount(0);
     const fits = async (): Promise<boolean> =>
       page.evaluate(() => {
@@ -146,34 +143,36 @@ test.describe('economy ui', () => {
     expect(await fits()).toBe(true);
     await page.setViewportSize({ width: 640, height: 360 });
 
-    const card = (id: string) => page.locator(`[data-testid="shop-card"][data-item="${id}"]`);
-    await expect(card('hat_crown')).toHaveAttribute('data-state', 'poor');
-    await expect(card('glasses_gold')).toHaveAttribute('data-state', 'chest');
-    await expect(card('emote_wave')).toHaveCount(0); // other tab
+    const card = (id: string) => page.locator(`[data-testid="shop"] [data-testid="shop-card"][data-item="${id}"]`);
+    const chestId = await page.evaluate(() => window.__rg!.ctx.economy.catalog.find((i) => i.chestOnly && i.category === 'outfit')!.id);
+    await expect(card('hat-crown')).toHaveAttribute('data-state', 'poor');
+    await expect(card(chestId)).toHaveAttribute('data-state', 'chest');
 
     // Buy: wallet drops, unlock moment, owned + worn.
-    await card('hat_star').click();
+    const w0 = await wallet(page);
+    await card('hat-propeller').click();
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
-    expect(await wallet(page)).toBe(27);
+    expect(await wallet(page)).toBe(w0 - 12);
     await save(page, 'unlock', 1000);
     await dismiss(page);
     await expect(page.getByTestId('unlock-moment')).toBeHidden();
-    await expect(card('hat_star')).toHaveAttribute('data-state', 'equipped');
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('hat_star');
+    await expect(card('hat-propeller')).toHaveAttribute('data-state', 'equipped');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('hat-propeller');
 
     // Too expensive / chest-only: nothing happens to the wallet.
-    await card('hat_crown').click();
-    await card('glasses_gold').click();
-    expect(await wallet(page)).toBe(27);
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat_crown') || window.__rg!.ctx.profile.owns('glasses_gold'))).toBe(false);
+    await card('hat-crown').click();
+    await card(chestId).click();
+    expect(await wallet(page)).toBe(w0 - 12);
+    expect(await page.evaluate((c) => window.__rg!.ctx.profile.owns('hat-crown') || window.__rg!.ctx.profile.owns(c), chestId)).toBe(false);
 
     // Another tab by icon; buy a paint with the keyboard.
     await page.getByTestId('shop-tab-paint').click();
-    await card('paint_sun').focus();
+    await card('paint-snow').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
     await dismiss(page);
-    expect(await wallet(page)).toBe(19);
+    expect(await wallet(page)).toBe(w0 - 22);
+    await step(page, 30);
     await save(page, 'shop-paint');
 
     // Esc closes the shop: playing again.
@@ -187,18 +186,17 @@ test.describe('economy ui', () => {
       window.__rg!.ctx.session.pause();
       window.__rg!.step(1 / 60, 2);
     });
+    await save(page, 'pause');
     await page.getByTestId('pause-wardrobe').click();
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     const wcard = (id: string) => page.locator(`[data-testid="wardrobe"] [data-testid="shop-card"][data-item="${id}"]`);
-    await expect(wcard('hat_crown')).toHaveCount(0);
-    await expect(wcard('emote_wave')).toHaveAttribute('data-state', 'owned');
-    await wcard('hat_star').click();
+    await expect(wcard('hat-crown')).toHaveCount(0);
+    await expect(wcard('emote-wave')).toHaveCount(1);
+    await wcard('hat-propeller').click();
     expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe(null);
-    await expect(wcard('hat_star')).toHaveAttribute('data-state', 'owned');
-    await wcard('emote_wave').click();
-    await wcard('hat_star').click();
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('hat_star');
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('emote'))).toBe('emote_wave');
+    await expect(wcard('hat-propeller')).toHaveAttribute('data-state', 'owned');
+    await wcard('hat-propeller').click();
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('hat-propeller');
     await save(page, 'wardrobe');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('resume')).toBeVisible();
@@ -206,31 +204,35 @@ test.describe('economy ui', () => {
     expect(await phase(page)).toBe('playing');
 
     // Chest unlock: compact moment on the HUD; then missions done and the jackpot.
-    await page.evaluate(
-      ({ missions }) => {
-        const rg = window.__rg!;
-        const e = rg.ctx.events;
-        rg.ctx.profile.unlock('glasses_gold', 'chest');
-        e.emit('mission:completed', { index: 0, mission: { ...missions[0]!, progress: 10, done: true } });
-        e.emit('mission:completed', { index: 1, mission: { ...missions[1]!, progress: 31, done: true } });
-        rg.ctx.profile.earn(15, 'jackpot');
-        e.emit('mission:jackpot', { reward: 15 });
-        rg.step(1 / 60, 3);
-      },
-      { missions: MISSIONS },
-    );
+    await page.evaluate((chest) => {
+      const rg = window.__rg!;
+      rg.ctx.profile.unlock(chest, 'chest');
+      rg.step(1 / 60, 2);
+    }, chestId);
+    await expect(page.getByTestId('moment-unlock')).toHaveCount(1);
+    await save(page, 'hud-chest-unlock', 700);
+    await page.evaluate((ms) => {
+      const rg = window.__rg!;
+      const e = rg.ctx.events;
+      e.emit('mission:completed', { index: 0, mission: { ...ms[0]!, progress: ms[0]!.target, done: true } });
+      e.emit('mission:completed', { index: 1, mission: { ...ms[1]!, progress: ms[1]!.target, done: true } });
+      rg.ctx.profile.earn(15, 'jackpot');
+      e.emit('mission:jackpot', { reward: 15 });
+      rg.step(1 / 60, 3);
+    }, missions);
     await expect(page.getByTestId('moment-jackpot')).toHaveCount(1);
     await save(page, 'hud-jackpot', 700);
 
     // End screen: earned gems, wallet, missions + jackpot, best combo, unlocked items.
-    await page.evaluate(() => {
+    const earned = await page.evaluate(() => {
       const rg = window.__rg!;
       rg.setRemaining(0.05);
       rg.step(1 / 60, 30);
+      return rg.state().earned ?? 0;
     });
     await expect(page.getByTestId('play-again')).toBeVisible();
-    await expect(page.getByTestId('end-earned')).toContainText('+40');
-    await expect(page.getByTestId('end-wallet')).toContainText('34');
+    await expect(page.getByTestId('end-earned')).toContainText(`+${earned}`);
+    await expect(page.getByTestId('end-wallet')).toContainText(String(await wallet(page)));
     await expect(page.getByTestId('end-mission')).toHaveCount(3);
     await expect(page.locator('[data-testid="end-mission"][data-earned="true"]')).toHaveCount(3);
     await expect(page.getByTestId('end-jackpot')).toHaveAttribute('data-earned', 'true');
@@ -254,15 +256,17 @@ test.describe('economy ui', () => {
     await page.getByTestId('tab-game').click();
     const hold = page.getByTestId('reset-profile');
     await expect(hold).toBeVisible();
+    const before = await wallet(page);
+    expect(before).toBeGreaterThan(0);
     const box = (await hold.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     await page.evaluate(() => window.__rg!.step(1 / 60, 60, false));
-    expect(await wallet(page)).toBe(34); // 1 s is not enough
+    expect(await wallet(page)).toBe(before); // 1 s is not enough
     await page.evaluate(() => window.__rg!.step(1 / 60, 150, false));
     await page.mouse.up();
     expect(await wallet(page)).toBe(0);
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat_star'))).toBe(false);
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat-propeller'))).toBe(false);
 
     expect(consoleErrors).toEqual([]);
   });

@@ -22,8 +22,8 @@ export const ECON_CSS = `
 @keyframes rg-wbump{40%{transform:scale(1.14)}}
 @keyframes rg-wbumpb{30%{transform:scale(1.34) rotate(-4deg)}60%{transform:scale(.95) rotate(2deg)}}
 @keyframes rg-wshake{15%{transform:translateX(calc(var(--u)*-1.4)) rotate(-3deg)}35%{transform:translateX(calc(var(--u)*1.4)) rotate(3deg)}55%{transform:translateX(calc(var(--u)*-1)) rotate(-2deg)}75%{transform:translateX(calc(var(--u)*.7))}}
-.rg .wallet .pops{position:absolute;left:calc(var(--u)*4);top:100%;width:0;height:0;pointer-events:none;z-index:3}
-.rg .pop{position:absolute;left:0;top:calc(var(--u)*.4);display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*4.6);
+.rg .wallet .pops{position:absolute;left:calc(100% + var(--u)*.8);top:62%;width:0;height:0;pointer-events:none;z-index:3}
+.rg .pop{position:absolute;left:0;top:0;display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*4.6);
   transform-origin:15% 50%;animation:rg-popfly 1.3s cubic-bezier(.2,1.3,.4,1) both;isolation:isolate}
 .rg .pop .v{color:var(--y);font-size:1.05em}
 .rg .pop.neg .v{color:#fff}
@@ -35,13 +35,15 @@ export const ECON_CSS = `
 .rg .pop.again .v{animation:rg-wbump .3s cubic-bezier(.2,1.6,.4,1)}
 .rg .pop .rays{position:absolute;left:-40%;top:50%;width:calc(var(--u)*18);height:calc(var(--u)*18);margin-top:calc(var(--u)*-9);z-index:-1;border-radius:50%;
   background:repeating-conic-gradient(rgba(255,255,255,.8) 0 9deg,transparent 9deg 26deg);-webkit-mask:${RAYS_MASK};mask:${RAYS_MASK};animation:rg-raypop 1.4s ease-out both}
-@keyframes rg-popfly{0%{opacity:0;transform:translateY(calc(var(--u)*-2)) scale(.3)}14%{opacity:1;transform:translateY(0) scale(1.3)}26%{transform:scale(1)}72%{opacity:1;transform:translateY(calc(var(--u)*1.2))}100%{opacity:0;transform:translateY(calc(var(--u)*3)) scale(.9)}}
+@keyframes rg-popfly{0%{opacity:0;transform:translate(calc(var(--u)*-3),-50%) scale(.3)}14%{opacity:1;transform:translate(0,-50%) scale(1.3)}26%{transform:translate(0,-50%) scale(1)}72%{opacity:1;transform:translate(calc(var(--u)*.6),calc(-50% + var(--u)*1.6))}100%{opacity:0;transform:translate(calc(var(--u)*1),calc(-50% + var(--u)*3.4)) scale(.9)}}
 @keyframes rg-raypop{0%{transform:scale(0) rotate(0);opacity:0}25%{opacity:1}100%{transform:scale(1.3) rotate(90deg);opacity:0}}
 
 /* ---------- HUD top-left cluster: wallet + combo ---------- */
-.rg .econtop{position:absolute;z-index:4;left:calc(var(--u)*2.4);top:calc(var(--u)*2.4);display:flex;align-items:center;gap:calc(var(--u)*1.6)}
+.rg .econtop{position:absolute;z-index:4;left:calc(var(--u)*2.4);top:calc(var(--u)*2.4);display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--u)*1.6)}
+.rg .econtop .row2{display:flex;align-items:center;gap:calc(var(--u)*2.2)}
+.rg .econtop .row2 .pill.stars{position:relative;left:auto;top:auto}
+.rg .econtop>.wallet{z-index:2}
 .rg .econtop.near .wallet{animation:rg-near 1.2s ease-out}
-.rg .hud .pill.stars{top:calc(var(--u)*13.8)}
 .rg .combo{--cs:1;position:relative;width:calc(var(--u)*9.4);height:calc(var(--u)*9.4);display:none;align-items:center;justify-content:center;font-size:calc(var(--u)*3.9);transform:scale(var(--cs))}
 .rg .combo.on{display:flex}
 .rg .combo svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
@@ -58,7 +60,7 @@ export const ECON_CSS = `
 @keyframes rg-late{to{opacity:.35}}
 
 /* ---------- mission cards ---------- */
-.rg .missions{position:absolute;right:calc(var(--u)*2.4);top:calc(var(--u)*13.4);display:none;flex-direction:column;gap:calc(var(--u)*1.1);align-items:stretch}
+.rg .missions{position:absolute;right:calc(var(--u)*2.4);top:calc(var(--u)*21.6);display:none;flex-direction:column;gap:calc(var(--u)*1.1);align-items:stretch}
 .rg .missions.on{display:flex}
 .rg .mcard{position:relative;display:flex;align-items:center;gap:calc(var(--u)*.9);padding:calc(var(--u)*.5) calc(var(--u)*.8) calc(var(--u)*1) calc(var(--u)*.5);
   min-width:calc(var(--u)*19);background:linear-gradient(180deg,#1f2650e6,#0b0f22e6);border:calc(var(--u)*.45) solid #fff;border-radius:calc(var(--u)*2);
@@ -122,9 +124,9 @@ export const ECON_CSS = `
 .rg .titlew{position:absolute;left:calc(var(--u)*3);top:calc(var(--u)*3);font-size:calc(var(--u)*4.4)}
 
 /* ---------- pause: wardrobe tile ---------- */
-.rg .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--u)*2)}
+.rg .grid3{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(var(--u)*2)}
 .rg .pausep .grid3 .tile{min-width:calc(var(--u)*18);min-height:calc(var(--u)*14.5)}
-.rg .pausep .grid3 .tile.main{grid-column:1/3;min-height:calc(var(--u)*15)}
+.rg .pausep .grid3 .tile.main{grid-column:1/4;min-height:calc(var(--u)*15)}
 
 /* ---------- Gear Shack / wardrobe ---------- */
 .rg .shopscr{background:radial-gradient(ellipse at 50% 30%,rgba(30,36,80,.6),rgba(6,8,20,.9))}
@@ -140,7 +142,7 @@ export const ECON_CSS = `
 .rg .shop .bar .wallet{margin-left:auto;font-size:calc(var(--u)*4.6)}
 .rg .shop .close{min-width:max(44px,calc(var(--u)*8))!important;min-height:max(44px,calc(var(--u)*8))!important;font-size:calc(var(--u)*3.6)}
 .rg .sgrid{position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*21),1fr));
-  grid-auto-rows:minmax(calc(var(--u)*26),calc((100% - var(--u)*2.2) / 2));gap:calc(var(--u)*2.2);padding:calc(var(--u)*1.8);margin:0 calc(var(--u)*-.6);align-content:start;scrollbar-width:thin;scrollbar-color:#fff #0b0f22}
+  grid-auto-rows:minmax(calc(var(--u)*26),calc((100% - var(--u)*2.2) / 2));gap:calc(var(--u)*2.2);padding:calc(var(--u)*1.8);margin:0;align-content:start;scrollbar-width:thin;scrollbar-gutter:stable;scrollbar-color:#fff #0b0f22}
 .rg .card{flex-direction:column;justify-content:flex-start;gap:calc(var(--u)*.7);min-width:0!important;min-height:0!important;width:100%;height:100%;
   padding:calc(var(--u)*1.2) calc(var(--u)*1) calc(var(--u)*1.2);color:#fff;--out:#000;border-radius:calc(var(--u)*2.4);
   background:linear-gradient(180deg,#2e3768,#151a38);box-shadow:0 0 0 calc(var(--u)*.45) #fff,0 calc(var(--u)*1) 0 calc(var(--u)*.45) #000,inset 0 calc(var(--u)*.3) 0 rgba(255,255,255,.25)}

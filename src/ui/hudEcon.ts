@@ -18,8 +18,9 @@ const CR = 20;
 const CC = 2 * Math.PI * CR;
 
 export interface HudEcon {
-  /** The top-left cluster (wallet + combo). */
+  /** The top-left cluster: wallet, then a row (stars pill goes first, then the combo badge). */
   top: HTMLElement;
+  row2: HTMLElement;
   missions: HTMLElement;
   moments: HTMLElement;
   update(dt: number): void;
@@ -70,7 +71,8 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
     }
   };
 
-  const top = h('div', 'econtop', {}, wallet.el, combo);
+  const row2 = h('div', 'row2', {}, combo);
+  const top = h('div', 'econtop', {}, wallet.el, row2);
 
   // ── mission cards ──
   const missions = h('div', 'missions', { 'data-testid': 'missions' });
@@ -200,6 +202,7 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
 
   return {
     top,
+    row2,
     missions,
     moments,
     reset() {

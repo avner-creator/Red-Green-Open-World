@@ -61,7 +61,8 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
   };
   const econ = createHudEcon(ctx, tracker, toastNodes);
   const gems = econ.top;
-  el.append(glow, econ.top, stars, econ.missions, timer, prompt, toasts, econ.moments);
+  econ.row2.prepend(stars);
+  el.append(glow, econ.top, econ.missions, timer, prompt, toasts, econ.moments);
   ctx.uiRoot.append(el);
 
   let lastStars = -1;

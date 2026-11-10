@@ -17,6 +17,7 @@ import { Colliders, type Kit } from './props';
 import { buildScatter } from './scatter';
 import { buildContent } from './content';
 import { createPost } from './post';
+import { createGearShackLive } from './gear-shack';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -45,6 +46,8 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   const chestSpots = content.chestSpots.map((c) => ({ position: new THREE.Vector3(c.x, c.y, c.z), yaw: c.yaw }));
   const scatter = buildScatter(terrain, mats, col, content.trees, content.keepouts, terrainMesh.colorAt);
   root.add(scatter.group);
+  const shack = createGearShackLive(mats, heightAt);
+  root.add(shack.group);
 
   const post = createPost(ctx.camera);
 
@@ -72,6 +75,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       quality = q;
       lighting.setQuality(q);
       scatter.setQuality(q);
+      shack.setQuality(q);
       ctx.vision.setPostPasses(post.passes(q));
     },
     update(dt) {
@@ -79,6 +83,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       mats.update();
       lighting.update(ctx.camera);
       scatter.update(ctx.camera);
+      shack.update(dt);
     },
   };
   api.setQuality(ctx.settings.get().quality);
