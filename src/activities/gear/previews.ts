@@ -11,6 +11,7 @@ import { buildGear } from './models';
 import { RAINBOW_LANES } from './trailLogic';
 import { bubbleTexture, sparkleTexture } from './trails';
 import { paintColor, trailKind } from './catalog';
+import { emotePreview } from './emotePreviews';
 import type { TrailKind } from './catalog';
 
 const SIZE = 192;
@@ -284,7 +285,7 @@ export function previewFor(item: ShopItem): string | null {
 /** Give every gear item that has a picture a `preview()` (emotes use the UI icon). */
 export function withPreviews(items: readonly ShopItem[], enabled: () => boolean = () => true): ShopItem[] {
   const out = items.map((it): ShopItem => {
-    if (it.slot === 'emote') return it;
+    if (it.slot === 'emote') return { ...it, preview: () => emotePreview(it.id) };
     return { ...it, preview: () => (enabled() ? previewFor(it) : null) };
   });
   total = out.filter((i) => i.preview).length;

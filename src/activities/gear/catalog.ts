@@ -12,10 +12,10 @@ const outfit = (id: string, slot: EquipSlot, name: string, icon: ShopItem['icon'
 
 /** Buggy paints: they differ in brightness in BOTH the red and the green channel, not by hue alone. */
 export const GEAR_PAINTS: Readonly<Record<string, number>> = {
-  'paint-snow': 0xf2f6ff,
-  'paint-night': 0x161a2e,
-  'paint-ruby': 0xc4122e,
-  'paint-lime': 0x8fe03a,
+  'paint-snow': 0xf2f4f6,
+  'paint-night': 0x1a1a2e,
+  'paint-ruby': 0xbf4d52,
+  'paint-lime': 0x73bf30,
 };
 
 const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;

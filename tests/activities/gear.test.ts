@@ -80,18 +80,24 @@ describe('gear catalog', () => {
     }
   });
 
-  it('buggy paints differ in brightness in both the R and the G channel, not by hue alone', () => {
+  it('shop paints are mutually distinct in the R channel alone and in the G channel alone', () => {
+    const shop = Object.values(GEAR_PAINTS).map(rg);
+    for (let i = 0; i < shop.length; i++) {
+      for (let j = i + 1; j < shop.length; j++) {
+        expect(Math.abs(shop[i][0] - shop[j][0]) / 255, `R ${i} ${j}`).toBeGreaterThanOrEqual(0.15);
+        expect(Math.abs(shop[i][1] - shop[j][1]) / 255, `G ${i} ${j}`).toBeGreaterThanOrEqual(0.15);
+      }
+    }
+  });
+
+  it('every paint, the default and the chest paints included, differs in at least one channel', () => {
     const all = [0xffbd2e, ...Object.values(PAINT_COLORS), ...Object.values(GEAR_PAINTS)].map(rg);
     for (let i = 0; i < all.length; i++) {
       for (let j = i + 1; j < all.length; j++) {
-        const d = Math.hypot(all[i][0] - all[j][0], all[i][1] - all[j][1]);
-        expect(d, `paints ${i} and ${j}`).toBeGreaterThan(50);
+        const d = Math.max(Math.abs(all[i][0] - all[j][0]), Math.abs(all[i][1] - all[j][1])) / 255;
+        expect(d, `paints ${i} and ${j}`).toBeGreaterThanOrEqual(0.15);
       }
     }
-    // The shop paints alone span dark to bright in both channels.
-    const shop = Object.values(GEAR_PAINTS).map(rg);
-    expect(Math.max(...shop.map((c) => c[0])) - Math.min(...shop.map((c) => c[0]))).toBeGreaterThan(150);
-    expect(Math.max(...shop.map((c) => c[1])) - Math.min(...shop.map((c) => c[1]))).toBeGreaterThan(150);
   });
 
   it('maps ids to paints, trails and emotes', () => {
@@ -254,12 +260,9 @@ describe('emotes', () => {
 });
 
 describe('shop previews', () => {
-  it('every non-emote gear item gets a preview function, emotes keep the UI icon', () => {
+  it('every gear item gets a preview function (emotes draw a pictogram)', () => {
     const items = withPreviews(GEAR_CATALOG);
     expect(items).toHaveLength(GEAR_CATALOG.length);
-    for (const it of items) {
-      if (it.slot === 'emote') expect(it.preview).toBeUndefined();
-      else expect(typeof it.preview, it.id).toBe('function');
-    }
+    for (const it of items) expect(typeof it.preview, it.id).toBe('function');
   });
 });

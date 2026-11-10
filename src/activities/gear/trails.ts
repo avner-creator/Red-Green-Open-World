@@ -59,7 +59,7 @@ export function sparkleTexture(): THREE.CanvasTexture {
     g.fillStyle = glow;
     g.fillRect(0, 0, s, s);
     // A dark amber shadow under the cross so it still shows on bright ground in a single channel.
-    g.fillStyle = 'rgba(120,60,0,0.5)';
+    g.fillStyle = 'rgba(90,40,0,0.7)';
     for (const rot of [0, Math.PI / 2]) {
       g.save();
       g.translate(m, m);
@@ -87,7 +87,14 @@ export function sparkleTexture(): THREE.CanvasTexture {
       g.fill();
       g.restore();
     }
-    const core = g.createRadialGradient(m, m, 0, m, m, s * 0.16);
+    // Dark halo ring behind the bright core: reads on bright paving in either channel.
+    const halo = g.createRadialGradient(m, m, s * 0.1, m, m, s * 0.26);
+    halo.addColorStop(0, 'rgba(70,35,0,0.75)');
+    halo.addColorStop(0.6, 'rgba(70,35,0,0.4)');
+    halo.addColorStop(1, 'rgba(70,35,0,0)');
+    g.fillStyle = halo;
+    g.fillRect(0, 0, s, s);
+    const core = g.createRadialGradient(m, m, 0, m, m, s * 0.15);
     core.addColorStop(0, 'rgba(255,255,255,1)');
     core.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = core;
@@ -109,8 +116,8 @@ export function bubbleTexture(): THREE.CanvasTexture {
     g.arc(m, m, r, 0, Math.PI * 2);
     g.fill();
     // Dark outline just outside the bright rim, so the bubble reads on bright paving in one channel.
-    g.strokeStyle = 'rgba(30,70,150,0.55)';
-    g.lineWidth = s * 0.03;
+    g.strokeStyle = 'rgba(15,35,90,0.85)';
+    g.lineWidth = s * 0.06;
     g.beginPath();
     g.arc(m, m, r, 0, Math.PI * 2);
     g.stroke();
