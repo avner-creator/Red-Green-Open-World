@@ -162,3 +162,35 @@ test('robot: jump presses during a trampoline flight are not double jumps or tri
   expect(r.maxY).toBeGreaterThan(25); // holding jump still grows the bounce
   expect(r.mode).toBe('walk');
 });
+
+test('rex in the buggy: the tail lies low along the deck and the head stays on top', async () => {
+  await fresh('rex');
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const p = rg.ctx.player;
+    const car = rg.ctx.vehicles.all[0];
+    const q = car.object.quaternion;
+    const h = Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+    const x = car.position.x + Math.cos(h) * 1.9;
+    const z = car.position.z - Math.sin(h) * 1.9;
+    rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.3, z, h);
+    rg.step(1 / 60, 20, false);
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 90, false);
+    p.object.updateWorldMatrix(true, true);
+    const y = (name: string): number => {
+      const o = p.object.getObjectByName(name);
+      return o ? o.getWorldPosition(o.position.clone()).y : NaN;
+    };
+    const out = { mode: p.mode, tail: y('Tail5'), head: y('Head') };
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    return out;
+  });
+  expect(r.mode).toBe('driving');
+  expect(r.head - r.tail).toBeGreaterThan(0.4);
+});
