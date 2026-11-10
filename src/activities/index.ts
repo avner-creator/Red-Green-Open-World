@@ -6,6 +6,7 @@ import type { GameContext, GameSystem } from '../types';
 import { createChests } from './chests';
 import { createGems } from './gems';
 import { createSkydive } from './skydive';
+import { createSkyRides } from './skyrides';
 import { createThrills } from './thrills';
 
 export { setLaunchGate } from './rocket';
@@ -16,6 +17,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const thrills = createThrills(ctx);
   const chests = createChests(ctx);
   const skydive = createSkydive(ctx);
+  const skyRides = createSkyRides(ctx);
   return {
     update(dt) {
       // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
@@ -24,6 +26,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
         thrills.update(dt);
       }
       skydive.update(dt);
+      skyRides.update(dt);
       gems.update(dt);
       chests.update(dt);
     },
@@ -32,6 +35,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       thrills.dispose();
       chests.dispose();
       skydive.dispose();
+      skyRides.dispose?.();
     },
   };
 }
