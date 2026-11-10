@@ -15,16 +15,19 @@ export interface AddOpts {
   ao?: number;
 }
 
-const CHUNK = 100;
+const CHUNK = 50;
+/** Parts smaller than this (bounding radius, m) go into buckets that cast no shadow. */
+const SMALL = 0.3;
 const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road']);
 const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 
 const tmpColor = new THREE.Color();
 const tmpBox = new THREE.Box3();
 const tmpV = new THREE.Vector3();
+const tmpS = new THREE.Vector3();
 
 export class Batcher {
-  private buckets = new Map<string, { key: MatKey; geos: THREE.BufferGeometry[] }>();
+  private buckets = new Map<string, { key: MatKey; geos: THREE.BufferGeometry[]; small: boolean }>();
   triangles = 0;
 
   add(key: MatKey, geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, matrix?: THREE.Matrix4, opts?: AddOpts): void {
@@ -59,9 +62,11 @@ export class Batcher {
     if (key === 'cloth' && !g.attributes.aWave) g.setAttribute('aWave', new THREE.BufferAttribute(new Float32Array(n), 1));
     if (key !== 'cloth' && g.attributes.aWave) g.deleteAttribute('aWave');
     tmpBox.setFromBufferAttribute(pos as THREE.BufferAttribute).getCenter(tmpV);
-    const id = `${key}:${Math.floor(tmpV.x / CHUNK)},${Math.floor(tmpV.z / CHUNK)}`;
+    const small = tmpBox.getSize(tmpS).length() / 2 < SMALL && !NO_SHADOW.has(key);
+    const cs = small ? CHUNK * 2 : CHUNK;
+    const id = `${key}:${Math.floor(tmpV.x / cs)},${Math.floor(tmpV.z / cs)}${small ? ':s' : ''}`;
     let b = this.buckets.get(id);
-    if (!b) this.buckets.set(id, (b = { key, geos: [] }));
+    if (!b) this.buckets.set(id, (b = { key, geos: [], small }));
     b.geos.push(g);
     this.triangles += n / 3;
   }
@@ -76,7 +81,7 @@ export class Batcher {
       merged.computeBoundingSphere();
       const mesh = new THREE.Mesh(merged, mats.get(b.key));
       mesh.name = id;
-      mesh.castShadow = !NO_SHADOW.has(b.key);
+      mesh.castShadow = !NO_SHADOW.has(b.key) && !b.small;
       mesh.receiveShadow = !NO_RECEIVE.has(b.key);
       mesh.matrixAutoUpdate = false;
       parent.add(mesh);

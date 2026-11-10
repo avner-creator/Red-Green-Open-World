@@ -44,10 +44,11 @@ function sample(t: number): Key {
   };
 }
 
-const SHADOW: Record<Quality, { size: number; extent: number } | null> = {
+// Tighter boxes than before (crisper contact shadows); radius is the PCF blur in texels.
+const SHADOW: Record<Quality, { size: number; extent: number; radius: number } | null> = {
   low: null,
-  medium: { size: 2048, extent: 55 },
-  high: { size: 4096, extent: 80 },
+  medium: { size: 2048, extent: 44, radius: 1.6 },
+  high: { size: 4096, extent: 66, radius: 2.2 },
 };
 
 export interface Lighting {
@@ -66,8 +67,8 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
 
   const sun = new THREE.DirectionalLight(0xffffff, 3);
   sun.name = 'sun';
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.035;
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.025;
   sun.shadow.radius = 3;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 420;
@@ -82,6 +83,7 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
   const sunDir = new THREE.Vector3();
   const state: SkyState = { sunDir, zenith: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color() };
   const envGround = new THREE.Color();
+  const fogColor = new THREE.Color();
   let bakedAt = -1;
   let extent = 55;
 
@@ -99,9 +101,11 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
       state.horizon.setRGB(...k.horizon);
       // Fog / below-horizon colour: the horizon, a touch hazier.
       state.ground.copy(state.horizon).lerp(state.zenith, 0.18);
+      // Fog: the warm horizon haze, so distance melts into the sky's glow.
+      fogColor.copy(state.horizon).lerp(state.zenith, 0.08);
       envGround.setRGB(0.26, 0.24, 0.15).multiply(state.sun);
       sky.set(state, envGround);
-      fog.color.copy(state.ground);
+      fog.color.copy(fogColor);
       sun.color.setRGB(...k.sun);
       sun.intensity = k.sunI;
       scene.environmentIntensity = k.envI;
@@ -119,6 +123,7 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
       sun.castShadow = s !== null;
       if (s) {
         extent = s.extent;
+        sun.shadow.radius = s.radius;
         if (sun.shadow.mapSize.x !== s.size) {
           sun.shadow.mapSize.set(s.size, s.size);
           sun.shadow.map?.dispose();
@@ -131,7 +136,7 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
         c.bottom = -extent;
         c.updateProjectionMatrix();
       }
-      fog.density = q === 'low' ? 0.0018 : 0.0013;
+      fog.density = q === 'low' ? 0.0024 : 0.0019;
     },
     update(camera) {
       sky.mesh.position.copy(camera.position);

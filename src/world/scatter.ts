@@ -1,14 +1,17 @@
 /**
- * Vegetation and rocks: a few hand-built species, scattered deterministically and drawn with
- * InstancedMesh, split into map chunks so far chunks are culled. Density follows the quality preset.
+ * Vegetation and rocks: a few hand-built species, scattered deterministically and drawn with one
+ * InstancedMesh per (species, LOD). Instances live in a coarse grid; every time the camera moves or
+ * turns a little, the visible cells are copied into the instance buffers: near cells get the full
+ * mesh (and cast shadows), far cells a low-poly mesh, cells outside the (padded) view are skipped.
+ * Grass and flowers are generated lazily per small cell around the camera and fade out with distance.
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Quality } from '../types';
 import { T } from './batch';
-import type { Materials } from './materials';
+import { U, type Materials } from './materials';
 import type { Colliders } from './props';
-import { Rng, fbm, smoothstep } from './rng';
+import { Rng, fbm, hash2, noise2, smoothstep } from './rng';
 import { blobG, coneG, cylG, sphereG } from './shapes';
 import { anchorClearance, sampleHeight, sampleMask, slopeAt, coastRadius } from './terrain';
 import type { TerrainData } from './terrain';
@@ -19,7 +22,8 @@ export interface ManualTree {
   x: number;
   z: number;
   y?: number;
-  kind: TreeKind;
+  /** Trees get a trunk collider; big rocks (scale ≥ 1.2) a sphere; bushes none. */
+  kind: TreeKind | 'bush' | 'rock';
   scale?: number;
 }
 
@@ -32,6 +36,8 @@ export interface Keepout {
   hz?: number;
   /** Also keep grass out (paved surfaces). */
   paved?: boolean;
+  /** Short mown grass, no flowers (sports fields, launch circles). Grass only; trees stay out. */
+  mown?: boolean;
 }
 
 interface Part {
@@ -72,49 +78,61 @@ function assemble(parts: Part[]): THREE.BufferGeometry {
   return merged;
 }
 
-function oakGeo(): THREE.BufferGeometry {
-  const parts: Part[] = [
-    { geo: cylG(9, 0.62), color: 0x6b4a33, m: T(0, -0.3, 0, 0, 0.32, 3.4, 0.32) },
-    { geo: cylG(6, 0.4), color: 0x6b4a33, m: T(0.3, 2.2, 0, 0, 0.12, 1.4, 0.12, 0, -0.7) },
-    { geo: cylG(6, 0.4), color: 0x6b4a33, m: T(-0.25, 2.4, 0.1, 0.6, 0.11, 1.3, 0.11, 0, 0.75) },
-  ];
-  const blobs: [number, number, number, number][] = [
-    [0, 4.6, 0, 2.2], [1.35, 4.0, 0.5, 1.6], [-1.25, 4.1, -0.4, 1.7], [0.2, 4.1, -1.35, 1.5], [-0.3, 5.5, 0.9, 1.5],
-  ];
-  blobs.forEach(([x, y, z, r], i) => parts.push({ geo: blobG(70 + i, 1, 0.16), color: 0x4f7f2a, m: T(x, y, z, i, r, r * 0.86, r), shade: [2.6, 6.8] }));
+const OAK_BLOBS: [number, number, number, number][] = [
+  [0, 4.6, 0, 2.2], [1.35, 4.0, 0.5, 1.6], [-1.25, 4.1, -0.4, 1.7], [0.2, 4.1, -1.35, 1.5], [-0.3, 5.5, 0.9, 1.5],
+];
+function oakGeo(far: boolean): THREE.BufferGeometry {
+  const parts: Part[] = [{ geo: cylG(far ? 5 : 9, 0.62), color: 0x6b4a33, m: T(0, -0.3, 0, 0, 0.32, 3.4, 0.32) }];
+  if (!far) {
+    parts.push(
+      { geo: cylG(6, 0.4), color: 0x6b4a33, m: T(0.3, 2.2, 0, 0, 0.12, 1.4, 0.12, 0, -0.7) },
+      { geo: cylG(6, 0.4), color: 0x6b4a33, m: T(-0.25, 2.4, 0.1, 0.6, 0.11, 1.3, 0.11, 0, 0.75) },
+    );
+  }
+  // Far: three bigger detail-0 blobs carry the silhouette.
+  const blobs = far ? [[0, 4.7, 0, 2.5], [1.2, 4.0, 0.3, 1.9], [-1.1, 4.1, -0.5, 1.9]] : OAK_BLOBS;
+  blobs.forEach(([x, y, z, r], i) =>
+    parts.push({ geo: blobG(70 + i, far ? 0 : 1, 0.16), color: 0x4f7f2a, m: T(x, y, z, i, r, r * 0.86, r), shade: [2.6, 6.8] }),
+  );
   return assemble(parts);
 }
 
-function pineGeo(): THREE.BufferGeometry {
-  const parts: Part[] = [{ geo: cylG(7, 0.5), color: 0x5e4330, m: T(0, -0.3, 0, 0, 0.28, 3.0, 0.28) }];
-  const tiers: [number, number, number][] = [[1.6, 2.5, 3.2], [3.2, 2.0, 2.8], [4.6, 1.5, 2.5], [5.9, 1.0, 2.2]];
-  tiers.forEach(([y, r, h], i) => parts.push({ geo: coneG(9), color: 0x2f5a30, m: T(0, y, 0, i * 0.7, r, h, r), shade: [1.4, 8.2] }));
+function pineGeo(far: boolean): THREE.BufferGeometry {
+  const parts: Part[] = [{ geo: cylG(far ? 4 : 7, 0.5), color: 0x5e4330, m: T(0, -0.3, 0, 0, 0.28, 3.0, 0.28) }];
+  const tiers: [number, number, number][] = far ? [[1.6, 2.5, 3.6], [3.6, 1.9, 3.2], [5.5, 1.2, 2.6]] : [[1.6, 2.5, 3.2], [3.2, 2.0, 2.8], [4.6, 1.5, 2.5], [5.9, 1.0, 2.2]];
+  tiers.forEach(([y, r, h], i) => parts.push({ geo: coneG(far ? 6 : 9), color: 0x2f5a30, m: T(0, y, 0, i * 0.7, r, h, r), shade: [1.4, 8.2] }));
   return assemble(parts);
 }
 
-function palmGeo(): THREE.BufferGeometry {
+function palmGeo(far: boolean): THREE.BufferGeometry {
   const parts: Part[] = [];
   let x = 0;
   let y = 0;
-  for (let i = 0; i < 6; i++) {
-    const lean = 0.06 + i * 0.05;
-    parts.push({ geo: cylG(7, 0.88), color: i % 2 ? 0x8a6c4a : 0x7a5d3e, m: T(x, y, 0, 0, 0.2 - i * 0.012, 1.1, 0.2 - i * 0.012, 0, -lean) });
-    x += Math.sin(lean) * 1.05;
-    y += Math.cos(lean) * 1.05;
+  const segs = far ? 3 : 6;
+  for (let i = 0; i < segs; i++) {
+    const k = (i * 6) / segs;
+    const lean = 0.06 + k * 0.05;
+    const len = 1.05 * (6 / segs);
+    parts.push({ geo: cylG(far ? 4 : 7, 0.88), color: i % 2 ? 0x8a6c4a : 0x7a5d3e, m: T(x, y, 0, 0, 0.2 - k * 0.012, len * 1.05, 0.2 - k * 0.012, 0, -lean) });
+    x += Math.sin(lean) * len;
+    y += Math.cos(lean) * len;
   }
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    for (let s = 0; s < 3; s++) {
-      const out = 0.5 + s * 0.85;
-      const droop = -0.15 - s * s * 0.22;
-      parts.push({ geo: OCTA, color: 0x5a8a2a, m: T(x + Math.cos(a) * out, y + droop, Math.sin(a) * out, -a, 0.6, 0.07, 0.3), shade: [y - 1.6, y + 0.2] });
+  const leaves = far ? 6 : 8;
+  for (let i = 0; i < leaves; i++) {
+    const a = (i / leaves) * Math.PI * 2;
+    const steps = far ? 1 : 3;
+    for (let s = 0; s < steps; s++) {
+      const out = far ? 1.3 : 0.5 + s * 0.85;
+      const droop = far ? -0.4 : -0.15 - s * s * 0.22;
+      parts.push({ geo: OCTA, color: 0x5a8a2a, m: T(x + Math.cos(a) * out, y + droop, Math.sin(a) * out, -a, far ? 1.5 : 0.6, 0.07, 0.3), shade: [y - 1.6, y + 0.2] });
     }
   }
   parts.push({ geo: sphereG(0), color: 0x6b4a2a, m: T(x, y - 0.25, 0, 0, 0.32, 0.28, 0.32) });
   return assemble(parts);
 }
 
-function bushGeo(): THREE.BufferGeometry {
+function bushGeo(far: boolean): THREE.BufferGeometry {
+  if (far) return assemble([{ geo: blobG(91, 0, 0.2), color: 0x47752a, m: T(0, 0.45, 0, 0, 1.05, 0.75, 1.0), shade: [-0.1, 1.2] }]);
   return assemble([
     { geo: blobG(91, 1, 0.2), color: 0x47752a, m: T(0, 0.45, 0, 0, 0.8, 0.65, 0.8), shade: [-0.1, 1.2] },
     { geo: blobG(92, 0, 0.15), color: 0x47752a, m: T(0.6, 0.35, 0.2, 1, 0.55, 0.5, 0.55), shade: [-0.1, 1.2] },
@@ -122,122 +140,231 @@ function bushGeo(): THREE.BufferGeometry {
   ]);
 }
 
-function rockGeo(seed: number): THREE.BufferGeometry {
-  return assemble([{ geo: blobG(seed, 1, 0.28, false), color: 0xa39b90, m: T(0, 0.3, 0, 0, 1, 0.7, 1.1), shade: [-0.5, 0.9] }]);
+function rockGeo(seed: number, far: boolean): THREE.BufferGeometry {
+  return assemble([{ geo: blobG(seed, far ? 0 : 1, 0.28, false), color: 0xa39b90, m: T(0, 0.3, 0, 0, 1, 0.7, 1.1), shade: [-0.5, 0.9] }]);
 }
 
-function grassGeo(): THREE.BufferGeometry {
-  const rng = new Rng(7);
+/**
+ * A soft, full tuft: 11 wide blades in two segments that arch outwards. Vertex colour is a
+ * multiplier (dark base → bright tip) on the instance colour, which matches the ground beneath.
+ */
+function grassGeo(seed = 7, blades = 11): THREE.BufferGeometry {
+  const rng = new Rng(seed);
   const pos: number[] = [];
   const col: number[] = [];
-  const base = new THREE.Color(0x2f4a14);
-  const tip = new THREE.Color(0x9fb045);
-  for (let i = 0; i < 9; i++) {
-    const a = rng.range(0, Math.PI * 2);
-    const r = rng.range(0, 0.22);
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    const h = rng.range(0.28, 0.55);
-    const w = rng.range(0.035, 0.055);
-    const ry = rng.range(0, Math.PI);
-    const lx = Math.cos(ry) * w;
-    const lz = Math.sin(ry) * w;
-    const lean = rng.range(-0.12, 0.12);
-    pos.push(x - lx, 0, z - lz, x + lx, 0, z + lz, x + lean, h, z + lean * 0.5);
-    col.push(base.r, base.g, base.b, base.r, base.g, base.b, tip.r, tip.g, tip.b);
+  const nrm: number[] = [];
+  const shade = [0.62, 0.95, 1.32];
+  for (let i = 0; i < blades; i++) {
+    const a = (i / blades) * Math.PI * 2 + rng.range(-0.3, 0.3);
+    const r = rng.range(0.02, 0.2);
+    const bx = Math.cos(a) * r;
+    const bz = Math.sin(a) * r;
+    const h = rng.range(0.22, 0.46) * (r < 0.1 ? 1.15 : 0.9);
+    const w = rng.range(0.05, 0.085);
+    // Blade faces roughly tangential so it is seen broadside from most angles.
+    const fy = a + Math.PI / 2 + rng.range(-0.6, 0.6);
+    const lx = Math.cos(fy) * w;
+    const lz = Math.sin(fy) * w;
+    const lean = rng.range(0.12, 0.3);
+    const ox = Math.cos(a);
+    const oz = Math.sin(a);
+    const p0 = [bx - lx, 0, bz - lz];
+    const p1 = [bx + lx, 0, bz + lz];
+    const mx = bx + ox * lean * 0.35 * h;
+    const mz = bz + oz * lean * 0.35 * h;
+    const p2 = [mx - lx * 0.7, h * 0.55, mz - lz * 0.7];
+    const p3 = [mx + lx * 0.7, h * 0.55, mz + lz * 0.7];
+    const p4 = [bx + ox * lean * h, h, bz + oz * lean * h];
+    const tri = (A: number[], B: number[], Cc: number[], ca: number, cb: number, cc: number): void => {
+      pos.push(...A, ...B, ...Cc);
+      col.push(ca, ca, ca, cb, cb, cb, cc, cc, cc);
+      // Mostly-up normals with a little outward tilt: soft, ground-like lighting.
+      for (let k = 0; k < 3; k++) nrm.push(ox * 0.25, 0.95, oz * 0.25);
+    };
+    tri(p0, p1, p2, shade[0], shade[0], shade[1]);
+    tri(p1, p3, p2, shade[0], shade[1], shade[1]);
+    tri(p2, p3, p4, shade[1], shade[1], shade[2]);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  // Normals point up so tufts light like the ground they stand on.
-  const n = new Float32Array(pos.length);
-  for (let i = 1; i < n.length; i += 3) n[i] = 1;
-  g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   g.computeBoundingSphere();
   return g;
 }
 
+/** A small clump of leaves with 5 flower heads. Head colour comes from the instance colour. */
 function flowerGeo(): THREE.BufferGeometry {
-  const g = grassGeo();
+  const leaves = grassGeo(13, 6);
+  // Leaves: tint to green-ish multipliers (instance colour is the flower colour).
+  const lc = leaves.attributes.color;
+  for (let i = 0; i < lc.count; i++) lc.setXYZ(i, 0.36 * lc.getX(i), 0.6 * lc.getY(i), 0.2 * lc.getZ(i));
   const heads: Part[] = [];
   const rng = new Rng(11);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     const a = rng.range(0, Math.PI * 2);
-    heads.push({ geo: OCTA, color: 0xffffff, m: T(Math.cos(a) * 0.15, rng.range(0.42, 0.6), Math.sin(a) * 0.15, a, 0.08, 0.05, 0.08) });
+    const r = rng.range(0.04, 0.2);
+    const y = rng.range(0.3, 0.5);
+    heads.push({ geo: OCTA, color: 0xffffff, m: T(Math.cos(a) * r, y, Math.sin(a) * r, a, 0.075, 0.045, 0.075) });
+    heads.push({ geo: OCTA, color: 0xfff2a0, m: T(Math.cos(a) * r, y + 0.02, Math.sin(a) * r, a, 0.03, 0.03, 0.03) });
   }
   const h = assemble(heads);
   const nn = h.attributes.normal;
   for (let i = 0; i < nn.count; i++) nn.setXYZ(i, 0, 1, 0);
-  const merged = mergeGeometries([g, h], false);
+  const merged = mergeGeometries([leaves, h], false);
   if (!merged) throw new Error('flower');
+  merged.computeBoundingSphere();
   return merged;
 }
 
-interface Inst {
+// ───────────────────────────── instance storage ─────────────────────────────
+
+interface Cell {
   x: number;
   y: number;
   z: number;
-  yaw: number;
-  s: number;
-  sy: number;
-  color: THREE.Color;
+  /** Bounding radius (cell half-diagonal + object size). */
+  r: number;
+  n: number;
+  mat: Float32Array;
+  col: Float32Array;
 }
 
-interface Species {
+interface Lod {
+  mesh: THREE.InstancedMesh;
+  cap: number;
+}
+
+interface SpeciesDef {
   name: string;
-  geo: THREE.BufferGeometry;
+  near: THREE.BufferGeometry;
+  far?: THREE.BufferGeometry;
   mat: THREE.Material;
   shadow: boolean;
   /** Fraction of instances drawn at each quality. */
   density: Record<Quality, number>;
-  list: Inst[];
+  /** Beyond this distance the far mesh is used (if any). */
+  lod: Record<Quality, number>;
+  /** Not drawn beyond this distance. */
+  max: Record<Quality, number>;
+  /** Object radius (for culling spheres). */
+  size: number;
 }
 
-const CHUNK = 134;
+interface Species extends SpeciesDef {
+  cells: Map<number, Cell>;
+  nearLod: Lod;
+  farLod?: Lod;
+  pending: Map<number, { m: number[]; c: number[]; y0: number; y1: number }>;
+}
+
+const CELL = 32;
+const GCELL = 12;
+const cellKey = (ix: number, iz: number): number => (ix + 512) * 1024 + (iz + 512);
 
 export interface Scatter {
   group: THREE.Group;
   setQuality(q: Quality): void;
+  /** Re-pick visible instances for this camera (cheap; only when the camera moved or turned). */
+  update(camera: THREE.Camera): void;
   stats(): { instances: number };
 }
 
-export function buildScatter(t: TerrainData, mats: Materials, col: Colliders, manual: readonly ManualTree[], keepouts: readonly Keepout[]): Scatter {
+const GRASS: Record<Quality, { far: number; density: number }> = {
+  low: { far: 26, density: 0.45 },
+  medium: { far: 42, density: 0.7 },
+  high: { far: 62, density: 1 },
+};
+
+const FLOWER_COLS = [0xffffff, 0xfff0a0, 0xffc6dc, 0xd9c8ff, 0xffb070, 0xffffff];
+
+export function buildScatter(
+  t: TerrainData,
+  mats: Materials,
+  col: Colliders,
+  manual: readonly ManualTree[],
+  keepouts: readonly Keepout[],
+  groundColor: (x: number, z: number, out: THREE.Color) => THREE.Color,
+): Scatter {
   const rng = new Rng(SEED + 77);
   const h = (x: number, z: number): number => sampleHeight(t, x, z);
-  const inKeepout = (x: number, z: number, margin: number, pavedOnly: boolean): boolean => {
+  const keepHit = (x: number, z: number, margin: number, pred: (k: Keepout) => boolean): Keepout | null => {
     for (const k of keepouts) {
-      if (pavedOnly && !k.paved) continue;
+      if (!pred(k)) continue;
       if (k.r !== undefined) {
-        if (Math.hypot(x - k.x, z - k.z) < k.r + margin) return true;
-      } else if (Math.abs(x - k.x) < (k.hx ?? 0) + margin && Math.abs(z - k.z) < (k.hz ?? 0) + margin) return true;
+        if (Math.hypot(x - k.x, z - k.z) < k.r + margin) return k;
+      } else if (Math.abs(x - k.x) < (k.hx ?? 0) + margin && Math.abs(z - k.z) < (k.hz ?? 0) + margin) return k;
     }
-    return false;
+    return null;
   };
+  const inKeepout = (x: number, z: number, margin: number): boolean => keepHit(x, z, margin, (k) => !k.mown) !== null;
   const roadNear = (x: number, z: number, m: number): boolean =>
     sampleMask(t, t.roadMask, x, z) > 0.02 ||
     sampleMask(t, t.roadMask, x + m, z) > 0.02 || sampleMask(t, t.roadMask, x - m, z) > 0.02 ||
     sampleMask(t, t.roadMask, x, z + m) > 0.02 || sampleMask(t, t.roadMask, x, z - m) > 0.02;
 
-  const species: Record<string, Species> = {
-    oak: { name: 'oak', geo: oakGeo(), mat: mats.foliage, shadow: true, density: { low: 0.7, medium: 1, high: 1 }, list: [] },
-    pine: { name: 'pine', geo: pineGeo(), mat: mats.foliage, shadow: true, density: { low: 0.7, medium: 1, high: 1 }, list: [] },
-    palm: { name: 'palm', geo: palmGeo(), mat: mats.foliage, shadow: true, density: { low: 1, medium: 1, high: 1 }, list: [] },
-    bush: { name: 'bush', geo: bushGeo(), mat: mats.foliage, shadow: false, density: { low: 0.5, medium: 0.85, high: 1 }, list: [] },
-    rockA: { name: 'rockA', geo: rockGeo(301), mat: mats.rock, shadow: true, density: { low: 1, medium: 1, high: 1 }, list: [] },
-    rockB: { name: 'rockB', geo: rockGeo(302), mat: mats.rock, shadow: true, density: { low: 1, medium: 1, high: 1 }, list: [] },
-    grass: { name: 'grass', geo: grassGeo(), mat: mats.grass, shadow: false, density: { low: 0.2, medium: 0.55, high: 1 }, list: [] },
-    flower: { name: 'flower', geo: flowerGeo(), mat: mats.grass, shadow: false, density: { low: 0.25, medium: 0.6, high: 1 }, list: [] },
+  const group = new THREE.Group();
+  group.name = 'scatter';
+  const all = { low: 1, medium: 1, high: 1 };
+  const inf = { low: 1e9, medium: 1e9, high: 1e9 };
+  const treeLod = { low: 45, medium: 62, high: 100 };
+  const defs: SpeciesDef[] = [
+    { name: 'oak', near: oakGeo(false), far: oakGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },
+    { name: 'pine', near: pineGeo(false), far: pineGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },
+    { name: 'palm', near: palmGeo(false), far: palmGeo(true), mat: mats.foliage, shadow: true, density: all, lod: treeLod, max: inf, size: 4 },
+    { name: 'bush', near: bushGeo(false), far: bushGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.5, medium: 0.85, high: 1 }, lod: { low: 30, medium: 50, high: 70 }, max: { low: 110, medium: 170, high: 230 }, size: 1.5 },
+    { name: 'rockA', near: rockGeo(301, false), far: rockGeo(301, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
+    { name: 'rockB', near: rockGeo(302, false), far: rockGeo(302, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
+    { name: 'grass', near: grassGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: inf, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
+    { name: 'flower', near: flowerGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: inf, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
+  ];
+  const species: Record<string, Species> = {};
+  for (const d of defs) species[d.name] = { ...d, cells: new Map(), pending: new Map(), nearLod: { mesh: null as unknown as THREE.InstancedMesh, cap: 0 } };
+
+  const m4 = new THREE.Matrix4();
+  const push = (sp: Species, cs: number, x: number, y: number, z: number, yaw: number, s: number, sy: number, c: THREE.Color): void => {
+    const key = cellKey(Math.floor(x / cs), Math.floor(z / cs));
+    let p = sp.pending.get(key);
+    if (!p) sp.pending.set(key, (p = { m: [], c: [], y0: Infinity, y1: -Infinity }));
+    m4.copy(T(x, y, z, yaw, s, sy, s));
+    for (let i = 0; i < 16; i++) p.m.push(m4.elements[i]);
+    p.c.push(c.r, c.g, c.b);
+    p.y0 = Math.min(p.y0, y);
+    p.y1 = Math.max(p.y1, y);
   };
+  const flush = (sp: Species, cs: number): void => {
+    for (const [key, p] of sp.pending) {
+      const ix = Math.floor(key / 1024) - 512;
+      const iz = (key % 1024) - 512;
+      const n = p.c.length / 3;
+      const cell: Cell = {
+        x: (ix + 0.5) * cs, z: (iz + 0.5) * cs, y: (p.y0 + p.y1) / 2,
+        r: Math.hypot(cs / 2, cs / 2, (p.y1 - p.y0) / 2) + sp.size * 2,
+        n, mat: new Float32Array(p.m), col: new Float32Array(p.c),
+      };
+      sp.cells.set(key, cell);
+    }
+    sp.pending.clear();
+  };
+
   const tint = (base: number, v: number): THREE.Color => new THREE.Color(base).offsetHSL(rng.range(-v, v) * 0.15, rng.range(-v, v) * 0.2, rng.range(-v, v) * 0.12);
 
   const addTree = (kind: TreeKind, x: number, z: number, s: number, y?: number): void => {
     const yy = y ?? h(x, z);
     const tintBase = kind === 'oak' ? (rng.chance(0.25) ? 0xfff0b0 : 0xffffff) : 0xffffff;
-    const c = tint(tintBase, 1);
-    species[kind].list.push({ x, y: yy - 0.05, z, yaw: rng.range(0, Math.PI * 2), s, sy: s * rng.range(0.9, 1.15), color: c });
+    push(species[kind], CELL, x, yy - 0.05, z, rng.range(0, Math.PI * 2), s, s * rng.range(0.9, 1.15), tint(tintBase, 1));
     col.cyl(x, yy, z, 2.2 * s, (kind === 'palm' ? 0.22 : 0.3) * s);
   };
-  for (const m of manual) addTree(m.kind, m.x, m.z, m.scale ?? 1, m.y);
+  for (const m of manual) {
+    const s = m.scale ?? 1;
+    if (m.kind === 'bush') {
+      push(species.bush, CELL, m.x, (m.y ?? h(m.x, m.z)) - 0.1, m.z, rng.range(0, 6.28), s, s * rng.range(0.8, 1.1), tint(0xffffff, 1));
+    } else if (m.kind === 'rock') {
+      const y = m.y ?? h(m.x, m.z);
+      push(rng.chance(0.5) ? species.rockA : species.rockB, CELL, m.x, y - 0.2 * s, m.z, rng.range(0, 6.28), s, s * rng.range(0.8, 1.1), tint(0xffffff, 0.6));
+      if (s >= 1.2) col.sphere(m.x, y + 0.1 * s, m.z, 0.75 * s);
+    } else addTree(m.kind, m.x, m.z, s, m.y);
+  }
 
   // Trees.
   const forest = (x: number, z: number): number => smoothstep(-0.05, 0.35, fbm(x / 70, z / 70, 3, SEED + 31));
@@ -250,7 +377,7 @@ export function buildScatter(t: TerrainData, mats: Materials, col: Colliders, ma
     if (y < 0.8 || coast < 2) continue;
     const sl = slopeAt(t, x, z);
     if (sl > 0.9) continue;
-    if (sampleMask(t, t.padMask, x, z) > 0.05 || anchorClearance(x, z) < 4 || roadNear(x, z, 4) || inKeepout(x, z, 3, false)) continue;
+    if (sampleMask(t, t.padMask, x, z) > 0.05 || anchorClearance(x, z) < 4 || roadNear(x, z, 4) || inKeepout(x, z, 3)) continue;
     const beach = y < 3.2;
     const ridge = z < -62;
     const dens = beach ? 0.25 : ridge ? 0.85 : 0.12 + 0.75 * forest(x, z);
@@ -260,77 +387,206 @@ export function buildScatter(t: TerrainData, mats: Materials, col: Colliders, ma
     placed++;
   }
   // Bushes and rocks.
+  let rocks = 0;
+  let placedBushes = 0;
   for (let i = 0; i < 6000; i++) {
     const x = rng.range(-185, 185);
     const z = rng.range(-185, 185);
     const y = h(x, z);
     if (y < 0.4) continue;
     const sl = slopeAt(t, x, z);
-    if (anchorClearance(x, z) < 2 || inKeepout(x, z, 1.5, false) || roadNear(x, z, 2)) continue;
+    if (anchorClearance(x, z) < 2 || inKeepout(x, z, 1.5) || roadNear(x, z, 2)) continue;
     const pad = sampleMask(t, t.padMask, x, z) > 0.05;
     if (sl > 0.55 || rng.chance(0.3)) {
       if (pad && sl < 0.55) continue;
       const core = Math.hypot(x - 30, z + 5) < 95;
       const big = rng.chance(sl > 0.55 ? 0.5 : core ? 0 : 0.15);
       const s = big ? rng.range(1.4, 2.8) : rng.range(0.35, 0.9);
-      const list = rng.chance(0.5) ? species.rockA.list : species.rockB.list;
-      if (list.length > 160) continue;
-      list.push({ x, y: y - (0.15 + 0.4 * Math.min(1, sl)) * s, z, yaw: rng.range(0, 6.28), s, sy: s * rng.range(0.7, 1.2), color: tint(0xffffff, 0.6) });
+      if (rocks >= 322) continue;
+      rocks++;
+      push(rng.chance(0.5) ? species.rockA : species.rockB, CELL, x, y - (0.15 + 0.4 * Math.min(1, sl)) * s, z, rng.range(0, 6.28), s, s * rng.range(0.7, 1.2), tint(0xffffff, 0.6));
       if (big) col.sphere(x, y + 0.1 * s, z, 0.75 * s);
-    } else if (!pad && y > 1.5 && species.bush.list.length < 380 && rng.chance(0.35 + 0.5 * forest(x, z))) {
-      species.bush.list.push({ x, y: y - 0.1, z, yaw: rng.range(0, 6.28), s: rng.range(0.7, 1.4), sy: rng.range(0.6, 1.2), color: tint(0xffffff, 1) });
+    } else if (!pad && y > 1.5 && placedBushes < 380 && rng.chance(0.35 + 0.5 * forest(x, z))) {
+      placedBushes++;
+      push(species.bush, CELL, x, y - 0.1, z, rng.range(0, 6.28), rng.range(0.7, 1.4), rng.range(0.6, 1.2), tint(0xffffff, 1));
     }
   }
-  // Grass and flowers: dense around the play areas, thinner further out.
-  for (let i = 0; i < 60000; i++) {
-    const near = i % 3 !== 0;
-    const x = near ? 30 + rng.range(-120, 120) : rng.range(-185, 185);
-    const z = near ? -5 + rng.range(-105, 115) : rng.range(-185, 185);
-    const y = h(x, z);
-    if (y < 1.9) continue;
-    if (slopeAt(t, x, z) > 0.5 || sampleMask(t, t.roadMask, x, z) > 0.1 || inKeepout(x, z, 0.4, true)) continue;
-    const isFlower = rng.chance(0.12);
-    const list = isFlower ? species.flower.list : species.grass.list;
-    if (list.length > (isFlower ? 2200 : 16000)) continue;
-    list.push({ x, y: y - 0.04, z, yaw: rng.range(0, 6.28), s: rng.range(0.8, 1.5), sy: rng.range(0.7, 1.3), color: isFlower ? new THREE.Color(rng.pick([0xffffff, 0xfff3a0, 0xffd0e0, 0xffffff])) : tint(0xffffff, 1) });
+  for (const sp of Object.values(species)) flush(sp, CELL);
+
+  // Grass + flowers: generated per small cell on first use (deterministic per cell).
+  const generated = new Set<number>();
+  const gc = new THREE.Color();
+  const genGrassCell = (ix: number, iz: number): void => {
+    const key = cellKey(ix, iz);
+    if (generated.has(key)) return;
+    generated.add(key);
+    const r = new Rng(Math.floor(hash2(ix, iz, SEED + 5) * 4294967296));
+    const tries = Math.round((GCELL * GCELL) / 0.62);
+    for (let i = 0; i < tries; i++) {
+      const x = (ix + r.next()) * GCELL;
+      const z = (iz + r.next()) * GCELL;
+      const y = h(x, z);
+      if (y < 1.7) continue;
+      if (slopeAt(t, x, z) > 0.62 || sampleMask(t, t.roadMask, x, z) > 0.08) continue;
+      if (keepHit(x, z, 0.3, (k) => k.paved === true)) continue;
+      const mown = keepHit(x, z, 0, (k) => k.mown === true) !== null;
+      // Meadow patches: denser and taller; thinner, shorter grass in between.
+      const meadow = 0.5 + 0.5 * fbm(x / 22, z / 22, 2, SEED + 41);
+      const beach = smoothstep(1.7, 3.2, y);
+      if (!r.chance((0.45 + 0.55 * meadow) * (0.35 + 0.65 * beach))) continue;
+      const patch = noise2(x / 9, z / 9, SEED + 43);
+      const isFlower = !mown && r.chance(patch > 0.45 ? 0.22 : 0.012);
+      const yaw = r.range(0, Math.PI * 2);
+      if (isFlower) {
+        const pal = FLOWER_COLS[Math.floor(hash2(Math.floor(x / 9), Math.floor(z / 9), SEED + 44) * FLOWER_COLS.length)];
+        gc.set(r.chance(0.8) ? pal : 0xffffff);
+        const s = r.range(0.8, 1.25);
+        push(species.flower, GCELL, x, y - 0.03, z, yaw, s, s * r.range(0.8, 1.2), gc);
+      } else {
+        groundColor(x, z, gc);
+        // Taller grass is a little lighter/yellower at the tips; mown grass is short and even.
+        const v = r.range(-0.06, 0.06);
+        gc.offsetHSL(v * 0.25, 0.04, v + 0.02 * meadow);
+        const s = mown ? r.range(0.9, 1.2) : r.range(0.85, 1.35) * (0.8 + 0.45 * meadow);
+        const sy = mown ? r.range(0.3, 0.42) : r.range(0.75, 1.25) * (0.7 + 0.6 * meadow);
+        push(species.grass, GCELL, x, y - 0.03, z, yaw, s, sy, gc);
+      }
+    }
+    flush(species.grass, GCELL);
+    flush(species.flower, GCELL);
+  };
+
+  // Instanced meshes (one per species and LOD) with enough capacity for the visible set.
+  const mkLod = (sp: Species, geo: THREE.BufferGeometry, cap: number, shadow: boolean, tag: string): Lod => {
+    const mesh = new THREE.InstancedMesh(geo, sp.mat, cap);
+    mesh.name = `${sp.name}:${tag}`;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    mesh.count = 0;
+    mesh.castShadow = shadow;
+    mesh.receiveShadow = true;
+    // We cull ourselves (cells vs a padded view frustum), so the bounding sphere is never needed.
+    mesh.frustumCulled = false;
+    mesh.matrixAutoUpdate = false;
+    group.add(mesh);
+    return { mesh, cap };
+  };
+  for (const sp of Object.values(species)) {
+    let total = 0;
+    for (const c of sp.cells.values()) total += c.n;
+    const cap = sp.name === 'grass' ? 16000 : sp.name === 'flower' ? 3000 : Math.max(1, total);
+    sp.nearLod = mkLod(sp, sp.near, cap, sp.shadow, 'near');
+    if (sp.far) sp.farLod = mkLod(sp, sp.far, cap, false, 'far');
   }
 
-  // Build chunked instanced meshes.
-  const group = new THREE.Group();
-  group.name = 'scatter';
-  const meshes: { mesh: THREE.InstancedMesh; sp: Species; total: number }[] = [];
-  const m4 = new THREE.Matrix4();
-  for (const sp of Object.values(species)) {
-    const chunks = new Map<string, Inst[]>();
-    for (const it of sp.list) {
-      const key = `${Math.floor(it.x / CHUNK)},${Math.floor(it.z / CHUNK)}`;
-      let c = chunks.get(key);
-      if (!c) chunks.set(key, (c = []));
-      c.push(it);
+  // ───────────── visibility ─────────────
+  let quality: Quality = 'medium';
+  const frustum = new THREE.Frustum();
+  const pv = new THREE.Matrix4();
+  const sphere = new THREE.Sphere();
+  const lastPos = new THREE.Vector3(1e9, 0, 0);
+  const lastDir = new THREE.Vector3();
+  const camPos = new THREE.Vector3();
+  const camDir = new THREE.Vector3();
+  let dirty = true;
+
+  const fill = (sp: Species, cells: Iterable<Cell>, pad: number): void => {
+    const near = sp.nearLod;
+    const far = sp.farLod;
+    let nn = 0;
+    let nf = 0;
+    const dens = sp.density[quality];
+    const lodD = sp.lod[quality];
+    const maxD = sp.max[quality];
+    for (const c of cells) {
+      const d = Math.hypot(c.x - camPos.x, c.z - camPos.z, (c.y - camPos.y) * 0.5) - c.r * 0.5;
+      if (d > maxD) continue;
+      sphere.center.set(c.x, c.y, c.z);
+      sphere.radius = c.r + pad + Math.max(0, d) * 0.08;
+      if (!frustum.intersectsSphere(sphere)) continue;
+      const useFar = far !== undefined && d > lodD;
+      const L = useFar ? far : near;
+      const n = Math.min(Math.ceil(c.n * dens), L.cap - (useFar ? nf : nn));
+      if (n <= 0) continue;
+      const o = useFar ? nf : nn;
+      (L.mesh.instanceMatrix.array as Float32Array).set(c.mat.subarray(0, n * 16), o * 16);
+      (L.mesh.instanceColor?.array as Float32Array).set(c.col.subarray(0, n * 3), o * 3);
+      if (useFar) nf += n;
+      else nn += n;
     }
-    for (const [key, list] of chunks) {
-      const mesh = new THREE.InstancedMesh(sp.geo, sp.mat, list.length);
-      mesh.name = `${sp.name}:${key}`;
-      list.forEach((it, i) => {
-        m4.copy(T(it.x, it.y, it.z, it.yaw, it.s, it.sy, it.s));
-        mesh.setMatrixAt(i, m4);
-        mesh.setColorAt(i, it.color);
-      });
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      mesh.castShadow = sp.shadow;
-      mesh.receiveShadow = true;
-      mesh.computeBoundingSphere();
-      mesh.matrixAutoUpdate = false;
-      group.add(mesh);
-      meshes.push({ mesh, sp, total: list.length });
+    const commit = (L: Lod, n: number): void => {
+      L.mesh.count = n;
+      L.mesh.instanceMatrix.clearUpdateRanges();
+      L.mesh.instanceMatrix.addUpdateRange(0, n * 16);
+      L.mesh.instanceMatrix.needsUpdate = true;
+      const ic = L.mesh.instanceColor;
+      if (ic) {
+        ic.clearUpdateRanges();
+        ic.addUpdateRange(0, n * 3);
+        ic.needsUpdate = true;
+      }
+    };
+    commit(near, nn);
+    if (far) commit(far, nf);
+  };
+
+  const grassCells: Cell[] = [];
+  const flowerCells: Cell[] = [];
+  const refresh = (): void => {
+    for (const sp of Object.values(species)) {
+      if (sp.name === 'grass' || sp.name === 'flower') continue;
+      fill(sp, sp.cells.values(), sp.shadow ? 22 : 4);
     }
-  }
+    // Grass cells around the camera, nearest first so the capacity goes to what matters.
+    const R = GRASS[quality].far;
+    const cx = Math.floor(camPos.x / GCELL);
+    const cz = Math.floor(camPos.z / GCELL);
+    const rc = Math.ceil(R / GCELL) + 1;
+    const order: [number, number, number][] = [];
+    for (let iz = cz - rc; iz <= cz + rc; iz++) {
+      for (let ix = cx - rc; ix <= cx + rc; ix++) {
+        const dx = (ix + 0.5) * GCELL - camPos.x;
+        const dz = (iz + 0.5) * GCELL - camPos.z;
+        const d = Math.hypot(dx, dz);
+        if (d < R + GCELL) order.push([d, ix, iz]);
+      }
+    }
+    order.sort((a, b) => a[0] - b[0]);
+    grassCells.length = 0;
+    flowerCells.length = 0;
+    for (const [, ix, iz] of order) {
+      genGrassCell(ix, iz);
+      const g = species.grass.cells.get(cellKey(ix, iz));
+      if (g) grassCells.push(g);
+      const f = species.flower.cells.get(cellKey(ix, iz));
+      if (f) flowerCells.push(f);
+    }
+    species.grass.density[quality] = GRASS[quality].density;
+    species.flower.density[quality] = Math.min(1, GRASS[quality].density + 0.2);
+    fill(species.grass, grassCells, 1);
+    fill(species.flower, flowerCells, 1);
+  };
+
   return {
     group,
     setQuality(q) {
-      for (const m of meshes) m.mesh.count = Math.max(0, Math.round(m.total * m.sp.density[q]));
+      quality = q;
+      U.grassFar.value = GRASS[q].far;
+      dirty = true;
     },
-    stats: () => ({ instances: meshes.reduce((a, m) => a + m.mesh.count, 0) }),
+    update(camera) {
+      camera.updateMatrixWorld();
+      camera.getWorldPosition(camPos);
+      camera.getWorldDirection(camDir);
+      if (!dirty && camPos.distanceToSquared(lastPos) < 1.5 * 1.5 && camDir.dot(lastDir) > 0.9986) return;
+      dirty = false;
+      lastPos.copy(camPos);
+      lastDir.copy(camDir);
+      pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(pv);
+      refresh();
+    },
+    stats: () => ({ instances: Object.values(species).reduce((a, s) => a + s.nearLod.mesh.count + (s.farLod?.mesh.count ?? 0), 0) }),
   };
 }

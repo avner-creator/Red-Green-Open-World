@@ -1,10 +1,9 @@
 /**
- * Areas around the village: garage (dressed), balloon field and landing-ring markers (dressed),
- * and tidy blockouts for the bridge, lighthouse, ranch, lake platform, Silly Zone and launch pads.
+ * Areas further out: tidy blockouts for the bridge, lighthouse, ranch, lake platform, Silly Zone and launch pads.
  */
 import * as THREE from 'three';
 import { M, T } from './batch';
-import { C, barrel, bench, box, crate, cone, fence, hayBale, icon, lamp, type Kit } from './props';
+import { C, barrel, box, fence, hayBale, icon, type Kit } from './props';
 import { boxG, coneG, cylG, discG, flagG, rbox, sphereG, torusG } from './shapes';
 import { ANCHORS, BRIDGE, CANYON, DECK_Y } from './layout';
 import type { Keepout, ManualTree } from './scatter';
@@ -12,154 +11,6 @@ import type { Keepout, ManualTree } from './scatter';
 export interface AreaResult {
   trees: ManualTree[];
   keepouts: Keepout[];
-}
-
-function flatRing(k: Kit, x: number, z: number, y: number, r0: number, r1: number, color: number): void {
-  const g = new THREE.RingGeometry(r0, r1, 64, 1).rotateX(-Math.PI / 2);
-  k.b.add('paving', g, color, T(x, y, z));
-  g.dispose();
-}
-
-function markerPost(k: Kit, x: number, z: number, color: number): void {
-  const y = k.h(x, z);
-  k.b.add('paint', rbox(0.2, 1.6, 0.2, 0.04), C.white, T(x, y, z), { aoY: y, aoH: 0.4 });
-  k.b.add('paint', boxG(), color, T(x, y + 1.1, z, 0, 0.22, 0.3, 0.22));
-  k.b.add('cloth', flagG(), color, T(x + 0.1, y + 1.6, z, 0.4, 0.7, 0.45, 1));
-  k.col.cyl(x, y, z, 0.8, 0.12);
-}
-
-// ───────────────────────────── Garage ─────────────────────────────
-
-function garage(k: Kit): Keepout[] {
-  const a = ANCHORS.garage;
-  const y = k.h(a.x, a.z);
-  const b = k.b;
-  // Forecourt with bay lines.
-  b.add('rubber', rbox(24, 0.06, 15, 0.02), 0x5f6369, T(a.x, y + 0.02, a.z + 1.5));
-  for (const lx of [-9, -3, 3, 9]) b.add('paint', boxG(), 0xf1eee6, T(a.x + lx, y + 0.08, a.z + 4, 0, 0.18, 0.02, 6));
-  b.add('paint', boxG(), 0xf1eee6, T(a.x, y + 0.08, a.z - 4.8, 0, 22, 0.02, 0.18));
-
-  const w = 18;
-  const d = 9;
-  const h = 5.2;
-  const gx = a.x;
-  const gz = a.z + 12.5;
-  const m = T(gx, y, gz, Math.PI); // front (+Z local) faces the forecourt (−Z world)
-  const wall = 0xebe3d3;
-  const slate = 0x55626f;
-  const red = 0xb8433a;
-  box(b, 'matte', m, 0, -1.5, 0, w + 0.6, 1.65, d + 0.6, 0xa8a49c);
-  box(b, 'matte', m, 0, 0.1, 0, w, 0.05, d, 0x6d7076);
-  // Shell: back and side walls with a slate wainscot and a red band.
-  b.add('matte', boxG(), wall, M(m, T(0, 0, -d / 2, 0, w, h, 0.3)), { aoY: y, aoH: 1.2, ao: 0.25 });
-  for (const s of [-1, 1]) b.add('matte', boxG(), wall, M(m, T((s * w) / 2, 0, 0, 0, 0.3, h, d)), { aoY: y, aoH: 1.2, ao: 0.25 });
-  box(b, 'paint', m, 0, 0, -d / 2 - 0.02, w + 0.36, 1.1, 0.32, slate);
-  for (const s of [-1, 1]) box(b, 'paint', m, (s * w) / 2, 0, 0, 0.36, 1.1, d + 0.36, slate);
-  box(b, 'paint', m, 0, h - 1.0, -d / 2 - 0.03, w + 0.38, 0.35, 0.32, red);
-  for (const s of [-1, 1]) box(b, 'paint', m, (s * w) / 2, h - 1.0, 0, 0.38, 0.35, d + 0.38, red);
-  // Side windows.
-  for (const s of [-1, 1]) {
-    for (const t of [-2, 2]) {
-      const wm = M(m, T((s * (w / 2 + 0.16)), 1.9, t, (s * Math.PI) / 2));
-      b.add('paint', rbox(1.6, 1.3, 0.12, 0.03), 0xf4f1ea, M(wm, T(0, -0.08, 0)));
-      b.add('window', boxG(), new THREE.Color(0.7, 0, 0), M(wm, T(0, 0, 0.05, 0, 1.36, 1.1, 0.05)));
-    }
-  }
-  // Front: slate piers, red sign fascia, half-open roller doors.
-  for (const px of [-w / 2 + 0.6, 0, w / 2 - 0.6]) b.add('paint', rbox(1.2, h, 0.5, 0.05), slate, M(m, T(px, 0, d / 2 - 0.15)));
-  box(b, 'paint', m, 0, 3.9, d / 2 - 0.15, w, h - 3.9, 0.42, red);
-  box(b, 'paint', m, 0, 3.85, d / 2 + 0.07, w, 0.1, 0.06, 0xf4f1ea);
-  box(b, 'paint', m, 0, h - 0.06, d / 2 + 0.07, w, 0.1, 0.06, 0xf4f1ea);
-  for (const px of [-w / 4, w / 4]) {
-    for (let i = 0; i < 6; i++) box(b, 'paint', m, px, 3.0 + i * 0.15, d / 2 - 0.3, w / 2 - 1.3, 0.13, 0.08, i % 2 ? 0xc9ced3 : 0xb5bcc2);
-  }
-  // Flat roof with parapet and trim.
-  const rm = M(m, T(0, h, 0));
-  box(b, 'paint', rm, 0, 0, 0, w + 0.6, 0.25, d + 0.6, 0x56606b);
-  for (const [px, pz, pw, pd] of [[0, d / 2 + 0.2, w + 0.7, 0.3], [0, -d / 2 - 0.2, w + 0.7, 0.3], [w / 2 + 0.2, 0, 0.3, d + 0.7], [-w / 2 - 0.2, 0, 0.3, d + 0.7]]) {
-    box(b, 'paint', rm, px, 0, pz, pw, 0.55, pd, 0xf4f1ea);
-  }
-  // Sign with a big car icon in the middle of the fascia.
-  const sm = M(m, T(0, 3.95, d / 2 + 0.1));
-  b.add('paint', rbox(3.6, 1.1, 0.12, 0.06), 0xf4f1ea, sm);
-  icon(b, M(sm, T(0, 0.55, 0.06, 0, 1.6, 1.6, 1)), 'car', 0x2f3b52);
-  // Interior: shelves, tyres, tool wall, a work lamp.
-  for (const sx of [-6, 6]) {
-    box(b, 'paint', m, sx, 0.1, -d / 2 + 0.6, 3, 2.4, 0.7, 0x7a5236);
-    for (let i = 0; i < 3; i++) box(b, 'paint', m, sx, 0.6 + i * 0.7, -d / 2 + 0.6, 3.1, 0.06, 0.8, 0x5a3a26);
-  }
-  b.add('glow', boxG(), C.bulb, M(m, T(-w / 4, h - 0.5, 0, 0, 2.5, 0.1, 0.3)));
-  b.add('glow', boxG(), C.bulb, M(m, T(w / 4, h - 0.5, 0, 0, 2.5, 0.1, 0.3)));
-  // Colliders.
-  k.col.box(m, 0, h / 2, -d / 2, w / 2, h / 2, 0.2);
-  for (const s of [-1, 1]) k.col.box(m, (s * w) / 2, h / 2, 0, 0.2, h / 2, d / 2);
-  for (const px of [-w / 2 + 0.6, 0, w / 2 - 0.6]) k.col.box(m, px, h / 2, d / 2 - 0.15, 0.6, h / 2, 0.2);
-  k.col.box(m, 0, (h + 3.9) / 2, d / 2 - 0.15, w / 2, (h - 3.9) / 2, 0.2);
-  k.col.box(rm, 0, 0.15, 0, (w + 0.6) / 2, 0.2, (d + 0.6) / 2);
-  // Props around the yard.
-  const tyres = (x: number, z: number, n: number): void => {
-    const ty = k.h(x, z);
-    for (let i = 0; i < n; i++) b.add('rubber', torusG(0.42, 18), 0x2a2a2c, T(x, ty + 0.2 + i * 0.36, z, i, 0.55, 1.4, 0.55));
-    k.col.cyl(x, ty, z, n * 0.18, 0.75);
-  };
-  tyres(a.x - 11.5, a.z + 6, 4);
-  tyres(a.x - 12, a.z + 3.6, 2);
-  barrel(k, a.x + 11.4, a.z + 6.5, 0x2f5d7c);
-  barrel(k, a.x + 12.3, a.z + 5.6, 0xb8433a);
-  crate(k, a.x + 11.6, a.z + 3.6, 0.9, 0.3);
-  for (const cx of [-10, -10.6, 10.4]) cone(b, a.x + cx, y + 0.02, a.z - 5.8 + (cx > 0 ? 0 : cx === -10 ? 0 : 1.1));
-  lamp(k, a.x - 12.5, a.z - 5.5);
-  lamp(k, a.x + 12.5, a.z - 5.5);
-  return [{ x: gx, z: gz, hx: w / 2 + 1.5, hz: d / 2 + 1.5 }, { x: a.x, z: a.z + 1.5, hx: 12.5, hz: 8, paved: true }];
-}
-
-// ───────────────────────────── Balloon field & landing rings ─────────────────────────────
-
-function balloonField(k: Kit): Keepout[] {
-  const a = ANCHORS.balloon;
-  const y = k.h(a.x, a.z);
-  // Painted launch circle.
-  flatRing(k, a.x, a.z, y + 0.05, 8.6, 9.3, 0xf0ebe0);
-  flatRing(k, a.x, a.z, y + 0.05, 2.0, 2.6, 0xf0ebe0);
-  const cols = [0xc8433a, 0xf2c14e, 0x2f5d7c, 0xf4efe6];
-  for (let i = 0; i < 10; i++) {
-    const ang = (i / 10) * Math.PI * 2;
-    markerPost(k, a.x + Math.cos(ang) * 13.5, a.z + Math.sin(ang) * 13.5, cols[i % cols.length]);
-  }
-  // Windsock.
-  const wx = a.x + 17;
-  const wz = a.z + 6;
-  const wy = k.h(wx, wz);
-  k.b.add('metal', cylG(8), 0xe8e6e0, T(wx, wy, wz, 0, 0.08, 6.5, 0.08));
-  for (let i = 0; i < 4; i++) {
-    k.b.add('cloth', cylG(12, 0.82, true), i % 2 ? 0xf4efe6 : 0xf07a28, M(T(wx, wy + 6.2, wz, -0.9), T(0, 0, 0.1 + i * 0.5, 0, 0.42 * (1 - i * 0.12), 0.5, 0.42 * (1 - i * 0.12), Math.PI / 2 - 0.2)));
-  }
-  k.col.cyl(wx, wy, wz, 3.2, 0.1);
-  // Ticket hut with striped roof, sandbags and crates.
-  const hx = a.x - 16;
-  const hz = a.z + 9;
-  const hy = k.h(hx, hz);
-  const hm = T(hx, hy, hz, Math.PI * 0.8);
-  k.b.add('paint', rbox(3, 2.4, 2.4, 0.06), 0xf2e6cf, hm, { aoY: hy, aoH: 0.6 });
-  box(k.b, 'paint', hm, 0, 1.0, 1.21, 2.2, 0.9, 0.02, 0x30251e);
-  for (let i = 0; i < 6; i++) k.b.add('paint', rbox(0.56, 0.08, 3.0, 0.02), i % 2 ? 0xf4efe6 : 0xc8433a, M(hm, T(-1.4 + i * 0.56, 2.55, 0, 0, 1, 1, 1, 0.12)));
-  k.col.box(hm, 0, 1.2, 0, 1.6, 1.3, 1.3);
-  for (let i = 0; i < 5; i++) k.b.add('matte', sphereG(1), 0xc2a878, T(hx + 3 + (i % 3) * 0.6, hy + 0.2 + Math.floor(i / 3) * 0.35, hz - 1.5, i, 0.38, 0.22, 0.28));
-  crate(k, hx + 2.5, hz + 1.2, 1.0, 0.4);
-  crate(k, hx + 3.4, hz + 1.6, 0.8, 0.9);
-  bench(k, a.x - 6, a.z + 16, Math.PI);
-  bench(k, a.x + 4, a.z + 16.5, Math.PI);
-  return [{ x: hx, z: hz, r: 3 }];
-}
-
-function landingRings(k: Kit): void {
-  const a = ANCHORS.landingRings;
-  const cols = [0xc8433a, 0xf4efe6];
-  for (let i = 0; i < 8; i++) {
-    const ang = (i / 8) * Math.PI * 2 + 0.2;
-    markerPost(k, a.x + Math.cos(ang) * 21, a.z + Math.sin(ang) * 21, cols[i % 2]);
-  }
-  bench(k, a.x - 22, a.z + 10, -Math.PI / 2);
 }
 
 // ───────────────────────────── Bridge ─────────────────────────────
@@ -461,9 +312,6 @@ function sillyZone(k: Kit): Keepout[] {
 
 export function buildAreas(k: Kit): AreaResult {
   const keepouts: Keepout[] = [];
-  keepouts.push(...garage(k));
-  keepouts.push(...balloonField(k));
-  landingRings(k);
   bridge(k);
   keepouts.push(...lighthouse(k));
   keepouts.push(...ranch(k));
@@ -472,9 +320,6 @@ export function buildAreas(k: Kit): AreaResult {
   keepouts.push({ x: BRIDGE.x, z: (BRIDGE.z0 + BRIDGE.z1) / 2, hx: 6, hz: (BRIDGE.z0 - BRIDGE.z1) / 2 + 2 });
   keepouts.push({ x: ANCHORS.bungeeLanding.x, z: CANYON.z, hx: 20, hz: 4 });
   const trees: ManualTree[] = [
-    { x: ANCHORS.garage.x - 15, z: ANCHORS.garage.z + 14, kind: 'oak' },
-    { x: ANCHORS.garage.x + 15, z: ANCHORS.garage.z + 15, kind: 'oak', scale: 0.9 },
-    { x: ANCHORS.balloon.x - 22, z: ANCHORS.balloon.z - 4, kind: 'oak', scale: 1.1 },
     { x: ANCHORS.ranch.x - 30, z: ANCHORS.ranch.z - 14, kind: 'oak', scale: 1.2 },
     { x: ANCHORS.ranch.x - 31, z: ANCHORS.ranch.z + 14, kind: 'oak', scale: 1.1 },
   ];

@@ -61,7 +61,7 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
 
   // ── First 15: plaza, rooftops, trampoline ──
   ground(0, -2, 'plaza', 3.4); // on top of the fountain
-  ground(7, 4, 'plaza');
+  ground(7.5, 2.5, 'plaza');
   ground(-7, 4, 'plaza');
   ground(15, -9, 'plaza');
   ground(-14, -13, 'plaza');
@@ -86,12 +86,14 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
   const r = ANCHORS.landingRings;
   const top = height(b.x, b.z) + 170;
   const bottom = height(r.x, r.z) + 24;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 7; i++) {
     const t = i / 7;
     const x = b.x + (r.x - b.x) * t + Math.sin(t * 5) * 6 * (1 - t);
     const z = b.z + (r.z - b.z) * t + Math.cos(t * 4) * 5 * (1 - t);
     spots.push({ x, y: top + (bottom - top) * Math.pow(t, 0.85), z, tag: 'skydive' });
   }
+  // The last one sits on the final glide just above the landing target (under the canopy).
+  spots.push({ x: r.x, y: height(r.x, r.z) + 6, z: r.z, tag: 'skydive' });
 
   // Bungee fall line beside the platform, then along the canyon floor.
   const fallX = ANCHORS.bungee.x - 6;
@@ -121,7 +123,8 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
   const lhY = height(lh.x, lh.z);
   ground(lh.x + 9, lh.z + 2, 'lighthouse');
   ground(lh.x - 3, lh.z + 10, 'lighthouse');
-  spots.push({ x: lh.x + 2.4, y: lhY + 13.6 + FLOAT, z: lh.z + 0.8, tag: 'lighthouse' });
+  // Gallery: between the lantern (r 1.4) and the rail (r 2.8), a metre above the deck.
+  spots.push({ x: lh.x + 2.15, y: lhY + 14.3 + 0.25 + 1.0, z: lh.z + 0.7, tag: 'lighthouse' });
   spots.push({ x: lh.x, y: lhY + 21, z: lh.z, tag: 'lighthouse' });
 
   // Silly Zone ring.

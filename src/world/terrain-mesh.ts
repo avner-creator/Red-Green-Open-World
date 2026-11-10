@@ -27,7 +27,12 @@ const DIRT = lin(0xb59a72);
 
 const mix3 = (a: RGB, b: RGB, t: number): RGB => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
-export function createTerrainMesh(t: TerrainData): THREE.Mesh {
+export interface TerrainMesh {
+  group: THREE.Group;
+  colorAt(x: number, z: number, out: THREE.Color): THREE.Color;
+}
+
+export function createTerrainMesh(t: TerrainData): TerrainMesh {
   const n = t.n;
   const N = n + 1;
   const H = t.heights;
@@ -81,48 +86,105 @@ export function createTerrainMesh(t: TerrainData): THREE.Mesh {
       col[i * 3 + 2] = c[2] * ao;
     }
   }
-  const idx = new Uint32Array(n * n * 6);
-  let k = 0;
-  for (let iz = 0; iz < n; iz++) {
-    for (let ix = 0; ix < n; ix++) {
-      const a = iz * N + ix;
-      const b = a + 1;
-      const c = a + N;
-      const d = c + 1;
-      // Split along b–c, matching Rapier's heightfield triangles.
-      idx[k++] = a; idx[k++] = c; idx[k++] = b;
-      idx[k++] = b; idx[k++] = c; idx[k++] = d;
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeBoundingSphere();
+  const posA = new THREE.BufferAttribute(pos, 3);
+  const norA = new THREE.BufferAttribute(nor, 3);
+  const colA = new THREE.BufferAttribute(col, 3);
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
   patch(mat, 'rg-terrain', {
-    fragment: /* glsl */ `
-      float fw = fwidth(vWorldPos.x) + fwidth(vWorldPos.z);
-      float d1 = rgNoise(vWorldPos.xz * 0.21);
-      float d2 = rgNoise(vWorldPos.xz * 1.9);
-      float d3 = mix(rgNoise(vWorldPos.xz * 11.0), 0.5, smoothstep(0.05, 0.25, fw));
-      diffuseColor.rgb *= 0.84 + 0.2 * d1 + 0.1 * d2 + 0.12 * (d3 - 0.5);`,
-    // Rock strata and streaks on steep faces (world-space normal).
+    fragmentPre: /* glsl */ `
+      // Triplanar value noise: no stretching on steep faces.
+      float rgTri(vec3 p, vec3 w, float f) {
+        return rgNoise(p.zy * f) * w.x + rgNoise(p.xz * f) * w.y + rgNoise(p.xy * f) * w.z;
+      }`,
     afterNormal: /* glsl */ `
       {
         vec3 wN = inverseTransformDirection(normal, viewMatrix);
-        float rk = smoothstep(0.82, 0.55, wN.y);
-        float along = dot(vWorldPos.xz, normalize(vec2(-wN.z, wN.x) + 1e-4));
-        float strata = rgNoise(vec2(vWorldPos.y * 1.6, along * 0.12));
-        float streak = rgNoise(vec2(along * 0.9, vWorldPos.y * 0.08));
-        diffuseColor.rgb *= mix(1.0, 0.72 + 0.28 * strata + 0.18 * (streak - 0.5), rk);
+        vec3 bw = pow(abs(wN), vec3(4.0));
+        bw /= (bw.x + bw.y + bw.z);
+        vec3 p = vWorldPos;
+        float fw = length(fwidth(p));
+        float d1 = rgTri(p, bw, 0.21);
+        float d2 = rgTri(p, bw, 1.9);
+        float d3 = mix(rgTri(p, bw, 11.0), 0.5, smoothstep(0.05, 0.25, fw));
+        diffuseColor.rgb *= 0.84 + 0.2 * d1 + 0.1 * d2 + 0.12 * (d3 - 0.5);
+        // Break up flat green: broad lush/dry hue drift and small clover patches (grass only).
+        float green = smoothstep(0.02, 0.12, diffuseColor.g - max(diffuseColor.r, diffuseColor.b));
+        float drift = rgNoise(p.xz * 0.045) * 0.65 + rgNoise(p.xz * 0.17) * 0.35;
+        vec3 dry = diffuseColor.rgb * vec3(1.18, 1.06, 0.78);
+        vec3 lush = diffuseColor.rgb * vec3(0.86, 0.98, 0.9);
+        vec3 tinted = mix(lush, dry, smoothstep(0.3, 0.75, drift));
+        float clover = smoothstep(0.62, 0.78, rgNoise(p.xz * 0.6 + 17.0)) * (1.0 - smoothstep(0.1, 0.3, fw));
+        tinted *= 1.0 - 0.12 * clover;
+        diffuseColor.rgb = mix(diffuseColor.rgb, tinted, green);
+        // Rock strata on real cliffs only (world-space height bands, broken up triplanar).
+        float rk = smoothstep(0.72, 0.5, wN.y);
+        float strata = 0.5 + 0.5 * sin(p.y * 2.1 + 3.0 * rgTri(p, bw, 0.12));
+        float grain = rgTri(p, bw, 3.1);
+        diffuseColor.rgb *= mix(1.0, 0.76 + 0.22 * strata + 0.12 * (grain - 0.5), rk);
       }`,
   });
-  const mesh = new THREE.Mesh(g, mat);
-  mesh.name = 'terrain';
-  mesh.receiveShadow = true;
-  mesh.castShadow = false;
-  mesh.matrixAutoUpdate = false;
-  return mesh;
+  // 4×4 tiles that share one set of vertex buffers, so the camera frustum culls what is behind.
+  const TILES = 4;
+  const per = n / TILES;
+  const group = new THREE.Group();
+  group.name = 'terrain';
+  for (let tz = 0; tz < TILES; tz++) {
+    for (let tx = 0; tx < TILES; tx++) {
+      const idx = new Uint32Array(per * per * 6);
+      let k = 0;
+      let y0 = Infinity;
+      let y1 = -Infinity;
+      for (let iz = tz * per; iz < (tz + 1) * per; iz++) {
+        for (let ix = tx * per; ix < (tx + 1) * per; ix++) {
+          const a = iz * N + ix;
+          const b = a + 1;
+          const c = a + N;
+          const d = c + 1;
+          // Split along b–c, matching Rapier's heightfield triangles.
+          idx[k++] = a; idx[k++] = c; idx[k++] = b;
+          idx[k++] = b; idx[k++] = c; idx[k++] = d;
+          y0 = Math.min(y0, H[a], H[d]);
+          y1 = Math.max(y1, H[a], H[d]);
+        }
+      }
+      const tg = new THREE.BufferGeometry();
+      tg.setAttribute('position', posA);
+      tg.setAttribute('normal', norA);
+      tg.setAttribute('color', colA);
+      tg.setIndex(new THREE.BufferAttribute(idx, 1));
+      const cx = -half + (tx + 0.5) * per * t.cell;
+      const cz = -half + (tz + 0.5) * per * t.cell;
+      const hs = (per * t.cell) / 2;
+      tg.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, (y0 + y1) / 2, cz), Math.hypot(hs, hs, (y1 - y0) / 2 + 1));
+      tg.boundingBox = new THREE.Box3(new THREE.Vector3(cx - hs, y0 - 1, cz - hs), new THREE.Vector3(cx + hs, y1 + 1, cz + hs));
+      const mesh = new THREE.Mesh(tg, mat);
+      mesh.name = `terrain:${tx},${tz}`;
+      mesh.receiveShadow = true;
+      mesh.castShadow = false;
+      mesh.matrixAutoUpdate = false;
+      group.add(mesh);
+    }
+  }
+  /** Base ground colour (before shader detail) at a point: grass tufts take it on so they blend in. */
+  const colorAt = (x: number, z: number, out: THREE.Color): THREE.Color => {
+    const gx = THREE.MathUtils.clamp((x + half) / t.cell, 0, n - 1e-6);
+    const gz = THREE.MathUtils.clamp((z + half) / t.cell, 0, n - 1e-6);
+    const ix = Math.floor(gx);
+    const iz = Math.floor(gz);
+    const fx = gx - ix;
+    const fz = gz - iz;
+    const i = iz * N + ix;
+    const w = [(1 - fx) * (1 - fz), fx * (1 - fz), (1 - fx) * fz, fx * fz];
+    const ids = [i, i + 1, i + N, i + N + 1];
+    let r = 0;
+    let gg = 0;
+    let bb = 0;
+    for (let q = 0; q < 4; q++) {
+      r += col[ids[q] * 3] * w[q];
+      gg += col[ids[q] * 3 + 1] * w[q];
+      bb += col[ids[q] * 3 + 2] * w[q];
+    }
+    return out.setRGB(r, gg, bb);
+  };
+  return { group, colorAt };
 }
