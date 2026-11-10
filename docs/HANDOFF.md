@@ -28,21 +28,33 @@ Rules that matter for a newcomer: the orchestrator writes no code (workers on Op
 interfaces are in `src/types.ts` (integrator only); tests use `?test=1` and `window.__rg`;
 parallel agents must each use their own `RG_PORT`.
 
-## State (updated 2026-11-10 ~17:30 UTC)
+## State (updated 2026-11-10 ~20:00 UTC)
 
-**On `main` (verified, 31 e2e; live on Netlify and confirmed loading):** M0 + M1 vertical slice
-plus both-eye treasure chests (weak-eye key, strong-eye keyhole), 6 outfits and trampoline
-walk-on auto-bounce.
+**On `main` (verified, 166 unit + 42 e2e; live on Netlify):** red-green compositor + calibration,
+robot player, island with dressed plaza / Bouncy Park / garage / balloon field / landing field,
+63 weak-eye gems, trampoline + bounce pads, both-eye chests + 6 outfits, drivable buggy, balloon
+skydive with parachute and landing rings, UI (title, HUD, pause, end screen, gate, settings,
+credits), adaptive CC0 music + procedural SFX.
 
-## In flight (workers running in the old session; branches pushed as WIP)
+Interface additions since M1 (other streams must keep them): `CameraApi.setOverride` accepts
+`yawOffset`/`orbitRate`; `PlayerApi.setTilt(pitch, roll)`; `TestApi.step(dt, n, render)`.
+
+## In flight
+
+Main session (worktree subagents, WIP pushed):
 
 | Branch | Owner agent | Task |
 |---|---|---|
-| `agent/activities-skydive` | (done, verified alone) | Balloon skydive in `src/activities/skydive/`. Conflicts with `main` only in `src/activities/index.ts` (keep both registrations). |
-| `agent/integrate-skydive` | integrator | Merging skydive onto `main`, `CameraApi.setOverride` gets `yawOffset`/`orbitRate`, freefall pickup-point fix, combined chest+skydive e2e, e2e speed-up. |
-| `agent/core-car` | engine-engineer | One drivable buggy at `anchors.garage`: arcade raycast vehicle, enter/exit with E, chase camera, engine loop, `tests/e2e/vehicle.spec.ts`, publishes `object.userData.defaultColor`. |
-| `agent/ui-polish` | ui-designer | QA fixes: small fading tutorial strip, HUD sizes, settings without scrolling, labels "Gem eye / Gem glow / Ghosting guard / Other-eye dimmer", honest end-screen stickers, stable Play button. |
-| `agent/world-polish` | world-artist | Dress garage, balloon field, landing field, roads; fog/bloom/shadows; fix gem spots 35 and 44 and the last skydive gem; open views at every anchor; Medium ≤ ~450k triangles. |
+| `agent/world-wayfinding` | world-artist | Beacons over attractions, plaza fingerpost, road waymarks, pictogram how-to boards, fuller grass. |
+| `agent/ui-wayfinding` | ui-designer | HUD icon compass, "?"/H controls card, driving and skydive hint strips (new files only). |
+| `agent/activities-thrills` | activities-designer | Trampoline 12 m → 45 m, air tricks, bigger pads, rocket pads + landing net, `thrillSpots`, `setLaunchGate` hook. |
+| (next) | integrator | Walk 6.5 / sprint 11 m/s; stronger parachute auto-steer to the rings; freefall camera angle. |
+
+Second account (see `docs/PARALLEL_WORK.md`; merge each when the owner says it is pushed):
+`agent/economy` (Stream C, orchestrated), `agent/mobile-touch` (A), `agent/characters` (B);
+optional `agent/activities-secrets` (F), `agent/core-horse` (D), `agent/activities-bungee-silly` (E).
+After `agent/characters` lands, the main session wires characters into the player controller,
+skills and a character-select onboarding screen.
 
 If a WIP branch is unfinished, start the same agent type on it (not from scratch): "continue the
 task on branch `agent/...`; run verify; report". If a branch is empty or missing, re-brief from the

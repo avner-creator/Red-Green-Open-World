@@ -1,8 +1,24 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { boot } from './helpers';
 
-test('teleporting onto a gem collects it; restart brings gems back', async ({ page }) => {
-  const { consoleErrors } = await boot(page);
+test.describe.configure({ mode: 'serial' });
+
+// One page for the whole file (a boot costs several seconds on SwiftShader); every test starts a
+// fresh session with rg.start().
+let page: Page;
+let consoleErrors: string[] = [];
+
+test.beforeAll(async ({ browser }) => {
+  page = await browser.newPage();
+  ({ consoleErrors } = await boot(page));
+});
+
+test.afterAll(async () => {
+  await page.close();
+});
+
+test('teleporting onto a gem collects it; restart brings gems back', async () => {
   const result = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -10,18 +26,18 @@ test('teleporting onto a gem collects it; restart brings gems back', async ({ pa
     const events: { id: string; count: number; total: number }[] = [];
     ctx.events.on('gem:collected', (e) => events.push({ id: e.id, count: e.count, total: e.total }));
     rg.start();
-    rg.step(1 / 60, 5);
+    rg.step(1 / 60, 5, false);
     const spot = ctx.world.gemSpots[0].position;
     const before = rg.state().gems;
     const total = rg.state().gemsTotal;
     // Feet are ~0.85 m below the gem centre the pickup test uses.
     rg.teleport(spot.x, spot.y - 0.85, spot.z);
-    rg.step(1 / 60, 3);
+    rg.step(1 / 60, 3, false);
     const after = rg.state().gems;
-    rg.step(1 / 60, 10);
+    rg.step(1 / 60, 10, false);
     const stays = rg.state().gems;
     rg.start(); // back to title, then a fresh session
-    rg.step(1 / 60, 3);
+    rg.step(1 / 60, 3, false);
     const restarted = rg.state().gems;
     return { before, after, stays, restarted, total, spots: ctx.world.gemSpots.length, events };
   });
@@ -36,27 +52,25 @@ test('teleporting onto a gem collects it; restart brings gems back', async ({ pa
   expect(consoleErrors).toEqual([]);
 });
 
-test('walking onto the trampoline mat launches the player upward', async ({ page }) => {
-  const { consoleErrors } = await boot(page);
+test('walking onto the trampoline mat launches the player upward', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
     rg.freeze(true);
     rg.start();
-    rg.step(1 / 60, 3);
+    rg.step(1 / 60, 3, false);
     const a = ctx.world.anchors.trampoline.position;
     const toasts: unknown[] = [];
     ctx.events.on('ui:toast', (e) => toasts.push(e));
     rg.teleport(a.x, ctx.world.heightAt(a.x, a.z) + 1, a.z);
-    rg.step(1 / 60, 3);
+    rg.step(1 / 60, 3, false);
     return { vy: ctx.player.velocity.y, toasts: toasts.length };
   });
   expect(r.vy).toBeGreaterThan(5);
   expect(consoleErrors).toEqual([]);
 });
 
-test('walking from the steps onto the mat (no drop) starts a gentle bounce', async ({ page }) => {
-  const { consoleErrors } = await boot(page);
+test('walking from the steps onto the mat (no drop) starts a gentle bounce', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;

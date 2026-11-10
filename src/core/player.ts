@@ -125,7 +125,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     launched = true; // whatever height the ride ended at, the landing is gentle
     if (mode === 'external') setMode('walk');
     c.onRelease?.();
+    api.setTilt(0, 0);
   };
+  const tiltPivot = new THREE.Vector3();
 
   const internal: PlayerInternal = {
     api: undefined as unknown as PlayerApi, // set below
@@ -245,6 +247,13 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       return () => {
         o.removeFromParent();
       };
+    },
+    setTilt(pitch, roll) {
+      // Rotate the squash group, then shift it so the body centre stays put (pivot = centre).
+      const s = model.squash;
+      s.rotation.set(pitch, 0, roll);
+      tiltPivot.set(0, model.centre, 0).applyEuler(s.rotation);
+      s.position.set(-tiltPivot.x, model.centre - tiltPivot.y, -tiltPivot.z);
     },
   };
   internal.api = api;

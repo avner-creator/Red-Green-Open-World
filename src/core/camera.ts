@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { CAMERA } from '../config';
 import type { CameraApi, GameContext } from '../types';
-import { clamp, orbitOffset, resolveCameraDistance } from './camera-math';
+import { clamp, orbitOffset, resolveCameraDistance, steerOverrideYaw } from './camera-math';
 import { angleDelta, damp } from './motion-math';
 import { CAM } from './tuning';
 
@@ -132,6 +132,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       yaw -= input.lookX;
       pitch = clamp(pitch + input.lookY, CAM.minPitch, CAM.maxPitch);
       sinceLook = looking ? 0 : sinceLook + dt;
+      yaw = steerOverrideYaw(yaw, ctx.player.yaw, override, sinceLook, CAM.autoAlignDelay, 2, dt);
       // Gently swing behind a player who runs forward-ish and isn't steering the camera.
       const hs = Math.hypot(ctx.player.velocity.x, ctx.player.velocity.z);
       if (chase) {
