@@ -41,7 +41,7 @@ friend. It is wordless: pictograms and numbers only.
   stars, your time and the friend's time with a star beside the winner, the gem prize, and two
   buttons: ↻ replay (Space/E, gamepad A or X, tap) and exit (R or gamepad B/Y, tap). Walking
   away or 14 s of no input also leaves. Confetti (`ThrillConfetti`, a brightness-safe palette),
-  a fanfare and a slow camera orbit play behind it.
+  a fanfare and a front camera on the hero's bow play behind it.
 - **R always leaves safely,** at any moment of a run: you are put back on foot in front of the
   booth.
 - **Outside a run** the course is solid (Rapier colliders on every part), so kids can walk it

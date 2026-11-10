@@ -298,7 +298,10 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     if (!confetti.group.parent) ctx.scene.add(confetti.group);
     confetti.burst(burstAt, 140);
     confettiT = 4;
-    ctx.cameraRig.setOverride({ distance: 5.2, height: 1.9, orbitRate: 0.35 });
+    // Face the pit and take the bow: the camera looks back at the hero from over the foam (always
+    // open space, whatever stands behind the finish deck).
+    sim.yaw = 0;
+    ctx.cameraRig.setOverride({ distance: 5.2, height: 1.9, yawOffset: Math.PI });
     ui.result({ time, medal, stars, friendTime, beatFriend, prize, friendColor: friend.color }, ctx.input.state.device);
   }
 
