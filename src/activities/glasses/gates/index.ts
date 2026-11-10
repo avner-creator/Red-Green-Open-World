@@ -29,12 +29,13 @@ import {
   pivotMatrix,
   quadGeo,
   remapUv,
-  layoutSite,
   siteFrame,
   squashCurve,
   wobbleCurve,
 } from './kit';
 import type { Opening } from './kit';
+import { chooseLayout } from './layout';
+import type { LayoutSpec } from './layout';
 import { halvesFor, isGateRound, makeGateRound, otherSide } from './round';
 import type { GateRound, Side } from './round';
 
@@ -103,7 +104,24 @@ function drawPlate(g: CanvasRenderingContext2D, ready: boolean): void {
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
-  const lay = layoutSite(site);
+  const G = GATES;
+  const spec: LayoutSpec = {
+    hero: { x: 0, z: G.plateZ },
+    targets: [
+      ...[-1, 0, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * 0.7, z: G.signZ, y: G.signY + sy * 0.7 }))),
+      ...G.archX.flatMap((x) => [{ x, z: G.archZ, y: G.plaqueY }, { x, z: G.archZ, y: G.plaqueY + 0.5 }]),
+    ],
+    footprint: [
+      ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: sx * (G.archX[2] + G.outerHalf), z: G.archZ + sz * 0.35 }))),
+      ...G.archX.map((x) => ({ x, z: G.archZ })),
+      { x: 0, z: G.signZ },
+      { x: -G.plateR, z: G.plateZ },
+      { x: G.plateR, z: G.plateZ },
+      { x: 0, z: G.plateZ + G.plateR },
+    ],
+    radius: site.radius + 0.4,
+  };
+  const lay = chooseLayout(ctx, site, spec);
   const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
     const w = frame.toWorld(lx, lz);
@@ -143,7 +161,7 @@ export function create(env: MechanicEnv): Mechanic {
   });
   // The sign: a lectern in front of the plate (one stout post, a wooden frame, the dark panel,
   // a roof cap), leaning back a little so it faces the camera that looks down over the hero.
-  const signCentre = new THREE.Vector3(0, signBase + GATES.signY, GATES.signZ);
+  const signCentre = new THREE.Vector3(0, plateBase + GATES.signY, GATES.signZ);
   {
     const z = GATES.signZ;
     const tilted = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateX(-GATES.signTilt).translate(0, signCentre.y, z);
@@ -446,6 +464,7 @@ export function create(env: MechanicEnv): Mechanic {
         gemsPerTier: { ...GATE_GEMS },
         tierPreset: { ...TIERS[tier] },
         yaw: lay.yaw,
+        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems },
         plate: pt(0, GATES.plateZ),
         // Points just in front of / behind each opening (world), for tests.
         arches: GATES.archX.map((x) => ({ front: pt(x, GATES.archZ + 0.7), back: pt(x, GATES.archZ - 0.7), around: pt(x + GATES.outerHalf + 0.6, GATES.archZ - 0.7) })),

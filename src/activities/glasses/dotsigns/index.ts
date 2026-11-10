@@ -24,11 +24,12 @@ import {
   nextTier,
   pivotMatrix,
   remapUv,
-  layoutSite,
   siteFrame,
   squashCurve,
   wobbleCurve,
 } from '../gates/kit';
+import { chooseLayout } from '../gates/layout';
+import type { LayoutSpec } from '../gates/layout';
 import type { Mechanic, MechanicEnv } from '../types';
 import { DOT_GEMS, DOT_TIERS, DOTSIGNS } from './constants';
 import { shapeButtonCanvas } from './picto';
@@ -49,13 +50,28 @@ const SWATCHES = {
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
-  const lay = layoutSite(site);
+  const D = DOTSIGNS;
+  const spec: LayoutSpec = {
+    // Between two buttons: the default camera then shows all three beside the hero.
+    hero: { x: D.buttonX[2] / 2, z: D.heroZ },
+    targets: [
+      ...[-1, 0, 1].flatMap((sx) => [-1, 0, 1].map((sy) => ({ x: sx * 1.15, z: D.signZ + 0.15, y: D.signY + sy * 1.15 }))),
+      ...D.buttonX.map((x) => ({ x, z: D.pedZ, y: D.pedH + 0.12 })),
+    ],
+    footprint: [
+      ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: (sx * D.pedW) / 2, z: D.pedZ + (sz * D.pedD) / 2 }))),
+      ...[-1, 1].map((sx) => ({ x: (sx * D.frameW) / 2, z: D.signZ })),
+      { x: 0, z: D.signZ },
+      { x: 0, z: D.heroZ },
+    ],
+    radius: site.radius + 0.4,
+  };
+  const lay = chooseLayout(ctx, site, spec);
   const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
     const w = frame.toWorld(lx, lz);
     return env.groundAt(w.x, w.z) - site.y;
   };
-  const D = DOTSIGNS;
 
   // ───────────── both-eye mesh (one draw call) ─────────────
   const atlas = createAtlas(SWATCHES);
@@ -63,8 +79,8 @@ export function create(env: MechanicEnv): Mechanic {
   const U = (n: keyof typeof SWATCHES) => atlas.swatchUv(n);
   const signBase = Math.min(ground(-D.legX, D.signZ), ground(D.legX, D.signZ), ground(0, D.signZ));
   const pedBase = Math.min(ground(-D.pedW / 2, D.pedZ), ground(D.pedW / 2, D.pedZ), ground(0, D.pedZ));
-  const signY = signBase + D.signY;
-  const signTop = signY + D.frame / 2;
+  const signY = ground(0, D.heroZ) + D.signY;
+  const signTop = signY + D.frameH / 2;
   const sink = 0.7;
   // Button centre (top of the pedestal) and face normal, site-local.
   const btnY = pedBase + D.pedH + 0.06;
@@ -79,11 +95,11 @@ export function create(env: MechanicEnv): Mechanic {
       list.push(boxGeo(0.3, h, 0.3, sx * D.legX, signBase - sink + h / 2, z - 0.22, U('woodDark')));
       list.push(boxGeo(0.5, 0.45, 0.5, sx * D.legX, signBase + 0.08, z - 0.22, U('stoneDark')));
     }
-    list.push(boxGeo(D.frame, D.frame, 0.16, 0, signY, z, U('wood')));
+    list.push(boxGeo(D.frameW, D.frameH, 0.16, 0, signY, z, U('wood')));
     list.push(boxGeo(D.panel, D.panel, 0.04, 0, signY, z + 0.09, U('panel')));
-    list.push(boxGeo(D.frame + 0.4, 0.16, 0.56, 0, signTop + 0.08, z - 0.05, U('woodDark')));
+    list.push(boxGeo(D.frameW + 0.4, 0.16, 0.56, 0, signTop + 0.08, z - 0.05, U('woodDark')));
     for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-      list.push(boxGeo(0.13, 0.13, 0.05, cx * (D.frame / 2 - 0.08), signY + cy * (D.frame / 2 - 0.08), z + 0.1, U('gold')));
+      list.push(boxGeo(0.13, 0.13, 0.05, cx * (D.frameW / 2 - 0.08), signY + cy * (D.frameH / 2 - 0.08), z + 0.1, U('gold')));
     }
     parts.sign = list;
   }
@@ -117,7 +133,7 @@ export function create(env: MechanicEnv): Mechanic {
     colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, site.y + ly, w.z), new THREE.Vector3(hx, hy, hz), rot));
   };
   // The sign as one solid block (no squeezing under it) and the pedestal.
-  addBox(0, (signBase - sink + signTop) / 2, D.signZ - 0.1, D.frame / 2 + 0.05, (signTop - signBase + sink) / 2, 0.24);
+  addBox(0, (signBase - sink + signTop) / 2, D.signZ - 0.1, D.frameW / 2 + 0.05, (signTop - signBase + sink) / 2, 0.24);
   addBox(0, pedBase - sink / 2 + D.pedH / 2, D.pedZ, D.pedW / 2 + 0.05, (D.pedH + sink) / 2, D.pedD / 2 + 0.05);
 
   // ───────────── the dot picture (weak quad + strong quad, exactly registered) ─────────────
@@ -376,9 +392,10 @@ export function create(env: MechanicEnv): Mechanic {
         yaw: lay.yaw,
         buttons: btnWorld.map((b) => ({ x: b.x, y: b.y, z: b.z })),
         // Where to stand to press each button (in front of the pedestal).
-        stand: D.buttonX.map((x) => pt(x, D.pedZ + D.pedD / 2 + 0.45)),
-        // A spot a few steps back with the sign and all three buttons in view.
-        view: pt(0, D.pedZ + 3.4),
+        stand: D.buttonX.map((x) => pt(x, D.heroZ)),
+        // The viewing spot the layout was chosen for (between the middle and the right button).
+        view: pt(D.buttonX[2] / 2, D.heroZ),
+        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems },
         sign: { ...pt(0, D.signZ), y: site.y + signY },
       };
     },

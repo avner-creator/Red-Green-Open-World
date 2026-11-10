@@ -43,21 +43,6 @@ export function siteFrame(site: { x: number; z: number; yaw: number }): SiteFram
   };
 }
 
-/**
- * The play layout's own frame inside the site. The pictogram board stands on the approach edge
- * (front-left or front-right); a player standing in the play area has the camera ~5.5 m behind
- * them, right where the board is. So the layout slides a little back and sideways away from the
- * board, which keeps the board at the edge of the play view instead of in front of it.
- */
-export function layoutSite(site: { x: number; z: number; yaw: number; board: { x: number; z: number } }): { x: number; z: number; yaw: number } {
-  const local = siteFrame(site).toLocal(site.board.x, site.board.z);
-  const side = local.x > 1 ? 1 : local.x < -1 ? -1 : 0;
-  const shift = side === 0 ? { x: 0, z: -1.0 } : { x: -0.8 * side, z: -0.6 };
-  const at = siteFrame(site).toWorld(shift.x, shift.z);
-  // The approach axis keeps the site's yaw: the site finder cleared that corridor of trees.
-  return { x: at.x, z: at.z, yaw: site.yaw };
-}
-
 // ───────────────────────────── atlas ─────────────────────────────
 
 /** Atlas: 4 × 2 cells of 256 px. Row 0 = picture cells 0..3, row 1 = 8 × 2 flat swatches. */
