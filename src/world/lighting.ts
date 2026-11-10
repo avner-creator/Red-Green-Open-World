@@ -10,6 +10,7 @@ import type { Quality } from '../types';
 import { createSky } from './sky';
 import type { Sky, SkyState } from './sky';
 import { U } from './materials';
+import { SHADOW_PROXY_LAYER } from '../core/shadow-proxy';
 
 /** Height (m) at which the fog has its nominal density, and how fast it thins above (1/m). */
 const FOG_BASE = 18;
@@ -106,6 +107,9 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
   sun.shadow.radius = 3;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 420;
+  // The shadow map also draws the low-poly shadow proxies (static batches, trees, hero objects).
+  sun.shadow.camera.layers.enable(0);
+  sun.shadow.camera.layers.enable(SHADOW_PROXY_LAYER);
   scene.add(sun);
   scene.add(sun.target);
 

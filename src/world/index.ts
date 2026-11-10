@@ -90,6 +90,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       quality = q;
       lighting.setQuality(q);
       terrainMesh.setQuality(q);
+      b.setQuality(q);
       scatter.setQuality(q);
       shack.setQuality(q);
       ctx.vision.setPostPasses(post.passes(q));
@@ -99,6 +100,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       mats.update();
       lighting.update(ctx.camera);
       terrainMesh.update(ctx.camera);
+      b.update(ctx.camera, lighting.sun);
       water.update(ctx.camera);
       scatter.update(ctx.camera);
       shack.update(dt);
