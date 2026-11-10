@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, canvasShot, channelDiff } from './helpers';
+import { SHOTS, boot, canvasShot, channelDiff } from './helpers';
 import type { EyeSettings } from '../../src/types';
 import type { SecretsInfo } from '../../src/activities/secrets';
 
@@ -97,6 +97,7 @@ function splitChannel(png: PNG, c: number): Buffer {
 }
 
 async function save(name: string): Promise<void> {
+  if (!SHOTS) return; // human-only screenshots are opt-in (RG_SHOTS=1)
   const png = await render();
   writeFileSync(`${OUT}/${name}-full.png`, PNG.sync.write(png));
   writeFileSync(`${OUT}/${name}-R.png`, splitChannel(png, 0));

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, startGame } from './helpers';
+import { SHOTS, boot, startGame } from './helpers';
 
 const OUT = 'test-results/shop';
 mkdirSync(OUT, { recursive: true });
@@ -22,6 +22,7 @@ function channel(png: PNG, c: number): Buffer {
  * (deterministic: the moment of an animation we want to judge), then resumed.
  */
 async function save(page: Page, name: string, at = 1200): Promise<void> {
+  if (!SHOTS) return; // human-only screenshots are opt-in (RG_SHOTS=1)
   await page.evaluate((t) => {
     for (const a of document.getAnimations()) {
       a.pause();

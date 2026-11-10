@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, canvasShot } from './helpers';
+import { SHOTS, boot, canvasShot } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -36,6 +36,7 @@ function splitChannel(png: PNG, c: number): Buffer {
 
 /** Save the last rendered frame as full / R / G. */
 async function save(name: string): Promise<void> {
+  if (!SHOTS) return; // human-only screenshots are opt-in (RG_SHOTS=1)
   const png = await canvasShot(page, `${OUT}/${name}-full.png`);
   writeFileSync(`${OUT}/${name}-R.png`, splitChannel(png, 0));
   writeFileSync(`${OUT}/${name}-G.png`, splitChannel(png, 1));
