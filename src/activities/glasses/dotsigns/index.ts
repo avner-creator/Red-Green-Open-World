@@ -28,9 +28,11 @@ import {
   squashCurve,
   wobbleCurve,
 } from '../gates/kit';
-import { chooseLayout } from '../gates/layout';
+import { CAM_BACK, chooseLayout } from '../gates/layout';
 import type { LayoutSpec } from '../gates/layout';
 import type { Mechanic, MechanicEnv } from '../types';
+import { freshGuard, settle } from '../gates/guard';
+import type { Guard } from '../gates/guard';
 import { DOT_GEMS, DOT_TIERS, DOTSIGNS } from './constants';
 import { shapeButtonCanvas } from './picto';
 import { answerShape, isDotRound, makeDotRound } from './round';
@@ -65,8 +67,19 @@ export function create(env: MechanicEnv): Mechanic {
       { x: 0, z: D.heroZ },
     ],
     radius: site.radius + 0.4,
+    // The four picture corners must be clear of canopies from the play spot and the approach.
+    canopyTargets: [-1, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * 1.25, z: D.signZ + 0.15, y: D.signY + sy * 1.25 }))),
+    // The approach (~7 m from the sign): the clearest of a few spots, kept in `lay.view`.
+    views: [[0, 7], [-2.5, 6.6], [2.5, 6.6], [-4, 5.8], [4, 5.8]].map(([x, dz]) => ({ x, z: D.signZ + dz })),
+    foreground: 1.5,
   };
-  const lay = chooseLayout(ctx, site, spec);
+  const lay = chooseLayout(ctx, site, spec, { refreshDecor: true });
+  // The sign turns to face the default camera at the play spot squarely.
+  const signYaw = Math.atan2(spec.hero.x, spec.hero.z + CAM_BACK - D.signZ);
+  const signTurn = new THREE.Matrix4()
+    .makeTranslation(0, 0, D.signZ)
+    .multiply(new THREE.Matrix4().makeRotationY(signYaw))
+    .multiply(new THREE.Matrix4().makeTranslation(0, 0, -D.signZ));
   const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
     const w = frame.toWorld(lx, lz);
@@ -101,6 +114,7 @@ export function create(env: MechanicEnv): Mechanic {
     for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
       list.push(boxGeo(0.13, 0.13, 0.05, cx * (D.frameW / 2 - 0.08), signY + cy * (D.frameH / 2 - 0.08), z + 0.1, U('gold')));
     }
+    for (const g of list) g.applyMatrix4(signTurn);
     parts.sign = list;
   }
   {
@@ -150,7 +164,7 @@ export function create(env: MechanicEnv): Mechanic {
 
   const flourishM = new THREE.Matrix4();
   const rootM = new THREE.Matrix4();
-  const offM = new THREE.Matrix4().makeTranslation(dotsAt.lx, dotsAt.ly, dotsAt.lz);
+  const offM = signTurn.clone().multiply(new THREE.Matrix4().makeTranslation(dotsAt.lx, dotsAt.ly, dotsAt.lz));
   /** Layer roots = site frame × sign animation × the picture's spot (keeps both quads on the panel). */
   function placeRoots(anim: THREE.Matrix4 | null): void {
     rootM.copy(body.mesh.matrixWorld);
@@ -188,6 +202,11 @@ export function create(env: MechanicEnv): Mechanic {
   let active = false;
   let lastResult: { tier: GlassesTier; hit: boolean; button: number } | null = null;
   let flourish = 1;
+  let guard: Guard = freshGuard();
+  /** Seconds from the answer to the next picture (D.next after a hit, the nap after a miss). */
+  let wait: number = D.next;
+  /** Buttons sunk into the pedestal during a nap (0..1, eased). */
+  let btnSink = 0;
   const btnAnim = D.buttonX.map(() => ({ press: 1, wobble: 1, bob: 1 }));
 
   function drawButtons(): void {
@@ -235,6 +254,7 @@ export function create(env: MechanicEnv): Mechanic {
 
   function clearAnims(): void {
     flourish = 1;
+    btnSink = 0;
     body.setPart('sign', null);
     placeRoots(null);
     btnAnim.forEach((a, i) => {
@@ -252,10 +272,13 @@ export function create(env: MechanicEnv): Mechanic {
     doneT = 0;
     lastResult = { tier: t, hit, button: i };
     btnAnim[i].press = 0;
+    const settled = settle(guard, hit, DOT_GEMS[t], D.nap);
+    guard = settled.guard;
+    wait = hit ? D.next : settled.nap;
     if (hit) {
       hits++;
-      gems += DOT_GEMS[t];
-      env.pay(DOT_GEMS[t]);
+      gems += settled.gems;
+      env.pay(settled.gems);
       ctx.audio.play('click');
       ctx.audio.play('fanfare');
       flourish = 0;
@@ -288,16 +311,24 @@ export function create(env: MechanicEnv): Mechanic {
         placeRoots(flourishM);
       }
     }
+    // Nap after a miss: the buttons sink into the pedestal (prompts are off while state is done).
+    const sinkTo = state === 'done' && !lastResult?.hit && doneT > 0.9 && doneT < wait - 0.4 ? 1 : 0;
+    const sinkWas = btnSink;
+    btnSink += (sinkTo - btnSink) * Math.min(1, dt * 5);
+    if (Math.abs(btnSink - sinkTo) < 1e-3) btnSink = sinkTo;
+    const sinking = btnSink !== sinkWas || btnSink > 0;
     btnAnim.forEach((a, i) => {
-      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1) return;
+      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1 && !sinking) {
+        return;
+      }
       a.press = Math.min(1, a.press + dt / D.press);
       a.wobble = Math.min(1, a.wobble + dt / D.wobble);
       a.bob = Math.min(1, a.bob + dt / 1.2);
-      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1) {
+      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1 && btnSink === 0) {
         body.setPart(`btn${i}`, null);
         return;
       }
-      const down = a.press < 1 ? -Math.sin(a.press * Math.PI) * 0.07 : 0;
+      const down = (a.press < 1 ? -Math.sin(a.press * Math.PI) * 0.07 : 0) - btnSink * 0.16;
       const bob = a.bob < 1 ? Math.abs(Math.sin(a.bob * Math.PI * 3)) * (1 - a.bob) * 0.22 : 0;
       const k = a.press < 1 ? 1 + Math.sin(a.press * Math.PI) * 0.12 : 1;
       pivotMatrix(D.buttonX[i], btnY, btnZ, k, 1 / k, k, wobbleCurve(a.wobble) * 2.5, down + bob, m4);
@@ -324,6 +355,8 @@ export function create(env: MechanicEnv): Mechanic {
 
   function reset(): void {
     tier = 1;
+    guard = freshGuard();
+    wait = D.next;
     hits = 0;
     misses = 0;
     gems = 0;
@@ -353,7 +386,7 @@ export function create(env: MechanicEnv): Mechanic {
       confetti.update(dt);
       if (state === 'done') {
         doneT += dt;
-        if (doneT >= D.next) newRound();
+        if (doneT >= wait) newRound();
       }
     },
     dispose() {
@@ -387,6 +420,9 @@ export function create(env: MechanicEnv): Mechanic {
         misses,
         gems,
         lastResult,
+        guard: { ...guard },
+        wait,
+        sink: btnSink,
         confetti: confetti.live,
         gemsPerTier: { ...DOT_GEMS },
         yaw: lay.yaw,
@@ -395,7 +431,14 @@ export function create(env: MechanicEnv): Mechanic {
         stand: D.buttonX.map((x) => pt(x, D.heroZ)),
         // The viewing spot the layout was chosen for (between the middle and the right button).
         view: pt(D.buttonX[2] / 2, D.heroZ),
-        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems },
+        // The approach spot the layout keeps clear (the sign seen from ~7 m).
+        approach: pt(lay.view?.x ?? 0, lay.view?.z ?? D.signZ + 7),
+        approachYaw: (() => {
+          const a = frame.toWorld(lay.view?.x ?? 0, lay.view?.z ?? D.signZ + 7);
+          const t = frame.toWorld(0, D.signZ);
+          return Math.atan2(t.x - a.x, t.z - a.z);
+        })(),
+        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes, ms: lay.ms },
         sign: { ...pt(0, D.signZ), y: site.y + signY },
       };
     },

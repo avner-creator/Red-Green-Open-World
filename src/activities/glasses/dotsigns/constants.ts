@@ -6,7 +6,7 @@ export const DOTSIGNS = {
    *  the pedestal sees the whole picture above the hero's head between ≈1.4 m and ≈4.4 m), picture
    *  / panel edges, frame width and height, leg spacing. */
   signZ: 0.22,
-  signY: 2.75,
+  signY: 2.62,
   picture: 2.5,
   panel: 2.62,
   frameW: 3.4,
@@ -25,7 +25,9 @@ export const DOTSIGNS = {
   heroZ: 0.92 + 0.31 + 0.45,
   /** E prompt radius around each button. */
   reach: 1.25,
-  /** Seconds from an answer to the next picture. */
+  /** Nap after a miss (s): buttons sunk, prompts off (1st, 2nd, 3rd+ miss in a row). */
+  nap: [5, 8, 12] as const,
+  /** Seconds from a hit to the next picture. */
   next: 2.1,
   flourish: 1.0,
   press: 0.6,

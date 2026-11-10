@@ -17,6 +17,8 @@ import { createFullSymbolTexture, createHalfSymbol, TIERS, withChallenge } from 
 import type { HalfSymbolBlock } from '../../../vision/toolkit';
 import type { Mechanic, MechanicEnv } from '../types';
 import { GATE_GEMS, GATES } from './constants';
+import { freshGuard, settle } from './guard';
+import type { Guard } from './guard';
 import {
   boxGeo,
   Confetti,
@@ -68,8 +70,33 @@ function archShape(): THREE.Shape {
   return s;
 }
 
-function drawPlate(g: CanvasRenderingContext2D, ready: boolean): void {
+type PlateMode = 'live' | 'ready' | 'nap';
+
+function drawPlate(g: CanvasRenderingContext2D, mode: PlateMode): void {
   const c = 128;
+  const ready = mode === 'ready';
+  if (mode === 'nap') {
+    // A sleepy plate after a miss: dim rim, a crescent moon instead of the arrow.
+    g.fillStyle = '#2b2f38';
+    g.fillRect(0, 0, 256, 256);
+    g.fillStyle = '#8f8a7e';
+    g.beginPath();
+    g.arc(c, c, 124, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#20242c';
+    g.beginPath();
+    g.arc(c, c, 106, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#d9d2bf';
+    g.beginPath();
+    g.arc(c, c - 6, 58, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#20242c';
+    g.beginPath();
+    g.arc(c + 26, c - 26, 50, 0, Math.PI * 2);
+    g.fill();
+    return;
+  }
   g.fillStyle = '#2b2f38';
   g.fillRect(0, 0, 256, 256);
   g.fillStyle = ready ? '#ffe9a8' : '#cfc7b2';
@@ -120,8 +147,12 @@ export function create(env: MechanicEnv): Mechanic {
       { x: 0, z: G.plateZ + G.plateR },
     ],
     radius: site.radius + 0.4,
+    canopyTargets: [-1, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * 0.8, z: G.signZ, y: G.signY + sy * 0.8 }))),
+    // The approach (~7 m from the sign): the clearest of a few spots, kept in `lay.view`.
+    views: [[0, 7], [-2.5, 6.6], [2.5, 6.6], [-4, 5.8], [4, 5.8]].map(([x, dz]) => ({ x, z: G.signZ + dz })),
+    foreground: 1.5,
   };
-  const lay = chooseLayout(ctx, site, spec);
+  const lay = chooseLayout(ctx, site, spec, { refreshDecor: true });
   const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
     const w = frame.toWorld(lx, lz);
@@ -260,7 +291,11 @@ export function create(env: MechanicEnv): Mechanic {
   let lastResult: { tier: GlassesTier; hit: boolean; arch: number } | null = null;
   const anim = GATES.archX.map(() => ({ squash: 1, wobble: 1 }));
   let prev: { x: number; y: number; z: number } | null = null;
-  let plateReady = false;
+  let plateMode: PlateMode = 'live';
+  let guard: Guard = freshGuard();
+  /** Seconds the player must stand on the plate before the next round (the nap after a miss). */
+  let pauseNeeded = 0;
+  let plateT = 0;
 
   const openings: Opening[] = GATES.archX.map((cx) => ({ cx, z: GATES.archZ, halfWidth: GATES.innerHalf - 0.05, height: GATES.passHeight }));
 
@@ -285,9 +320,9 @@ export function create(env: MechanicEnv): Mechanic {
     });
   }
 
-  function drawPlateCell(ready: boolean): void {
-    plateReady = ready;
-    atlas.drawCell(PLATE_CELL, (g) => drawPlate(g, ready), ready ? 0.55 : 0.3);
+  function drawPlateCell(mode: PlateMode): void {
+    plateMode = mode;
+    atlas.drawCell(PLATE_CELL, (g) => drawPlate(g, mode), mode === 'ready' ? 0.55 : 0.3);
   }
 
   function applyHalves(): void {
@@ -310,7 +345,8 @@ export function create(env: MechanicEnv): Mechanic {
     chosen = -1;
     doneT = 0;
     drawSymbols();
-    drawPlateCell(false);
+    drawPlateCell('live');
+    weakRoot.visible = strongRoot.visible = true;
     applyHalves();
   }
 
@@ -336,12 +372,17 @@ export function create(env: MechanicEnv): Mechanic {
     state = 'done';
     doneT = 0;
     lastResult = { tier: t, hit, arch: i };
+    const settled = settle(guard, hit, GATE_GEMS[t], GATES.missPause);
+    guard = settled.guard;
+    pauseNeeded = settled.nap;
+    plateT = 0;
     const top = frame.toWorld(GATES.archX[i], GATES.archZ);
     if (hit) {
       hits++;
       anim[i].squash = 0;
-      gems += GATE_GEMS[t];
-      env.pay(GATE_GEMS[t]);
+      const paid = settled.gems;
+      gems += paid;
+      env.pay(paid);
       ctx.audio.play('fanfare');
       confetti.burst(top.x, site.y + archBase[i] + GATES.plaqueY, top.z, fxRng, 60, 5.5);
     } else {
@@ -352,7 +393,9 @@ export function create(env: MechanicEnv): Mechanic {
     env.result(t, hit);
     tier = nextTier(t, hit);
     drawSymbols();
-    drawPlateCell(true);
+    drawPlateCell(hit ? 'ready' : 'nap');
+    // After a miss the sign goes quiet until the nap on the plate is over.
+    if (!hit) weakRoot.visible = strongRoot.visible = false;
   }
 
   const m4 = new THREE.Matrix4();
@@ -383,6 +426,8 @@ export function create(env: MechanicEnv): Mechanic {
 
   function reset(): void {
     tier = 1;
+    guard = freshGuard();
+    pauseNeeded = 0;
     hits = 0;
     misses = 0;
     gems = 0;
@@ -423,7 +468,9 @@ export function create(env: MechanicEnv): Mechanic {
         }
       } else if (state === 'done') {
         doneT += dt;
-        if (doneT >= GATES.rearm && onPlate(cur)) newRound();
+        const on = onPlate(cur);
+        if (on) plateT += dt;
+        if (doneT >= GATES.rearm && on && plateT >= pauseNeeded) newRound();
       }
       prev = cur;
     },
@@ -459,13 +506,23 @@ export function create(env: MechanicEnv): Mechanic {
         misses,
         gems,
         lastResult,
-        plateReady,
+        plateMode,
+        guard: { ...guard },
+        pauseNeeded,
+        plateT,
         confetti: confetti.live,
         gemsPerTier: { ...GATE_GEMS },
         tierPreset: { ...TIERS[tier] },
         yaw: lay.yaw,
-        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems },
+        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes, ms: lay.ms },
         plate: pt(0, GATES.plateZ),
+        // The approach spot the layout keeps clear (the sign seen from ~7 m).
+        approach: pt(lay.view?.x ?? 0, lay.view?.z ?? GATES.signZ + 7),
+        approachYaw: (() => {
+          const a = frame.toWorld(lay.view?.x ?? 0, lay.view?.z ?? GATES.signZ + 7);
+          const t = frame.toWorld(0, GATES.signZ);
+          return Math.atan2(t.x - a.x, t.z - a.z);
+        })(),
         // Points just in front of / behind each opening (world), for tests.
         arches: GATES.archX.map((x) => ({ front: pt(x, GATES.archZ + 0.7), back: pt(x, GATES.archZ - 0.7), around: pt(x + GATES.outerHalf + 0.6, GATES.archZ - 0.7) })),
         sign: { ...pt(0, GATES.signZ), y: signY },
