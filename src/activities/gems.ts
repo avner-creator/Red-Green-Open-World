@@ -140,6 +140,7 @@ export function createGems(ctx: GameContext): Gems {
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
   const group = new THREE.Group();
+  group.name = 'glow-gems';
   group.add(gems, megas, halos, sparks);
   // Weak-eye layer only: never added to ctx.scene.
   ctx.vision.add(group, VisionLayer.WeakOnly);

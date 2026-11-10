@@ -560,6 +560,10 @@ export interface TestApi {
   teleport(x: number, y: number, z: number, yaw?: number): void;
   setEye(patch: Partial<EyeSettings>): void;
   setLayerVisible(layer: VisionLayer, visible: boolean): void;
+  /** Names of every object registered on a vision layer (`ctx.vision.add`), in order. */
+  layerObjects(): { name: string; layer: VisionLayer }[];
+  /** Hide/show every registered layer object whose name starts with `prefix`. Returns how many matched. */
+  setLayerObjectsVisible(prefix: string, visible: boolean): number;
   setRemaining(seconds: number): void;
   inject(patch: Partial<InputState> | null): void;
   state(): SessionState & { playerPosition: [number, number, number]; playerMode: PlayerMode };

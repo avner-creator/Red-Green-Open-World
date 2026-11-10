@@ -13,6 +13,7 @@ import { createActivities } from './activities';
 import { createEconomy } from './activities/economy';
 import { createProfile } from './profile';
 import { createUi } from './ui';
+import { VisionLayer } from './types';
 import type { GameContext, TestApi } from './types';
 
 const params = new URLSearchParams(location.search);
@@ -77,6 +78,21 @@ async function boot(): Promise<void> {
   ctx.profile = createProfile(events);
 
   ctx.vision = createVision(ctx);
+  // Test mode: remember what goes on the vision layers, so channel tests can toggle one feature.
+  const layerObjects: { object: THREE.Object3D; layer: VisionLayer }[] = [];
+  if (testMode) {
+    const add = ctx.vision.add.bind(ctx.vision);
+    const remove = ctx.vision.remove.bind(ctx.vision);
+    ctx.vision.add = (object, layer) => {
+      if (layer !== VisionLayer.Both) layerObjects.push({ object, layer });
+      add(object, layer);
+    };
+    ctx.vision.remove = (object) => {
+      const i = layerObjects.findIndex((o) => o.object === object);
+      if (i >= 0) layerObjects.splice(i, 1);
+      remove(object);
+    };
+  }
   ctx.input = createInput(ctx);
   ctx.physics = await createPhysics(ctx);
   ctx.world = await createWorld(ctx);
@@ -183,6 +199,26 @@ async function boot(): Promise<void> {
       },
       setLayerVisible(layer, visible) {
         ctx.vision.setLayerVisible(layer, visible);
+      },
+      layerObjects() {
+        return layerObjects.map((o) => ({ name: o.object.name, layer: o.layer }));
+      },
+      setLayerObjectsVisible(prefix, visible) {
+        let n = 0;
+        for (const o of layerObjects) {
+          if (!o.object.name.startsWith(prefix)) continue;
+          // Remember the owner's own flag (chest keys stay hidden until placed) and restore it.
+          const ud = o.object.userData as { rgTestHidden?: boolean };
+          if (!visible && ud.rgTestHidden === undefined) {
+            ud.rgTestHidden = o.object.visible;
+            o.object.visible = false;
+          } else if (visible && ud.rgTestHidden !== undefined) {
+            o.object.visible = ud.rgTestHidden;
+            delete ud.rgTestHidden;
+          }
+          n++;
+        }
+        return n;
       },
       setRemaining(seconds) {
         session.setRemaining(seconds);
