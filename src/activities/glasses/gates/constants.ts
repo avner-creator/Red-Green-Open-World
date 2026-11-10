@@ -19,12 +19,12 @@ export const GATES = {
   plaqueY: 3.48,
   /** The half-symbol sign: a lectern between the plate and the arches, facing the plate. */
   signZ: 0.1,
-  signY: 1.95,
+  signY: 1.78,
   signTilt: 0.15,
-  signPanel: 1.7,
-  signFrame: 1.96,
+  signPanel: 1.6,
+  signFrame: 1.84,
   /** Half-symbol height on the sign at tier 1 (× the tier size). */
-  halfSize: 1.4,
+  halfSize: 1.32,
   /** Start plate (centre z, radius). */
   plateZ: 2.0,
   plateR: 0.95,

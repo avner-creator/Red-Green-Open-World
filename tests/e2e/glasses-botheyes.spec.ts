@@ -45,6 +45,7 @@ interface DotsDebug {
   gems: number;
   yaw: number;
   stand: P3[];
+  view: P3;
 }
 
 const debug = <T>(id: string): Promise<T> => page.evaluate((i) => window.__rgGlasses!.debug(i), id) as Promise<T>;
@@ -122,6 +123,9 @@ test.beforeAll(async ({ browser }) => {
     rg.start();
     rg.step(1 / 60, 5, false);
     rg.setRemaining(9999);
+    // Framing for the proofs and screenshots: close behind the hero, so a decor tree or the
+    // pictogram board next to the default camera spot cannot cover the play area.
+    rg.ctx.cameraRig.setOverride({ distance: 3.4, height: 1.5 });
     const w = window as unknown as { __bothEyes: { results: unknown[]; toasts: number } };
     w.__bothEyes = { results: [], toasts: 0 };
     rg.ctx.events.on('glasses:result', (e) => w.__bothEyes.results.push(e));
@@ -178,7 +182,7 @@ test('gates: run through the right arch → hit, wrong arch → miss, the plate 
   // Walking round the outside of an arch does not count.
   await teleport(d.arches[2].front, facing);
   await step(2);
-  await teleport({ ...d.arches[2].around, z: d.arches[2].around.z }, facing);
+  await teleport(d.arches[2].around, facing);
   await step(2);
   expect((await debug<GatesDebug>('gates')).state).toBe('open');
   // Through the middle arch (the answer).
@@ -191,8 +195,8 @@ test('gates: run through the right arch → hit, wrong arch → miss, the plate 
   expect(d.hits).toBe(1);
   expect(d.tier).toBe(2);
   expect(d.gems).toBe(3);
-  await step(20);
-  await page.evaluate(() => window.__rg!.render());
+  // Turn round behind the arch: the camera now looks back at it (squash, confetti).
+  await standAt(d.arches[1].back, d.yaw, 16);
   await shots('gates', 'hit');
   let ev = await events();
   expect(ev.results).toEqual([{ mechanic: 'gates', kind: 'lineUp', tier: 1, hit: true }]);
@@ -232,7 +236,7 @@ test('dot signs: the picture and the buttons; each layer only touches its channe
   await step(2);
   const d = await debug<DotsDebug>('dotsigns');
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 1 });
-  await standAt(d.stand[1], d.yaw + Math.PI);
+  await standAt(d.view, d.yaw + Math.PI);
   await shots('dotsigns', 'pedestal');
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'dotsigns' });
   await expectDrawBudget(page, 'dotsigns', 6);
@@ -283,7 +287,7 @@ test('dot signs: press the hidden shape → hit, a wrong one → miss, a new pic
   expect(d.hits).toBe(1);
   expect(d.tier).toBe(2);
   expect(d.gems).toBe(3);
-  await step(24);
+  await standAt(d.view, facing, 20);
   await shots('dotsigns', 'hit');
   let ev = await events();
   expect(ev.results).toEqual([{ mechanic: 'dotsigns', kind: 'popOut', tier: 1, hit: true }]);
@@ -306,7 +310,7 @@ test('dot signs: press the hidden shape → hit, a wrong one → miss, a new pic
   expect((await debug<DotsDebug>('dotsigns')).round).toBe(d.round + 1);
   // A finer picture in view for the record.
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 3 });
-  await standAt(d.stand[1], facing);
+  await standAt(d.view, facing);
   await shots('dotsigns', 'tier3');
 });
 

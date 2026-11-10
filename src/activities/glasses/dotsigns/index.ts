@@ -377,6 +377,8 @@ export function create(env: MechanicEnv): Mechanic {
         buttons: btnWorld.map((b) => ({ x: b.x, y: b.y, z: b.z })),
         // Where to stand to press each button (in front of the pedestal).
         stand: D.buttonX.map((x) => pt(x, D.pedZ + D.pedD / 2 + 0.45)),
+        // A spot a few steps back with the sign and all three buttons in view.
+        view: pt(0, D.pedZ + 3.4),
         sign: { ...pt(0, D.signZ), y: site.y + signY },
       };
     },
