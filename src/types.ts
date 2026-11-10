@@ -527,6 +527,8 @@ export interface ShopItem {
   chestOnly?: boolean;
   /** Optional CSS colour for the shop card preview (paints, trails). */
   swatch?: string;
+  /** Optional picture of the item for shop cards: returns an image URL (may be a `data:` URL, may render lazily on first call), or null if there is none. */
+  preview?(): string | null;
 }
 
 export interface ProfileData {

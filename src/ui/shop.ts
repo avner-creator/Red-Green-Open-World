@@ -11,6 +11,7 @@ import { h, retrigger } from './dom';
 import { CATEGORY_ICON, cardState, missingGems, shopCategories, SLOT_ICON, wardrobeGroups } from './econ';
 import type { CardState } from './econ';
 import { icon } from './icons';
+import { itemPicture } from './itemArt';
 import type { Screen } from './screens';
 import { createWalletChip } from './wallet';
 
@@ -65,7 +66,7 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
       h('span', 'rays'),
       h('span', 'rays r2'),
       ...conf,
-      h('span', 'badge', { style: it.swatch ? `--sw:${it.swatch}` : '' }, it.swatch ? h('span', 'sw') : null, icon(it.icon)),
+      art(it, 'badge'),
       ...sparks,
       h('span', 'worn', {}, icon('check')),
     );
@@ -76,6 +77,19 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
     window.clearTimeout(fxTimer);
     fxTimer = window.setTimeout(hideFx, CELEBRATE_MS);
     ctx.audio.play('fanfare');
+  };
+
+  /** The item's picture (preview image, else swatch + icon), built only when shown. */
+  const art = (it: ShopItem, cls: string): HTMLElement => {
+    const pic = itemPicture(it, it.icon);
+    const isImg = pic.tagName === 'IMG';
+    return h(
+      'span',
+      `${cls} ${isImg ? 'has-pic' : ''}`.trim(),
+      { style: it.swatch && !isImg ? `--sw:${it.swatch}` : '' },
+      it.swatch && !isImg ? h('span', 'sw') : null,
+      pic,
+    );
   };
 
   const card = (it: ShopItem): HTMLButtonElement => {
@@ -100,7 +114,7 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
       'button',
       `b card s-${st}`,
       { type: 'button', 'aria-label': it.name, 'data-testid': 'shop-card', 'data-item': it.id, 'data-state': st, 'aria-pressed': String(st === 'equipped') },
-      h('span', 'pv', { style: it.swatch ? `--sw:${it.swatch}` : '' }, it.swatch ? h('span', 'sw') : null, icon(it.icon)),
+      art(it, 'pv'),
       foot,
       st === 'owned' ? h('span', 'own', {}, icon('check')) : null,
       st === 'equipped' ? h('span', 'ribbon', {}, icon('check')) : null,

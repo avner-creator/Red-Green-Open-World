@@ -10,6 +10,7 @@ import { comboFraction, deltaText, missionFraction, missionText, popKindFor } fr
 import type { EconTracker } from './econState';
 import { outfitIcon } from './glyphs';
 import { icon } from './icons';
+import { itemPicture } from './itemArt';
 import type { UiIconName } from './icons';
 import { createWalletChip } from './wallet';
 
@@ -110,14 +111,14 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
 
   // ── moments (compact, never block play) ──
   const moments = h('div', 'moments', { 'data-testid': 'moments' });
-  const moment = (kind: string, main: UiIconName, extra: (HTMLElement | null)[] = []): void => {
+  const moment = (kind: string, main: UiIconName | HTMLElement, extra: (HTMLElement | null)[] = []): void => {
     const sparks = Array.from({ length: 8 }, (_, n) => h('i', 'spk', { style: `--a:${n * 45 + 22}deg;--dl:${(n % 3) * 0.05}s` }, icon('sparkle')));
     const m = h(
       'div',
       `moment ${kind}`,
       { 'data-testid': `moment-${kind}` },
       h('span', 'rays'),
-      h('span', 'badge', {}, icon(main)),
+      h('span', 'badge', {}, typeof main === 'string' ? icon(main) : main),
       ...sparks,
       ...extra,
     );
@@ -186,7 +187,7 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
     }),
     ctx.events.on('item:unlocked', (e) => {
       if (e.source !== 'chest') return;
-      moment('unlock', itemIcon(ctx, e.itemId), [h('span', 'src', {}, icon('chest'))]);
+      moment('unlock', itemPicture(ctx.economy.item(e.itemId), itemIcon(ctx, e.itemId)), [h('span', 'src', {}, icon('chest'))]);
     }),
     ctx.events.on('session:phase', (e) => {
       if (e.phase === 'playing' && e.previous !== 'paused') {
