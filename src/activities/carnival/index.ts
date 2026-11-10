@@ -17,8 +17,9 @@ import { CarnivalFx } from './fx';
 import { Friends } from './friends';
 import { createBalloonPop } from './games/balloonPop';
 import { createDuckPond } from './games/duckPond';
-import { createRingToss } from './games/ringToss';
 import { createGlowDodge } from './games/glowDodge';
+import { createRingToss } from './games/ringToss';
+import { createStrengthBell } from './games/strengthBell';
 import type { BoothGame, GameEnv, GameFactory, RoundApi } from './games/types';
 import { CarnivalHud } from './hud';
 import type { Contestant } from './hud';
@@ -34,12 +35,13 @@ import { makeRng } from './rng';
 import type { Rng } from './rng';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-/** Booth games that exist so far (a missing one leaves its booth as dressing). */
-const FACTORIES: Partial<Record<GameId, GameFactory>> = {
+/** One game per booth. */
+const FACTORIES: Record<GameId, GameFactory> = {
   balloonPop: createBalloonPop,
   ringToss: createRingToss,
   duckPond: createDuckPond,
   glowDodge: createGlowDodge,
+  strengthBell: createStrengthBell,
 };
 
 const COUNTDOWN = 3;
