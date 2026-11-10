@@ -6,7 +6,7 @@ import { Colliders, type Kit } from '../../src/world/props';
 import { buildContent, type Content } from '../../src/world/content';
 import { ANCHORS, LAUNCH_NET } from '../../src/world/layout';
 import { ATTRACTIONS, FINGERPOSTS, roadEdgeDistance } from '../../src/world/wayfinding';
-import { PICTO_RECTS, ATLAS_SIZE, type PictoId } from '../../src/world/pictograms';
+import { PICTO_RECTS, ATLAS_H, ATLAS_SIZE, type PictoId } from '../../src/world/pictograms';
 
 let t: TerrainData;
 let content: Content;
@@ -87,7 +87,7 @@ describe('wayfinding', () => {
   it('pictogram atlas cells are inside the atlas and do not overlap', () => {
     const rects = Object.entries(PICTO_RECTS) as [PictoId, readonly [number, number, number]][];
     for (const [id, [x, y, s]] of rects) {
-      expect(x >= 0 && y >= 0 && x + s <= ATLAS_SIZE && y + s <= ATLAS_SIZE, id).toBe(true);
+      expect(x >= 0 && y >= 0 && x + s <= ATLAS_SIZE && y + s <= ATLAS_H, id).toBe(true);
     }
     for (let i = 0; i < rects.length; i++) {
       for (let j = i + 1; j < rects.length; j++) {

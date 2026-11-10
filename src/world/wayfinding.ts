@@ -54,6 +54,27 @@ export const ATTRACTIONS: readonly Attraction[] = [
     anchor: 'landingRings', icon: 'iTarget', arm: 0x7a5410, balloon: 0xf0b030, panels: [],
     beacon: { x: 148, z: 6, h: 22 }, board: { x: NaN, z: NaN, faceX: 0, faceZ: 0 },
   },
+  // ── Outer areas (stream G) ──
+  {
+    anchor: 'ranch', icon: 'iHorse', arm: 0x6b3f1e, balloon: 0xe08a2e, panels: ['horse1', 'horse2', 'horse3'],
+    beacon: { x: -46, z: 52, h: 13 }, board: { x: -46, z: 38, faceX: -36, faceZ: 24 },
+  },
+  {
+    anchor: 'bungee', icon: 'iBungee', arm: 0x2f5418, balloon: 0x7cc243, panels: ['bungee1', 'bungee2'],
+    beacon: { x: -12, z: -84, h: 14 }, board: { x: 12, z: -87.2, faceX: 12, faceZ: -78 },
+  },
+  {
+    anchor: 'sillyZone', icon: 'iSilly', arm: 0x7a1f6a, balloon: 0xf060c8, panels: ['silly1', 'silly2'],
+    beacon: { x: -22, z: 112, h: 13 }, board: { x: -3, z: 71, faceX: -1, faceZ: 60 },
+  },
+  {
+    anchor: 'lakePlatform', icon: 'iLake', arm: 0x14506e, balloon: 0x2fb8e8, panels: [],
+    beacon: { x: -110, z: 2, h: 14 }, board: { x: NaN, z: NaN, faceX: 0, faceZ: 0 },
+  },
+  {
+    anchor: 'lighthouse', icon: 'iLighthouse', arm: 0x232c6e, balloon: 0x5468e0, panels: [],
+    beacon: { x: -48, z: -124, h: 22 }, board: { x: NaN, z: NaN, faceX: 0, faceZ: 0 },
+  },
 ];
 
 const byAnchor = (a: AnchorName): Attraction => {
@@ -84,18 +105,24 @@ export interface FingerpostDef {
  */
 export const FINGERPOSTS: readonly FingerpostDef[] = [
   {
-    x: 8.4, z: 4.9, scale: 1, targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon'],
-    rows: [['balloon', 'bouncePads', 'trampoline'], ['garage'], ['launchPads'], ['landingRings']],
-    hang: ['bouncePads', 'trampoline'],
+    x: 8.4, z: 4.9, scale: 1,
+    targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon', 'ranch', 'bungee', 'sillyZone', 'lakePlatform', 'lighthouse'],
+    // Arms that share a row point at least ~50° apart so they never overlap.
+    rows: [['balloon', 'bouncePads', 'trampoline'], ['garage', 'sillyZone', 'lakePlatform', 'bungee'], ['launchPads', 'ranch', 'lighthouse'], ['landingRings']],
+    hang: ['bouncePads', 'trampoline', 'ranch'],
   },
   { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon'] },
   { x: 57.5, z: 32, scale: 0.85, targets: ['launchPads', 'balloon', 'landingRings', 'garage'] },
   { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads'] },
-  { x: 1.5, z: 78.5, scale: 0.85, targets: ['balloon', 'landingRings'] },
+  { x: 1.5, z: 78.5, scale: 0.85, targets: ['balloon', 'landingRings', 'sillyZone'] },
+  // Outer roads: north end of the village street, the bridge's far end, the ranch approach.
+  { x: -5.5, z: -61, scale: 0.85, targets: ['bungee', 'lighthouse'] },
+  { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee'] },
+  { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform'] },
 ];
 
 /** Roads that get painted chevrons, all pointing forward along the road (towards attractions). */
-const CHEVRON_ROADS = ['park', 'east', 'south', 'loop', 'rocket', 'parklink'];
+const CHEVRON_ROADS = ['park', 'east', 'south', 'loop', 'rocket', 'parklink', 'west', 'ridge', 'north', 'beach'];
 
 export interface ArmInfo {
   x: number;

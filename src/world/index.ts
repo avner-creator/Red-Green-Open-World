@@ -21,6 +21,7 @@ import { createPictogramAtlas } from './pictograms';
 import { createDecalMesh, pictoMaterial } from './decals';
 import { createBeacons } from './beacons';
 import { LAUNCH_NET } from './layout';
+import { createOuterLive } from './outer/live';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -55,6 +56,8 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   root.add(createDecalMesh(content.wayfinding.decals, pictoMaterial(atlas)));
   const beacons = createBeacons(content.wayfinding.beacons, atlas);
   root.add(beacons.group);
+  const outerLive = createOuterLive(content.outer.live);
+  root.add(outerLive.group);
 
   const post = createPost(ctx.camera);
 
@@ -96,6 +99,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       water.update(ctx.camera);
       scatter.update(ctx.camera);
       beacons.update(U.time.value, ctx.camera);
+      outerLive.update(U.time.value);
     },
   };
   api.setQuality(ctx.settings.get().quality);
