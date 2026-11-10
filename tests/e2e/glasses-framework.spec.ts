@@ -78,7 +78,9 @@ test('six valid sites on land, outside every anchor and off the roads', async ()
 
 test('far mechanics are idle; one becomes active on approach', async () => {
   const far = sites[5]; // beside the balloon
-  const near = sites[2]; // plaza, west side
+  // The plaza site farthest from it (beyond the deactivate radius, so the hysteresis cannot keep it on).
+  const dist = (s: (typeof sites)[number]): number => Math.hypot(s.x - far.x, s.z - far.z);
+  const near = sites.slice(0, 3).reduce((a, b) => (dist(b) > dist(a) ? b : a));
   await page.evaluate((id) => {
     window.__rgGlasses!.goto(id);
     window.__rg!.step(1 / 60, 2, false);

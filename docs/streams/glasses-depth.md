@@ -75,7 +75,8 @@ alone identifies the answer.
   `ctx.world.anchors` (anchors added later by other streams are avoided automatically), off the
   roads, clear of gem and chest spots, free of colliders, board visible from the approach.
   No anchor was added or moved. Sites found in the current world (x, z): glowflies (12, 24),
-  oddone (33, −3), lineup (−25, −20) near the plaza; toys (13, 39) by the garage; gates (61, 10)
+  oddone (−25, −25), lineup (−11, 32) near the plaza (after the merge of main on 2026-11-10; before it
+  oddone (33, −3), lineup (−25, −20)); toys (13, 39) by the garage; gates (61, 10)
   by the trampoline; dotsigns (45, 58) by the balloon.
 - `board.ts` + `pictos.ts`: a wordless pictogram board per site (both eyes, one draw call, reads
   in R-only and G-only).
