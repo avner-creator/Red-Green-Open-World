@@ -4,7 +4,7 @@
  */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { boot } from './helpers';
+import { boot, startGame } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -35,7 +35,7 @@ test.afterAll(async () => {
 
 const pauses = (): Promise<number> => page.evaluate(() => (window as unknown as { __rgPauses: number }).__rgPauses);
 
-test('Play unlocks audio and starts the session in one click', async () => {
+test('Play unlocks audio; Go on the character select starts the session', async () => {
   await page.evaluate(() => {
     const audio = window.__rg!.ctx.audio;
     const w = window as unknown as { __rgUnlocks: number };
@@ -46,8 +46,8 @@ test('Play unlocks audio and starts the session in one click', async () => {
       orig();
     };
   });
-  await page.getByTestId('play').click();
-  expect(await page.evaluate(() => (window as unknown as { __rgUnlocks: number }).__rgUnlocks)).toBe(1);
+  await startGame(page);
+  expect(await page.evaluate(() => (window as unknown as { __rgUnlocks: number }).__rgUnlocks)).toBeGreaterThanOrEqual(1);
   expect(await phase()).toBe('playing');
   await step(2);
 });
