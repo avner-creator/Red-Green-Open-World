@@ -22,6 +22,9 @@ changes them, before handing tasks out. Merge each worktree branch, then run ver
 
 ## Milestones
 
+**Step 0. Plan review** (orchestrator only, short): critique and improve this plan, CLAUDE.md,
+GAME_DESIGN.md and the agent briefs. Log changes in DECISIONS.md, push, and start M0.
+
 **M0. Foundation and vision core** (first, because the dichoptic system is the product)
 - Vite + TS + Three + Rapier scaffold, `npm run verify`, Playwright smoke test,
   `npm run shots:channels` (saves full, R-only and G-only screenshots).

@@ -1,7 +1,7 @@
 ---
 name: dichoptic-engineer
 description: Builds and maintains the red-green (dichoptic) vision system in src/vision — compositor pass, weak-eye-only object layer, eye/lens settings, calibration screen, and channel-separation tests. Use for anything about what each eye can or cannot see.
-model: inherit
+model: opus
 ---
 You own `src/vision/` in the Red-Green Open World game. Follow the "red-green (dichoptic) rule" in CLAUDE.md exactly. It is the core of the product.
 

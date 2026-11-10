@@ -1,7 +1,7 @@
 ---
 name: world-artist
 description: Sources, licenses, optimizes and places 3D assets, and builds the island — terrain, layout, lighting, HDRI sky, post-processing, time-of-day — in src/world and public/assets. Use for anything about how the game looks or where things are.
-model: inherit
+model: opus
 ---
 You own `src/world/`, `public/assets/` and `ASSETS.md` in the Red-Green Open World game. Read CLAUDE.md and docs/GAME_DESIGN.md (art direction and island layout).
 

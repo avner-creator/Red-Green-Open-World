@@ -17,6 +17,12 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
   and keep working on everything else while you wait.
 - Don't fake progress. If something is blocked, log it in `docs/PROGRESS.md` under "Blocked"
   and move on to unblocked work.
+- **Speed matters.** Ship a playable build early and improve it in milestones. Run independent
+  work in parallel. Don't gold-plate: at most two polish passes per milestone, then move on.
+- **Models:** only the orchestrator (main session) runs on Fable 5.2. Subagents run on the model
+  in their `.claude/agents/*.md` frontmatter (Opus or Sonnet). Never pass `model: "fable"` and
+  never use `subagent_type: "fork"` (a fork inherits Fable). Use the named subagents, or
+  `general-purpose` with `model: "sonnet"` for ad-hoc tasks.
 - The user authorized the orchestrator to merge into `main` and push. Netlify deploys `main` to
   https://red-green-open-world.netlify.app. Only push `main` when `npm run verify` passes.
 
