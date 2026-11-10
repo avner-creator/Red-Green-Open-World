@@ -10,6 +10,8 @@ import type { Cell, SummaryModel } from './summaryModel';
 export interface GlassesSummaryScreen extends Screen {
   /** Rebuild from the vision system's current tally. */
   fill(): void;
+  /** Gamepad stick / d-pad scrolling while shown. */
+  update(dt: number): void;
 }
 
 const cellEl = (tag: 'td' | 'th', c: Cell, cls = ''): HTMLElement =>
@@ -74,6 +76,15 @@ export function createGlassesSummary(ctx: GameContext, o: { back(): void }): Gla
   return {
     el,
     fill,
+    update(dt) {
+      const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+      const pad = [...pads].find((p) => p && p.connected);
+      if (!pad) return;
+      const dpad = (pad.buttons[13]?.pressed ? 1 : 0) - (pad.buttons[12]?.pressed ? 1 : 0);
+      const ay = pad.axes[1] ?? 0;
+      const v = dpad || (Math.abs(ay) > 0.3 ? ay : 0);
+      if (v) scroll.scrollTop += v * dt * 600;
+    },
     onShow() {
       fill();
       return back;

@@ -21,7 +21,9 @@ export const GLASSES_CSS = `
 .rg .glsum .dots{letter-spacing:.1em;margin-left:calc(var(--u)*.4)}
 .rg .glsum .empty{display:flex;align-items:center;gap:calc(var(--u)*1.6);justify-content:center;padding:calc(var(--u)*4) calc(var(--u)*2);text-align:center;font-size:calc(var(--u)*3.2)}
 .rg .glsum .empty .ic{font-size:1.8em;color:var(--y)}
-@media (max-height:460px){.rg .settings .panes .pane{gap:calc(var(--u)*1)}.rg .settings .panes .srow{padding:calc(var(--u)*.7) calc(var(--u)*1.4) calc(var(--u)*.9);gap:calc(var(--u)*.3)}.rg .settings .bar{margin-bottom:calc(var(--u)*.8)}.rg .settings .panes .sl input[type=range]{height:max(30px,calc(var(--u)*4))}.rg .settings .panes .srow .b{min-height:max(40px,calc(var(--u)*5.6))}}
+@media (max-height:460px){.rg .settings .panes .pane{gap:calc(var(--u)*1)}.rg .settings .panes .srow{padding:calc(var(--u)*.7) calc(var(--u)*1.4) calc(var(--u)*.9);gap:calc(var(--u)*.3)}.rg .settings .bar{margin-bottom:calc(var(--u)*.8)}.rg .settings .panes .sl input[type=range]{height:max(28px,calc(var(--u)*3.6))}.rg .settings .panes .srow .b{min-height:max(40px,calc(var(--u)*5.6))}}
+.rg .srow.gl .sub{margin-top:calc(var(--u)*.5);line-height:1.25;font-size:.6em}
+.rg .srow.gl .choices{margin-top:calc(var(--u)*.6)}
 .rg .srow .b[aria-pressed] .onoff{min-width:2.4ch;text-align:center}
 `;
 
