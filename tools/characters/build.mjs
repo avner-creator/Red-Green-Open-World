@@ -4,7 +4,8 @@
 //
 // Usage:  cd tools/characters && npm install && npm run build      (writes public/assets/characters)
 //         node build.mjs frog rex                                  (only some characters)
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
@@ -37,6 +38,10 @@ async function fetchCached(src) {
     const res = await fetch(src.url);
     if (!res.ok) throw new Error(`download failed ${res.status} ${src.url}`);
     writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  }
+  if (src.sha256) {
+    const got = createHash('sha256').update(readFileSync(file)).digest('hex');
+    if (got !== src.sha256) throw new Error(`checksum mismatch for ${src.url}: ${got}`);
   }
   return file;
 }

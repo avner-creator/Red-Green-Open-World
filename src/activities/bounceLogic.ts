@@ -34,6 +34,20 @@ export function nextBounceApex(prev: number, held: boolean, airPeak = 0): number
   return next < BOUNCE.stopBelow ? 0 : next;
 }
 
+/**
+ * Apply a character skill's bounce boost (`player.skill.bounceBoost`): 1 = none, 1.25 after a
+ * super-bounce, Infinity after a ground-pound landing (= straight to `max`).
+ */
+export function boostedApex(apex: number, boost: number, max: number = BOUNCE.maxHeight): number {
+  if (!(boost > 1) || apex <= 0) return apex;
+  return Math.min(max, apex * boost);
+}
+
+/** Apex of a bounce-pad launch with a skill boost: +25% at most, so the exact pad arc still lands. */
+export function boostedPadApex(apex: number, boost: number): number {
+  return boostedApex(apex, Math.min(boost, PADS.maxBoost), apex * PADS.maxBoost);
+}
+
 /** Awards each height threshold once until `reset`. */
 export class ThresholdAwards {
   private done = new Set<number>();

@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
 };
 
 export const SETTINGS_KEY = 'rgow.settings.v1';
+/** The remembered character pick (written by the character select, read by the player at boot). */
+export const CHARACTER_KEY = 'rgow.character.v1';
 
 export const WORLD = {
   size: 400,

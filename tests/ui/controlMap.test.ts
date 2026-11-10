@@ -54,3 +54,14 @@ describe('control glyph table vs src/core/input.ts', () => {
     }
   });
 });
+
+describe('touch column', () => {
+  it('every control says what the touch HUD shows (or null for none)', () => {
+    for (const [id, d] of Object.entries(CONTROL_MAP)) expect('touch' in d, id).toBe(true);
+    expect(CONTROL_MAP.move.touch).toBe('stick');
+    expect(CONTROL_MAP.jump.touch).toBe('jump');
+    expect(CONTROL_MAP.respawn.touch).toBeNull(); // no respawn button on touch
+    expect(CONTROL_MAP.skill.touch).toBeTruthy(); // touch Skill and Emote buttons exist
+    expect(CONTROL_MAP.emote.touch).toBe('sparkle');
+  });
+});

@@ -131,6 +131,7 @@ export const UI_CSS = `
   border:calc(var(--u)*.5) solid #000;box-shadow:0 0 0 calc(var(--u)*.35) #fff}
 .rg .gp.pill2{width:auto;padding:0 .5em;border-radius:.6em}
 .rg .gp.press{animation:rg-key 1.1s ease-in-out infinite}
+.rg .gp.tb{width:1.7em;height:1.7em;background:#1b2142;border-color:#fff;box-shadow:0 0 0 calc(var(--u)*.35) #000}.rg .gp.tb .ic{width:1.05em;height:1.05em}
 .rg .tut{--u:clamp(3.8px,.82vmin,18px);position:absolute;left:calc(var(--u)*3);bottom:calc(var(--u)*3);display:flex;gap:calc(var(--u)*2);align-items:flex-end;padding:calc(var(--u)*1.2) calc(var(--u)*2);
   background:linear-gradient(180deg,#1d2346e6,#0b0f22e6);border:calc(var(--u)*.6) solid #fff;border-radius:calc(var(--u)*2.8);box-shadow:0 0 0 calc(var(--u)*.45) #000,0 calc(var(--u)*.8) calc(var(--u)*2) rgba(0,0,0,.5);
   font-size:calc(var(--u)*3);opacity:0;pointer-events:none;transition:opacity .6s;max-width:28vw}

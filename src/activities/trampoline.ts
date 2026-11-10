@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { CAMERA } from '../config';
 import type { GameContext } from '../types';
 import { BOUNCE, MAT } from './constants';
-import { ThresholdAwards, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
+import { ThresholdAwards, boostedApex, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
 import type { ThrillConfetti } from './thrillConfetti';
 import { getStuntGate } from './stuntGate';
@@ -376,7 +376,21 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     },
   };
 
-  function begin(apex: number, vx: number, vz: number, from: Flight): void {
+  /** Extra fanfare for a skill-boosted first bounce (a ground-pound goes straight to the top). */
+  function boostFx(boost: number, apex: number): void {
+    const p = ctx.player.position;
+    spawnRings(1.4);
+    ctx.cameraRig.shake(boost === Infinity ? 0.7 : 0.45);
+    ctx.audio.play('fanfare', { volume: boost === Infinity ? 0.9 : 0.6 });
+    ctx.audio.play('whoosh', { volume: Math.min(1, apex / 45), pitch: 0.85 });
+    confetti.burst(new THREE.Vector3(p.x, p.y + 1, p.z), boost === Infinity ? 140 : 60);
+  }
+
+  function begin(rawApex: number, vx: number, vz: number, from: Flight): void {
+    // Character skill boost (super-bounce +25%, ground-pound = maximum): read it before the flight
+    // takes over, because taking over clears it.
+    const boost = ctx.player.skill.bounceBoost;
+    const apex = boostedApex(rawApex, boost);
     ctx.player.position.y = matTopY;
     chainApex = apex;
     rest = false;
@@ -387,6 +401,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
       return;
     }
     boingFx(apex);
+    if (boost > 1) boostFx(boost, apex);
   }
 
   function update(dt: number): void {
