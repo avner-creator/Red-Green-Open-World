@@ -46,14 +46,15 @@ void main() {
   float a;
   float g;
 #if defined(KIND_FLY)
-  float pulse = 0.8 + 0.2 * sin(time * 4.0 + vGlow.z);
-  float core = smoothstep(0.4, 0.24, r);
-  float halo = exp(-r * r * 3.2) * 0.7 * pulse;
+  // Slow, bright breathing glow: a big soft halo around a solid core, little wings flapping.
+  float pulse = 0.72 + 0.28 * sin(time * 2.2 + vGlow.z);
+  float core = smoothstep(0.38, 0.25, r);
+  float halo = exp(-r * r * 3.4) * (0.5 + 0.35 * pulse) * (1.0 - smoothstep(0.85, 1.0, r));
   float flap = 0.55 + 0.45 * sin(time * 21.0 + vGlow.z * 3.0);
-  float wl = smoothstep(1.0, 0.75, ell(vec2(abs(p.x), p.y), vec2(0.46, 0.3), vec2(0.3, 0.08 + 0.16 * flap)));
-  float wing = wl * 0.55;
+  float wl = smoothstep(1.0, 0.75, ell(vec2(abs(p.x), p.y), vec2(0.38, 0.24), vec2(0.22, 0.06 + 0.11 * flap)));
+  float wing = wl * 0.6;
   a = max(max(core, halo), wing);
-  g = core > 0.01 ? mix(0.6, 1.0, core) : (wing > halo ? 0.55 : 0.85 * pulse);
+  g = core > 0.01 ? mix(0.75, 1.0, core) * (0.85 + 0.15 * pulse) : (wing > halo ? 0.6 : 0.95 * pulse);
 #elif defined(KIND_SPARK)
   float soft = exp(-r * r * 9.0);
   float rays = exp(-abs(p.x) * 14.0) * exp(-abs(p.y) * 2.6) + exp(-abs(p.y) * 14.0) * exp(-abs(p.x) * 2.6);
@@ -161,14 +162,18 @@ function starTexture(): THREE.Texture {
     grad.addColorStop(1, 'rgba(255,240,200,0)');
     g.fillStyle = grad;
     g.fillRect(0, 0, size, size);
-    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.fillStyle = 'rgba(255,255,255,1)';
+    g.strokeStyle = 'rgba(46,34,12,0.95)';
+    g.lineWidth = 3.5;
+    g.lineJoin = 'round';
     g.beginPath();
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-      const rr = i % 2 === 0 ? c * 0.95 : c * 0.16;
+      const rr = i % 2 === 0 ? c * 0.9 : c * 0.24;
       g.lineTo(c + Math.cos(a) * rr, c + Math.sin(a) * rr);
     }
     g.closePath();
+    g.stroke();
     g.fill();
   }
   const t = new THREE.CanvasTexture(canvas);
@@ -180,6 +185,8 @@ export interface Sparkle {
   readonly mesh: THREE.InstancedMesh;
   /** A burst of `n` stars around `pos` (world), flying up and out. */
   burst(pos: THREE.Vector3, n?: number, spread?: number): void;
+  /** A flat ring of stars racing outwards around `pos` (world). */
+  ring(pos: THREE.Vector3, n?: number, speed?: number): void;
   update(dt: number, camera: THREE.Camera): void;
   clear(): void;
   readonly busy: boolean;
@@ -193,16 +200,18 @@ interface Star {
   v: THREE.Vector3;
   s: number;
   spin: number;
+  /** Gravity on this star. */
+  g: number;
 }
 
 /**
- * Both-eye star sparkle (main scene): bright warm-white stars, additive, so they read as a
- * brightness flash in the R and the G channel alike. Use it only at both-eye objects.
+ * Both-eye star sparkle (main scene): warm-white stars with a dark outline, so they read as a
+ * brightness pop in the R and the G channel alike, on bright and dark backgrounds. Use it only at both-eye objects.
  */
 export function createSparkle(capacity: number, name: string, rng: () => number): Sparkle {
   const tex = starTexture();
   const geo = new THREE.PlaneGeometry(1, 1);
-  const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xfff4d6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xfff4d6, transparent: true, depthWrite: false, toneMapped: false });
   const mesh = new THREE.InstancedMesh(geo, mat, capacity);
   mesh.name = name;
   mesh.frustumCulled = false;
@@ -221,13 +230,19 @@ export function createSparkle(capacity: number, name: string, rng: () => number)
       for (let i = 0; i < n && stars.length < capacity; i++) {
         const a = (i / n) * Math.PI * 2 + rng() * 0.5;
         const sp = (1.4 + rng() * 1.6) * spread;
-        stars.push({ t: 0, life: 0.7 + rng() * 0.5, p: pos.clone(), v: new THREE.Vector3(Math.cos(a) * sp, 2.2 + rng() * 2.2, Math.sin(a) * sp), s: (0.22 + rng() * 0.2) * spread, spin: rng() * 6 });
+        stars.push({ t: 0, life: 0.7 + rng() * 0.5, p: pos.clone(), v: new THREE.Vector3(Math.cos(a) * sp, 2.2 + rng() * 2.2, Math.sin(a) * sp), s: (0.22 + rng() * 0.2) * spread, spin: rng() * 6, g: 5.5 });
+      }
+    },
+    ring(pos, n = 16, speed = 3.2) {
+      for (let i = 0; i < n && stars.length < capacity; i++) {
+        const a = (i / n) * Math.PI * 2;
+        stars.push({ t: 0, life: 0.75, p: pos.clone(), v: new THREE.Vector3(Math.cos(a) * speed, 0.3, Math.sin(a) * speed), s: 0.46, spin: i, g: 0 });
       }
     },
     update(dt, camera) {
       for (const s of stars) {
         s.t += dt;
-        s.v.y -= 5.5 * dt;
+        s.v.y -= s.g * dt;
         s.p.addScaledVector(s.v, dt);
       }
       for (let i = stars.length - 1; i >= 0; i--) if (stars[i].t >= stars[i].life) stars.splice(i, 1);

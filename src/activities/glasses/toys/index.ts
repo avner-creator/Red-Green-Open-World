@@ -60,7 +60,7 @@ export function create(env: MechanicEnv): Mechanic {
   ];
   const toys = buildToys(TOYS.perSession + 1);
   env.add(toys.mesh, VisionLayer.Both);
-  const sparkle = createSparkle(40, 'toys-sparkle', seededRng(0x70e5));
+  const sparkle = createSparkle(72, 'toys-sparkle', seededRng(0x70e5));
   env.add(sparkle.mesh, VisionLayer.Both);
 
   // ── weak eye: the paw prints ──
@@ -148,47 +148,63 @@ export function create(env: MechanicEnv): Mechanic {
 
   function drawToys(): void {
     let count = 0;
-    const toyScale = 1;
     for (let i = 0; i < Math.min(rounds.found, TOYS.perSession); i++) {
       slotWorld(i, p);
-      m.compose(p, q.setFromEuler(e.set(0.2 * (i - 1), site.yaw + i * 1.9, 0.15)), s.setScalar(toyScale));
+      m.compose(p, q.setFromEuler(e.set(0.2 * (i - 1), site.yaw + i * 1.9, 0.15)), s.setScalar(1));
       toys.set(count++, m, i);
     }
     if (rounds.state === 'found') {
       const end = rounds.trail().end;
       const t = rounds.t;
+      const S = TOYS.showScale;
+      const base = end.y + 0.32 * S; // toy centre resting on the ground
       const t1 = TOYS.popSeconds;
-      const t2 = t1 + TOYS.hopSeconds;
-      const t3 = t2 + TOYS.flightSeconds;
+      const t2 = t1 + TOYS.launchSeconds;
+      const t3 = t2 + TOYS.holdSeconds;
+      const t4 = t3 + TOYS.flightSeconds;
       let spin = 0;
+      let tumble = 0;
       let sx = 1;
       let sy = 1;
+      let size = S;
       if (t < t1) {
+        // Bursts out of the ground: squashed, then stretched.
         const k = t / t1;
-        p.set(end.x, end.y - 0.3 + 0.55 * easeOutBack(k), end.z);
-        sy = 0.6 + 0.6 * k;
-        sx = 1.25 - 0.25 * k;
+        p.set(end.x, base - 0.5 * S + 0.5 * S * easeOutBack(k), end.z);
+        sy = 0.55 + 0.7 * k;
+        sx = 1.3 - 0.4 * k;
       } else if (t < t2) {
-        const k = (t - t1) / TOYS.hopSeconds;
-        p.set(end.x, end.y + 0.25 + Math.sin(k * Math.PI) * 0.6, end.z);
-        sy = 1 + Math.sin(k * Math.PI) * 0.2;
-        sx = 1 - Math.sin(k * Math.PI) * 0.1;
-        spin = k * Math.PI;
+        // Launch 2.8 m up with a spin, stretched along the way.
+        const k = (t - t1) / TOYS.launchSeconds;
+        p.set(end.x, base + TOYS.launchHeight * (1 - (1 - k) * (1 - k)), end.z);
+        sy = 1.25 - 0.25 * k;
+        sx = 0.88 + 0.12 * k;
+        spin = k * Math.PI * 3;
+        tumble = Math.sin(k * Math.PI) * 0.5;
+      } else if (t < t3) {
+        // Hold at the top for a beat: a happy wobble.
+        const k = (t - t2) / TOYS.holdSeconds;
+        p.set(end.x, base + TOYS.launchHeight + Math.sin(k * Math.PI * 2) * 0.08, end.z);
+        sy = 1 + Math.sin(k * Math.PI * 4) * 0.07;
+        sx = 1 - Math.sin(k * Math.PI * 4) * 0.05;
+        spin = Math.PI * 3 + k * 0.8;
       } else {
-        const k = Math.min(1, (t - t2) / TOYS.flightSeconds);
+        const k = Math.min(1, (t - t3) / TOYS.flightSeconds);
         const ke = k * k * (3 - 2 * k);
         slotWorld(rounds.found, n);
-        const lift = Math.max(2.5, Math.hypot(n.x - end.x, n.z - end.z) * 0.18);
-        p.set(end.x + (n.x - end.x) * ke, end.y + 0.25 + (n.y - end.y - 0.25) * ke + Math.sin(k * Math.PI) * lift, end.z + (n.z - end.z) * ke);
-        spin = Math.PI + k * Math.PI * 4;
-        if (t >= t3) {
-          const kk = Math.min(1, (t - t3) / 0.35);
+        const top = base + TOYS.launchHeight;
+        const lift = Math.max(1.5, Math.hypot(n.x - end.x, n.z - end.z) * 0.12);
+        p.set(end.x + (n.x - end.x) * ke, top + (n.y - top) * ke + Math.sin(k * Math.PI) * lift, end.z + (n.z - end.z) * ke);
+        size = S + (1 - S) * ke;
+        spin = Math.PI * 3.25 + k * Math.PI * 4;
+        if (t >= t4) {
+          const kk = Math.min(1, (t - t4) / 0.35);
           sy = 1 - Math.sin(kk * Math.PI) * 0.25;
           sx = 1 + Math.sin(kk * Math.PI) * 0.15;
           spin = 0;
         }
       }
-      m.compose(p, q.setFromEuler(e.set(0, site.yaw + spin + rounds.found * 1.9, 0)), s.set(sx * toyScale, sy * toyScale, sx * toyScale));
+      m.compose(p, q.setFromEuler(e.set(tumble, site.yaw + spin + rounds.found * 1.9, 0)), s.set(sx * size, sy * size, sx * size));
       toys.set(count++, m, rounds.found);
     }
     toys.commit(count);
@@ -236,12 +252,14 @@ export function create(env: MechanicEnv): Mechanic {
   function update(dt: number): void {
     time += dt;
     const pp = ctx.player.position;
+    const showT = rounds.state === 'found' ? rounds.t : -1;
     for (const ev of rounds.update(dt, pp.x, pp.z)) {
       if (ev.type === 'print') passT[ev.index] = 0;
       else if (ev.type === 'found') {
         const end = rounds.trail().end;
         ctx.audio.play('boing', { pitch: 2.1, volume: 0.8 }); // squeak
         sparkle.burst(p.set(end.x, end.y + 0.4, end.z), 12, 1);
+        sparkle.ring(p.set(end.x, end.y + 0.15, end.z), 14, 2.6);
         env.pay(ev.gems);
         env.result(ev.tier, true);
       } else if (ev.type === 'landed') {
@@ -255,6 +273,15 @@ export function create(env: MechanicEnv): Mechanic {
         }
       } else if (ev.type === 'miss') env.result(ev.tier, false);
       else if (ev.type === 'trail') passT.fill(-1);
+    }
+    // At the top of the pop: a big both-eye sparkle ring around the toy (it is found now).
+    const top = TOYS.popSeconds + TOYS.launchSeconds;
+    if (rounds.state === 'found' && showT >= 0 && showT < top && rounds.t >= top) {
+      const end = rounds.trail().end;
+      p.set(end.x, end.y + 0.32 * TOYS.showScale + TOYS.launchHeight, end.z);
+      sparkle.ring(p, 18, 3.4);
+      sparkle.burst(p, 8, 0.9);
+      ctx.audio.play('boing', { pitch: 2.4, volume: 0.7 });
     }
     for (let i = 0; i < passT.length; i++) if (passT[i] >= 0) passT[i] += dt;
     if (landedT >= 0) landedT += dt;

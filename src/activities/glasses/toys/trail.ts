@@ -84,7 +84,7 @@ interface Attempt {
 
 function walk(w: TrailWorld, start: XZ, angle: number, bend: number, freq: number, phase: number, count: number, spacing: number): Attempt {
   const length = spacing * (count - 1);
-  const total = length + TRAIL.endBeyond;
+  const total = length;
   const step = TRAIL.sampleStep;
   let x = start.x;
   let z = start.z;
@@ -116,8 +116,20 @@ function walk(w: TrailWorld, start: XZ, angle: number, bend: number, freq: numbe
     if (Math.abs(h - prevH) > TRAIL.maxGrade * ds + 0.02) return fail();
     prevH = h;
   }
-  if (w.blockedBetween?.(lastPrint.x, lastPrint.z, x, z)) return fail();
-  return { prints, end: { x, y: surface(w, x, z), z, yaw: heading(total) }, ok: prints.length === count };
+  if (prints.length !== count) return fail();
+  // The hidden spot is BESIDE the last print (so the toy pops up next to the hero, not behind them).
+  const last = prints[count - 1];
+  const sides = bend >= 0 ? [1, -1] : [-1, 1];
+  for (const side of sides) {
+    const ex = last.x + Math.cos(last.yaw) * side * TRAIL.endBeside;
+    const ez = last.z - Math.sin(last.yaw) * side * TRAIL.endBeside;
+    if (pointReject(w, ex, ez)) continue;
+    const ey = surface(w, ex, ez);
+    if (Math.abs(ey - last.y) > TRAIL.maxGrade * TRAIL.endBeside + 0.02) continue;
+    if (w.blockedBetween?.(last.x, last.z, ex, ez)) continue;
+    return { prints, end: { x: ex, y: ey, z: ez, yaw: last.yaw }, ok: true };
+  }
+  return fail();
 }
 
 /**
@@ -275,7 +287,7 @@ export class ToyRounds {
     }
     this.t += dt;
     if (this.state === 'found') {
-      const land = TOYS.popSeconds + TOYS.hopSeconds + TOYS.flightSeconds;
+      const land = TOYS.popSeconds + TOYS.launchSeconds + TOYS.holdSeconds + TOYS.flightSeconds;
       if (this.t - dt < land && this.t >= land) ev.push({ type: 'landed', toy: this.found });
       if (this.t >= TOYS.nextAfterFind) {
         this.found++;

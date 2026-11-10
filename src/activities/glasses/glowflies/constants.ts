@@ -11,8 +11,8 @@ export const FLIES = {
   boardClear: 1.5,
   jarClear: 1.3,
   /** Flight height above the ground (the whole path stays inside). */
-  minHeight: 0.8,
-  maxHeight: 2.2,
+  minHeight: 1.0,
+  maxHeight: 2.4,
   /** Catch distance from the hero's chest (metres). */
   catchRadius: 1.1,
   /** Player counts as "in the patch" within this distance of the centre (misses only count then). */
@@ -29,7 +29,7 @@ export const FLIES = {
   /** Base angular speed of the paths (rad/s); multiplied by the tier speed. */
   baseSpeed: 0.42,
   /** Fly glow quad size (metres) before the tier size. */
-  size: 1.8,
+  size: 2.4,
   /** Quick catches within this many seconds raise the chime's pitch. */
   comboWindow: 4,
   /** Bursts kept at once and particles per burst. */
