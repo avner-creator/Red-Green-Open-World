@@ -40,6 +40,49 @@ export interface ChannelAssignment {
   strong: Channel;
 }
 
+/** Kinds of glasses play (docs/GAME_DESIGN.md "Red-green depth pass"); used for scoring and the grown-up summary. */
+export type GlassesKind = 'find' | 'follow' | 'read' | 'tellApart' | 'timeIt' | 'lineUp' | 'popOut' | 'onHero';
+
+/** Difficulty tier of a weak-eye object: 1 = big, bright, slow … 3 = small, faint, fast (worth more). */
+export type GlassesTier = 1 | 2 | 3;
+
+/**
+ * Per-session challenge modifiers on top of the calibrated eye settings ("Auto challenge").
+ * Runtime only: never written to the saved settings. Every scale is 0..1 where 1 = exactly the
+ * calibrated value, so the picture can only get harder than calibrated, never stronger.
+ */
+export interface ChallengeModifiers {
+  /** Staircase step: 0 (calibrated) .. `maxLevel`. */
+  level: number;
+  maxLevel: number;
+  /** Effective weak-layer strength = settings.eye.weakStrength × weakScale. */
+  weakScale: number;
+  /** Effective strong-eye contrast = max(0.4, settings.eye.strongContrast × strongScale). */
+  strongScale: number;
+  /** Suggested size multiplier for weak-eye objects built with the vision toolkit. */
+  sizeScale: number;
+}
+
+/** Hits and misses of one mechanic at one tier in a session. */
+export interface GlassesTally {
+  /** Mechanic id, e.g. 'gems', 'glowflies', 'oddOneOut'. */
+  mechanic: string;
+  kind: GlassesKind;
+  tier: GlassesTier;
+  hits: number;
+  misses: number;
+}
+
+/** What the grown-up summary screen shows: plain counts, nothing else. */
+export interface GlassesSummary {
+  /** One row per mechanic and tier that had at least one result in the session. */
+  rows: readonly GlassesTally[];
+  /** Seconds played in the session the rows cover. */
+  seconds: number;
+  /** Auto challenge: was it on, where the staircase ended and how many steps it took each way. */
+  challenge: { enabled: boolean; level: number; maxLevel: number; stepsUp: number; stepsDown: number };
+}
+
 export type Quality = 'low' | 'medium' | 'high';
 
 export interface GameSettings {
@@ -50,6 +93,8 @@ export interface GameSettings {
   volumeMusic: number; // 0..1
   volumeSfx: number; // 0..1
   quality: Quality;
+  /** Grown-up option "Auto challenge": gently adapts weak-eye objects during a session. Default off (undefined). */
+  autoChallenge?: boolean;
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -86,6 +131,17 @@ export interface VisionApi {
   render(dt: number): void;
   /** Test/debug: hide or show every object of a layer. */
   setLayerVisible(layer: VisionLayer, visible: boolean): void;
+  /** Current per-session challenge modifiers (identity, level 0, when "Auto challenge" is off). */
+  challenge?(): Readonly<ChallengeModifiers>;
+  /** Test/debug: force modifiers (clamped to 0..1); null hands control back to the staircase. Never touches saved settings. */
+  setChallenge?(mods: Partial<Pick<ChallengeModifiers, 'level' | 'weakScale' | 'strongScale' | 'sizeScale'>> | null): void;
+  /**
+   * Fade a whole layer (`WeakOnly` or `StrongOnly`) to `fade` 0..1 (1 = normal), eased over `seconds`
+   * (default 0 = at once). Multiplies with the challenge modifiers; never touches the other channel.
+   */
+  setLayerFade?(layer: VisionLayer, fade: number, seconds?: number): void;
+  /** Glasses-play counts of the current (or the last finished) session, for the grown-up summary. */
+  sessionSummary?(): GlassesSummary;
   /** Open the calibration screen (DOM overlay + test patterns). Calls `onClose` when done. */
   openCalibration(onClose: () => void): void;
   dispose(): void;
@@ -115,6 +171,10 @@ export interface GameEvents {
   'player:land': { speed: number };
   'player:flop': Record<string, never>;
   'player:respawn': Record<string, never>;
+  /** Glasses play: something only the weak eye (or both eyes together) could do was hit or missed. */
+  'glasses:result': { mechanic: string; kind: GlassesKind; tier: GlassesTier; hit: boolean };
+  /** The "Auto challenge" staircase moved or was reset. */
+  'glasses:challenge': { modifiers: Readonly<ChallengeModifiers> };
   /** The playable character changed (after its model loaded and swapped in). */
   'player:character': { id: string };
   /** A character skill fired (double jump, glide start, dash, super-bounce spring, ground pound). */
