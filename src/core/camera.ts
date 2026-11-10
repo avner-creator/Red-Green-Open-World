@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { CAMERA, PLAYER } from '../config';
 import type { CameraApi, GameContext } from '../types';
 import { clamp, orbitOffset, resolveCameraDistance, steerOverrideYaw } from './camera-math';
-import { angleDelta, damp } from './motion-math';
+import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
 
 type Override = Parameters<CameraApi['setOverride']>[0];
@@ -63,6 +63,13 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   let fovKick = 0;
   const pivot = new THREE.Vector3();
   const target = new THREE.Vector3();
+  /** Last frame's follow target (the follow integrates its motion exactly within a frame). */
+  const prevTarget = new THREE.Vector3();
+  /**
+   * Smoothed player velocity for the look-ahead. The raw one is a per-frame finite difference
+   * (seated: Δseat/dt), which turns millimetre wobbles at 120-144 Hz into visible aim twitches.
+   */
+  const lookVel = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   const dir = new THREE.Vector3();
   const lookAt = new THREE.Vector3();
@@ -98,6 +105,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     yaw = newYaw;
     pitch = BASE_PITCH;
     playerPivot(pivot);
+    prevTarget.copy(pivot);
+    lookVel.set(0, 0, 0);
     distance = wantDistance;
     first = false;
   }
@@ -131,6 +140,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     playerPivot(target);
     if (first) {
       pivot.copy(target);
+      prevTarget.copy(target);
       first = false;
     }
 
@@ -159,16 +169,17 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         yaw += angleDelta(yaw, ctx.player.yaw) * damp(CAM.autoAlignRate * Math.min(1, hs / 6), dt);
       }
       // Smooth follow (tighter horizontally than vertically), with bounded lag.
-      const kh = damp(CAM.followRate, dt);
       // Fast falls (skydive, big bounces) tighten the vertical follow so the camera doesn't hang
       // metres above the player looking down on them.
-      const kv = damp(CAM.verticalFollowRate + Math.abs(ctx.player.velocity.y) * CAM.fallFollowGain, dt);
-      pivot.x += (target.x - pivot.x) * kh;
-      pivot.z += (target.z - pivot.z) * kh;
-      pivot.y += (target.y - pivot.y) * kv;
+      const rv = CAM.verticalFollowRate + Math.abs(ctx.player.velocity.y) * CAM.fallFollowGain;
+      pivot.x = followMoving(pivot.x, prevTarget.x, target.x, CAM.followRate, dt);
+      pivot.z = followMoving(pivot.z, prevTarget.z, target.z, CAM.followRate, dt);
+      pivot.y = followMoving(pivot.y, prevTarget.y, target.y, rv, dt);
       tmp.subVectors(pivot, target);
       if (tmp.length() > CAM.maxLag) pivot.copy(target).addScaledVector(tmp.normalize(), CAM.maxLag);
     }
+
+    prevTarget.copy(target);
 
     // Collision: ray from the pivot towards the wanted camera position.
     const off = orbitOffset(yaw, pitch, 1);
@@ -177,9 +188,10 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     distance = resolveCameraDistance(distance, wantDistance, hit ? hit.distance : null, CAM.collisionMargin, CAM.minDistance, CAM.easeOutRate, dt);
     camera.position.copy(pivot).addScaledVector(dir, distance);
 
+    lookVel.lerp(ctx.player.velocity, damp(CAM.lookVelRate, dt));
     lookAt.copy(pivot);
     if (lookAhead !== 0) {
-      tmp.copy(ctx.player.velocity).setY(ctx.player.velocity.y * 0.2);
+      tmp.copy(lookVel).setY(lookVel.y * 0.2);
       if (tmp.length() > 20) tmp.setLength(20);
       lookAt.addScaledVector(tmp, lookAhead * 0.1);
     }

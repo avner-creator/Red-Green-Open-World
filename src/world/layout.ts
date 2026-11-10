@@ -48,6 +48,10 @@ export const ANCHORS: Record<AnchorName, AnchorDef> = {
   sillyZone: { x: 8, z: 98, radius: 16, yaw: Math.PI, onLand: true },
   // Just south of Bouncy Park; yaw points the flight north over the park to the landing net.
   launchPads: { x: 80, z: 24, radius: 12, yaw: Math.atan2(3, -58), onLand: true },
+  // Gem shop kiosk set back on the east edge of the fountain plaza, between the park road and the east
+  // road, ahead-left of the spawn view. Every walking line from spawn to the roads stays ≥ 2.5 m clear
+  // of it (tests). +Z of the yaw is the counter side: it faces the plaza centre.
+  gearShack: { x: 14, z: 2, radius: 3, yaw: Math.atan2(-14, -4), onLand: true },
 };
 
 /** Where the rocket-pad flight lands (flat, clear spot inside Bouncy Park for the landing net). */

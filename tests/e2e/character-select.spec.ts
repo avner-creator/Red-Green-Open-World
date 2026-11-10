@@ -63,6 +63,7 @@ test.describe('character select', () => {
       window.__rg!.freeze(true);
       try {
         localStorage.removeItem('rgow.character.v1');
+        window.__rg!.ctx.profile.equip('character', 'frog');
       } catch {
         /* ignore */
       }
@@ -76,18 +77,20 @@ test.describe('character select', () => {
     await page.getByTestId('play').click();
     await expect(page.getByTestId('csel-go')).toBeVisible();
     expect(await phase(page)).toBe('title');
-    await settle(page, 'robot');
-    await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
-    await save(page, 'select-robot');
-
-    // Browse with the keyboard (the focused chip is the selected one).
-    await page.keyboard.press('ArrowRight');
+    // A new profile starts with the frog (the first-run default).
     await settle(page, 'frog');
     await expect(page.getByTestId('csel-name')).toHaveText('HOPPER');
     await expect(page.getByTestId('csel-skill')).toHaveAttribute('data-skill', 'superBounce');
     await save(page, 'select-frog');
 
+    // Browse with the keyboard (the focused chip is the selected one).
+    await page.keyboard.press('ArrowLeft');
+    await settle(page, 'robot');
+    await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
+    await save(page, 'select-robot');
+
     // A priced character shows a padlock and the price, can be previewed, and cannot start.
+    await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
     await settle(page, 'panda');
     await expect(page.getByTestId('csel-locked')).toBeVisible();
@@ -100,54 +103,43 @@ test.describe('character select', () => {
     // Back returns to the title and the saved (default) hero comes back.
     await page.getByTestId('csel-back').click();
     await expect(page.getByTestId('play')).toBeVisible();
-    await settle(page, 'robot');
+    await settle(page, 'frog');
   });
 
-  test('choosing the frog starts the session as the frog, and a reload preselects it', async () => {
+  test('choosing the robot starts the session as the robot, and a reload preselects it', async () => {
     await page.getByTestId('play').click();
-    await page.getByTestId('csel-frog').click();
-    await settle(page, 'frog');
+    await page.getByTestId('csel-robot').click();
+    await settle(page, 'robot');
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
-    await settle(page, 'frog');
-    expect(await page.evaluate(() => localStorage.getItem('rgow.character.v1'))).toBe('frog');
+    await settle(page, 'robot');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('robot');
     await step(page, 5);
     await expect(page.getByTestId('skill-chip')).toBeVisible();
-    await expect(page.getByTestId('skill-chip')).toHaveAttribute('data-skill', 'superBounce');
+    await expect(page.getByTestId('skill-chip')).toHaveAttribute('data-skill', 'doubleJump');
     await save(page, 'hud-skill-chip');
 
     await page.reload();
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
     await page.evaluate(() => window.__rg!.freeze(true));
-    await settle(page, 'frog');
+    await settle(page, 'robot');
     await page.getByTestId('play').click();
-    await expect(page.getByTestId('csel-frog')).toHaveClass(/sel/);
-    await expect(page.getByTestId('csel-name')).toHaveText('HOPPER');
+    await expect(page.getByTestId('csel-robot')).toHaveClass(/sel/);
+    await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
     // Play, Go: two clicks for a returning player.
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
-    expect(await charId(page)).toBe('frog');
+    expect(await charId(page)).toBe('robot');
   });
 
   test('a character that can be afforded unlocks with a celebration and then starts', async () => {
     await page.evaluate(() => window.__rg!.ctx.session.toTitle());
     await step(page, 5);
-    // A fake economy: 30 gems, Mochi (25) is for sale.
+    // The real wallet: a fresh profile with 30 gems; Mochi (25) is for sale.
     await page.evaluate(() => {
-      const owned = new Set(['robot', 'frog']);
-      let gems = 30;
-      const set = (window as unknown as { __rgSetCharacterAccess: (a: unknown) => void }).__rgSetCharacterAccess;
-      set({
-        owns: (id: string) => owned.has(id),
-        canAfford: (id: string) => !owned.has(id) && id === 'panda' && gems >= 25,
-        buy: (id: string) => {
-          if (owned.has(id) || id !== 'panda' || gems < 25) return false;
-          gems -= 25;
-          owned.add(id);
-          return true;
-        },
-        wallet: () => gems,
-      });
+      const p = window.__rg!.ctx.profile;
+      p.reset();
+      p.earn(30, 'test');
     });
     await page.getByTestId('play').click();
     await page.getByTestId('csel-panda').click();
@@ -163,7 +155,26 @@ test.describe('character select', () => {
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
     await settle(page, 'panda');
-    expect(await page.evaluate(() => localStorage.getItem('rgow.character.v1'))).toBe('panda');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('panda');
+    // Same wallet and profile as the shop: paid, owned, worn, and the shop card says so.
+    expect(await page.evaluate(() => {
+      const p = window.__rg!.ctx.profile;
+      return { wallet: p.wallet, owns: p.owns('panda'), worn: p.equipped('character') };
+    })).toEqual({ wallet: 5, owns: true, worn: 'panda' });
+    await page.evaluate(() => {
+      window.__rg!.ctx.events.emit('shop:open', {});
+      window.__rg!.step(1 / 60, 3);
+    });
+    await page.getByTestId('shop-tab-character').click();
+    await expect(page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="panda"]')).toHaveAttribute('data-state', 'equipped');
+    await expect(page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="bee"]')).toHaveAttribute('data-state', 'poor');
+    await page.getByTestId('shop-close').click();
+    await page.evaluate(() => window.__rg!.step(1 / 60, 3));
+    expect(await phase(page)).toBe('playing');
+    // A wipe locks the paid heroes again and swaps back to a free one.
+    await page.evaluate(() => window.__rg!.ctx.profile.reset());
+    await settle(page, 'frog');
+    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('panda'), window.__rg!.ctx.profile.equipped('character')])).toEqual([false, 'frog']);
     expect(consoleErrors).toEqual([]);
   });
 });

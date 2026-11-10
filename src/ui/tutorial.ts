@@ -6,6 +6,7 @@ import type { ControlId } from './controlGlyphs';
 import { cap } from './glyphs';
 import { icon } from './icons';
 import { pictogram } from './wayIcons';
+import { skillPicto } from './skillPicto';
 
 export const TUTORIAL_SECONDS = 6;
 
@@ -29,8 +30,9 @@ export function createTutorial(ctx: GameContext): Tutorial {
 
   const build = (): void => {
     clear(el);
+    // The skill shows the hero's own skill pictogram (sprint already has the lightning bolt).
     const group = (id: ControlId, device: 'keyboard' | 'gamepad'): HTMLElement =>
-      h('div', 'tgroup', {}, controlKeys(id, device, true), pictogram(controlIcon(id)));
+      h('div', 'tgroup', {}, controlKeys(id, device, true), id === 'skill' ? skillPicto(ctx.player.skill.id, true) : pictogram(controlIcon(id)));
     if (gamepad) {
       el.append(...(['move', 'look', 'jump', 'use', 'sprint', 'skill', 'emote'] as const).map((id) => group(id, 'gamepad')));
       return;

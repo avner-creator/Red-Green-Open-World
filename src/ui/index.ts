@@ -4,6 +4,7 @@
  */
 import type { GameContext, SessionPhase, UiApi } from '../types';
 import { injectCss } from './css';
+import { createEconTracker } from './econState';
 import { h } from './dom';
 import { icon } from './icons';
 import { setCharacterAccess } from './characterAccess';
@@ -16,6 +17,7 @@ import { createNav } from './nav';
 import { createCredits, createEnd, createPause, createTitle } from './screens';
 import type { Actions, Screen } from './screens';
 import { createSettings } from './settingsScreen';
+import { createShop } from './shop';
 import { createSkillChip } from './skillButton';
 import { createTouchUi } from './touch';
 import { createTutorial } from './tutorial';
@@ -27,6 +29,9 @@ export function createUi(ctx: GameContext): UiApi {
   root.classList.add('rg');
 
   let calibrating = false;
+  /** The Gear Shack is open: the session is paused and the shop is the base screen. */
+  let shopOpen = false;
+  const tracker = createEconTracker(ctx);
   const stack: Screen[] = [];
   let shown: Screen | null = null;
   let wasMenu = false;
@@ -47,6 +52,12 @@ export function createUi(ctx: GameContext): UiApi {
   const resume = (): void => {
     ctx.session.resume();
     capture();
+  };
+  const closeShop = (): void => {
+    if (!shopOpen) return;
+    shopOpen = false;
+    if (ctx.session.state.phase === 'paused') resume();
+    else render();
   };
   const pop = (): void => {
     stack.pop();
@@ -70,15 +81,21 @@ export function createUi(ctx: GameContext): UiApi {
       stack.push(credits);
       render();
     },
+    openWardrobe: () => {
+      stack.push(wardrobe);
+      render();
+    },
   };
 
   const openSelect = (): void => {
     stack.push(select);
     render();
   };
-  const title = createTitle(actions);
+  const title = createTitle(ctx, actions);
   const pause = createPause(actions);
-  const end = createEnd(ctx, actions);
+  const end = createEnd(ctx, actions, tracker);
+  const shop = createShop(ctx, 'shop', closeShop);
+  const wardrobe = createShop(ctx, 'wardrobe', pop);
   const credits = createCredits({ back: pop });
   const settings = createSettings(ctx, {
     onClose: pop,
@@ -105,14 +122,17 @@ export function createUi(ctx: GameContext): UiApi {
   // Pause menu: change hero (same screen as the title's).
   const heroTile = h('button', 'b tile d', { type: 'button', 'aria-label': 'Hero', 'data-testid': 'pause-hero' }, h('span', 'pair', {}, icon('grownup'), icon('sparkle')), 'Hero');
   heroTile.addEventListener('click', openSelect);
-  pause.el.querySelector('.grid2')?.append(heroTile);
+  // Right after Resume: row 1 = Resume, Hero, Wardrobe; row 2 = Restart, Home, Grown-ups, "?".
+  const pauseGrid = pause.el.querySelector('.grid3, .grid2');
+  if (pauseGrid?.firstElementChild) pauseGrid.firstElementChild.after(heroTile);
+  else pauseGrid?.append(heroTile);
   applyStoredCharacter(ctx);
   // Tests plug a fake wallet in through this hook (the economy calls setCharacterAccess directly).
   if (ctx.testMode) (window as unknown as { __rgSetCharacterAccess?: typeof setCharacterAccess }).__rgSetCharacterAccess = setCharacterAccess;
   const wayfinding = createWayfinding(ctx, { pause, open: (s) => (stack.push(s), render()), back: pop });
-  const all: Screen[] = [title, pause, end, credits, settings, gate, select, wayfinding.screen];
+  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe, select, wayfinding.screen];
   for (const s of all) root.append(s.el);
-  const hud = createHud(ctx);
+  const hud = createHud(ctx, tracker);
   const skillChip = createSkillChip(ctx);
   const tutorial = createTutorial(ctx);
   const touch = createTouchUi(ctx);
@@ -122,7 +142,7 @@ export function createUi(ctx: GameContext): UiApi {
   const phase = (): SessionPhase => ctx.session.state.phase;
   const base = (): Screen | null => {
     const p = phase();
-    return p === 'title' ? title : p === 'paused' ? pause : p === 'ended' ? end : null;
+    return p === 'title' ? title : p === 'paused' ? (shopOpen ? shop : pause) : p === 'ended' ? end : null;
   };
   const top = (): Screen | null => {
     if (calibrating) return null;
@@ -155,15 +175,28 @@ export function createUi(ctx: GameContext): UiApi {
     layer: () => top()?.el ?? null,
     back: () => {
       if (stack.length) pop();
+      else if (shopOpen) closeShop();
       else if (phase() === 'paused') resume();
     },
     start: () => {
       if (stack.length) pop();
+      else if (shopOpen) closeShop();
       else if (phase() === 'paused') resume();
+    },
+    tab: (dir) => {
+      const t = top();
+      if (t === shop) shop.tab(dir);
     },
   });
 
+  ctx.events.on('shop:open', () => {
+    if (phase() !== 'playing' || calibrating) return;
+    shopOpen = true;
+    ctx.session.pause();
+  });
+
   ctx.events.on('session:phase', (e) => {
+    if (e.phase !== 'paused') shopOpen = false;
     select.leave();
     stack.length = 0;
     shown = null;
@@ -180,6 +213,10 @@ export function createUi(ctx: GameContext): UiApi {
     update(dt: number): void {
       const pad = nav.poll(dt);
       if (shown === gate) gate.update(dt, pad.aHeld);
+      if (shown === settings) settings.update(dt, pad.aHeld);
+      if (shown === shop) shop.update(dt);
+      if (shown === wardrobe) wardrobe.update(dt);
+      if (shown === title) title.wallet.update(dt);
       if (shown === glassesSummary) glassesSummary.update(dt);
       hud.update(dt);
       skillChip.update();

@@ -8,14 +8,20 @@ import { pictogram } from './wayIcons';
 export const MODE_HINT_SECONDS = 6;
 
 /** Which hint strip a player mode gets (null: none; the on-foot tutorial owns walking). */
-export function hintKind(mode: PlayerMode): 'driving' | 'skydive' | null {
+export function hintKind(mode: PlayerMode): HintKind | null {
   if (mode === 'driving') return 'driving';
+  if (mode === 'riding') return 'riding';
   if (mode === 'external') return 'skydive';
   return null;
 }
 
-const ROWS: Record<'driving' | 'skydive', ControlId[]> = {
-  driving: ['steer', 'drive', 'hop', 'slide', 'horn', 'exit'],
+export type HintKind = 'driving' | 'riding' | 'skydive';
+
+const ROWS: Record<HintKind, ControlId[]> = {
+  // Four at most: a strip of tiny pictograms is noise (slide and horn are on the controls card).
+  driving: ['steer', 'drive', 'hop', 'exit'],
+  // Horse: walk/trot, gallop, jump, get off.
+  riding: ['move', 'sprint', 'jump', 'exit'],
   skydive: ['move', 'chute'],
 };
 
@@ -26,7 +32,7 @@ export interface ModeHints {
 
 export function createModeHints(ctx: GameContext): ModeHints {
   const el = h('div', 'wf-strip', { 'data-testid': 'mode-strip' });
-  let kind: 'driving' | 'skydive' | null = null;
+  let kind: HintKind | null = null;
   let t = 0;
   let device = ctx.input.state.device;
 
@@ -37,13 +43,13 @@ export function createModeHints(ctx: GameContext): ModeHints {
       el.append(h('div', 'tgroup', {}, controlKeys(id, device, true), pictogram(controlIcon(id))));
     }
   };
-  const set = (k: 'driving' | 'skydive' | null): void => {
+  const set = (k: HintKind | null): void => {
     kind = k;
     t = 0;
     device = ctx.input.state.device;
     el.dataset.kind = k ?? '';
     // The on-foot tutorial is hidden by CSS in these modes.
-    ctx.uiRoot.dataset.mode = k === 'driving' ? 'driving' : k === 'skydive' ? 'external' : 'walk';
+    ctx.uiRoot.dataset.mode = k === 'driving' || k === 'riding' ? 'driving' : k === 'skydive' ? 'external' : 'walk';
     build();
     el.classList.toggle('on', k !== null);
   };

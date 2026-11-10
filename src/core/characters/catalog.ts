@@ -241,4 +241,5 @@ export function getCharacter(id: CharacterId): CharacterDef {
   return c;
 }
 
-export const DEFAULT_CHARACTER: CharacterId = 'robot';
+/** First-run hero for a new profile (owner's pick: Hopper the frog). Saved picks are kept. */
+export const DEFAULT_CHARACTER: CharacterId = 'frog';

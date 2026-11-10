@@ -51,6 +51,8 @@ export interface NavHost {
   back(): void;
   /** Gamepad Start: resume or similar. */
   start(): void;
+  /** Previous/next tab (gamepad LB/RB, keys Q/E or PageUp/PageDown). Optional. */
+  tab?(dir: 1 | -1): void;
   root: HTMLElement;
 }
 
@@ -80,6 +82,7 @@ function adjustSlider(el: HTMLInputElement, dir: 1 | -1): void {
 const isSlider = (e: Element | null): e is HTMLInputElement => e instanceof HTMLInputElement && e.type === 'range';
 
 const KEY_DIRS: Record<string, Dir> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+const KEY_TABS: Record<string, 1 | -1> = { KeyQ: -1, KeyE: 1, PageUp: -1, PageDown: 1 };
 
 export interface Nav {
   notePhaseChange(): void;
@@ -115,6 +118,9 @@ export function createNav(host: NavHost): Nav {
         setKb(true);
         if (isSlider(active) && (dir === 'left' || dir === 'right')) adjustSlider(active, dir === 'right' ? 1 : -1);
         else moveFocus(layer, dir);
+      } else if (KEY_TABS[ev.code] && host.tab) {
+        if (!ev.repeat) host.tab(KEY_TABS[ev.code] as 1 | -1);
+        setKb(true);
       } else if (ev.code === 'Escape') {
         ev.preventDefault();
       } else if (ev.code === 'Enter' || ev.code === 'Space') {
@@ -138,7 +144,7 @@ export function createNav(host: NavHost): Nav {
   const prev: boolean[] = [];
   let axisCool = 0;
   let sinceChange = 1;
-  const BTN = { a: 0, b: 1, start: 9, up: 12, down: 13, left: 14, right: 15 };
+  const BTN = { a: 0, b: 1, lb: 4, rb: 5, start: 9, up: 12, down: 13, left: 14, right: 15 };
   return {
     notePhaseChange(): void {
       sinceChange = 0;
@@ -173,6 +179,10 @@ export function createNav(host: NavHost): Nav {
         if (edge(BTN.a) && sinceChange > 0.2 && active && !active.hasAttribute('data-hold') && layer.contains(active)) active.click();
         if (edge(BTN.b) && sinceChange > 0.2) host.back();
         if (edge(BTN.start) && sinceChange > 0.3) host.start();
+        if (host.tab && sinceChange > 0.2) {
+          if (edge(BTN.lb)) host.tab(-1);
+          else if (edge(BTN.rb)) host.tab(1);
+        }
       }
       for (const i of Object.values(BTN)) prev[i] = down(i);
       return { aHeld: down(BTN.a) };

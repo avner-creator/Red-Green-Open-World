@@ -227,7 +227,7 @@ function treasureGeometry(): THREE.BufferGeometry {
     gem.scale(1, 1.25, 1);
     gem.rotateY(i);
     gem.translate(Math.cos(a) * 0.22, 0.13 + (i % 2) * 0.04, Math.sin(a) * 0.12);
-    parts.push(paint(gem.toNonIndexed(), shade(gemColors[i], 1.1)));
+    parts.push(paint(gem.index ? gem.toNonIndexed() : gem, shade(gemColors[i], 1.1)));
   }
   return merge(parts);
 }

@@ -69,3 +69,19 @@ export function cameraRelative(moveX: number, moveY: number, camYaw: number): { 
   const c = Math.cos(camYaw);
   return { x: s * moveY - c * moveX, z: c * moveY + s * moveX };
 }
+
+/**
+ * Exact first-order follow of a target that moved linearly from `prevTarget` to `target` during
+ * this frame: solves x' = rate·(T(t) − x) over `dt`. Unlike `x += (target − x)·damp(rate, dt)`,
+ * the steady lag behind a target moving at constant speed is the same (speed/rate) at every
+ * frame time, so a chase camera doesn't twitch when frame times vary (16/33 ms, 144 Hz, hitches).
+ * A jump bigger than `maxStep` (a teleport) is treated as a jump, not as speed.
+ */
+export function followMoving(x: number, prevTarget: number, target: number, rate: number, dt: number, maxStep = 3): number {
+  if (!(dt > 0) || !(rate > 0)) return x;
+  const moved = target - prevTarget;
+  const v = Math.abs(moved) > maxStep ? 0 : moved / dt;
+  const e0 = x - (Math.abs(moved) > maxStep ? target : prevTarget);
+  const lag = v / rate;
+  return target - lag + (e0 + lag) * Math.exp(-rate * dt);
+}

@@ -44,9 +44,9 @@ test('teleporting onto a gem collects it; restart brings gems back', async () =>
   expect(result.before).toBe(0);
   expect(result.after).toBe(1);
   expect(result.stays).toBe(1);
-  expect(result.total).toBe(result.spots);
+  expect(result.total).toBe(result.spots + (await page.evaluate(() => window.__rgEconomy!.megaSpots.length)));
   expect(result.events).toHaveLength(1);
-  expect(result.events[0]).toMatchObject({ id: 'gem0', count: 1, total: result.spots });
+  expect(result.events[0]).toMatchObject({ id: 'gem0', count: 1, total: result.total });
   expect(result.restarted).toBe(0);
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);

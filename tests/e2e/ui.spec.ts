@@ -78,11 +78,13 @@ test.describe('ui', () => {
       const rg = window.__rg!;
       rg.ctx.session.setTotals({ gems: 60 });
       rg.ctx.events.emit('gem:collected', { id: 'g1', count: 3, total: 60, position: rg.ctx.player.position.clone() });
+      rg.ctx.profile.earn(3, 'gem');
       rg.ctx.events.emit('stunt', { kind: 'bigBounce', value: 22, stars: 2 });
       rg.ctx.events.emit('ui:toast', { icon: 'key' });
       rg.step(1 / 60, 4, false);
     });
-    await expect(page.getByTestId('gems')).toHaveText('3/60');
+    // The wallet (gems are money) replaced the old n/total gem counter.
+    await expect(page.getByTestId('wallet').locator('.n')).toHaveText('3');
     await expect(page.getByTestId('stars')).toHaveText('2');
     await page.evaluate(() => window.__rg!.setRemaining(25));
     await step(page);
@@ -231,7 +233,8 @@ test.describe('ui', () => {
     // Play is focused; arrow moves to a corner button; Enter opens credits.
     await page.keyboard.press('ArrowDown');
     const id = await page.evaluate(() => (document.activeElement as HTMLElement).dataset.testid);
-    expect(['grownups', 'credits']).toContain(id);
+    // Below Play: the wardrobe button (title), then the corner buttons.
+    expect(['title-wardrobe', 'grownups', 'credits']).toContain(id);
     await page.getByTestId('credits').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('credits-back')).toBeVisible();

@@ -158,7 +158,11 @@ export interface GameEvents {
   /** Fired about 4×/s while playing. */
   'session:tick': { remaining: number; total: number };
   'settings:changed': { settings: Readonly<GameSettings> };
-  'gem:collected': { id: string; count: number; total: number; position: THREE.Vector3 };
+  'gem:collected': {
+    id: string; count: number; total: number; position: THREE.Vector3;
+    /** Stream C: gem value (1 or 5), mega gem, combo multiplier used (1..5), value × combo put in the wallet. */
+    value?: number; mega?: boolean; combo?: number; gain?: number;
+  };
   'gem:near': { id: string; distance: number };
   'chest:key': { chestId: string };
   'chest:opened': { chestId: string; outfitId: string };
@@ -184,6 +188,23 @@ export interface GameEvents {
   'vehicle:bump': { speed: number };
   /** Short icon+text toast on the HUD (text is optional; icons first). */
   'ui:toast': { icon: IconName; text?: string };
+  // Economy (stream C)
+  'wallet:changed': { wallet: number; delta: number; reason: WalletReason };
+  'gem:respawned': { id: string };
+  'combo:changed': { multiplier: number; streak: number };
+  /** The player used the kiosk; the UI opens the shop. */
+  'shop:open': Record<string, never>;
+  'shop:purchased': { itemId: string; price: number };
+  'item:unlocked': { itemId: string; source: UnlockSource };
+  'item:equipped': { slot: EquipSlot; itemId: string | null };
+  /** Ask for the equipped emote (or a given one) to play. */
+  'emote:play': { itemId?: string };
+  'ticket:paid': { kind: TicketKind; price: number; free: boolean };
+  'ticket:denied': { kind: TicketKind; price: number; wallet: number };
+  'mission:progress': { index: number; mission: MissionState };
+  'mission:completed': { index: number; mission: MissionState };
+  'mission:jackpot': { reward: number };
+  'profile:reset': Record<string, never>;
 }
 
 export interface EventBus {
@@ -216,6 +237,13 @@ export interface SessionState {
   /** Best value per stunt kind this session. */
   bestStunts: Partial<Record<StuntKind, number>>;
   outfits: string[];
+  // Economy counters (stream C), reset by `start()`.
+  /** Gems put in the wallet this session (bonuses included). */
+  earned?: number;
+  bestCombo?: number;
+  megaGems?: number;
+  missionsDone?: number;
+  spent?: number;
 }
 
 export interface SessionApi {
@@ -402,6 +430,11 @@ export interface PlayerApi {
   readonly skill: PlayerSkillView;
   /** Play the character's signature emote (walk mode, on the ground; moving cancels it). */
   emote(): void;
+  /**
+   * Stream C: a handler `emote()` asks first (after its own walk/ground checks). Return true when it
+   * played its own emote (the equipped shop emote); false falls back to the signature emote.
+   */
+  setEmoteHandler?(handler: (() => boolean) | null): void;
 }
 
 export interface VehicleApi {
@@ -438,7 +471,8 @@ export interface CameraApi {
 export type IconName =
   | 'gem' | 'key' | 'lock' | 'chest' | 'star' | 'car' | 'horse' | 'balloon' | 'parachute'
   | 'bungee' | 'trampoline' | 'rocket' | 'hat' | 'cape' | 'glasses' | 'paint' | 'exit'
-  | 'hand' | 'clock' | 'flop' | 'eye' | 'check';
+  | 'hand' | 'clock' | 'flop' | 'eye' | 'check'
+  | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet';
 
 export interface Interactable {
   id: string;
@@ -474,7 +508,9 @@ export interface Anchor {
 
 export type AnchorName =
   | 'spawn' | 'garage' | 'ranch' | 'trampoline' | 'bouncePads' | 'bungee' | 'bungeeLanding'
-  | 'balloon' | 'landingRings' | 'lakePlatform' | 'lighthouse' | 'sillyZone' | 'launchPads';
+  | 'balloon' | 'landingRings' | 'lakePlatform' | 'lighthouse' | 'sillyZone' | 'launchPads'
+  /** Gear Shack kiosk on the plaza; +Z of its yaw is the counter side where the player stands. */
+  | 'gearShack';
 
 export interface WorldApi {
   /** Island is `size`×`size` metres centred on the origin; water level is y = `waterLevel`. */
@@ -557,6 +593,10 @@ export interface GameContext {
   interactions: InteractionApi;
   vehicles: VehiclesApi;
   ui: UiApi;
+  /** Saved player profile (wallet, owned items). Created right after `session`. */
+  profile: ProfileApi;
+  /** Shop, tickets, combo, missions. Created just before `activities`. */
+  economy: EconomyApi;
 }
 
 // ───────────────────────────── Test hook (`?test=1`) ─────────────────────────────
@@ -580,6 +620,10 @@ export interface TestApi {
   teleport(x: number, y: number, z: number, yaw?: number): void;
   setEye(patch: Partial<EyeSettings>): void;
   setLayerVisible(layer: VisionLayer, visible: boolean): void;
+  /** Names of every object registered on a vision layer (`ctx.vision.add`), in order. */
+  layerObjects(): { name: string; layer: VisionLayer }[];
+  /** Hide/show every registered layer object whose name starts with `prefix`. Returns how many matched. */
+  setLayerObjectsVisible(prefix: string, visible: boolean): number;
   setRemaining(seconds: number): void;
   inject(patch: Partial<InputState> | null): void;
   state(): SessionState & { playerPosition: [number, number, number]; playerMode: PlayerMode };
@@ -591,4 +635,103 @@ declare global {
   interface Window {
     __rg?: TestApi;
   }
+}
+
+// ───────────────────────────── Economy (stream C) ─────────────────────────────
+
+export type EquipSlot = OutfitSlot | 'trail' | 'emote' | 'character';
+export type ShopCategory = 'character' | 'outfit' | 'paint' | 'trail' | 'emote';
+export type WalletReason = 'gem' | 'mission' | 'jackpot' | 'shop' | 'ticket' | 'test';
+export type UnlockSource = 'shop' | 'chest' | 'starter';
+export type TicketKind = 'balloon' | 'rocketPad';
+export type BuyResult = 'ok' | 'owned' | 'tooPoor' | 'notForSale' | 'unknown';
+export type MissionKind =
+  | 'collectGems' | 'megaGems' | 'combo' | 'bounceHeight' | 'openChest' | 'driveGems' | 'landRings' | 'stars';
+
+export interface ShopItem {
+  id: string;
+  category: ShopCategory;
+  slot: EquipSlot;
+  /** Short name, shown small. The icon and the preview are what matter. */
+  name: string;
+  icon: IconName;
+  /** Price in gems (5..100). 0 = free starter item (owned from the start). */
+  price: number;
+  /** Only given by treasure chests: never sold; shown with a chest badge until owned. */
+  chestOnly?: boolean;
+  /** Optional CSS colour for the shop card preview (paints, trails). */
+  swatch?: string;
+  /** Optional picture of the item for shop cards: returns an image URL (may be a `data:` URL, may render lazily on first call), or null if there is none. */
+  preview?(): string | null;
+}
+
+export interface ProfileData {
+  version: 1;
+  /** Gems the player can spend. Kept between sessions. */
+  wallet: number;
+  /** Every gem ever earned (never goes down). */
+  lifetimeGems: number;
+  /** Ids of owned shop items (starter items included). */
+  owned: string[];
+  equipped: Partial<Record<EquipSlot, string>>;
+  /** Sessions started. */
+  sessions: number;
+  bestCombo: number;
+}
+
+/** The player's saved profile (localStorage, wrapped in try/catch). Implemented in `src/profile.ts`. */
+export interface ProfileApi {
+  readonly data: Readonly<ProfileData>;
+  readonly wallet: number;
+  /** Add gems (amount > 0). Emits `wallet:changed`. */
+  earn(amount: number, reason: WalletReason): void;
+  /** Take gems if the wallet has enough; returns false (and changes nothing) if not. Emits `wallet:changed`. */
+  spend(amount: number, reason: WalletReason): boolean;
+  owns(itemId: string): boolean;
+  /** Mark an item as owned. Returns true if it was new (then emits `item:unlocked`). */
+  unlock(itemId: string, source: UnlockSource): boolean;
+  /** Save what is worn in a slot (null = nothing). Emits `item:equipped`. Does not check ownership. */
+  equip(slot: EquipSlot, itemId: string | null): void;
+  equipped(slot: EquipSlot): string | null;
+  /** Record a new best combo if higher. */
+  noteCombo(multiplier: number): void;
+  /** Count a started session. */
+  noteSession(): void;
+  /** Wipe the profile (grown-up settings). Emits `profile:reset`, `wallet:changed` and `item:equipped` (null) for every slot that was set. */
+  reset(): void;
+}
+
+export interface Mission {
+  id: string;
+  kind: MissionKind;
+  icon: IconName;
+  /** The number shown on the card ("10 gems", "30 m"). */
+  target: number;
+  /** Gem bonus paid when done. */
+  reward: number;
+}
+export interface MissionState extends Mission {
+  progress: number;
+  done: boolean;
+}
+
+/** Gems as money: shop, tickets, combo and missions. Implemented in `src/activities/economy/`. */
+export interface EconomyApi {
+  /** Everything the shop can show (registered items, in registration order). */
+  readonly catalog: readonly ShopItem[];
+  item(id: string): ShopItem | undefined;
+  /** Add items to the catalog (gear, and later the characters from the main build). Starter items (price 0) become owned. Ignores ids already registered. */
+  registerItems(items: readonly ShopItem[]): void;
+  /** Pay, unlock and equip in one go. Emits `shop:purchased` on 'ok'. */
+  buy(itemId: string): BuyResult;
+  /** Wear an owned item (or null to take the slot off). Returns false if not owned/unknown. */
+  equip(slot: EquipSlot, itemId: string | null): boolean;
+  /** What the next ride costs right now (0 = free, e.g. the first balloon ride of a session). */
+  ticketPrice(kind: TicketKind): number;
+  /** Call when the player starts a ride. true = go (paid or free; emits `ticket:paid`). false = not enough gems (emits `ticket:denied`; the ride must not start). */
+  payTicket(kind: TicketKind): boolean;
+  /** This session's three missions (empty on the title screen before the first session). */
+  readonly missions: readonly MissionState[];
+  /** Current streak. multiplier 1 = no combo. timeLeft = seconds before it drops. */
+  readonly combo: Readonly<{ multiplier: number; streak: number; timeLeft: number }>;
 }

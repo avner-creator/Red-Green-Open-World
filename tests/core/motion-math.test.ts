@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER } from '../../src/config';
 import {
-  angleDelta, apexHeight, approachVec2, cameraRelative, canJump, integrateVertical, speedForApex,
+  angleDelta, apexHeight, approachVec2, cameraRelative, canJump, followMoving, integrateVertical, speedForApex,
 } from '../../src/core/motion-math';
 import { flopPose } from '../../src/core/player-fx';
 
@@ -70,5 +70,31 @@ describe('flop pose', () => {
   });
   it('squashes into a pancake in the middle', () => {
     expect(flopPose(0.65, 1.2).sy).toBeLessThan(0.7);
+  });
+});
+
+describe('followMoving (frame-rate independent chase)', () => {
+  /** Follow a target moving at 14 m/s with the given frame times; return the lag per frame. */
+  const lags = (dts: number[]): number[] => {
+    let x = 0;
+    let t = 0;
+    const out: number[] = [];
+    for (const dt of dts) {
+      const nt = t + 14 * dt;
+      x = followMoving(x, t, nt, 16, dt);
+      t = nt;
+      out.push(t - x);
+    }
+    return out;
+  };
+  it('settles to the same lag (speed / rate) at any frame time, even alternating 16/33 ms', () => {
+    const alt = lags(Array.from({ length: 200 }, (_, i) => (i % 2 ? 1 / 30 : 1 / 60)));
+    const hi = lags(Array.from({ length: 400 }, () => 1 / 144));
+    for (const l of [...alt.slice(-10), ...hi.slice(-10)]) expect(l).toBeCloseTo(14 / 16, 6);
+  });
+  it('treats a teleport as a jump, not as speed', () => {
+    const x = followMoving(0, 0, 100, 16, 1 / 60);
+    expect(x).toBeGreaterThan(0);
+    expect(x).toBeLessThan(100);
   });
 });

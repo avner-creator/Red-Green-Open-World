@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { CDPSession, Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, startGame } from './helpers';
+import { SHOTS, boot, startGame } from './helpers';
 
 /** Touch controls on a phone (667×375) and a tablet (1024×768), both landscape. */
 const OUT = 'test-results/touch';
@@ -18,6 +18,7 @@ function channel(png: PNG, c: number): Buffer {
 }
 
 async function save(page: Page, name: string): Promise<void> {
+  if (!SHOTS) return; // human-only screenshots are opt-in (RG_SHOTS=1)
   const buf = await page.screenshot({ type: 'png', animations: 'disabled' });
   writeFileSync(`${OUT}/${name}-full.png`, buf);
   const png = PNG.sync.read(buf);

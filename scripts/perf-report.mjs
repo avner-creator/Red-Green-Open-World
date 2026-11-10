@@ -17,6 +17,11 @@ const GROUPS = {
   balloon: ['balloon', 'balloonPad', 'canopy', 'landingRings'],
   player: ['player', 'skill-sparkles', 'skill-shockwave', 'skill-speedlines'],
   thrills: ['trampoline', 'bouncePads', 'rocketPads'],
+  horse: ['horse'],
+  bungee: ['bungee-platform', 'bungee-landing', 'bungee-cord'],
+  silly: ['silly-zone'],
+  secrets: ['secret-pedestal', 'secret-vault'],
+  shack: ['gearShack'],
 };
 
 const server = await preview({ preview: { port, strictPort: true, open: false }, logLevel: 'warn' });
@@ -95,6 +100,13 @@ try {
           // The buggy from 8 m on the spawn side (it parks at the garage).
           garage: () => (buggyRoot ? lookAt({ position: buggyRoot.position }, A.spawn.position, 8) : standBack(A.garage, 10)),
           balloon: () => standBack(A.balloon, 26),
+          ranch: () => lookAt(A.ranch, A.spawn.position, 14),
+          bungee: () => lookAt(A.bungee, A.bungeeLanding.position, 18),
+          silly: () => lookAt(A.sillyZone, A.spawn.position, 16),
+          vault: () => {
+            const d = window.__rgSecrets?.info().doors[0];
+            if (d) lookAt({ position: { x: d.x, z: d.z } }, { x: d.x + Math.sin(d.yaw) * 20, z: d.z + Math.cos(d.yaw) * 20 }, 12);
+          },
         };
         const out = [];
         for (const [view, go] of Object.entries(views)) {
@@ -157,7 +169,7 @@ try {
 
   const k = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
   const cell = (c) => `${String(c.main).padStart(3)}/${k(c.mainTris).padStart(5)} ${String(c.shadow).padStart(3)}/${k(c.shadowTris).padStart(5)}`;
-  const cols = ['total', 'buggy', 'balloon', 'player', 'thrills', 'world'];
+  const cols = ['total', ...Object.keys(GROUPS), 'world'];
   console.log('\nDraws/triangles per frame: main pass | shadow pass (attributed by hiding each group)');
   console.log(`${'quality'.padEnd(7)} ${'view'.padEnd(8)} ${cols.map((c) => c.padEnd(21)).join(' ')}`);
   for (const r of rows) {

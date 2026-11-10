@@ -17,6 +17,11 @@ export const COMPASS_TARGETS: readonly { anchor: AnchorName; icon: PictoName }[]
   { anchor: 'balloon', icon: 'wBalloon' },
   { anchor: 'landingRings', icon: 'wTarget' },
   { anchor: 'launchPads', icon: 'wRocket' },
+  { anchor: 'gearShack', icon: 'shop' },
+  // Integration: the newer attractions (both-eye places, never a weak-eye object).
+  { anchor: 'ranch', icon: 'horse' },
+  { anchor: 'bungee', icon: 'bungee' },
+  { anchor: 'sillyZone', icon: 'flop' },
 ];
 
 /** Closer than this the marker hides (you are already there). */

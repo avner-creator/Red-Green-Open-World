@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysicsSync, GROUP_AVATAR, groups, rowMajorToRapier } from '../../src/core/physics';
+import { createPhysicsSync, fixedStepHooks, GROUP_AVATAR, groups, rowMajorToRapier } from '../../src/core/physics';
 import { pickFocus } from '../../src/core/interactions';
 import type { Interactable } from '../../src/types';
 
@@ -70,5 +70,28 @@ describe('interaction focus', () => {
     const far = mk('far', 10, 3);
     expect(pickFocus([a, b, c, far], from)?.id).toBe('a');
     expect(pickFocus([far], from)).toBeNull();
+  });
+});
+
+describe('fixed-step hooks', () => {
+  it('run around every fixed step and report the leftover alpha', () => {
+    const p = createPhysicsSync();
+    const hooks = fixedStepHooks(p);
+    let before = 0;
+    let after = 0;
+    const off = hooks.onBeforeStep(() => before++);
+    hooks.onAfterStep(() => after++);
+    p.step(1 / 144);
+    expect(before).toBe(0);
+    expect(hooks.alpha).toBeCloseTo(60 / 144, 5);
+    p.step(1 / 144);
+    p.step(1 / 144);
+    expect(before).toBe(1);
+    expect(after).toBe(1);
+    expect(hooks.alpha).toBeCloseTo((3 * 60) / 144 - 1, 5);
+    off();
+    p.step(1 / 30);
+    expect(before).toBe(1);
+    expect(after).toBe(3);
   });
 });
