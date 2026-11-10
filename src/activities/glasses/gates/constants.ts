@@ -30,6 +30,8 @@ export const GATES = {
   /** Start plate (centre z, radius). */
   plateZ: 2.0,
   plateR: 0.95,
+  /** Nap after a miss: seconds on the plate before the next sign (1st, 2nd, 3rd+ miss in a row). */
+  missPause: [3, 6, 8] as const,
   /** Seconds after an answer before the plate can start a new round. */
   rearm: 0.8,
   /** Celebration lengths (s). */

@@ -33,6 +33,8 @@ interface GatesDebug {
   gems: number;
   yaw: number;
   plate: P3;
+  approach: P3;
+  approachYaw: number;
   arches: { front: P3; back: P3; around: P3 }[];
 }
 interface DotsDebug {
@@ -48,6 +50,8 @@ interface DotsDebug {
   yaw: number;
   stand: P3[];
   view: P3;
+  approach: P3;
+  approachYaw: number;
 }
 
 const debug = <T>(id: string): Promise<T> => page.evaluate((i) => window.__rgGlasses!.debug(i), id) as Promise<T>;
@@ -167,6 +171,9 @@ test('gates: on the plate, the halves fuse on the sign; each layer only touches 
   await standAt(d.plate, d.yaw + Math.PI);
   expect(await page.evaluate(() => window.__rgGlasses!.active('gates'))).toBe(true);
   await shots('gates', 'plate', true);
+  await standAt(d.approach, d.approachYaw);
+  await shots('gates', 'approach', true);
+  await standAt(d.plate, d.yaw + Math.PI);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'gates' });
   await expectDrawBudget(page, 'gates', 6);
 });
@@ -235,8 +242,23 @@ test('gates: run through the right arch → hit, wrong arch → miss, the plate 
   ev = await events();
   expect(ev.results).toEqual([{ mechanic: 'gates', kind: 'lineUp', tier: 2, hit: false }]);
   expect(ev.toasts).toBe(0);
+  // The nap: back on the plate, the next sign waits 3 s.
   await standAt(d.plate, facing, 50);
-  expect((await debug<GatesDebug>('gates')).round).toBe(d.round + 1);
+  expect((await debug<GatesDebug>('gates')).round, 'still napping').toBe(d.round);
+  await step(150);
+  d = await debug<GatesDebug>('gates');
+  expect(d.round).toBe(round + 2);
+  expect(d.state).toBe('open');
+  // The first hit after a miss pays 1 gem.
+  const before = d.gems;
+  await teleport(d.arches[d.answer].front, facing);
+  await step(2);
+  await teleport(d.arches[d.answer].back, facing);
+  await step(3);
+  d = await debug<GatesDebug>('gates');
+  expect(d.hits).toBe(2);
+  expect(d.gems - before).toBe(1);
+  await events();
 });
 
 // ───────────────────────────── dot-picture signs ─────────────────────────────
@@ -250,6 +272,9 @@ test('dot signs: the picture and the buttons; each layer only touches its channe
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 1 });
   await standAt(d.view, d.yaw + Math.PI);
   await shots('dotsigns', 'pedestal', true);
+  await standAt(d.approach, d.approachYaw);
+  await shots('dotsigns', 'approach', true);
+  await standAt(d.view, d.yaw + Math.PI);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'dotsigns' });
   await expectDrawBudget(page, 'dotsigns', 6);
 });
@@ -318,8 +343,24 @@ test('dot signs: press the hidden shape → hit, a wrong one → miss, a new pic
   ev = await events();
   expect(ev.results).toEqual([{ mechanic: 'dotsigns', kind: 'popOut', tier: 2, hit: false }]);
   expect(ev.toasts).toBe(0);
+  // The nap: buttons sink, every prompt is off, a press does nothing, for 5 s.
   await step(140);
-  expect((await debug<DotsDebug>('dotsigns')).round).toBe(d.round + 1);
+  const nap = await debug<DotsDebug & { sink: number }>('dotsigns');
+  expect(nap.round).toBe(d.round);
+  expect(nap.sink).toBeGreaterThan(0.5);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused)).toBeNull();
+  await pressAt(d.answer);
+  expect((await debug<DotsDebug>('dotsigns')).hits).toBe(1);
+  await step(200);
+  d = await debug<DotsDebug>('dotsigns');
+  expect(d.round).toBe(nap.round + 1);
+  // The first hit after a miss pays 1 gem.
+  const before = d.gems;
+  await pressAt(d.answer);
+  d = await debug<DotsDebug>('dotsigns');
+  expect(d.hits).toBe(2);
+  expect(d.gems - before).toBe(1);
+  await events();
   // A finer picture in view for the record.
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 3 });
   await standAt(d.view, facing);
