@@ -162,7 +162,11 @@ test('key, wrong side stays closed, right side opens with the outfit; restart re
   expect((await info())[0].open).toBe(true);
   expect(await log()).toEqual(['key:chest0', 'opened:chest0:hat-explorer', 'unlocked:hat-explorer', 'equipped:hat-explorer:head']);
 
-  // Restart: closed again, key back, nothing worn.
+  // The outfit is saved in the profile and worn through the gear applier.
+  expect(await page.evaluate(() => window.__rgGear!.attached().head)).toBe('hat-explorer');
+  expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat-explorer'))).toBe(true);
+
+  // Restart: closed again, key back; the saved outfit stays on (it persists between sessions).
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.start();
@@ -171,6 +175,7 @@ test('key, wrong side stays closed, right side opens with the outfit; restart re
   const again = await page.evaluate(() => ({ s: window.__rg!.state(), c: window.__rgChests!.info()[0] }));
   expect(again.s.chests).toBe(0);
   expect(again.s.outfits).toEqual([]);
+  expect(await page.evaluate(() => window.__rgGear!.attached().head)).toBe('hat-explorer');
   expect(again.c.open).toBe(false);
   expect(again.c.keyState).toBe('ground');
   expect(await page.evaluate(() => window.__rg!.state().chestsTotal)).toBe(6);

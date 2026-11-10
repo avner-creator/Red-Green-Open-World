@@ -14,9 +14,9 @@ export interface Wearable {
   dispose(): void;
 }
 
-const LIGHT = new THREE.Vector3(0.45, 0.8, 0.4).normalize();
+export const LIGHT = new THREE.Vector3(0.45, 0.8, 0.4).normalize();
 
-function lit(hex: number, ambient = 0.55, k = 1): (x: number, y: number, z: number, nx: number, ny: number, nz: number) => THREE.Color {
+export function lit(hex: number, ambient = 0.55, k = 1): (x: number, y: number, z: number, nx: number, ny: number, nz: number) => THREE.Color {
   const c = new THREE.Color(hex);
   return (_x, _y, _z, nx, ny, nz) => {
     const d = Math.max(0, nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z);
@@ -25,7 +25,7 @@ function lit(hex: number, ambient = 0.55, k = 1): (x: number, y: number, z: numb
   };
 }
 
-function disposer(geos: THREE.BufferGeometry[], mats: THREE.Material[], extra: { dispose(): void }[] = []): () => void {
+export function disposer(geos: THREE.BufferGeometry[], mats: THREE.Material[], extra: { dispose(): void }[] = []): () => void {
   return () => {
     for (const g of geos) g.dispose();
     for (const m of mats) m.dispose();
@@ -33,11 +33,11 @@ function disposer(geos: THREE.BufferGeometry[], mats: THREE.Material[], extra: {
   };
 }
 
-function std(opts: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
+export function std(opts: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.05, ...opts });
 }
 
-function mesh(g: THREE.BufferGeometry, m: THREE.Material, cast = true): THREE.Mesh {
+export function mesh(g: THREE.BufferGeometry, m: THREE.Material, cast = true): THREE.Mesh {
   const o = new THREE.Mesh(g, m);
   o.castShadow = cast;
   return o;
@@ -109,7 +109,22 @@ export function buildPartyHat(): Wearable {
 
 // ───────────────────────────── Hero cape ─────────────────────────────
 
-function capeTexture(): THREE.CanvasTexture {
+export interface CapeSpec {
+  /** Cloth gradient (top, bottom), CSS colours. */
+  top: string;
+  bottom: string;
+  trim: string;
+  trimDark: string;
+  emblem: 'star' | 'flame' | 'bolt';
+  emblemFill: string;
+  emblemStroke: string;
+}
+
+export const HERO_CAPE: CapeSpec = {
+  top: '#2a3fd8', bottom: '#1a1f8c', trim: '#ffd24a', trimDark: '#c88a14', emblem: 'star', emblemFill: '#ffe36e', emblemStroke: '#c88a14',
+};
+
+function capeTexture(spec: CapeSpec): THREE.CanvasTexture {
   const w = 128;
   const h = 192;
   const canvas = document.createElement('canvas');
@@ -118,29 +133,45 @@ function capeTexture(): THREE.CanvasTexture {
   const g = canvas.getContext('2d');
   if (g) {
     const grad = g.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#2a3fd8');
-    grad.addColorStop(1, '#1a1f8c');
+    grad.addColorStop(0, spec.top);
+    grad.addColorStop(1, spec.bottom);
     g.fillStyle = grad;
     g.fillRect(0, 0, w, h);
-    // Gold hem and side trim.
-    g.fillStyle = '#ffd24a';
+    g.fillStyle = spec.trim;
     g.fillRect(0, h - 14, w, 14);
     g.fillRect(0, 0, 5, h);
     g.fillRect(w - 5, 0, 5, h);
-    g.fillStyle = '#c88a14';
+    g.fillStyle = spec.trimDark;
     g.fillRect(0, h - 14, w, 3);
-    // Star emblem.
-    g.fillStyle = '#ffe36e';
-    g.strokeStyle = '#c88a14';
+    g.fillStyle = spec.emblemFill;
+    g.strokeStyle = spec.emblemStroke;
     g.lineWidth = 3;
     g.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const r = i % 2 === 0 ? 40 : 18;
-      const a = -Math.PI / 2 + (i * Math.PI) / 5;
-      const x = w / 2 + Math.cos(a) * r;
-      const y = h * 0.42 + Math.sin(a) * r;
-      if (i === 0) g.moveTo(x, y);
-      else g.lineTo(x, y);
+    if (spec.emblem === 'star') {
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? 40 : 18;
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const x = w / 2 + Math.cos(a) * r;
+        const y = h * 0.42 + Math.sin(a) * r;
+        if (i === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+    } else if (spec.emblem === 'bolt') {
+      const cx = w / 2;
+      const cy = h * 0.42;
+      const pts: Array<[number, number]> = [[8, -48], [-22, 6], [-2, 6], [-14, 48], [26, -10], [4, -10], [20, -48]];
+      pts.forEach(([x, y], i) => (i === 0 ? g.moveTo(cx + x, cy + y) : g.lineTo(cx + x, cy + y)));
+    } else {
+      // Flame: three tongues rising from the hem of the emblem.
+      const cx = w / 2;
+      const cy = h * 0.5;
+      g.moveTo(cx - 36, cy + 34);
+      g.quadraticCurveTo(cx - 40, cy - 6, cx - 18, cy - 30);
+      g.quadraticCurveTo(cx - 16, cy - 8, cx - 8, cy - 4);
+      g.quadraticCurveTo(cx - 6, cy - 40, cx + 2, cy - 56);
+      g.quadraticCurveTo(cx + 12, cy - 30, cx + 20, cy - 12);
+      g.quadraticCurveTo(cx + 26, cy - 22, cx + 28, cy - 30);
+      g.quadraticCurveTo(cx + 46, cy, cx + 36, cy + 34);
     }
     g.closePath();
     g.fill();
@@ -152,14 +183,14 @@ function capeTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-export function buildCape(): Wearable {
+export function buildClothCape(spec: CapeSpec): Wearable {
   const NX = 14;
   const NY = 20;
   const L = 0.95;
   const top = 0.36;
   const geo = new THREE.PlaneGeometry(1, 1, NX, NY);
   const pos = geo.getAttribute('position');
-  const tex = capeTexture();
+  const tex = capeTexture(spec);
   const mat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.8 });
   const cloth = mesh(geo, mat);
   cloth.frustumCulled = false;
@@ -204,6 +235,10 @@ export function buildCape(): Wearable {
     },
     dispose: disposer([geo, collarGeo], [mat, collarMat], [tex]),
   };
+}
+
+export function buildCape(): Wearable {
+  return buildClothCape(HERO_CAPE);
 }
 
 // ───────────────────────────── Star glasses ─────────────────────────────
