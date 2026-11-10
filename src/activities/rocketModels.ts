@@ -1,8 +1,15 @@
 /**
  * Procedural models for the rocket pad and the landing net. Everything is both-eye: bright and
  * dark bands (never hue alone) so each reads in the red channel and in the green channel.
+ *
+ * Render cost: a pad is 4 draws (static base + thrusters, plate, both springs, floating arrow;
+ * the flame sprites only while launching) and 1 shadow-proxy draw; the net is 3 draws (dome, pole,
+ * flag) and 2 shadow draws. Parts are merged by transform with per-vertex finishes
+ * (`core/vertex-finish`); unlit arrows on the plate are emissive-only finishes.
  */
 import * as THREE from 'three';
+import { asShadowProxy } from '../core/shadow-proxy';
+import { finish, finishKeepColors, finishMaterial, mergeFinished, placed, type Finish } from '../core/vertex-finish';
 import { NET, ROCKET } from './constants';
 
 const BRIGHT = 0xf4f4f4;
@@ -89,103 +96,121 @@ function arrowShape(): THREE.Shape {
   return s;
 }
 
+const std = (color: number, rough = 0.55, metal = 0): Finish => ({ color, rough, metal });
+/** Unlit look (as MeshBasicMaterial): black albedo, the colour as glow. */
+const unlit = (color: number): Finish => ({ color: 0x000000, rough: 1, metal: 0, emissive: color, glow: 1 });
+
+/** Shared materials (one program, shared by every pad and the net). */
+let padMaterial: THREE.MeshStandardMaterial | null = null;
+let flagMaterial: THREE.MeshStandardMaterial | null = null;
+const sharedPadMaterial = (): THREE.MeshStandardMaterial => (padMaterial ??= finishMaterial('rg-rocket-parts'));
+const sharedFlagMaterial = (): THREE.MeshStandardMaterial => (flagMaterial ??= finishMaterial('rg-rocket-flag', undefined, { side: THREE.DoubleSide }));
+
 export function buildRocketPad(): RocketPadModel {
   const disposables: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(d: T): T => {
     disposables.push(d);
     return d;
   };
-  const std = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}): THREE.MeshStandardMaterial =>
-    keep(new THREE.MeshStandardMaterial({ color, roughness: 0.55, ...extra }));
+  const material = sharedPadMaterial();
   const group = new THREE.Group();
-
-  // Striped base ring (hazard stripes) and a dark disc under the plate.
   const baseR = ROCKET.padRadius + 0.5;
-  const ring = new THREE.Mesh(keep(stripedRing(baseR, 0.34, 12, YELLOW, DARK)), keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 })));
-  ring.position.y = 0.17;
-  ring.castShadow = ring.receiveShadow = true;
-  const disc = new THREE.Mesh(keep(new THREE.CylinderGeometry(baseR, baseR + 0.1, 0.3, 32)), std(DARK, { roughness: 0.8 }));
-  disc.position.y = 0.15;
-  disc.receiveShadow = true;
-  group.add(disc, ring);
 
-  // Plate: dark slate with a bright rim and a big bright arrow with a dark outline.
+  // Static base: dark disc, striped hazard ring, two thruster cones with nozzles.
+  const base: THREE.BufferGeometry[] = [
+    finish(placed(new THREE.CylinderGeometry(baseR, baseR + 0.1, 0.3, 32), 0, 0.15, 0), std(DARK, 0.8)),
+    finishKeepColors(placed(stripedRing(baseR, 0.34, 12, YELLOW, DARK), 0, 0.17, 0), { rough: 0.6, metal: 0 }),
+  ];
+  const coneFinish: Finish = { color: 0xff8a1f, rough: 0.4, metal: 0, emissive: 0xff6a10, glow: 0.9 };
+  const flameSpots: THREE.Vector3[] = [];
+  for (const s of [-1, 1]) {
+    const coneM = new THREE.Matrix4().compose(new THREE.Vector3(s * 0.95, 0.7, -ROCKET.padRadius - 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0, 0)), new THREE.Vector3(1, 1, 1));
+    base.push(finish(new THREE.CylinderGeometry(0.3, 0.7, 1.2, 20).applyMatrix4(coneM), coneFinish));
+    base.push(finish(new THREE.TorusGeometry(0.31, 0.08, 8, 20).rotateX(Math.PI / 2).translate(0, 0.6, 0).applyMatrix4(coneM), std(DARK, 0.55, 0.4)));
+    flameSpots.push(new THREE.Vector3(0, 1.05, 0).applyMatrix4(coneM));
+  }
+  const baseMesh = new THREE.Mesh(keep(mergeFinished(base)), material);
+  baseMesh.name = 'rocketPad-base';
+  baseMesh.receiveShadow = true;
+  group.add(baseMesh);
+
+  // Plate: dark slate with a bright rim and a big bright (unlit) arrow with a dark outline.
   const plate = new THREE.Group();
   plate.position.y = ROCKET.padTop - 0.14;
-  const plateTop = new THREE.Mesh(keep(new THREE.CylinderGeometry(ROCKET.padRadius, ROCKET.padRadius, 0.18, 36)), std(0x2f3a5a, { roughness: 0.5 }));
-  plateTop.castShadow = plateTop.receiveShadow = true;
-  const rim = new THREE.Mesh(keep(new THREE.TorusGeometry(ROCKET.padRadius, 0.11, 10, 48).rotateX(Math.PI / 2)), std(BRIGHT, { roughness: 0.4 }));
-  rim.position.y = 0.09;
-  const arrowGeo = keep(new THREE.ShapeGeometry(arrowShape()).rotateX(-Math.PI / 2));
-  const outline = new THREE.Mesh(arrowGeo, keep(new THREE.MeshBasicMaterial({ color: NAVY })));
-  outline.scale.setScalar(ROCKET.padRadius * 0.86);
-  outline.position.y = 0.095;
-  const inner = new THREE.Mesh(arrowGeo, keep(new THREE.MeshBasicMaterial({ color: YELLOW })));
-  inner.scale.setScalar(ROCKET.padRadius * 0.68);
-  inner.position.y = 0.105;
-  plate.add(plateTop, rim, outline, inner);
+  const plateGeo = mergeFinished([
+    finish(new THREE.CylinderGeometry(ROCKET.padRadius, ROCKET.padRadius, 0.18, 36), std(0x2f3a5a, 0.5)),
+    finish(placed(new THREE.TorusGeometry(ROCKET.padRadius, 0.11, 10, 48).rotateX(Math.PI / 2), 0, 0.09, 0), std(BRIGHT, 0.4)),
+    finish(placed(new THREE.ShapeGeometry(arrowShape()).rotateX(-Math.PI / 2), 0, 0.095, 0, 0, 0, 0, ROCKET.padRadius * 0.86), unlit(NAVY)),
+    finish(placed(new THREE.ShapeGeometry(arrowShape()).rotateX(-Math.PI / 2), 0, 0.105, 0, 0, 0, 0, ROCKET.padRadius * 0.68), unlit(YELLOW)),
+  ]);
+  const plateMesh = new THREE.Mesh(keep(plateGeo), material);
+  plateMesh.name = 'rocketPad-plate';
+  plateMesh.receiveShadow = true;
+  plate.add(plateMesh);
   group.add(plate);
 
-  // Two big coil springs on posts either side of the plate.
-  const springs: THREE.Object3D[] = [];
-  const coilGeo = keep(new THREE.TubeGeometry(new Helix(0.34, 1.5, 5), 90, 0.075, 6, false));
-  const coilMat = std(0xc9d1de, { metalness: 0.55, roughness: 0.35 });
-  const capGeo = keep(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 18));
-  const capMat = std(YELLOW);
+  // Two big coil springs on posts either side of the plate (one mesh; they squash together).
+  const springs = new THREE.Group();
+  springs.position.set(0, 0.15, -0.3);
+  const springParts: THREE.BufferGeometry[] = [];
   for (const s of [-1, 1]) {
-    const sp = new THREE.Group();
-    sp.position.set(s * (ROCKET.padRadius + 0.75), 0.15, -0.3);
-    const coil = new THREE.Mesh(coilGeo, coilMat);
-    coil.castShadow = true;
-    const top = new THREE.Mesh(capGeo, capMat);
-    top.position.y = 1.55;
-    top.castShadow = true;
-    const foot = new THREE.Mesh(capGeo, std(DARK));
-    foot.position.y = -0.02;
-    sp.add(coil, top, foot);
-    group.add(sp);
-    springs.push(sp);
+    const x = s * (ROCKET.padRadius + 0.75);
+    springParts.push(finish(new THREE.TubeGeometry(new Helix(0.34, 1.5, 5), 90, 0.075, 6, false).translate(x, 0, 0), std(0xc9d1de, 0.35, 0.55)));
+    springParts.push(finish(placed(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 18), x, 1.55, 0), std(YELLOW)));
+    springParts.push(finish(placed(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 18), x, -0.02, 0), std(DARK)));
   }
+  const springMesh = new THREE.Mesh(keep(mergeFinished(springParts)), material);
+  springMesh.name = 'rocketPad-springs';
+  springMesh.receiveShadow = true;
+  springs.add(springMesh);
+  group.add(springs);
 
-  // Thruster cones at the back (glowing orange, bright in both channels) with flame sprites.
+  // Flame sprites at the thruster mouths (hidden until a launch).
   const flames: THREE.Sprite[] = [];
-  const coneGeo = keep(new THREE.CylinderGeometry(0.3, 0.7, 1.2, 20));
-  const coneMat = std(0xff8a1f, { emissive: 0xff6a10, emissiveIntensity: 0.9, roughness: 0.4 });
-  const nozzleGeo = keep(new THREE.TorusGeometry(0.31, 0.08, 8, 20).rotateX(Math.PI / 2));
-  const nozzleMat = std(DARK, { metalness: 0.4 });
   const flameMat = keep(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
-  for (const s of [-1, 1]) {
-    const cone = new THREE.Mesh(coneGeo, coneMat);
-    cone.position.set(s * 0.95, 0.7, -ROCKET.padRadius - 0.6);
-    cone.rotation.x = -0.5;
-    cone.castShadow = true;
-    const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
-    nozzle.position.set(0, 0.6, 0);
-    cone.add(nozzle);
+  for (const p of flameSpots) {
     const flame = new THREE.Sprite(flameMat.clone());
-    flame.position.set(0, 1.05, 0);
+    flame.position.copy(p);
     flame.scale.setScalar(0.1);
     flame.visible = false;
-    cone.add(flame);
+    group.add(flame);
     flames.push(flame);
-    group.add(cone);
   }
 
   // Floating glowing arrow showing the launch direction (bobs; both-eye, unlit so always bright).
   const arrow = new THREE.Group();
-  const aOut = new THREE.Mesh(keep(new THREE.ShapeGeometry(arrowShape()).rotateX(-Math.PI / 2)), keep(new THREE.MeshBasicMaterial({ color: NAVY, side: THREE.DoubleSide })));
-  aOut.scale.setScalar(1.55);
-  const aIn = new THREE.Mesh(aOut.geometry, keep(new THREE.MeshBasicMaterial({ color: 0xfff08a, side: THREE.DoubleSide })));
-  aIn.scale.setScalar(1.2);
-  aIn.position.y = 0.02;
-  arrow.add(aOut, aIn);
+  const arrowColor = (g: THREE.BufferGeometry, hex: number): THREE.BufferGeometry => {
+    const c = new THREE.Color(hex);
+    const n = g.attributes.position.count;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) arr.set([c.r, c.g, c.b], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    g.deleteAttribute('uv');
+    return g;
+  };
+  const arrowGeo = mergeFinished([
+    arrowColor(placed(new THREE.ShapeGeometry(arrowShape()).rotateX(-Math.PI / 2), 0, 0, 0, 0, 0, 0, 1.55), NAVY),
+    arrowColor(placed(new THREE.ShapeGeometry(arrowShape()).rotateX(-Math.PI / 2), 0, 0.02, 0, 0, 0, 0, 1.2), 0xfff08a),
+  ]);
+  const arrowMesh = new THREE.Mesh(keep(arrowGeo), keep(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  arrowMesh.name = 'rocketPad-arrow';
+  arrow.add(arrowMesh);
   arrow.position.y = 3.6;
   group.add(arrow);
+
+  // Shadow proxy: base ring, thrusters, springs and plate as a few coarse solids (static).
+  const proxy: THREE.BufferGeometry[] = [new THREE.CylinderGeometry(baseR, baseR, 0.34, 16).translate(0, 0.17, 0)];
+  proxy.push(new THREE.CylinderGeometry(ROCKET.padRadius - 0.05, ROCKET.padRadius - 0.05, 0.16, 16).translate(0, ROCKET.padTop - 0.14, 0));
+  for (const s of [-1, 1]) {
+    proxy.push(new THREE.CylinderGeometry(0.26, 0.64, 1.1, 8).rotateX(-0.5).translate(s * 0.95, 0.7, -ROCKET.padRadius - 0.6));
+    proxy.push(new THREE.CylinderGeometry(0.36, 0.36, 1.6, 8).translate(s * (ROCKET.padRadius + 0.75), 0.95, -0.3));
+  }
+  group.add(asShadowProxy(new THREE.Mesh(keep(mergeFinished(proxy.map((g) => g.toNonIndexed()))))));
 
   return {
     group,
     plate,
-    springs,
+    springs: [springs],
     arrow,
     flames,
     dispose() {
@@ -257,31 +282,28 @@ export function buildNet(): NetModel {
   lathe.computeVertexNormals();
   keep(lathe);
   const dome = new THREE.Mesh(lathe, keep(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, side: THREE.DoubleSide })));
-  dome.castShadow = dome.receiveShadow = true;
+  dome.receiveShadow = true;
   group.add(dome);
+  // Shadow proxy: a coarse lathe just inside the cushion (child of the dome, so it squashes too).
+  const proxyPts = pts.filter((_, i) => i % 3 === 0 || i === pts.length - 1).map((p) => new THREE.Vector2(p.x * 0.97, p.y * 0.95));
+  dome.add(asShadowProxy(new THREE.Mesh(keep(new THREE.LatheGeometry(proxyPts, 16)))));
 
-  // Tall pole with a striped flag so the net is visible across the park.
-  const pole = new THREE.Group();
-  const poleGeo = keep(new THREE.CylinderGeometry(0.2, 0.24, 1.45, 12));
-  const poleA = keep(new THREE.MeshStandardMaterial({ color: BRIGHT, roughness: 0.5 }));
-  const poleB = keep(new THREE.MeshStandardMaterial({ color: NAVY, roughness: 0.5 }));
-  for (let i = 0; i < 9; i++) {
-    const seg = new THREE.Mesh(poleGeo, i % 2 === 0 ? poleA : poleB);
-    seg.position.set(R + 0.9, 0.72 + i * 1.45, 0);
-    seg.castShadow = true;
-    pole.add(seg);
-  }
-  const ball = new THREE.Mesh(keep(new THREE.SphereGeometry(0.5, 14, 10)), keep(new THREE.MeshStandardMaterial({ color: YELLOW, roughness: 0.4 })));
-  ball.position.set(R + 0.9, 13.3, 0);
+  // Tall pole with a striped flag so the net is visible across the park: pole + ball one mesh.
+  const poleParts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i++) poleParts.push(finish(placed(new THREE.CylinderGeometry(0.2, 0.24, 1.45, 12), R + 0.9, 0.72 + i * 1.45, 0), std(i % 2 === 0 ? BRIGHT : NAVY, 0.5)));
+  poleParts.push(finish(placed(new THREE.SphereGeometry(0.5, 14, 10), R + 0.9, 13.3, 0), std(YELLOW, 0.4)));
+  const pole = new THREE.Mesh(keep(mergeFinished(poleParts)), sharedPadMaterial());
+  pole.name = 'net-pole';
+  pole.castShadow = true;
+  group.add(pole);
   const flag = new THREE.Group();
   flag.position.set(R + 0.9, 11.9, 0);
-  const flagGeo = keep(new THREE.PlaneGeometry(4.6, 2.2, 6, 1));
-  const f1 = new THREE.Mesh(flagGeo, keep(new THREE.MeshStandardMaterial({ color: YELLOW, side: THREE.DoubleSide, roughness: 0.6 })));
-  f1.position.set(2.3, 0, 0);
-  const f2 = new THREE.Mesh(keep(new THREE.PlaneGeometry(1.5, 2.2)), keep(new THREE.MeshStandardMaterial({ color: NAVY, side: THREE.DoubleSide, roughness: 0.6 })));
-  f2.position.set(1.0, 0, 0.01);
-  flag.add(f1, f2);
-  group.add(pole, ball, flag);
+  const flagGeo = mergeFinished([
+    finish(placed(new THREE.PlaneGeometry(4.6, 2.2, 6, 1), 2.3, 0, 0), std(YELLOW, 0.6)),
+    finish(placed(new THREE.PlaneGeometry(1.5, 2.2), 1.0, 0, 0.01), std(NAVY, 0.6)),
+  ]);
+  flag.add(new THREE.Mesh(keep(flagGeo), sharedFlagMaterial()));
+  group.add(flag);
 
   return {
     group,

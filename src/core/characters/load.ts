@@ -10,6 +10,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { PlayerAnim } from '../../types';
 import type { AttachPart, CharacterDef, ClipRef } from './catalog';
+import { mergeCharacterMeshes } from './merge';
 
 export interface LoadedCharacter {
   readonly def: CharacterDef;
@@ -40,6 +41,8 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
   const model = gltf.scene;
   model.scale.setScalar(def.scale);
   object.add(model);
+  // One skinned mesh per material (the robot: 19 meshes → 5 draws per pass).
+  mergeCharacterMeshes(model, gltf.animations);
   model.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;

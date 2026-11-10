@@ -10,6 +10,7 @@ import { BALLOON, CAMERA } from '../../config';
 import type { ExternalController, GameContext, InputState } from '../../types';
 import { BALLOON_DIMS, createBalloonModel } from './balloonModel';
 import { createCanopyModel } from './canopyModel';
+import { createPadModel } from './padModel';
 import {
   SKY,
   ascentHeight,
@@ -66,53 +67,18 @@ export function createSkydive(ctx: GameContext): Skydive {
   model.root.rotation.y = Math.atan2(toRings.x, toRings.y);
   ctx.scene.add(model.root);
 
-  const padGroup = new THREE.Group();
+  // Deck + tether ropes (2 draws, see padModel).
+  const padModel = createPadModel({
+    radius: DECK.radius,
+    height: DECK.height,
+    yaw: model.root.rotation.y,
+    ropeTopY: BALLOON_DIMS.throatY - 0.9 + floorY - pad.y,
+    groundAt: (x, z) => ctx.world.heightAt(pad.x + x, pad.z + z) - pad.y,
+  });
+  const padGroup = padModel.group;
   padGroup.position.copy(pad);
   ctx.scene.add(padGroup);
-  const padDisposables: { dispose(): void }[] = [];
-  const deckMat = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.8 });
-  const deckGeo = new THREE.CylinderGeometry(DECK.radius, DECK.radius + 0.08, DECK.height, 40);
-  const deck = new THREE.Mesh(deckGeo, deckMat);
-  deck.position.y = DECK.height / 2;
-  deck.receiveShadow = true;
-  deck.castShadow = true;
-  padGroup.add(deck);
-  const plankMat = new THREE.MeshStandardMaterial({ color: 0xa47a4f, roughness: 0.75 });
-  const plankGeo = new THREE.BoxGeometry(0.42, 0.02, 1);
-  for (let i = -5; i <= 5; i++) {
-    const len = 2 * Math.sqrt(Math.max(0, DECK.radius * DECK.radius - (i * 0.44) ** 2)) - 0.12;
-    const p = new THREE.Mesh(plankGeo, i % 2 ? plankMat : deckMat);
-    p.scale.z = len;
-    p.position.set(i * 0.44, DECK.height + 0.01, 0);
-    p.receiveShadow = true;
-    padGroup.add(p);
-  }
-  // Tether stakes and ropes (shown while parked).
-  const tethers = new THREE.Group();
-  padGroup.add(tethers);
-  const ropeMat = new THREE.MeshStandardMaterial({ color: 0xe9dcc0, roughness: 0.9 });
-  const stakeMat = new THREE.MeshStandardMaterial({ color: 0x3b2c22, roughness: 0.7 });
-  const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 6);
-  padDisposables.push(deckMat, deckGeo, plankMat, plankGeo, ropeMat, stakeMat, unitCyl);
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4 + model.root.rotation.y;
-    const sx = Math.sin(a) * 6.5;
-    const sz = Math.cos(a) * 6.5;
-    const sy = ctx.world.heightAt(pad.x + sx, pad.z + sz) - pad.y;
-    const stake = new THREE.Mesh(unitCyl, stakeMat);
-    stake.scale.set(0.07, 0.6, 0.07);
-    stake.position.set(sx, sy + 0.25, sz);
-    stake.castShadow = true;
-    const top = new THREE.Vector3(Math.sin(a) * 1.6, BALLOON_DIMS.throatY - 0.9 + floorY - pad.y, Math.cos(a) * 1.6);
-    const bottom = new THREE.Vector3(sx, sy + 0.5, sz);
-    const d = new THREE.Vector3().subVectors(top, bottom);
-    const rope = new THREE.Mesh(unitCyl, ropeMat);
-    rope.position.copy(bottom).addScaledVector(d, 0.5);
-    rope.scale.set(0.022, d.length(), 0.022);
-    rope.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-    rope.castShadow = true;
-    tethers.add(stake, rope);
-  }
+  const tethers = padModel.tethers;
 
   // Colliders: the deck (walkable) and the basket while it is parked.
   const deckCollider = ctx.physics.addStaticCylinder(new THREE.Vector3(pad.x, pad.y + DECK.height / 2, pad.z), DECK.height / 2, DECK.radius);
@@ -560,8 +526,7 @@ export function createSkydive(ctx: GameContext): Skydive {
       streaks.dispose();
       rings.dispose();
       prompt.dispose();
-      padGroup.removeFromParent();
-      for (const d of padDisposables) d.dispose();
+      padModel.dispose();
     },
   };
 }
