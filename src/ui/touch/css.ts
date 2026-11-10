@@ -8,6 +8,9 @@ export const TOUCH_CSS = `
 html,body{overscroll-behavior:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 body,#game{touch-action:none}
 .rg .scroll{touch-action:pan-y;-webkit-overflow-scrolling:touch}
+/* short landscape screens: the settings rows scroll inside the panel instead of being cut off */
+.rg .settings .panes{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;overscroll-behavior:contain;
+  padding:calc(var(--u)*1.2);margin:calc(var(--u)*-1.2);scrollbar-width:thin;scrollbar-color:#fff #0b0f22}
 .rg input[type=range]{touch-action:none}
 @media (hover:none){.rg .b:hover{transform:none;filter:none}.rg .b:active{transform:scale(.95);filter:brightness(1.1)}}
 
@@ -61,7 +64,7 @@ body,#game{touch-action:none}
 .rg .thint{position:absolute;pointer-events:none;opacity:0;transition:opacity .5s;color:#fff;font-size:calc(var(--tb)*.7)}
 .rg .thint.on{opacity:1}
 .rg .thint .ic{width:1em;height:1em;color:#fff;--out:#000}
-.rg .thint.look{right:calc(var(--sr) + var(--tm) * 4 + var(--tj) * 2);bottom:calc(var(--sb) + var(--tj) * 1.6);display:flex;gap:calc(var(--tm)*.6);align-items:center}
+.rg .thint.look{right:calc(var(--sr) + var(--tj) * 2.3);top:calc(var(--st) + 36%);display:flex;gap:calc(var(--tm)*.6);align-items:center}
 .rg .thint.look .hand{animation:rg-tswipe 1.6s ease-in-out infinite}
 .rg .thint.look .ic.eye{color:var(--y)}
 .rg .tstick.hint{animation:rg-tpulse 1.2s ease-in-out infinite}
@@ -84,6 +87,6 @@ body,#game{touch-action:none}
 .rg .rotate.on{display:flex}
 .rg .rotate svg{width:min(46vw,46vh);height:min(46vw,46vh);overflow:visible}
 .rg .rotate .phone{transform-origin:50% 50%;animation:rg-trot 2.4s cubic-bezier(.6,0,.3,1) infinite}
-@keyframes rg-trot{0%,20%{transform:rotate(0)}55%,85%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+@keyframes rg-trot{0%,20%{transform:rotate(0)}55%,85%{transform:rotate(90deg)}100%{transform:rotate(0)}}
 @media (prefers-reduced-motion:reduce){.rg .touch *,.rg .rotate *{animation:none!important}}
 `;
