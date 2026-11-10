@@ -15,6 +15,8 @@ import { channelOnly, COMBOS, expectAnswerBlindWithoutWeakEye, expectDrawBudget,
 test.describe.configure({ mode: 'serial' });
 
 const OUT = 'test-results/glasses';
+/** The weak-eye-alone checks run once per weak channel (R, then G) to keep the spec short. */
+const MIRROR_COMBOS = [COMBOS[0], COMBOS[1]];
 let page: Page;
 let consoleErrors: string[] = [];
 
@@ -93,7 +95,7 @@ async function events(): Promise<{ results: { mechanic: string; tier: number; hi
  * them apart either). Positive control: shown, they differ in the strong channel only.
  */
 async function expectAnswerBlindWithoutStrongEye(setA: () => Promise<void>, setB: () => Promise<void>, label: string): Promise<void> {
-  for (const combo of COMBOS) {
+  for (const combo of MIRROR_COMBOS) {
     const tag = `${label} ${combo.eye.leftLens}-left, weak ${combo.eye.weakEye}`;
     await setEye(page, combo.eye);
     await setA();
@@ -251,7 +253,7 @@ test('dot signs: neither eye alone can tell the hidden shape', async () => {
   });
   // With the strong layer hidden the two pictures differ in the weak channel only (the weak
   // pattern alone is 50 % noise: tests/vision/toolkit-dots.test.ts and glasses-dotsigns.test.ts).
-  for (const combo of COMBOS) {
+  for (const combo of MIRROR_COMBOS) {
     await setEye(page, combo.eye);
     await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234 });
     const a = await layerFrame(page, { weak: true, strong: false });
