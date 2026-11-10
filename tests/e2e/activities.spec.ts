@@ -54,3 +54,46 @@ test('walking onto the trampoline mat launches the player upward', async ({ page
   expect(r.vy).toBeGreaterThan(5);
   expect(consoleErrors).toEqual([]);
 });
+
+test('walking from the steps onto the mat (no drop) starts a gentle bounce', async ({ page }) => {
+  const { consoleErrors } = await boot(page);
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    rg.freeze(true);
+    rg.start();
+    rg.step(1 / 60, 3, false);
+    const a = ctx.world.anchors.trampoline;
+    const dist = 14;
+    const x = a.position.x + Math.sin(a.yaw) * dist;
+    const z = a.position.z + Math.cos(a.yaw) * dist;
+    rg.teleport(x, ctx.world.heightAt(x, z) + 0.2, z, a.yaw + Math.PI);
+    rg.step(1 / 60, 30, false); // settle on the ground
+    const matTop = ctx.world.heightAt(a.position.x, a.position.z) + 1;
+    let maxY = -Infinity;
+    let onMatFrames = 0;
+    rg.inject({ moveY: 1 });
+    for (let i = 0; i < 420; i++) {
+      rg.step(1 / 60, 1, false);
+      const p = ctx.player.position;
+      const d = Math.hypot(p.x - a.position.x, p.z - a.position.z);
+      if (d < 8) {
+        onMatFrames++;
+        maxY = Math.max(maxY, p.y);
+      }
+      if (d < 3) break; // stop walking near the middle of the mat
+    }
+    rg.inject(null);
+    // Stand still: the mat keeps bouncing gently (no drop, no jump key).
+    let lateMax = -Infinity;
+    for (let i = 0; i < 600; i++) {
+      rg.step(1 / 60, 1, false);
+      if (i >= 480) lateMax = Math.max(lateMax, ctx.player.position.y);
+    }
+    return { maxRise: maxY - matTop, onMatFrames, standRise: lateMax - matTop };
+  });
+  expect(r.onMatFrames).toBeGreaterThan(20);
+  expect(r.maxRise).toBeGreaterThan(1.5);
+  expect(r.standRise).toBeGreaterThan(1.3);
+  expect(consoleErrors).toEqual([]);
+});

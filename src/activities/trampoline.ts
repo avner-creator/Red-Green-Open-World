@@ -136,8 +136,6 @@ export function createTrampoline(ctx: GameContext): Trampoline {
   const awards = new ThresholdAwards();
   let chainApex = 0;
   let cooldown = 0;
-  let prevGrounded = true;
-  let prevOnMat = false;
   let cameraSet = false;
   let dent = 0;
   let dentV = 0;
@@ -206,15 +204,15 @@ export function createTrampoline(ctx: GameContext): Trampoline {
     const mine = onMat();
 
     if (grounded && cooldown <= 0) {
-      if (mine && (!prevGrounded || !prevOnMat)) {
+      if (mine) {
+        // Landing, walking on from the steps or just standing here: the mat always bounces. A chain
+        // that has decayed to nothing restarts with a gentle first bounce (kids never get stuck).
         const input = ctx.input.state;
         handleLanding(input.jump || input.jumpPressed);
       } else if (!mine && chainApex > 0) {
         endChain();
       }
     }
-    prevGrounded = grounded;
-    prevOnMat = mine;
 
     // Camera pulls back with height while a chain is running.
     if (chainApex > 0) {
