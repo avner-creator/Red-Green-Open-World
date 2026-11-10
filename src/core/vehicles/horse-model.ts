@@ -186,6 +186,26 @@ function buildTack(): Tack {
   return { group, bridle, reins, materials: [leather, blanket, trim, brass], geometries };
 }
 
+let blobTex: THREE.DataTexture | null = null;
+/** Soft oval contact shadow (shared by both horses). */
+function blobTexture(): THREE.DataTexture {
+  if (blobTex) return blobTex;
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot((x / (size - 1)) * 2 - 1, (y / (size - 1)) * 2 - 1);
+      const a = Math.max(0, Math.min(1, (1 - d) / 0.7));
+      data[(y * size + x) * 4 + 3] = Math.round(a * a * (3 - 2 * a) * 255);
+    }
+  }
+  blobTex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  blobTex.magFilter = THREE.LinearFilter;
+  blobTex.minFilter = THREE.LinearFilter;
+  blobTex.needsUpdate = true;
+  return blobTex;
+}
+
 export function createHorseModel(scene: THREE.Scene, coat: THREE.ColorRepresentation, mane: THREE.ColorRepresentation): HorseModel {
   const root = new THREE.Group();
   root.name = 'horse';
@@ -197,10 +217,10 @@ export function createHorseModel(scene: THREE.Scene, coat: THREE.ColorRepresenta
   body.add(inner);
 
   const blob = new THREE.Mesh(
-    new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false }),
+    new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
   );
-  blob.scale.set(0.75, 1, 1.45);
+  blob.scale.set(1.3, 1, 3.0);
   blob.renderOrder = 1;
 
   const tack = buildTack();

@@ -153,6 +153,10 @@ export function createHorse(
   const saddle = new THREE.Vector3();
   const bodyQ = new THREE.Quaternion();
   const desired = { x: 0, y: 0, z: 0 };
+  const lift = { x: 0, y: 0, z: 0 };
+  let blockedFor = 0;
+  /** Turning back from deep water: −1 / +1 while turning, 0 otherwise. */
+  let turnBackDir = 0;
   let rider: RiderPose | null = null;
   let riderLean = 0;
   const leanQ = new THREE.Quaternion();
@@ -195,7 +199,7 @@ export function createHorse(
     const above = position.y - gy;
     model.blob.position.set(position.x, Math.max(gy, ctx.world.waterLevel) + 0.05, position.z);
     model.blob.rotation.y = yaw;
-    (model.blob.material as THREE.MeshBasicMaterial).opacity = 0.42 * clamp(1 - above / 4, 0, 1);
+    (model.blob.material as THREE.MeshBasicMaterial).opacity = 0.5 * clamp(1 - above / 4, 0, 1);
   }
 
   const api: HorsePublic = {
@@ -241,8 +245,8 @@ export function createHorse(
     const hAhead = ctx.world.heightAt(ax, az);
     const wl = ctx.world.waterLevel;
     // Which side is drier? Probe 3 m out at ±50°.
-    const probe = (a: number): number => ctx.world.heightAt(position.x + Math.sin(yaw + a) * 3, position.z + Math.cos(yaw + a) * 3);
-    const landSide = Math.sign(probe(0.9) - probe(-0.9)) || 1;
+    const probe = (a: number): number => ctx.world.heightAt(position.x + Math.sin(yaw + a) * 4, position.z + Math.cos(yaw + a) * 4);
+    const landSide = Math.sign(probe(1.3) - probe(-1.3)) || 1;
     return { rise: hAhead - hHere, depthAhead: wl - hAhead, depthHere: wl - hHere, landSide };
   }
 
@@ -289,9 +293,16 @@ export function createHorse(
     const t = terrainAhead();
     let target = targetSpeed(throttle, sprint);
     if (target > 0) target *= slopeFactor(t.rise, 2.4);
+    // Water: wading slows the horse; deep water ahead and it refuses, turning back to the shore
+    // (one turn direction, kept until it is out, so it never dithers).
     const water = waterResponse(Math.max(t.depthAhead, t.depthHere * 0.8));
     if (target > 0) target *= water.factor;
-    if (water.turnBack && (ridden || Math.abs(speed) > 0.5)) steer = clamp(steer - t.landSide * 0.9, -1, 1);
+    const wading = t.depthHere > HORSE.wadeDepth * 2 && t.depthAhead > t.depthHere - 0.05; // in, and not heading out
+    if (water.turnBack || t.depthAhead >= HORSE.refuseDepth * 0.7 || (wading && throttle >= 0)) {
+      if (turnBackDir === 0) turnBackDir = t.landSide;
+      steer = -turnBackDir;
+      if (target > 0) target = Math.min(target, t.depthAhead > HORSE.refuseDepth ? 0 : 1.6);
+    } else if (t.depthAhead < HORSE.wadeDepth) turnBackDir = 0;
     speed = approachSpeed(speed, target, dt);
     if (rearT >= 0) speed = approachSpeed(speed, 0, dt * 2);
 
@@ -308,14 +319,36 @@ export function createHorse(
     desired.z = fwd.z * speed * dt;
     desired.y = vy * dt;
     syncCollider();
+    if (vy > 0) cc.disableSnapToGround();
+    else cc.enableSnapToGround(0.6);
     cc.computeColliderMovement(collider, desired, R.QueryFilterFlags.EXCLUDE_SENSORS, moveGroups);
-    const mv = cc.computedMovement();
+    let mv = cc.computedMovement();
+    let mvx = mv.x;
+    let mvy = mv.y;
+    let mvz = mv.z;
+    let groundedNow = cc.computedGrounded();
+    // Heightfield seams can snag the capsule for a frame: retry with a small lift (snap brings
+    // the hooves back down next frame).
+    const wantH = Math.hypot(desired.x, desired.z);
+    if (wantH > 1e-4 && Math.hypot(mvx, mvz) < wantH * 0.6) {
+      lift.x = desired.x;
+      lift.z = desired.z;
+      lift.y = Math.max(desired.y, 0) + 0.08;
+      cc.computeColliderMovement(collider, lift, R.QueryFilterFlags.EXCLUDE_SENSORS, moveGroups);
+      mv = cc.computedMovement();
+      if (Math.hypot(mv.x, mv.z) > Math.hypot(mvx, mvz) + 1e-4) {
+        mvx = mv.x;
+        mvy = mv.y;
+        mvz = mv.z;
+        groundedNow = groundedNow || vy <= 0;
+      }
+    }
     const wasGrounded = grounded;
     const fallSpeed = -vy;
-    position.x += mv.x;
-    position.y += mv.y;
-    position.z += mv.z;
-    grounded = cc.computedGrounded() && vy <= 0.5;
+    position.x += mvx;
+    position.y += mvy;
+    position.z += mvz;
+    grounded = groundedNow && vy <= 0.5;
     if (grounded) {
       sinceGround = 0;
       if (!wasGrounded && airTime > 0.25) {
@@ -329,12 +362,13 @@ export function createHorse(
     } else {
       sinceGround += dt;
       airTime += dt;
-      if (mv.y < desired.y - 1e-4 && vy > 0) vy = 0; // bonked a ceiling
+      if (mvy < desired.y - 1e-4 && vy > 0) vy = 0; // bonked a ceiling
     }
-    // Blocked: lose speed softly (never a crash), a little bump.
+    // Blocked (for real, a few frames running): lose speed softly (never a crash), a little bump.
     if (dt > 0 && Math.abs(speed) > 0.5) {
-      const actual = (mv.x * fwd.x + mv.z * fwd.z) / dt;
-      if (Math.abs(actual) < Math.abs(speed) * 0.55) {
+      const actual = (mvx * fwd.x + mvz * fwd.z) / dt;
+      blockedFor = Math.abs(actual) < Math.abs(speed) * 0.55 ? blockedFor + dt : 0;
+      if (blockedFor > 0.05) {
         const hit = Math.abs(speed) - Math.abs(actual);
         if (hit > 3.5 && bumpCooldown === 0 && ridden) {
           bumpCooldown = 0.6;
@@ -345,7 +379,7 @@ export function createHorse(
         }
         speed = actual * 0.6 + speed * 0.4 * (Math.abs(actual) < 0.3 ? 0.3 : 1);
       }
-    }
+    } else blockedFor = 0;
     syncCollider();
 
     // ── Deep water / lost: splash and back to the last safe spot.
@@ -457,6 +491,7 @@ export function createHorse(
     api,
     mode: 'riding',
     icon: 'horse',
+    rescueKeepsRider: true,
     seat,
     seatAnim: 'sit',
     chase: {
@@ -464,8 +499,8 @@ export function createHorse(
       speed: () => speed,
       topSpeed: HORSE.gallopSpeed,
       yawRate: () => yawRate,
-      distance: 5.2,
-      height: 2.6,
+      distance: 4.3,
+      height: 2.2,
     },
     promptPosition: () => prompt.copy(position).setY(position.y + 2.0),
     update,

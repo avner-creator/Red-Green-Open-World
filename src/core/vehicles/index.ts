@@ -11,10 +11,14 @@ import { createCar } from './car';
 import { createHorse } from './horse';
 import type { VehicleInternal } from './types';
 
-/** The two paddock horses: offsets from the ranch anchor (metres, world axes), yaw offset, coat, mane. */
+/**
+ * The two paddock horses: offsets from the ranch anchor (metres, world axes), yaw offset, coat,
+ * mane. Coats are picked for the red/green channels against grass (dark in R, bright in G): a
+ * chestnut is bright in R and dark in G, the grey is bright in both; manes contrast with coats.
+ */
 const HORSES = [
-  { id: 'horse-biscuit', dx: -3.2, dz: -3, dyaw: 0, coat: 0xd9a35a, mane: 0xf6f0e2 },
-  { id: 'horse-pepper', dx: 3.6, dz: 2.8, dyaw: 2.5, coat: 0xe8e4dc, mane: 0x34302d },
+  { id: 'horse-maple', dx: -3.2, dz: -3, dyaw: 0, coat: 0xc8622c, mane: 0xf4eee0 },
+  { id: 'horse-pebble', dx: 3.6, dz: 2.8, dyaw: 2.5, coat: 0xf1eee7, mane: 0x34302d },
 ] as const;
 
 export interface VehiclesInternal {

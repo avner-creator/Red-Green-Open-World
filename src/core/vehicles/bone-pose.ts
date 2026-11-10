@@ -125,7 +125,7 @@ export function aimBone(
   if (len < 1e-6) return false;
   cur.divideScalar(len);
   _dq.setFromUnitVectors(cur, _c.copy(dir).normalize());
-  if (weight < 1) _dq.copy(_id).slerp(_dq, weight);
+  if (weight < 1) _dq.slerpQuaternions(_id, _dq.clone(), weight);
   layer.touch(bone);
   const pv = pivot.clone();
   const dq = _dq.clone();
