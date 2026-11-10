@@ -41,3 +41,13 @@
 - Handoff: `docs/HANDOFF.md` is the single entry point for a new session/account; workers push WIP to `agent/<area>-<task>` branches. Reason: usage limits may end this session; nothing may live only in the container.
 - Skydive scoring: hoop bonus gems count as `stunt bullseye` (1 star each); touchdown gives 1/2/3 stars for the 12/7/3 m rings; `longGlide` stars at 40/80/140 m; with no input the parachute steers gently toward the rings. Reason: skydive agent's design; keeps the gem system simple.
 - Both-eye lock design: the key is weak-eye-only; the keyhole side of the chest and its arrow are strong-eye-only; the chest looks the same from all four sides to both eyes. Reason: needs both eyes without being hard for an 8-year-old.
+
+## Owner playtest feedback, 2026-11-10 (see GAME_DESIGN.md "Fun and motivation pass")
+- Gems become a currency with a persistent wallet (localStorage profile), spent on characters, outfits, paints, trails and ride tickets; gems respawn. Reason: owner feedback that gems felt pointless; wanting gems is what makes the weak eye work. Replaces "no saving between sessions".
+- Balloon ride costs 5 gems (first ride per session free); rocket pads 3; everything else free. Reason: gives gems a reason without ever locking a child out of fun.
+- Character select with skills and backstories; some free, some bought. Reason: owner found the robot unrelatable.
+- Trampoline first bounce ~12 m, cap ~45 m, air tricks; bigger pads; rocket pads. Reason: owner wants crazier, sillier thrills.
+- Wayfinding: beacons, plaza signpost, HUD compass, pictogram signs. Walk 6.5 / sprint 11 m/s. Controls card on demand. Livelier music.
+- Touch/mobile is v2 unless the parallel stream in docs/PARALLEL_WORK.md delivers it. Reason: time.
+- World scatter is drawn per species and level of detail, re-picked when the camera moves; grass is generated lazily per cell. Reason: world-artist's performance pass.
+- The UI polish agent was stopped after it finished: it kept re-sending its final report.

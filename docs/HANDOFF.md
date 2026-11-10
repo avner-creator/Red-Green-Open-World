@@ -48,7 +48,11 @@ If a WIP branch is unfinished, start the same agent type on it (not from scratch
 task on branch `agent/...`; run verify; report". If a branch is empty or missing, re-brief from the
 table.
 
+Parallel streams another account can run right now: see `docs/PARALLEL_WORK.md`.
+
 ## Next steps (in order)
+
+0. Build the "Fun and motivation pass" in GAME_DESIGN.md (owner feedback): economy/wallet/shop, missions, characters, bigger thrills, wayfinding, speed, controls card, music.
 
 1. Merge the in-flight branches one at a time onto an integration branch; `integrator` fixes
    failures; verify; promote. Known follow-ups: vehicles should publish
