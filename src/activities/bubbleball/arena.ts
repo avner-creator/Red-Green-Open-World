@@ -26,8 +26,8 @@ export const PAL = {
   white: 0xf7f3ea,
   yellow: 0xffd83d,
   coral: 0xff6f5e,
-  turfA: 0x2c7337,
-  turfB: 0x3b8a44,
+  turfA: 0x3f9a49,
+  turfB: 0x52b05a,
 } as const;
 
 export interface ArenaModel {
@@ -106,7 +106,7 @@ export function createArenaModel(opts: {
     for (const side of [-1, 1]) {
       for (let i = 0; i < n; i++) {
         const t = -len / 2 + (i + 0.5) * w;
-        const col = i % 2 ? PAL.navy : PAL.yellow;
+        const col = i % 2 ? PAL.navy : i % 4 === 0 ? PAL.yellow : PAL.coral;
         if (axis === 'x') k.add(UNIT.box, col, TRS(t, -skirtH / 2, side * ARENA.hz, 0, w, skirtH, 0.3));
         else k.add(UNIT.box, col, TRS(side * ARENA.hx, -skirtH / 2, t, 0, 0.3, skirtH, w));
       }
@@ -283,7 +283,7 @@ export function createArenaModel(opts: {
   const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, side: THREE.DoubleSide });
   const sign = new THREE.Mesh(new THREE.CircleGeometry(0.85, 40), signMat);
   sign.name = 'bubbleball-sign';
-  sign.applyMatrix4(B(0, 3.45, -0.62, Math.PI));
+  sign.applyMatrix4(B(0, 3.3, -1.0, Math.PI));
   group.add(sign);
 
   const proxyMesh = asShadowProxy(new THREE.Mesh(proxy.build()));

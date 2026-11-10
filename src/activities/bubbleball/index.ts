@@ -35,7 +35,19 @@ type Phase = 'idle' | 'loading' | 'match' | 'result';
 
 export interface BubbleBallTestApi {
   phase(): Phase;
-  match(): { home: number; away: number; clock: number; phase: string; charged: number; ring: { x: number; z: number } | null } | null;
+  match(): {
+    home: number;
+    away: number;
+    clock: number;
+    phase: string;
+    charged: number;
+    ring: { x: number; z: number } | null;
+    /** Player and ball, pitch space. */
+    px: number;
+    pz: number;
+    bx: number;
+    bz: number;
+  } | null;
   booth(): [number, number, number];
   start(): void;
   /** Put a bonus ring at pitch (x, z) now (test: channel separation). */
@@ -48,6 +60,8 @@ export interface BubbleBallTestApi {
   world(x: number, y: number, z: number): [number, number, number];
   friendsLoaded(): number;
   triangles(): number;
+  /** Show/hide only this game's weak-eye objects (channel tests). */
+  layer(visible: boolean): void;
 }
 
 declare global {
@@ -108,6 +122,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   let lastCount = -1;
   let wasFlipping = false;
   let loadToken = 0;
+  let layerOn = true;
   const events: MatchEvent[] = [];
   const walls = pitchWalls();
   let rand = rng(1);
@@ -203,7 +218,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   }
 
   function placeLayer(): void {
-    if (!match) {
+    if (!match || !layerOn) {
       ringView.hide();
       sparkle.hide();
       return;
@@ -357,7 +372,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     // Camera: behind the hero, looking down the pitch at the goal to attack.
     let off = attackYaw - player.yaw;
     off = Math.atan2(Math.sin(off), Math.cos(off));
-    ctx.cameraRig.setOverride({ distance: 10.5, height: 5.4, fov: CAMERA.fov + 6, lookAhead: 0.2, yawOffset: off });
+    ctx.cameraRig.setOverride({ distance: 8.2, height: 3.9, fov: CAMERA.fov + 6, lookAhead: 0.3, yawOffset: off });
   }
 
   const controller: ExternalController = {
@@ -414,6 +429,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     },
     onRelease() {
       if (phase !== 'idle') cleanup();
+      // Hand back on foot with no leftover ride velocity (the hop to the booth is one frame).
+      player.launch(new THREE.Vector3(0, 0, 0));
     },
   };
 
@@ -449,6 +466,10 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           phase: match.phase,
           charged: match.charged,
           ring: match.ring ? { x: match.ring.x, z: match.ring.z } : null,
+          px: match.agents[0].body.x,
+          pz: match.agents[0].body.z,
+          bx: match.ball.x,
+          bz: match.ball.z,
         },
       booth: () => [model.booth.x, model.booth.y, model.booth.z],
       start: () => {
@@ -469,6 +490,10 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       world: (x, y, z) => toWorld(x, y, z, new THREE.Vector3()).toArray() as [number, number, number],
       friendsLoaded: () => pool.loaded,
       triangles: () => model.triangles,
+      layer: (v) => {
+        layerOn = v;
+        placeLayer();
+      },
     };
   }
 

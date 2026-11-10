@@ -17,7 +17,7 @@ const ICONS: Record<TeamIcon | ActionIcon | 'ball' | 'again' | 'leave' | 'gem' |
     '<path d="M3 16c0-5 4-8 9-8 2-3 6-4 8-2 1.5 1.5.5 4-2 4.5L17 14c0 3-3 5-7 5H6c-2 0-3-1-3-3z" fill="#fff3a0" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/><circle cx="17.5" cy="7.5" r="1.2" fill="#000"/><path d="M8 8l1-3 1.5 3M11 7l1.5-3 1 3" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/>',
   crown: '<path d="M3 18l1.5-10 4.5 4 3-6 3 6 4.5-4L21 18z" fill="#141a3c" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>',
   ball: '<circle cx="12" cy="12" r="9.5" fill="#fff" stroke="#000" stroke-width="2"/><path d="M12 7.5l4 3-1.5 4.5h-5L8 10.5z" fill="#000"/><path d="M12 2.5v5M16 10.5l5-1.5M14.5 15l3 4.5M9.5 15l-3 4.5M8 10.5L3 9" stroke="#000" stroke-width="1.6"/>',
-  hop: '<circle cx="12" cy="9" r="6.5" fill="#fff3a0" stroke="#000" stroke-width="1.8"/><path d="M9 21l3-4 3 4" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round"/><path d="M4 5l-2-2M20 5l2-2" stroke="#fff" stroke-width="2" stroke-linecap="round"/>',
+  hop: '<circle cx="12" cy="12.5" r="7.5" fill="#fff3a0" stroke="#000" stroke-width="1.8"/><path d="M8.5 10a4 4 0 0 1 3-3" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><path d="M12 1.5v7M8.8 4.6L12 1.4l3.2 3.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 1.5v7M8.8 4.6L12 1.4l3.2 3.2" fill="none" stroke="#000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21.5l1.2-2M15 21.5l-1.2-2" stroke="#000" stroke-width="2" stroke-linecap="round"/>',
   tail: '<path d="M4 15c3 4 10 5 15 0" fill="none" stroke="#000" stroke-width="5" stroke-linecap="round"/><path d="M4 15c3 4 10 5 15 0" fill="none" stroke="#fff3a0" stroke-width="2.6" stroke-linecap="round"/><path d="M19 15l2-4-4 1" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/><circle cx="12" cy="6" r="3.2" fill="#fff" stroke="#000" stroke-width="1.6"/>',
   again: '<path d="M18.5 8.5A7.5 7.5 0 1 0 19 15" fill="none" stroke="#000" stroke-width="5" stroke-linecap="round"/><path d="M18.5 8.5A7.5 7.5 0 1 0 19 15" fill="none" stroke="#fff3a0" stroke-width="2.4" stroke-linecap="round"/><path d="M20.5 3.5v6h-6" fill="#fff3a0" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/>',
   leave: '<rect x="4" y="3" width="10" height="18" rx="1.5" fill="#141a3c" stroke="#fff" stroke-width="1.8"/><path d="M12 12h9m-3-3.5L21.5 12 18 15.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -33,7 +33,7 @@ function svg(name: keyof typeof ICONS): string {
 
 const CSS = `
 .rg-bump{position:absolute;inset:0;pointer-events:none;font:900 5vmin/1 ui-rounded,"Nunito","Trebuchet MS",system-ui,sans-serif;color:#fff;z-index:3}
-.rg-bump .board{position:absolute;top:2.4vmin;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:1.6vmin;
+.rg-bump .board{position:absolute;top:13vmin;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:1.6vmin;
   background:#0d1130;border:.6vmin solid #fff;border-radius:3vmin;padding:1vmin 2vmin;box-shadow:0 .8vmin 0 #000;opacity:0;transition:opacity .2s}
 .rg-bump.on .board{opacity:1}
 .rg-bump .team{display:flex;align-items:center;gap:1vmin}
