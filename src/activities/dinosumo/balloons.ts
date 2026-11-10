@@ -41,6 +41,7 @@ export class Splash {
     this.life = new Float32Array(max);
     this.size = new Float32Array(max);
     this.hideAll();
+    this.mesh.visible = false;
   }
 
   private hideAll(): void {
@@ -61,11 +62,14 @@ export class Splash {
       this.life[i] = 0.6 + this.rand() * 0.5;
       this.size[i] = size * (0.6 + this.rand() * 0.9);
     }
+    this.mesh.visible = true;
   }
 
   update(dt: number): void {
+    let alive = 0;
     for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
+      alive++;
       this.life[i] -= dt;
       const k = i * 3;
       this.v[k + 1] -= 14 * dt;
@@ -76,7 +80,9 @@ export class Splash {
       this.m.compose(this.p.set(this.px[k], this.px[k + 1], this.px[k + 2]), this.q, this.s.set(s, s * 1.3, s));
       this.mesh.setMatrixAt(i, this.m);
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
+    // No draw call at all while nothing is splashing.
+    this.mesh.visible = alive > 0;
+    if (alive > 0) this.mesh.instanceMatrix.needsUpdate = true;
   }
 
   clear(): void {
