@@ -127,15 +127,23 @@ const RECIPES: Record<SfxName, Recipe> = {
   },
   land: (s, t, v, p) => thud(s, t, v, 120 * p, 0.3),
   boing: (s, t, v, p) => {
+    // Springy cartoon boing: a soft thump, a wobbling spring glide and a bright pluck on top.
     const pts: FreqPoints = [[0, 150 * p], [0.07, 620 * p], [0.16, 260 * p], [0.25, 500 * p], [0.34, 300 * p], [0.45, 400 * p]];
-    s.tone('sine', pts, t, 0.5, { peak: 0.3 * v });
+    s.tone('sine', [[0, 160 * p], [0.1, 60 * p]], t, 0.14, { peak: 0.28 * v, attack: 0.002 });
+    s.tone('sine', pts, t, 0.5, { peak: 0.28 * v });
     s.tone('triangle', pts.map(([d, f]) => [d, f * 2] as const), t, 0.4, { peak: 0.08 * v });
+    s.tone('triangle', pts.map(([d, f]) => [d, f * 1.5] as const), t + 0.01, 0.35, { peak: 0.05 * v, filter: { type: 'lowpass', freq: 2500 } });
+    s.tone('sine', [[0, 1320 * p], [0.08, 1760 * p]], t + 0.02, 0.12, { peak: 0.05 * v, attack: 0.002 });
   },
   bigBoing: (s, t, v, p) => {
+    // Bigger spring, a sub drop, a rising whoosh and a sparkly major chord.
     const pts: FreqPoints = [[0, 110 * p], [0.1, 700 * p], [0.22, 200 * p], [0.34, 600 * p], [0.46, 240 * p], [0.58, 480 * p], [0.7, 300 * p], [0.85, 380 * p]];
-    s.tone('sine', pts, t, 0.95, { peak: 0.32 * v });
+    s.tone('sine', [[0, 120 * p], [0.18, 45 * p]], t, 0.25, { peak: 0.35 * v, attack: 0.002 });
+    s.tone('sine', pts, t, 0.95, { peak: 0.3 * v });
     s.tone('triangle', pts.map(([d, f]) => [d, f * 2] as const), t, 0.8, { peak: 0.1 * v });
-    chime(s, t + 0.1, 1568 * p, 0.4, 0.08 * v);
+    s.tone('triangle', pts.map(([d, f]) => [d, f * 1.01] as const), t, 0.9, { peak: 0.08 * v, filter: { type: 'lowpass', freq: 1800 } });
+    s.burst(t + 0.05, 0.7, 'bandpass', 400, 2600, 1.1, 0.12 * v, 0.25);
+    [1046.5, 1318.5, 1568, 2093].forEach((f, i) => chime(s, t + 0.12 + i * 0.05, f * p, 0.5, 0.06 * v));
   },
   flop: (s, t, v, p) => {
     const pts: FreqPoints = [[0, 1300 * p], [0.15, 1000 * p], [0.3, 800 * p], [0.45, 500 * p], [0.6, 220 * p]];
