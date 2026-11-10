@@ -34,10 +34,11 @@ export const ARCH = { x: -54, z: 32.5, yaw: Math.atan2(-8, 10), half: 4.6 };
 /** Riding track centreline (rounded rect inside the fence) and its width. */
 export const TRACK = { hx: 15.6, hz: 11.6, r: 2.3, width: 2.6 };
 /**
- * Show jumps at the ends of the long straights (local x, z), outside the anchor's clear radius. The
- * beach path leaves through the north-west, so that end of the north straight has no jump.
+ * Show jumps at both ends of the south straight (local x, z), outside the anchor's clear radius. The
+ * north straight stays clear: the beach path leaves through its west end and the road (and a
+ * galloping horse) comes and goes through the open north-east corner.
  */
-export const JUMPS: readonly [number, number][] = [[13.3, -11.6], [-13.3, 11.6], [13.3, 11.6]];
+export const JUMPS: readonly [number, number][] = [[-13.3, 11.6], [13.3, 11.6]];
 
 function barn(k: Kit): void {
   const a = ANCHORS.ranch;
