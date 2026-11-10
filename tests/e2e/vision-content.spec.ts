@@ -162,6 +162,56 @@ test('every layer feature touches only its own channel with all content present 
   await page.evaluate(() => window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' }));
 });
 
+/**
+ * The attraction streams (bumper arena, carnival, foam course, sky rides, race, Scoops), with all of
+ * the above still present: each stream's layer objects, toggled by name, touch only their own
+ * channel, never the other channel or blue, for all 4 combos. Objects that only show during a round
+ * are checked for leaks here (their own specs play a round and check them in view); the ones that
+ * are on screen while idle must also really change their own channel (positive control).
+ */
+const STREAMS: { anchor: string; prefixes: string[]; mustSee: string[] }[] = [
+  { anchor: 'bubbleArena', prefixes: ['bubbleball-bonus-ring', 'bubbleball-charge'], mustSee: [] },
+  { anchor: 'dinoRing', prefixes: ['dinosumo-weak-balloons', 'dinosumo-beat-ring'], mustSee: ['dinosumo-weak-balloons'] },
+  { anchor: 'carnivalRow', prefixes: ['carnival-balloonPop-weak', 'carnival-ringToss-weak', 'carnival-duckPond-weak', 'carnival-strengthBell-weak', 'carnival-glowDodge-weak'], mustSee: [] },
+  { anchor: 'foamCourse', prefixes: ['foam-lava-weak'], mustSee: ['foam-lava-weak'] },
+  { anchor: 'dragonRoost', prefixes: ['sky-dragon-weak'], mustSee: [] },
+  { anchor: 'raceStart', prefixes: ['race-weak-eye'], mustSee: [] }, // the line is built on the first race
+  { anchor: 'iceCream', prefixes: ['Scoops.secret'], mustSee: [] },
+];
+
+test('attraction streams: every layer object touches only its own channel (4 combos)', async () => {
+  const seen: Record<string, number> = {};
+  for (const st of STREAMS) {
+    const view = await page.evaluate((name) => {
+      const a = window.__rg!.ctx.world.anchors[name as 'spawn'];
+      if (!a) return null;
+      const p = a.position;
+      const d = Math.max(10, a.radius * 1.4);
+      return { from: [p.x + d * 0.7, p.y + d * 0.9, p.z + d * 0.7] as V3, at: [p.x, p.y, p.z] as V3 };
+    }, st.anchor);
+    expect(view, st.anchor).not.toBeNull();
+    if (!view) continue;
+    await cam(view.from, view.at);
+    for (const combo of COMBOS) {
+      await page.evaluate((eye) => window.__rg!.setEye(eye), combo.eye);
+      const on = await frame();
+      for (const prefix of st.prefixes) {
+        expect(await toggle(prefix, false), prefix).toBeGreaterThan(0);
+        const off = await frame();
+        await toggle(prefix, true);
+        const diff = channelDiff(on, off);
+        const tag = `${st.anchor}: ${prefix} ${combo.eye.leftLens}/${combo.eye.weakEye}`;
+        expect.soft(maxOf(diff, combo.strong), tag).toBe(0);
+        expect.soft(diff.maxB, tag).toBe(0);
+        seen[prefix] = Math.min(seen[prefix] ?? Infinity, diff[combo.weak]);
+      }
+    }
+  }
+  console.log('[vision-content] streams own-channel diff', JSON.stringify(seen));
+  for (const st of STREAMS) for (const p of st.mustSee) expect.soft(seen[p], `${p} in view`).toBeGreaterThan(30);
+  await page.evaluate(() => window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' }));
+});
+
 test('no errors', async () => {
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
