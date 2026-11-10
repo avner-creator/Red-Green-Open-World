@@ -74,6 +74,12 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   let vehicle: VehicleApi | null = null;
   const desired = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
+  /**
+   * Intended horizontal ground velocity while pressing into an obstacle. `velocity` then reports
+   * the real (blocked) motion, but the next frame keeps pushing at full speed: zeroing it would
+   * starve Rapier's autostep (it needs real per-frame travel to climb kerbs and stairs).
+   */
+  const intended = { x: 0, z: 0, valid: false };
 
   const syncCollider = (): void => {
     collider.setTranslation({ x: position.x, y: position.y + CENTRE, z: position.z });
@@ -124,6 +130,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
         syncCollider();
         object.visible = true;
         velocity.set(0, 0, 0);
+        intended.valid = false;
         resetAir();
         setMode('walk');
       }
@@ -155,6 +162,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       if (yaw !== undefined) api.yaw = yaw;
       object.rotation.y = api.yaw;
       velocity.set(0, 0, 0);
+      intended.valid = false;
       resetAir();
       launched = false;
       groundedFor = 0;
@@ -163,6 +171,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     },
     launch(v) {
       velocity.copy(v);
+      intended.valid = false;
       if (mode === 'flop') {
         fx.reset();
         setMode('walk');
@@ -196,6 +205,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       if (mode === 'flop') fx.reset();
       external = c;
       externalAnim = 'idle';
+      intended.valid = false;
       collider.setEnabled(false);
       setMode('external');
     },
@@ -246,7 +256,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
 
   function moveCharacter(dt: number, inputActive: boolean): void {
     const input = ctx.input.state;
-    const hv = { x: velocity.x, z: velocity.z };
+    const hv = intended.valid ? { x: intended.x, z: intended.z } : { x: velocity.x, z: velocity.z };
+    intended.valid = false;
+    const startGrounded = grounded;
     const dir = inputActive ? cameraRelative(input.moveX, input.moveY, cameraYaw()) : { x: 0, z: 0 };
     const mag = Math.min(1, Math.hypot(dir.x, dir.z));
     const top = input.sprint && inputActive ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
@@ -309,11 +321,17 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     position.z += moved.z;
     syncCollider();
 
-    // Blocked by a wall: drop the blocked part of the speed so it doesn't build up.
+    // Blocked by a wall: report the real speed. In the air, drop the blocked part so launch speed
+    // doesn't build up against walls; on the ground keep pushing (see `intended`).
     const wantH = Math.hypot(desired.x, desired.z);
     if (wantH > 1e-5 && dt > 0) {
       const gotH = Math.hypot(moved.x, moved.z);
       if (gotH < wantH * 0.9) {
+        if (startGrounded) {
+          intended.x = hv.x;
+          intended.z = hv.z;
+          intended.valid = true;
+        }
         hv.x = moved.x / dt;
         hv.z = moved.z / dt;
       }
