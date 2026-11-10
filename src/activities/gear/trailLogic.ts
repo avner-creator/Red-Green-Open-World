@@ -25,9 +25,9 @@ export interface TrailSpec {
 }
 
 export const TRAIL_SPECS: Readonly<Record<TrailKind, TrailSpec>> = {
-  sparkle: { spacing: 0.4, life: 0.9, size: 0.2, rise: 0.5 },
-  bubbles: { spacing: 0.5, life: 1.5, size: 0.22, rise: 0.9 },
-  rainbow: { spacing: 0.26, life: 1.1, size: 0.2, rise: 0.0 },
+  sparkle: { spacing: 0.35, life: 1.0, size: 0.3, rise: 0.5 },
+  bubbles: { spacing: 0.45, life: 1.5, size: 0.3, rise: 0.9 },
+  rainbow: { spacing: 0.24, life: 1.2, size: 0.4, rise: 0.0 },
 };
 
 /** Turns distance walked into a number of puffs to emit. */

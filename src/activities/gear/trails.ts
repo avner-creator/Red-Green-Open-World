@@ -33,7 +33,7 @@ function geometryFor(kind: TrailKind): THREE.BufferGeometry {
   switch (kind) {
     case 'sparkle':
       // Four-point glint: a flat octahedron.
-      return new THREE.OctahedronGeometry(0.5, 0).scale(1, 1, 0.45);
+      return new THREE.OctahedronGeometry(0.5, 0).scale(0.55, 1.4, 0.55);
     case 'bubbles':
       return new THREE.IcosahedronGeometry(0.5, 1);
     default:
@@ -168,7 +168,7 @@ export function createTrails(ctx: GameContext): Trails {
       const fade = k > 0.6 ? 1 - (k - 0.6) / 0.4 : 1;
       const wob = kind === 'bubbles' ? 1 + 0.12 * Math.sin(time * 6 + p.seed) : 1;
       dummy.position.set(p.x + (kind === 'bubbles' ? Math.sin(time * 2.5 + p.seed) * 0.06 : 0), p.y, p.z);
-      dummy.rotation.set(0, p.spin * p.age + p.seed, kind === 'sparkle' ? p.spin * p.age * 0.5 : 0);
+      dummy.rotation.set(0, kind === 'rainbow' ? 0 : p.spin * p.age + p.seed, kind === 'sparkle' ? 0.3 * Math.sin(p.spin * p.age) : 0);
       dummy.scale.setScalar(Math.max(0.0001, p.size * pop * fade * wob));
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);

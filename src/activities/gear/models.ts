@@ -16,6 +16,15 @@ const part = (geo: THREE.BufferGeometry, color: number, ambient = 0.6, k = 1): T
 const at = (geo: THREE.BufferGeometry, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0): THREE.BufferGeometry => placed(geo, x, y, z, rx, ry, rz);
 const rbox = (w: number, h: number, d: number, r = 0.02): THREE.BufferGeometry => new RoundedBoxGeometry(w, h, d, 2, r);
 
+/** Wrap `inner` in an outer group scaled by `k`: the pop-in scales the outer one, so fitting survives it. */
+function fit(inner: THREE.Object3D, k: number): THREE.Group {
+  const outer = new THREE.Group();
+  inner.scale.multiplyScalar(k);
+  inner.position.multiplyScalar(k);
+  outer.add(inner);
+  return outer;
+}
+
 // ───────────────────────────── Propeller cap ─────────────────────────────
 
 export function buildPropellerCap(): Wearable {
@@ -53,7 +62,7 @@ export function buildPropellerCap(): Wearable {
   g.position.y = -0.065;
   g.rotation.x = -0.05;
   return {
-    object: g,
+    object: fit(g, 1.6),
     update(dt, speed) {
       prop.rotation.y += dt * (7 + Math.min(14, speed * 1.6));
     },
@@ -88,7 +97,7 @@ export function buildCrown(): Wearable {
   g.add(mesh(geo, mat));
   g.position.y = -0.04;
   g.rotation.set(-0.05, 0, 0.05);
-  return { object: g, dispose: disposer([geo], [mat]) };
+  return { object: fit(g, 1.5), dispose: disposer([geo], [mat]) };
 }
 
 // ───────────────────────────── Wizard hat ─────────────────────────────
@@ -135,7 +144,7 @@ export function buildWizardHat(): Wearable {
   g.add(mesh(geo, mat));
   g.position.y = -0.065;
   g.rotation.x = -0.08;
-  return { object: g, dispose: disposer([geo], [mat]) };
+  return { object: fit(g, 1.15), dispose: disposer([geo], [mat]) };
 }
 
 // ───────────────────────────── Capes ─────────────────────────────
@@ -222,39 +231,39 @@ export function buildRocketPack(): Wearable {
 // ───────────────────────────── Glasses ─────────────────────────────
 
 export function buildShades(): Wearable {
-  const dx = 0.1;
+  const dx = 0.15;
   const parts: THREE.BufferGeometry[] = [];
   const glints: THREE.BufferGeometry[] = [];
   for (const sx of [-1, 1]) {
-    parts.push(part(at(rbox(0.158, 0.1, 0.014, 0.03), sx * dx, 0, 0), 0xffe14a, 0.7, 1.1)); // rim
-    parts.push(paint(at(rbox(0.134, 0.078, 0.02, 0.026), sx * dx, 0, 0.003), 0x0a0c12));
-    glints.push(paint(at(rbox(0.014, 0.06, 0.006, 0.003), sx * dx - 0.03, 0.002, 0.014, 0, 0, -0.5), 0xffffff));
-    glints.push(paint(at(rbox(0.008, 0.04, 0.006, 0.003), sx * dx - 0.012, 0.002, 0.014, 0, 0, -0.5), 0xd8e6ff));
-    parts.push(part(at(rbox(0.018, 0.024, 0.3, 0.008), sx * (dx + 0.095), 0.012, -0.15), 0xffe14a, 0.7, 1.1));
+    parts.push(part(at(rbox(0.215, 0.14, 0.016, 0.04), sx * dx, 0, 0), 0xffe14a, 0.7, 1.1)); // rim
+    parts.push(paint(at(rbox(0.185, 0.112, 0.024, 0.036), sx * dx, 0, 0.004), 0x0a0c12));
+    glints.push(paint(at(rbox(0.02, 0.085, 0.006, 0.003), sx * dx - 0.04, 0.002, 0.018, 0, 0, -0.5), 0xffffff));
+    glints.push(paint(at(rbox(0.01, 0.055, 0.006, 0.003), sx * dx - 0.014, 0.002, 0.018, 0, 0, -0.5), 0xd8e6ff));
+    parts.push(part(at(rbox(0.022, 0.03, 0.34, 0.01), sx * (dx + 0.12), 0.015, -0.17), 0xffe14a, 0.7, 1.1));
   }
-  parts.push(part(at(rbox(0.07, 0.02, 0.02, 0.008), 0, 0.02, 0), 0xffe14a, 0.7, 1.1));
-  parts.push(part(at(rbox(0.42, 0.02, 0.022, 0.008), 0, 0.058, -0.004), 0x23262d, 0.7));
+  parts.push(part(at(rbox(0.1, 0.026, 0.024, 0.01), 0, 0.025, 0), 0xffe14a, 0.7, 1.1));
+  parts.push(part(at(rbox(0.56, 0.026, 0.026, 0.01), 0, 0.078, -0.004), 0x23262d, 0.7));
   const geo = merge([...parts, ...glints]);
   const mat = std({ roughness: 0.25, metalness: 0.1 });
   const g = new THREE.Group();
   g.add(mesh(geo, mat));
-  g.position.z = 0.03;
+  g.position.z = 0.08;
   return { object: g, dispose: disposer([geo], [mat]) };
 }
 
 export function buildGoggles(): Wearable {
-  const dx = 0.112;
+  const dx = 0.15;
   const brass = 0xe0a63a;
   const parts: THREE.BufferGeometry[] = [];
   const lensParts: THREE.BufferGeometry[] = [];
   for (const sx of [-1, 1]) {
-    parts.push(part(at(new THREE.TorusGeometry(0.075, 0.017, 10, 26), sx * dx, 0, 0), brass, 0.6, 1.1));
-    parts.push(part(at(new THREE.TorusGeometry(0.093, 0.01, 8, 26), sx * dx, 0, -0.012), 0x2a1c12, 0.8));
-    lensParts.push(paint(at(new THREE.CircleGeometry(0.07, 22), sx * dx, 0, 0.002), 0xa8ecff));
+    parts.push(part(at(new THREE.TorusGeometry(0.095, 0.021, 10, 26), sx * dx, 0, 0), brass, 0.6, 1.1));
+    parts.push(part(at(new THREE.TorusGeometry(0.117, 0.012, 8, 26), sx * dx, 0, -0.014), 0x2a1c12, 0.8));
+    lensParts.push(paint(at(new THREE.CircleGeometry(0.088, 22), sx * dx, 0, 0.002), 0xa8ecff));
     // Bolts on the rim.
     for (let k = 0; k < 4; k++) {
       const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
-      parts.push(part(at(new THREE.SphereGeometry(0.009, 6, 5), sx * dx + Math.cos(a) * 0.075, Math.sin(a) * 0.075, 0.015), 0xfff0b0, 0.8));
+      parts.push(part(at(new THREE.SphereGeometry(0.009, 6, 5), sx * dx + Math.cos(a) * 0.095, Math.sin(a) * 0.095, 0.019), 0xfff0b0, 0.8));
     }
   }
   parts.push(part(at(rbox(0.06, 0.03, 0.03, 0.01), 0, 0.005, 0), brass, 0.6));
@@ -268,7 +277,7 @@ export function buildGoggles(): Wearable {
   const lensMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.55, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false });
   const g = new THREE.Group();
   g.add(mesh(geo, mat), mesh(lensGeo, lensMat, false));
-  g.position.z = 0.035;
+  g.position.z = 0.07;
   return { object: g, dispose: disposer([geo, lensGeo], [mat, lensMat]) };
 }
 
