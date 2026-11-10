@@ -445,7 +445,7 @@ function bubbleBall(c: C2, x: number, y: number, s: number): void {
   line(c, [-24, -8, -20, -16], 3.4, WHITE);
   line(c, [-17, -21, -12, -24], 3.4, WHITE);
   person(c, -8, 4, 0.58, 'walk');
-  line(c, [-33, 4, -8, 4], 3, YEL);
+  line(c, [-34, 27, 38, 27], 3.4, YEL);
   disc(c, 27, 14, 11, WHITE);
   poly(c, [27, 9, 31.5, 12.5, 29.8, 18, 24.2, 18, 22.5, 12.5], INK);
   for (const a of [0.3, 1.55, 2.8, 4.05, 5.3]) line(c, [27 + Math.cos(a - 1.57) * 6, 14 + Math.sin(a - 1.57) * 6, 27 + Math.cos(a - 1.57) * 11, 14 + Math.sin(a - 1.57) * 11], 1.8, INK);
