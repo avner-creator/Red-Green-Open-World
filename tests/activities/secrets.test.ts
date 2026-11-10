@@ -4,6 +4,7 @@ import { PATH_RULES, STONE, checkPath, edgeGap, helixStones, minClearance, onSto
 import type { Stone } from '../../src/activities/secrets/pathLogic';
 import { DOOR_RULES, DoorLock, buttonAt, fromDoorLocal, makeSequence, toDoorLocal } from '../../src/activities/secrets/doorLogic';
 import { buildRoutes, buildVaults } from '../../src/activities/secrets/routes';
+import { ARROWS, arrowTrail, nearestOnPolylines } from '../../src/activities/secrets/arrowLogic';
 
 const terrain = buildTerrain();
 const height = (x: number, z: number): number => sampleHeight(terrain, x, z);
@@ -186,5 +187,34 @@ describe('vault doors', () => {
         }
       }
     }
+  });
+});
+
+describe('weak-eye arrows', () => {
+  test('a trail runs from the road toward the target, evenly spaced, all pointing at it', () => {
+    const t = arrowTrail({ x: 0, z: 0 }, { x: 0, z: 30 });
+    expect(t.length).toBeGreaterThan(8);
+    for (let i = 0; i + 1 < t.length; i++) expect(t[i + 1].z - t[i].z).toBeCloseTo(ARROWS.spacing);
+    expect(30 - t[t.length - 1].z).toBeCloseTo(ARROWS.endSkip);
+    expect(t[0].z).toBeGreaterThanOrEqual(ARROWS.startSkip - 1e-9);
+    for (const a of t) expect(a.yaw).toBeCloseTo(0);
+    expect(t[0].t).toBe(0);
+    expect(t[t.length - 1].t).toBe(1);
+    const east = arrowTrail({ x: 0, z: 0 }, { x: 20, z: 0 });
+    expect(east[0].yaw).toBeCloseTo(Math.PI / 2);
+  });
+
+  test('far targets only get the last stretch; targets by the road still get a short trail', () => {
+    const far = arrowTrail({ x: 0, z: 0 }, { x: 0, z: 200 });
+    expect(200 - far[0].z).toBeLessThanOrEqual(ARROWS.maxLength + ARROWS.endSkip + 1e-6);
+    const close = arrowTrail({ x: 0, z: 0 }, { x: 0, z: 2 });
+    expect(close.length).toBeGreaterThanOrEqual(3);
+    for (const a of close) expect(a.z).toBeLessThan(2);
+    expect(arrowTrail({ x: 0, z: 0 }, { x: 0, z: 0.1 })).toEqual([]);
+  });
+
+  test('nearest road point', () => {
+    const p = nearestOnPolylines([[{ x: 0, z: 0 }, { x: 10, z: 0 }], [{ x: 0, z: 20 }, { x: 0, z: 40 }]], 4, 3);
+    expect(p).toMatchObject({ x: 4, z: 0, distance: 3 });
   });
 });

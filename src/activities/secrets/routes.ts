@@ -161,8 +161,8 @@ export function buildRoutes(h: HeightFn): RouteDef[] {
  */
 export function buildVaults(h: HeightFn): VaultDef[] {
   const defs: { id: VaultDef['id']; x: number; z: number; yaw: number }[] = [
-    // Cliff foot at (100, 24); the door stands 4.6 m out from it on the flat.
-    { id: 'cliff', x: 100 + Math.sin(1.6) * 4.6, z: 24 + Math.cos(1.6) * 4.6, yaw: 1.6 },
+    // Cliff foot at (100, 21); the door stands 4.6 m out from it on the flat.
+    { id: 'cliff', x: 100 + Math.sin(1.6) * 4.6, z: 21 + Math.cos(1.6) * 4.6, yaw: 1.6 },
     { id: 'village', x: -22, z: -64 + 4.6, yaw: 0 },
   ];
   return defs.map((d) => ({ ...d, y: h(d.x, d.z) }));
