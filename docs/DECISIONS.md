@@ -52,3 +52,7 @@
 - World scatter is drawn per species and level of detail, re-picked when the camera moves; grass is generated lazily per cell. Reason: world-artist's performance pass.
 - The UI polish agent was stopped after it finished: it kept re-sending its final report.
 - Economy, shop and missions (fun pass items 1–4) are built by a second account on branch `agent/economy`; the main session builds the rest and merges it. Reason: owner offered extra capacity; additive-only interface rule keeps the two orchestrators from colliding.
+- Spawn yaw is 1.75 (facing the attractions); beacons float 9–12 m near the plaza (18–22 m at the far fields) because the walking camera shows only ~8° above the horizon. Reason: world-artist's visibility test.
+- Running jump is ~7.9 m (asked 5–6 m). Reason: matching 5–6 m made the jump too low; owner wants "a little crazy".
+- `launchPads` anchor moved to (80, 24) with a fixed landing-net target at (83, −34) inside the park. Reason: tighter attraction hub.
+- UI screenshots in e2e are opt-in (`RG_SHOTS=1`, `npm run shots:ui`). Reason: they cost ~2 min per run on the software renderer.
