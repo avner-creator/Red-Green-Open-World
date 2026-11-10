@@ -31,11 +31,18 @@ export interface GemFieldOptions {
   pickupRadius: number;
   nearRadius: number;
   nearInterval: number;
+  /** Seconds after pickup before a gem comes back (0 or missing = never). */
+  respawnSeconds?: number;
+  /** Per-spot pickup radius (mega gems are bigger). Defaults to `pickupRadius`. */
+  radiusOf?: (index: number) => number;
 }
 
 export class GemField {
   readonly collected: boolean[];
+  /** Gems picked up since the last reset (keeps rising when gems respawn). */
   count = 0;
+  /** Seconds left until a collected gem comes back (0 for gems that are in place). */
+  readonly respawnIn: number[];
   private nearTimer = 0;
 
   constructor(
@@ -43,6 +50,7 @@ export class GemField {
     private readonly opts: GemFieldOptions,
   ) {
     this.collected = spots.map(() => false);
+    this.respawnIn = spots.map(() => 0);
   }
 
   get total(): number {
@@ -51,6 +59,7 @@ export class GemField {
 
   reset(): void {
     this.collected.fill(false);
+    this.respawnIn.fill(0);
     this.count = 0;
     this.nearTimer = 0;
   }
@@ -60,13 +69,41 @@ export class GemField {
     const hit: number[] = [];
     for (let i = 0; i < this.spots.length; i++) {
       if (this.collected[i]) continue;
-      if (segmentSphereHit(prev, cur, this.spots[i], this.opts.pickupRadius)) {
+      if (segmentSphereHit(prev, cur, this.spots[i], this.opts.radiusOf ? this.opts.radiusOf(i) : this.opts.pickupRadius)) {
         this.collected[i] = true;
+        this.respawnIn[i] = this.opts.respawnSeconds ?? 0;
         this.count++;
         hit.push(i);
       }
     }
     return hit;
+  }
+
+  /** Count down respawn timers (call only while playing). Returns the indices that came back. */
+  tickRespawn(dt: number): number[] {
+    const back: number[] = [];
+    for (let i = 0; i < this.spots.length; i++) {
+      if (!this.collected[i] || this.respawnIn[i] <= 0) continue;
+      this.respawnIn[i] -= dt;
+      if (this.respawnIn[i] <= 0) {
+        this.respawnIn[i] = 0;
+        this.collected[i] = false;
+        back.push(i);
+      }
+    }
+    return back;
+  }
+
+  /** Bring every collected gem back right now. Returns their indices. */
+  respawnAll(): number[] {
+    const back: number[] = [];
+    for (let i = 0; i < this.spots.length; i++) {
+      if (!this.collected[i]) continue;
+      this.collected[i] = false;
+      this.respawnIn[i] = 0;
+      back.push(i);
+    }
+    return back;
   }
 
   nearest(pos: Vec3): { index: number; distance: number } | null {

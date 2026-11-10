@@ -51,3 +51,27 @@ export const GEM_FX = {
   maxSpeed: 90,
   slack: 2,
 } as const;
+
+/** Mega gems: bigger weak-eye-only gems at thrill spots (positions are computed from anchors). */
+export const MEGA = {
+  /** Visual scale of a mega gem relative to the normal gem (the silhouette is a star-burst). */
+  scale: 2.1,
+  /** Pickup radius (a little more generous than normal gems because they hang high). */
+  pickupRadius: 2.2,
+  /** Player chest height above the feet (the pickup test point). */
+  chestAboveFeet: 0.85,
+  /** Beyond the last bounce pad, along the push direction, metres. */
+  padsAhead: 7,
+  /** Over the launch pads: heights above the ground and the horizontal reach, metres. */
+  launchLow: 13,
+  launchHigh: 24,
+  launchAhead: 14,
+  /** Buggy line: metres in front of the garage (the road runs there) and sideways offsets. */
+  roadFront: 9,
+  roadOffsets: [-16, 0, 16] as readonly number[],
+  roadHeight: 1.6,
+  /** Pop-in animation after a respawn, seconds. */
+  popSeconds: 0.6,
+  /** Burst size multiplier (on the weak layer) compared with a normal gem. */
+  burstScale: 1.9,
+} as const;
