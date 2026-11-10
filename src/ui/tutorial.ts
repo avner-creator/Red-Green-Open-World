@@ -1,10 +1,15 @@
-/** Wordless tutorial shown for the first ~10 s of play: animated key caps or gamepad glyphs. */
+/** Wordless tutorial strip shown for the first ~6 s of play: animated key caps or gamepad glyphs. */
 import type { GameContext } from '../types';
 import { clear, h } from './dom';
 import { cap, GAMEPAD_GLYPH, padButton } from './glyphs';
 import { icon } from './icons';
 
-export const TUTORIAL_SECONDS = 10;
+export const TUTORIAL_SECONDS = 6;
+
+/** Fade out as soon as the player has moved AND (looked around or jumped). */
+export function tutorialDone(seen: { moved: boolean; looked: boolean; jumped: boolean }, t: number): boolean {
+  return t > TUTORIAL_SECONDS || (seen.moved && (seen.looked || seen.jumped));
+}
 
 export interface Tutorial {
   start(): void;
@@ -17,6 +22,7 @@ export function createTutorial(ctx: GameContext): Tutorial {
   ctx.uiRoot.append(el);
   let t = -1;
   let gamepad = false;
+  const seen = { moved: false, looked: false, jumped: false };
 
   const build = (): void => {
     clear(el);
@@ -43,6 +49,7 @@ export function createTutorial(ctx: GameContext): Tutorial {
   return {
     start() {
       t = 0;
+      seen.moved = seen.looked = seen.jumped = false;
       gamepad = ctx.input.state.device === 'gamepad';
       build();
       el.classList.add('on');
@@ -54,13 +61,19 @@ export function createTutorial(ctx: GameContext): Tutorial {
     update(dt, playing) {
       if (t < 0 || !playing) return;
       t += dt;
+      const st = ctx.input.state;
+      if (Math.abs(st.moveX) + Math.abs(st.moveY) > 0.2) seen.moved = true;
+      if (Math.abs(st.lookX) + Math.abs(st.lookY) > 0.002) seen.looked = true;
+      if (st.jumpPressed || st.jump) seen.jumped = true;
       const pad = ctx.input.state.device === 'gamepad';
       if (pad !== gamepad) {
         gamepad = pad;
         build();
       }
-      if (t > TUTORIAL_SECONDS - 0.8) el.classList.remove('on');
-      if (t > TUTORIAL_SECONDS) t = -1;
+      if (tutorialDone(seen, t)) {
+        el.classList.remove('on');
+        t = -1;
+      }
     },
   };
 }

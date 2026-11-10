@@ -4,6 +4,8 @@ import { checkAnswer, GATE_HOLD_SECONDS, makeGateQuestion, stepHold } from '../.
 import { pickNext, tabNext } from '../../src/ui/nav';
 import { ALL_ICON_NAMES, iconSvg } from '../../src/ui/icons';
 import { outfitIcon } from '../../src/ui/glyphs';
+import { outfitSlotsFilled, starSlots } from '../../src/ui/screens';
+import { TUTORIAL_SECONDS, tutorialDone } from '../../src/ui/tutorial';
 
 describe('format', () => {
   it('formats m:ss, rounding up', () => {
@@ -81,5 +83,28 @@ describe('icons', () => {
   it('guesses outfit icons', () => {
     expect(outfitIcon('hat_party')).toBe('hat');
     expect(outfitIcon('cape_gold')).toBe('cape');
+  });
+});
+
+describe('end screen helpers', () => {
+  it('earns no stars for 0 and caps at 3', () => {
+    expect([0, 1, 2, 3, 5, 6, 40].map(starSlots)).toEqual([0, 1, 1, 2, 2, 3, 3]);
+  });
+  it('maps outfit ids to slots, ignoring unknown ids', () => {
+    const f = outfitSlotsFilled(['hat_party', 'cape_gold', 'glasses_x', 'paint_red', 'mystery']);
+    expect([...f].sort()).toEqual(['cape', 'glasses', 'hat', 'paint']);
+    expect(outfitSlotsFilled(['mystery']).size).toBe(0);
+  });
+});
+
+describe('tutorial timing', () => {
+  it('ends after the timeout or once moved and looked/jumped', () => {
+    const none = { moved: false, looked: false, jumped: false };
+    expect(tutorialDone(none, 1)).toBe(false);
+    expect(tutorialDone({ ...none, moved: true }, 1)).toBe(false);
+    expect(tutorialDone({ moved: true, looked: true, jumped: false }, 1)).toBe(true);
+    expect(tutorialDone({ moved: true, looked: false, jumped: true }, 1)).toBe(true);
+    expect(tutorialDone({ ...none, looked: true }, 1)).toBe(false);
+    expect(tutorialDone(none, TUTORIAL_SECONDS + 0.1)).toBe(true);
   });
 });

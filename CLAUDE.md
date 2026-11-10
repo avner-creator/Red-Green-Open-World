@@ -125,7 +125,7 @@ Picking the project up in a new session? Start with `docs/HANDOFF.md`.
 - **Commit your work on your worktree branch** before you finish (small clear commits), and put
   the branch name in your report. Uncommitted work is lost.
 - **Commit and push work in progress often** (at least every ~20 minutes and at every working
-  state): `git push -f origin HEAD:refs/heads/agent/<area>-<task>` with the branch name from your
+  state): `git push origin HEAD:refs/heads/agent/<area>-<task>` (no force; add new commits instead of rewriting) with the branch name from your
   brief. The session can end at any time; pushed WIP is what lets another session continue.
 - Run `npm run verify` before finishing. If it fails because of code outside your folders, say so.
 - Look at your own screenshots (Read the PNG) before you report. Keep the report under 300 words.
