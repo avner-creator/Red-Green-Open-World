@@ -30,3 +30,7 @@
 - Player feel tuning lives in `src/core/tuning.ts`; flop is procedural and the model's "Death"/"Punch" clips are never used. Reason: non-violence and one place to tune feel.
 - `CameraApi.yaw` is the camera's look direction; forward is (sin yaw, cos yaw), the same convention as `player.yaw`. Reason: one convention for every system.
 - The player's safe respawn spot is saved only where `world.isLand()` is true, so the world must return false for water and outside the island.
+- Vision channel tests compare WebGL canvas readbacks, not page screenshots. Reason: page screenshots include DOM animation (title fade, tutorial key caps), which caused false strong-channel differences; the canvas is the compositor's real output.
+- `TestApi.step(dt, n, render = true)`: `render=false` steps the simulation without drawing. Reason: e2e speed on the software renderer.
+- The calibration "weak strength" slider also scales StrongOnly objects. Reason: one strength control for all layer objects keeps calibration simple.
+- Unverified merges go to an `integration/*` branch and are pushed there; `main` only moves when verify is green. Reason: Netlify deploys `main`.
