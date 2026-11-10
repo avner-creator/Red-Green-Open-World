@@ -34,7 +34,7 @@ export function characterLoader(): GLTFLoader {
 }
 
 export async function loadCharacter(def: CharacterDef, loader = characterLoader()): Promise<LoadedCharacter> {
-  const gltf = await loader.loadAsync(def.modelUrl);
+  const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}${def.modelUrl}`);
   const object = new THREE.Group();
   object.name = `character-${def.id}`;
   const model = gltf.scene;

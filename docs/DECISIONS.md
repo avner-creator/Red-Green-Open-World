@@ -52,3 +52,8 @@
 - World scatter is drawn per species and level of detail, re-picked when the camera moves; grass is generated lazily per cell. Reason: world-artist's performance pass.
 - The UI polish agent was stopped after it finished: it kept re-sending its final report.
 - Economy, shop and missions (fun pass items 1–4) are built by a second account on branch `agent/economy`; the main session builds the rest and merges it. Reason: owner offered extra capacity; additive-only interface rule keeps the two orchestrators from colliding.
+
+## Stream B — characters (branch `agent/characters`)
+- Characters come from Quaternius CC0 packs via the trebeljahr/quaternius-showcase GitHub mirror (pinned commit). Reason: quaternius.com, opengameart.org and jsDelivr are blocked from that cloud session; raw.githubusercontent.com works and the mirror lists every pack as CC0-1.0.
+- Cast: robot + four space-suit animals (frog, red panda, bee, flamingo; one shared rig) + a T-rex. Reason: the only fully animated, kid-friendly CC0 characters reachable; no robot re-skins were needed.
+- Missing clips (dance, flop, sit, spin, hop, dino wave/fall) are hand-keyed in code with a two-bone leg IK, because these rigs pin the feet to separate root joints.

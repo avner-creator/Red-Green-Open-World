@@ -42,7 +42,7 @@ export interface CharacterDef {
   readonly name: string;
   /** One fun line. No health wording. */
   readonly backstory: string;
-  /** Served from public/, so the URL is root-relative. */
+  /** File under public/, relative to the site base: load it as `${import.meta.env.BASE_URL}${modelUrl}` (loadCharacter does). */
   readonly modelUrl: string;
   /** Uniform scale applied to the GLB scene to get the size below. */
   readonly scale: number;
@@ -96,7 +96,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     id: 'robot',
     name: 'Bolt',
     backstory: 'Built from spare toaster parts, Bolt jumps twice because once is never enough.',
-    modelUrl: '/assets/characters/robot.glb',
+    modelUrl: 'assets/characters/robot.glb',
     scale: 0.383,
     height: 1.7,
     length: 0.6,
@@ -126,7 +126,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     id: 'frog',
     name: 'Hopper',
     backstory: 'Hopper once bounced so high he had to wear a space suit to come back down.',
-    modelUrl: '/assets/characters/frog.glb',
+    modelUrl: 'assets/characters/frog.glb',
     scale: ASTRO_SCALE,
     height: 1.64,
     length: 1.16,
@@ -141,7 +141,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     id: 'panda',
     name: 'Mochi',
     backstory: 'Mochi is the fastest snack-fetcher in the galaxy. Blink and you miss her.',
-    modelUrl: '/assets/characters/panda.glb',
+    modelUrl: 'assets/characters/panda.glb',
     scale: ASTRO_SCALE,
     height: 1.83,
     length: 0.96,
@@ -156,7 +156,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     id: 'bee',
     name: 'Bumble',
     backstory: 'Bumble’s wings are tiny, but she floats down like a dandelion seed anyway.',
-    modelUrl: '/assets/characters/bee.glb',
+    modelUrl: 'assets/characters/bee.glb',
     scale: ASTRO_SCALE,
     height: 1.56,
     length: 0.8,
@@ -171,7 +171,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     id: 'flamingo',
     name: 'Rosa',
     backstory: 'Rosa stands on one leg so the other one is always ready for a second jump.',
-    modelUrl: '/assets/characters/flamingo.glb',
+    modelUrl: 'assets/characters/flamingo.glb',
     scale: ASTRO_SCALE,
     height: 1.73,
     length: 0.87,
@@ -186,7 +186,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     id: 'rex',
     name: 'Stomp',
     backstory: 'Stomp is a very polite dinosaur who makes the ground wobble when he lands.',
-    modelUrl: '/assets/characters/rex.glb',
+    modelUrl: 'assets/characters/rex.glb',
     scale: 0.11,
     height: 1.67,
     length: 3.53,

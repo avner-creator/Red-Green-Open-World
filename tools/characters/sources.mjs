@@ -1,7 +1,7 @@
 // Where each character comes from. All CC0 1.0 by Quaternius (quaternius.com), fetched from the
 // trebeljahr/quaternius-showcase mirror on GitHub (its LICENSES.md lists each pack as CC0-1.0),
 // except the robot, which is the three.js example copy already in public/assets/models.
-const MIRROR = 'https://raw.githubusercontent.com/trebeljahr/quaternius-showcase/HEAD/public/glb';
+const MIRROR = 'https://raw.githubusercontent.com/trebeljahr/quaternius-showcase/c06a6fa9a1b13576edf3bd62d7b52aba334f8fc0/public/glb';
 
 export const SOURCES = [
   {
