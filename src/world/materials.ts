@@ -15,6 +15,8 @@ export const U = {
   /** Direction towards the sun and its colour × intensity (set by the lighting; used by the sea glint). */
   sunDir: { value: new THREE.Vector3(0, 1, 0) },
   sunColor: { value: new THREE.Color(1, 1, 1) },
+  /** Wind strength (1 = normal breeze; gusts up to ~1.5). Driven by src/world/life. */
+  wind: { value: 1 },
 };
 
 export const GLSL_NOISE = /* glsl */ `
@@ -35,8 +37,9 @@ export function patch(
     shader.uniforms.uTime = U.time;
     shader.uniforms.uGlow = U.glow;
     shader.uniforms.uGrassFar = U.grassFar;
+    shader.uniforms.uWind = U.wind;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nuniform float uTime;\nuniform float uGrassFar;\nvarying vec3 vWorldPos;\n${edit.vertexPre ?? ''}`)
+      .replace('#include <common>', `#include <common>\nuniform float uTime;\nuniform float uGrassFar;\nuniform float uWind;\nvarying vec3 vWorldPos;\n${edit.vertexPre ?? ''}`)
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>\n${edit.vertex ?? ''}\n{ vec4 rgWp = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\nrgWp = instanceMatrix * rgWp;\n#endif\nvWorldPos = (modelMatrix * rgWp).xyz; }`,
@@ -112,7 +115,7 @@ export function createMaterials(): Materials {
   const cloth = std({ roughness: 0.8, side: THREE.DoubleSide });
   patch(cloth, 'rg-cloth', {
     vertexPre: 'attribute float aWave;',
-    vertex: 'transformed += vec3(0.55, 0.35, 0.75) * aWave * 0.22 * sin(uTime * 5.0 + transformed.x * 0.9 + transformed.z * 0.7 + aWave * 2.5);',
+    vertex: 'transformed += vec3(0.55, 0.35, 0.75) * aWave * 0.22 * uWind * sin(uTime * 5.0 + transformed.x * 0.9 + transformed.z * 0.7 + aWave * 2.5);',
   });
 
   // Instanced vegetation: sway grows with height above the instance origin.
@@ -122,7 +125,7 @@ export function createMaterials(): Materials {
       #ifdef USE_INSTANCING
       ip = instanceMatrix[3].xyz;
       #endif
-      float sw = max(transformed.y - 1.5, 0.0) * 0.018;
+      float sw = max(transformed.y - 1.5, 0.0) * 0.018 * uWind;
       transformed.x += sin(uTime * 1.3 + ip.x * 0.21 + ip.z * 0.17) * sw;
       transformed.z += cos(uTime * 1.1 + ip.x * 0.13) * sw * 0.7; }`,
     fragment: 'diffuseColor.rgb *= 0.9 + 0.2 * rgNoise(vWorldPos.xz * 2.1 + vWorldPos.y * 2.7);',
@@ -135,7 +138,7 @@ export function createMaterials(): Materials {
       #endif
       float fade = 1.0 - smoothstep(uGrassFar * 0.7, uGrassFar, distance(cameraPosition.xz, ip.xz));
       transformed *= fade;
-      float sw = transformed.y * transformed.y * 0.35;
+      float sw = transformed.y * transformed.y * 0.35 * uWind;
       transformed.x += sin(uTime * 2.1 + ip.x * 0.37 + ip.z * 0.23) * sw;
       transformed.z += cos(uTime * 1.7 + ip.z * 0.31) * sw * 0.6; }`,
     // Blades are double-sided but keep their up-facing normals on the back side too (no dark backs).
