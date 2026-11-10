@@ -7,10 +7,11 @@ test.describe.configure({ mode: 'serial' });
 // One page: the one smoke boot at the shipped default quality (Medium: shadows, full post).
 let page: Page;
 let consoleErrors: string[] = [];
+let ownWarnings: string[] = [];
 
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
-  ({ consoleErrors } = await boot(page, '&quality=medium'));
+  ({ consoleErrors, ownWarnings } = await boot(page, '&quality=medium'));
 });
 
 test.afterAll(async () => {
@@ -30,6 +31,7 @@ test('boots, renders a frame, starts a session, no console errors', async () => 
   expect(state.phase).toBe('playing');
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
+  expect(ownWarnings).toEqual([]);
 });
 
 test('session ends when the timer runs out', async () => {

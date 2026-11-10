@@ -31,7 +31,7 @@ function spike(dir: THREE.Vector3, baseRadius: number, length: number, from: num
 
 /** Unit-ish size (tip to tip about 2.2); the caller scales it. */
 export function buildMegaGemGeometry(): THREE.BufferGeometry {
-  const core = new THREE.IcosahedronGeometry(0.42, 0).toNonIndexed();
+  const core = new THREE.IcosahedronGeometry(0.42, 0); // polyhedra are already non-indexed
   core.deleteAttribute('normal');
   core.deleteAttribute('uv');
   const parts: THREE.BufferGeometry[] = [core];

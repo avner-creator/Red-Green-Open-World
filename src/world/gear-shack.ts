@@ -103,7 +103,7 @@ export function gemGeometry(): THREE.BufferGeometry {
       g.deleteAttribute('uv');
       g.deleteAttribute('normal');
     }
-    const merged = mergeGeometries([crown.toNonIndexed(), pav.toNonIndexed()], false);
+    const merged = mergeGeometries([crown.index ? crown.toNonIndexed() : crown, pav.index ? pav.toNonIndexed() : pav], false);
     if (!merged) throw new Error('gem geometry');
     merged.computeVertexNormals();
     const n = merged.attributes.position.count;

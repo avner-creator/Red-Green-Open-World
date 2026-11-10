@@ -102,8 +102,9 @@ export function layerBasic(opts: { transparent?: boolean; alpha?: boolean } = {}
     transparent: !!opts.transparent,
     depthWrite: !opts.transparent,
     toneMapped: false,
-    ...(opts.alpha ? { vertexAlphas: true } : {}),
-  } as THREE.MeshBasicMaterialParameters);
+    // `opts.alpha`: three reads vertex alpha from a 4-component colour attribute by itself
+    // (there is no `vertexAlphas` material parameter; passing one only logs a warning).
+  });
 }
 
 // ───────────────────────────── arrows (weak eye) ─────────────────────────────
@@ -123,7 +124,7 @@ export function arrowGeometry(): THREE.BufferGeometry {
   // Shape is in XY with the tip at +Y; rotateX(+90°) maps +Y → +Z (tip forward) and the z = 0 cap
   // to an upward-facing top at y = 0, with the extrusion going down.
   g.rotateX(Math.PI / 2);
-  const out = g.toNonIndexed();
+  const out = g.index ? g.toNonIndexed() : g;
   g.dispose();
   out.computeVertexNormals();
   return paint(out, (_x, _y, _z, _nx, ny) => {
@@ -241,7 +242,7 @@ export interface VaultModel {
 }
 
 function rockPiece(seed: number, sx: number, sy: number, sz: number): THREE.BufferGeometry {
-  const g = new THREE.IcosahedronGeometry(1, 1).toNonIndexed();
+  const g = new THREE.IcosahedronGeometry(1, 1); // polyhedra are already non-indexed
   const pos = g.getAttribute('position');
   // Displace by a hash of the (shared) original vertex so faces stay watertight.
   for (let i = 0; i < pos.count; i++) {

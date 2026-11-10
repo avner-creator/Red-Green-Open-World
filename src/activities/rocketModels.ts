@@ -205,7 +205,7 @@ export function buildRocketPad(): RocketPadModel {
     proxy.push(new THREE.CylinderGeometry(0.26, 0.64, 1.1, 8).rotateX(-0.5).translate(s * 0.95, 0.7, -ROCKET.padRadius - 0.6));
     proxy.push(new THREE.CylinderGeometry(0.36, 0.36, 1.6, 8).translate(s * (ROCKET.padRadius + 0.75), 0.95, -0.3));
   }
-  group.add(asShadowProxy(new THREE.Mesh(keep(mergeFinished(proxy.map((g) => g.toNonIndexed()))))));
+  group.add(asShadowProxy(new THREE.Mesh(keep(mergeFinished(proxy.map((g) => (g.index ? g.toNonIndexed() : g)))))));
 
   return {
     group,

@@ -14,18 +14,21 @@ export const SHOTS = process.env.RG_SHOTS === '1';
  * Boots at Low quality (no shadow map: ~2x faster frames on SwiftShader) unless `query` names a
  * `quality=`; tests that judge the look of the lit world pass `&quality=medium`.
  */
-export async function boot(page: Page, query = ''): Promise<{ consoleErrors: string[] }> {
+export async function boot(page: Page, query = ''): Promise<{ consoleErrors: string[]; ownWarnings: string[] }> {
   if (!query.includes('quality=')) query += '&quality=low';
   const consoleErrors: string[] = [];
+  /** Warnings from our own code or three.js (driver/GPU noise from the browser is ignored). */
+  const ownWarnings: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text());
+    if (m.type() === 'warning' && !/^\[\.WebGL|GPU stall|swiftshader|Automatic fallback/i.test(m.text())) ownWarnings.push(m.text());
   });
   page.on('pageerror', (e) => consoleErrors.push(String(e)));
   await page.goto(`/?test=1${query}`);
   await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
   // The boot overlay fades out (~0.5 s) and is then removed; never screenshot it half-faded.
   await page.waitForSelector('#boot', { state: 'detached', timeout: 10_000 });
-  return { consoleErrors };
+  return { consoleErrors, ownWarnings };
 }
 
 /** Screenshot the page (canvas + DOM, CSS animations stopped) and decode it. */
