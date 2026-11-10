@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { CDPSession, Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot } from './helpers';
+import { boot, startGame } from './helpers';
 
 /** Touch controls on a phone (667×375) and a tablet (1024×768), both landscape. */
 const OUT = 'test-results/touch';
@@ -36,7 +36,7 @@ const step = (page: Page, n: number, draw = false): Promise<void> =>
 
 /** Tap Play with a finger, then stand still on flat ground at the spawn. */
 async function startByTouch(page: Page): Promise<void> {
-  await page.getByTestId('play').tap();
+  await startGame(page, true);
   await expect(page.getByTestId('touch-hud')).toBeVisible();
   await page.evaluate(() => {
     const rg = window.__rg!;

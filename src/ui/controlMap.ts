@@ -38,6 +38,10 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   use: { keys: [['E']], pad: [['X']], touch: 'hand', icon: 'hand' },
   flop: { keys: [['F']], pad: [['B']], touch: 'flop', icon: 'flop' },
   respawn: { keys: [['R']], pad: [['Y']], touch: null, icon: 'restart' },
+  // Character skill (hold for glide / bounce charge) and signature emote; LB and D-pad up.
+  // On touch: the Skill button (shows the character's skill icon) and the Emote button.
+  skill: { keys: [['Q']], pad: [['LB']], touch: 'bolt', icon: 'bolt' },
+  emote: { keys: [['C']], pad: [['↑']], touch: 'sparkle', icon: 'sparkle' },
   pause: { keys: [['Esc']], pad: [['START']], touch: 'pause', icon: 'pause' },
   // In the air, the move keys flip and spin.
   air: { keys: [['W', 'A', 'S', 'D']], pad: [['L']], touch: 'stick', icon: 'wAir' },
@@ -49,9 +53,6 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   horn: { keys: [['F']], pad: [['B']], touch: 'speaker', icon: 'speaker' },
   exit: { keys: [['E']], pad: [['X']], touch: 'exit', icon: 'exit' },
   chute: { keys: [['␣']], pad: [['A']], touch: 'jump', icon: 'parachute' },
-  // Character skill (double jump, glide, dash, super-bounce, ground pound) and emote (dance).
-  skill: { keys: [['Q']], pad: [['LB']], touch: null, icon: 'sparkle' },
-  emote: { keys: [['C'], ['G']], pad: [['↑']], touch: null, icon: 'note' },
 };
 
 /** First gamepad label of a control, e.g. padLabel('use') === 'X'. */

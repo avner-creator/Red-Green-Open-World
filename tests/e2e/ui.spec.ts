@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { SHOTS, boot } from './helpers';
+import { SHOTS, boot, startGame } from './helpers';
 
 const OUT = 'test-results/ui';
 mkdirSync(OUT, { recursive: true });
@@ -61,7 +61,7 @@ test.describe('ui', () => {
     await save(page, 'title');
 
     // Play starts the session in one click.
-    await page.getByTestId('play').click();
+    await startGame(page);
     expect(await page.evaluate(() => window.__rg!.state().phase)).toBe('playing');
     await step(page);
     await save(page, 'tutorial');
@@ -191,7 +191,7 @@ test.describe('ui', () => {
   test('end screen shows what was earned (fake events)', async () => {
     await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
-    await page.getByTestId('play').click();
+    await startGame(page);
     await page.evaluate(() => {
       const rg = window.__rg!;
       const e = rg.ctx.events;
@@ -215,7 +215,7 @@ test.describe('ui', () => {
   test('tutorial fades after the player moves and looks', async () => {
     await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
-    await page.getByTestId('play').click();
+    await startGame(page);
     await page.evaluate(() => window.__rg!.step(1 / 60, 5, false));
     await expect(page.getByTestId('tutorial')).toHaveClass(/on/);
     await page.evaluate(() => window.__rg!.step(1 / 60, 480, false));

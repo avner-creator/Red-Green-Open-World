@@ -20,6 +20,8 @@ export interface Actions {
   toTitle(): void;
   openGate(): void;
   openCredits(): void;
+  /** Title Play: open the character select (falls back to `play`). */
+  choose?(): void;
 }
 
 function btn(cls: string, label: string, testid: string, ...kids: (HTMLElement | string | null)[]): HTMLButtonElement {
@@ -35,7 +37,7 @@ export function createTitle(a: Actions): Screen {
     h('span', 'l2', {}, icon('gem', 'y'), 'OPEN WORLD', icon('gem', 'y')),
   );
   const play = btn('b play', 'Play', 'play', h('span', 'glow'), icon('play'), 'PLAY');
-  play.addEventListener('click', a.play);
+  play.addEventListener('click', a.choose ?? a.play);
   const grown = btn('b d corner l', 'Grown-ups', 'grownups', icon('gear'), icon('grownup'));
   grown.addEventListener('click', a.openGate);
   const cred = btn('b d corner r', 'Credits', 'credits', icon('credits'));

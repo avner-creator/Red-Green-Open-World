@@ -46,6 +46,7 @@ try {
   await page.evaluate(() => window.__rg.step(1 / 60, 5));
   await save('title-1080');
   await page.getByTestId('play').click();
+await page.getByTestId('csel-go').click();
   await page.evaluate(() => {
     const rg = window.__rg;
     rg.ctx.session.setTotals({ gems: 60 });

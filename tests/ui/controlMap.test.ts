@@ -7,7 +7,7 @@ import { GAMEPAD_GLYPH } from '../../src/ui/glyphs';
 const src = readFileSync('src/core/input.ts', 'utf8');
 
 const PAD_LETTER: Record<string, string> = { a: 'A', b: 'B', x: 'X', y: 'Y', start: 'START', lt: 'LT', rt: 'RT', ls: 'L3', lb: 'LB', up: '↑' };
-const KEY_LABEL: Record<string, string> = { Space: '␣', KeyE: 'E', KeyF: 'F', KeyR: 'R', Escape: 'Esc', KeyQ: 'Q', KeyC: 'C', KeyG: 'G' };
+const KEY_LABEL: Record<string, string> = { Space: '␣', KeyE: 'E', KeyF: 'F', KeyR: 'R', Escape: 'Esc', KeyQ: 'Q', KeyC: 'C' };
 const ACTION_CONTROL: Record<string, ControlId> = { jump: 'jump', use: 'use', flop: 'flop', respawn: 'respawn', pause: 'pause', skill: 'skill', emote: 'emote' };
 
 describe('control glyph table vs src/core/input.ts', () => {
@@ -26,8 +26,8 @@ describe('control glyph table vs src/core/input.ts', () => {
     const pairs = [...block.matchAll(/(\w+):\s*'(\w+)'/g)];
     expect(pairs.length).toBeGreaterThanOrEqual(5);
     for (const [, code, action] of pairs) {
-      if (code === 'KeyP') continue; // alias of Escape
-      expect(CONTROL_MAP[ACTION_CONTROL[action]].keys.flat()).toContain(KEY_LABEL[code]);
+      if (code === 'KeyP' || code === 'KeyG') continue; // aliases of Escape / C
+      expect(CONTROL_MAP[ACTION_CONTROL[action]].keys[0]).toContain(KEY_LABEL[code]);
     }
   });
 
@@ -61,5 +61,7 @@ describe('touch column', () => {
     expect(CONTROL_MAP.move.touch).toBe('stick');
     expect(CONTROL_MAP.jump.touch).toBe('jump');
     expect(CONTROL_MAP.respawn.touch).toBeNull(); // no respawn button on touch
+    expect(CONTROL_MAP.skill.touch).toBeTruthy(); // touch Skill and Emote buttons exist
+    expect(CONTROL_MAP.emote.touch).toBe('sparkle');
   });
 });
