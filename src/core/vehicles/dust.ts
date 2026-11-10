@@ -32,12 +32,15 @@ export function createDust(): Dust {
   let next = 0;
   const hide = new THREE.Matrix4().makeScale(0, 0, 0);
   for (let i = 0; i < POOL; i++) mesh.setMatrixAt(i, hide);
+  // No draw call while every puff is idle.
+  mesh.visible = false;
 
   return {
     mesh,
     emit(at, v, sz) {
       const i = next;
       next = (next + 1) % POOL;
+      mesh.visible = true;
       pos[i].copy(at);
       vel[i].copy(v);
       max[i] = life[i] = 0.55 + sz * 0.3;
@@ -45,6 +48,7 @@ export function createDust(): Dust {
     },
     update(dt) {
       let any = false;
+      let live = 0;
       for (let i = 0; i < POOL; i++) {
         if (life[i] <= 0) continue;
         life[i] -= dt;
@@ -53,6 +57,7 @@ export function createDust(): Dust {
           any = true;
           continue;
         }
+        live++;
         const k = 1 - life[i] / max[i];
         vel[i].multiplyScalar(Math.exp(-3 * dt));
         vel[i].y += 0.6 * dt;
@@ -64,6 +69,7 @@ export function createDust(): Dust {
         any = true;
       }
       if (any) mesh.instanceMatrix.needsUpdate = true;
+      mesh.visible = live > 0;
     },
     dispose() {
       geo.dispose();

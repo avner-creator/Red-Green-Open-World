@@ -105,6 +105,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
   const netLandY = site.groundY + NET.height - 0.1;
 
   const root = new THREE.Group();
+  root.name = 'rocketPads';
   ctx.scene.add(root);
   const disposables: { dispose(): void }[] = [];
   const colliders: PadState['collider'][] = [];

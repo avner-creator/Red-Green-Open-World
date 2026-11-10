@@ -10,6 +10,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { PlayerAnim } from '../../types';
 import type { AttachPart, CharacterDef, ClipRef } from './catalog';
+import { mergeCharacterMeshes } from './merge';
 
 export interface LoadedCharacter {
   readonly def: CharacterDef;
@@ -40,6 +41,8 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
   const model = gltf.scene;
   model.scale.setScalar(def.scale);
   object.add(model);
+  // One skinned mesh per material (the robot: 19 meshes → 5 draws per pass).
+  mergeCharacterMeshes(model, gltf.animations);
   model.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;
@@ -71,6 +74,20 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
   for (const clip of gltf.animations) actions.set(clip.name, mixer.clipAction(clip));
   let current: THREE.AnimationAction | null = null;
   let currentRef: ClipRef | null = null;
+  let currentAnim: PlayerAnim | 'emote' | null = null;
+
+  // Seated pose layer (catalog `seat`): eased in while the `sit` clip plays.
+  const seatBones: { bone: THREE.Object3D; q: THREE.Quaternion; saved: THREE.Quaternion }[] = [];
+  for (const [name, e] of Object.entries(def.seat?.bones ?? {})) {
+    const bone = model.getObjectByName(name);
+    if (bone) {
+      seatBones.push({ bone, q: new THREE.Quaternion().setFromEuler(new THREE.Euler(e[0], e[1], e[2])), saved: new THREE.Quaternion() });
+    }
+  }
+  const seatOffset = new THREE.Vector3().fromArray(def.seat?.offset ?? [0, 0, 0]);
+  const tmpQ = new THREE.Quaternion();
+  let seatW = 0;
+  let seatApplied = false;
 
   return {
     def,
@@ -101,9 +118,24 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       }
       current = next;
       currentRef = ref;
+      currentAnim = anim;
     },
     update(dt) {
+      // Undo last frame's seat layer first (bones the clip doesn't key would otherwise accumulate).
+      if (seatApplied) for (const s of seatBones) s.bone.quaternion.copy(s.saved);
+      seatApplied = false;
       mixer.update(dt);
+      if (!def.seat) return;
+      const target = currentAnim === 'sit' ? 1 : 0;
+      seatW = target > seatW ? Math.min(1, seatW + dt / 0.3) : Math.max(0, seatW - dt / 0.2);
+      model.position.copy(seatOffset).multiplyScalar(seatW);
+      if (seatW <= 0) return;
+      for (const s of seatBones) {
+        s.saved.copy(s.bone.quaternion);
+        tmpQ.identity().slerp(s.q, seatW);
+        s.bone.quaternion.multiply(tmpQ);
+      }
+      seatApplied = true;
     },
   };
 }

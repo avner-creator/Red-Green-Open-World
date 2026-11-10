@@ -45,16 +45,14 @@ events `player:character`/`player:skill`/`player:emote`; `Anchor.target`/`target
 
 ## In flight
 
-Main session (worktree subagents, WIP pushed):
-
-| Branch | Owner agent | Task |
-|---|---|---|
-| `agent/integrate-glue2` | integrator | Skill bounce boosts, `'touch'` device, phone quality/pixel cap, rex seated pose, remove old robot GLB + asset manifest test, boot loads the saved character. Re-merging `integration/m0` (conflict in `src/ui/controlMap.ts`). |
-| `agent/perf-heroes` | engine-engineer | Batch buggy / balloon / player draws, shadow proxies, `scripts/perf-report.mjs`. Whole frame at spawn on Medium was 336 draws / 779k triangles; target ≤ ~230 / 500k. |
+Main session: nothing in flight except a QA audit of `main` (read-only). Glue (skill bounce
+boosts, `'touch'` device, phone defaults, saved character at boot) and the hero-object performance
+pass are on `main` (75 e2e). Still over budget: triangles (Medium 534k vs 500k, Low 338k vs 280k;
+the rest is terrain and grass).
 
 Second account (see `docs/PARALLEL_WORK.md`; merge each when the owner says it is pushed):
 `agent/economy` (Stream C, orchestrated), `agent/mobile-touch` (A), `agent/characters` (B);
-optional `agent/activities-secrets` (F), `agent/core-horse` (D), `agent/activities-bungee-silly` (E).
+`agent/activities-secrets` (F), `agent/core-horse` (D), `agent/activities-bungee-silly` (E), `agent/world-outer` (G), `agent/world-life` (H), `agent/boot-loading` (I). A and B are merged; C is nearly done; the rest were started on 2026-11-11.
 After `agent/characters` lands, the main session wires characters into the player controller,
 skills and a character-select onboarding screen.
 

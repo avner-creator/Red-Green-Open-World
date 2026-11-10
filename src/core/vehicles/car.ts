@@ -39,6 +39,10 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   ctx.scene.add(model.blob);
   const dust = createDust();
   ctx.scene.add(dust.mesh);
+  /** Detail level: the lighter geometry set beyond LOD_FAR m (back within LOD_NEAR), unless driven. */
+  const LOD_FAR = 34;
+  const LOD_NEAR = 30;
+  let far = false;
   let dustAcc = 0;
   let seed = 1;
   /** Deterministic jitter (test mode stays reproducible). */
@@ -186,6 +190,9 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     const r = roll.step(clamp(sim.accelLat * 0.0062, -0.11, 0.11), dt);
     const h = heave.step(0, dt);
     model.update(sim.wheels, p, r, clamp(h, -0.12, 0.15));
+    const camDist = ctx.camera.position.distanceTo(sim.position);
+    far = !driven && (far ? camDist > LOD_NEAR : camDist > LOD_FAR);
+    model.setDetail(!far);
 
     // Contact shadow on the ground under the car.
     const gy = ctx.world.heightAt(sim.position.x, sim.position.z);

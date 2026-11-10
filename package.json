@@ -14,6 +14,8 @@
     "shots:channels": "node scripts/shots-channels.mjs",
     "shots:ui1080": "node scripts/shots-ui-1080.mjs",
     "shots:skydive": "node scripts/shots-skydive.mjs",
+    "shots:characters": "node scripts/shots-characters.mjs",
+    "boot:requests": "node scripts/boot-requests.mjs",
     "shots:ui": "RG_SHOTS=1 playwright test tests/e2e/ui.spec.ts tests/e2e/chests.spec.ts",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e"
   },
