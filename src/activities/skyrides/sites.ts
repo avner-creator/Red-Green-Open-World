@@ -21,13 +21,14 @@ export interface Site {
 
 /** Fallback spots (world coordinates) when the anchors are not on main yet. */
 export const SITE_DEFAULTS = {
-  // A gentle grass slope south of the balloon field, running east towards the sea.
-  airstrip: { x: 76, z: 106, yaw: Math.PI / 2, radius: 30 },
+  // The only tree-free strip big enough for a runway near the middle: the meadow south-west of the
+  // plaza, beside the south road, taking off southwards (the balloon field is all woods).
+  airstrip: { x: -12, z: 46, yaw: 0, radius: 22 },
   // The flat ridge top west of the bridge, by the lighthouse, looking south over the island.
-  dragonRoost: { x: -28, z: -127, yaw: Math.atan2(28, 127), radius: 7 },
+  dragonRoost: { x: -34, z: -130, yaw: Math.atan2(34, 130), radius: 7 },
 } as const;
 
-export const RUNWAY = { length: 58, width: 24 } as const;
+export const RUNWAY = { length: 40, width: 14 } as const;
 
 export function siteFor(ctx: GameContext, name: 'airstrip' | 'dragonRoost'): Site {
   const anchors = ctx.world.anchors as unknown as Partial<Record<string, Anchor>>;
@@ -285,9 +286,10 @@ export function buildRoost(ctx: GameContext, site: Site): RoostScene {
   group.add(mesh);
   const collider = ctx.physics.addStaticCylinder(new THREE.Vector3(site.x, g0 + PERCH.height / 2, site.z), PERCH.height / 2, PERCH.radius);
 
-  const signSpot = new THREE.Vector3(site.x + fx * (PERCH.radius + 2.2) + fz * 2.2, 0, site.z + fz * (PERCH.radius + 2.2) - fx * 2.2);
+  // The sign stands behind the perch, facing the ridge path (out of the way of the feeding view).
+  const signSpot = new THREE.Vector3(site.x - fx * (PERCH.radius + 1.6) + fz * 2.4, 0, site.z - fz * (PERCH.radius + 1.6) - fx * 2.4);
   signSpot.y = ctx.world.heightAt(signSpot.x, signSpot.z);
-  const sign = typeof document !== 'undefined' ? buildSign('dragon', signSpot.x, signSpot.y, signSpot.z, site.yaw) : null;
+  const sign = typeof document !== 'undefined' ? buildSign('dragon', signSpot.x, signSpot.y, signSpot.z, site.yaw + Math.PI) : null;
   let postGeo: THREE.BufferGeometry | null = null;
   if (sign) {
     group.add(sign.group);

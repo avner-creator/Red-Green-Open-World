@@ -19,26 +19,27 @@ import { Puffs, CONFETTI_COLORS } from './fx';
 
 /** Course control points (x, z, clearance above the ground, lowest absolute y). */
 export const COURSE_POINTS: readonly (readonly [number, number, number, number])[] = [
-  [86, 104, 20, 22], // over the airstrip, heading east
-  [108, 112, 14, 16], // low over the bay: rafts and the duck
-  [128, 92, 14, 16],
-  [142, 62, 16, 18],
-  [138, 30, 24, 26],
-  [118, 4, 26, 34],
-  [92, -10, 24, 42],
-  [64, 4, 24, 42],
-  [46, 34, 22, 40],
-  [50, 68, 22, 34],
-  [64, 94, 22, 28],
+  [-10, 84, 16, 22], // just past the runway end, heading south
+  [24, 116, 16, 18],
+  [70, 124, 12, 14], // low along the south beach and over the bay: rafts and the duck
+  [106, 118, 12, 14],
+  [134, 92, 14, 16],
+  [146, 58, 18, 20],
+  [136, 24, 24, 28],
+  [108, -2, 26, 40],
+  [76, -14, 24, 44],
+  [44, 2, 24, 42],
+  [18, 22, 24, 42],
+  [-14, 30, 22, 40], // back over the runway
 ];
 
 /** Raft and duck spots (on the sea next to the low part of the course). */
 export const RAFT_SPOTS: readonly (readonly [number, number])[] = [
-  [112, 121],
-  [136, 97],
-  [150, 64],
+  [92, 132],
+  [124, 112],
+  [152, 70],
 ];
-export const DUCK_SPOT = [124, 108] as const;
+export const DUCK_SPOT = [110, 126] as const;
 
 export const HOOP_COUNT = 10;
 const BONUS_COUNT = 4;

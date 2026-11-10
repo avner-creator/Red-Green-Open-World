@@ -19,7 +19,7 @@ import { getSkyPilot } from './pilot';
 import { SkyPilot } from './pilot';
 import { LIVERIES, PLANE_DIMS, createPlaneModel } from './planeModel';
 import { Rivals, pickFriends } from './rivals';
-import { buildAirstrip, runwayPoint, siteFor } from './sites';
+import { RUNWAY, buildAirstrip, runwayPoint, siteFor } from './sites';
 import type { SkyHud } from './skyHud';
 import { RideTickets, payPrize } from './tickets';
 
@@ -46,8 +46,8 @@ export interface PlaneRide {
 }
 
 const RIVAL_DEFS: readonly RivalDef[] = [
-  { character: 'frog', skill: 0.55, lane: 6, seed: 11 },
-  { character: 'panda', skill: 0.42, lane: -6, seed: 23 },
+  { character: 'frog', skill: 0.8, lane: 6, seed: 11 },
+  { character: 'panda', skill: 0.62, lane: -6, seed: 23 },
 ];
 
 const TAKEOFF_SECONDS = 3.4;
@@ -64,11 +64,11 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
 
   const model = createPlaneModel(LIVERIES[0], true);
   ctx.scene.add(model.root);
-  const park = runwayPoint(site, 9, 0, new THREE.Vector3());
+  const park = runwayPoint(site, 15, 0, new THREE.Vector3());
   park.y = ctx.world.heightAt(park.x, park.z) + PARK_HEIGHT;
   const parkYaw = site.yaw;
-  const rivalSpots = [-8.5, 8.5].map((side, i) => {
-    const p = runwayPoint(site, 4 - i * 2, side, new THREE.Vector3());
+  const rivalSpots = [-3.6, 3.6].map((side) => {
+    const p = runwayPoint(site, 4, side, new THREE.Vector3());
     p.y = ctx.world.heightAt(p.x, p.z) + PARK_HEIGHT;
     return { pos: p, yaw: parkYaw };
   });
@@ -238,7 +238,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     const controls = pilot.controls(input, fly.yaw, dt);
     untouched = SkyPilot.touched(input) ? 0 : untouched + dt;
     // Hands-off: drift gently along the course (blended out by any input).
-    const assist = clamp((untouched - 1) / 1.5, 0, 0.6);
+    const assist = clamp((untouched - 1) / 1.5, 0, 0.32);
     if (assist > 0) {
       c.course.at(playerS + 34, tmp);
       const want = Math.atan2(tmp.x - fly.x, tmp.z - fly.z);
@@ -433,7 +433,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
           const fz = Math.cos(parkYaw);
           const touch = { x: park.x - fx * 10, y: park.y, z: park.z - fz * 10 };
           const p1 = { x: landFrom.p.x + Math.sin(landFrom.yaw) * 30, y: landFrom.p.y, z: landFrom.p.z + Math.cos(landFrom.yaw) * 30 };
-          const p2 = { x: touch.x - fx * 45, y: touch.y + 6, z: touch.z - fz * 45 };
+          const p2 = { x: touch.x - fx * 38, y: touch.y + 12, z: touch.z - fz * 38 };
           bezier(landFrom.p, p1, p2, touch, e, tmp);
           const dx = tmp.x - fly.x;
           const dz = tmp.z - fly.z;
@@ -517,7 +517,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
       hud.hidePodium();
       podiumT = 0;
       boardFrom = player.position.clone();
-      startS = c.course.nearest(runwayPoint(site, 60, 0, new THREE.Vector3()));
+      startS = c.course.nearest(runwayPoint(site, RUNWAY.length + 20, 0, new THREE.Vector3()));
       rivals?.loadHeroes(pickFriends(player.characterId));
       rivals?.park(rivalSpots, startS);
       if (!pilot.take(hooks)) return;

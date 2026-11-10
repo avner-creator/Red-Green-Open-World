@@ -76,7 +76,7 @@ export const PLANE_TUNING: FlyTuning = {
   floor: 3,
   bounceUp: 11,
   ceiling: 95,
-  edge: 168,
+  edge: 180,
   sink: 0,
   liftDecay: 1.6,
 };

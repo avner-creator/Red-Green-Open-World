@@ -200,7 +200,7 @@ export class Rivals {
       const fz = Math.cos(p.parkYaw);
       const touch = { x: p.park.x - fx * 10, y: p.park.y, z: p.park.z - fz * 10 };
       const p1 = { x: from.p.x + Math.sin(from.yaw) * 30, y: from.p.y, z: from.p.z + Math.cos(from.yaw) * 30 };
-      const p2 = { x: touch.x - fx * 45, y: touch.y + 6, z: touch.z - fz * 45 };
+      const p2 = { x: touch.x - fx * 38, y: touch.y + 12, z: touch.z - fz * 38 };
       const before = { x: p.pos.x, z: p.pos.z };
       bezier(from.p, p1, p2, touch, t * t * (3 - 2 * t), this.tmp);
       // Final metres: roll along the ground to the park spot.

@@ -522,7 +522,10 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
           const s = roost.standSpot;
           player.position.lerpVectors(from, tmp3.set(s.x, s.y + 0.05, s.z), k * k * (3 - 2 * k));
           player.position.y += Math.sin(Math.PI * k) * 1.4;
+          // Turn round in the air to land facing your dragon friend.
+          player.yaw += angleDelta(player.yaw, perchYaw + Math.PI) * follow(8, dt);
           player.setAnimation('jump');
+          pilot.setCamera({ distance: 8, height: 3, yawOffset: 0 });
           if (k >= 1) {
             finishTour();
             return false;

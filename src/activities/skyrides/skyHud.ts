@@ -36,59 +36,59 @@ const CSS = `
 .rg-sky .ic .o{fill:none;stroke:#000;stroke-width:5.4}
 .rg-sky .ic .w{fill:none;stroke:currentColor;stroke-width:2.6;paint-order:normal}
 .rg-sky .t{-webkit-text-stroke:calc(var(--u)*.7) #000;paint-order:stroke fill;text-shadow:0 calc(var(--u)*.35) 0 #000}
-.rg-sky .top{position:absolute;top:calc(var(--u)*2);left:50%;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;gap:calc(var(--u)*1)}
-.rg-sky.on .top{display:flex}
-.rg-sky .pill{display:flex;align-items:center;gap:calc(var(--u)*1);background:#10142a;border:calc(var(--u)*.55) solid #fff;border-radius:calc(var(--u)*3);
+.rg-sky .sk-top{position:absolute;top:calc(var(--u)*13.5);left:50%;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;gap:calc(var(--u)*1)}
+.rg-sky.on .sk-top{display:flex}
+.rg-sky .sk-pill{display:flex;align-items:center;gap:calc(var(--u)*1);background:#10142a;border:calc(var(--u)*.55) solid #fff;border-radius:calc(var(--u)*3);
   padding:calc(var(--u)*.7) calc(var(--u)*1.8);box-shadow:0 calc(var(--u)*.7) 0 #000}
-.rg-sky .pill .ic{color:#ffd93b;font-size:1.15em}
-.rg-sky .pill.low{animation:rg-sky-pulse .5s ease-in-out infinite alternate}
-.rg-sky .racers{display:flex;gap:calc(var(--u)*1)}
-.rg-sky .racer{position:relative;display:flex;align-items:center;gap:calc(var(--u)*.6);background:#10142a;border:calc(var(--u)*.45) solid #000;
+.rg-sky .sk-pill .ic{color:#ffd93b;font-size:1.15em}
+.rg-sky .sk-pill.sk-low{animation:rg-sky-pulse .5s ease-in-out infinite alternate}
+.rg-sky .sk-racers{display:flex;gap:calc(var(--u)*1)}
+.rg-sky .sk-racer{position:relative;display:flex;align-items:center;gap:calc(var(--u)*.6);background:#10142a;border:calc(var(--u)*.45) solid #000;
   border-radius:calc(var(--u)*2.2);padding:calc(var(--u)*.4) calc(var(--u)*1.2);font-size:.82em;box-shadow:0 0 0 calc(var(--u)*.3) #8a90b0}
-.rg-sky .racer.you{box-shadow:0 0 0 calc(var(--u)*.45) #fff;font-size:1em}
-.rg-sky .racer .ic{font-size:1.25em}
-.rg-sky .racer .crown{position:absolute;left:50%;top:calc(var(--u)*-2.6);transform:translateX(-50%);font-size:calc(var(--u)*2.8);color:#ffd93b;display:none}
-.rg-sky .racer.lead .crown{display:block}
-.rg-sky .count{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-size:calc(var(--u)*22);display:none}
-.rg-sky .count.on{display:block;animation:rg-sky-pop .9s ease-out both}
-.rg-sky .count .ic{font-size:.8em;color:#ffd93b}
-.rg-sky .pops{position:absolute;left:50%;top:30%;width:0;height:0}
-.rg-sky .pop{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:calc(var(--u)*.6);font-size:calc(var(--u)*5.4);animation:rg-sky-rise 1.1s ease-out forwards;white-space:nowrap}
-.rg-sky .pop .ic{color:#ffd93b}
-.rg-sky .hints{position:absolute;bottom:calc(var(--u)*2.4);left:50%;transform:translateX(-50%);display:none;gap:calc(var(--u)*3)}
-.rg-sky.on .hints{display:flex}
-.rg-sky .hint{display:flex;align-items:center;gap:calc(var(--u)*.8);opacity:.95}
-.rg-sky .hint .ic{font-size:calc(var(--u)*6);color:#fff;filter:drop-shadow(0 calc(var(--u)*.5) 0 #000)}
-.rg-sky .hint.cool{opacity:.45}
-.rg-sky .cap{min-width:calc(var(--u)*6);height:calc(var(--u)*5.4);padding:0 calc(var(--u)*1.2);border-radius:calc(var(--u)*1.3);display:grid;place-items:center;
+.rg-sky .sk-racer.sk-you{box-shadow:0 0 0 calc(var(--u)*.45) #fff;font-size:1em}
+.rg-sky .sk-racer .ic{font-size:1.25em}
+.rg-sky .sk-racer .sk-crown{position:absolute;left:50%;top:calc(var(--u)*-2.6);transform:translateX(-50%);font-size:calc(var(--u)*2.8);color:#ffd93b;display:none}
+.rg-sky .sk-racer.sk-lead .sk-crown{display:block}
+.rg-sky .sk-count{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-size:calc(var(--u)*22);display:none}
+.rg-sky .sk-count.on{display:block;animation:rg-sky-pop .9s ease-out both}
+.rg-sky .sk-count .ic{font-size:.8em;color:#ffd93b}
+.rg-sky .sk-pops{position:absolute;left:50%;top:38%;width:0;height:0}
+.rg-sky .sk-pop{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:calc(var(--u)*.6);font-size:calc(var(--u)*7);animation:rg-sky-rise 1.1s ease-out forwards;white-space:nowrap}
+.rg-sky .sk-pop .ic{color:#ffd93b}
+.rg-sky .sk-hints{position:absolute;bottom:calc(var(--u)*2.4);left:50%;transform:translateX(-50%);display:none;gap:calc(var(--u)*3)}
+.rg-sky.on .sk-hints{display:flex}
+.rg-sky .sk-hint{display:flex;align-items:center;gap:calc(var(--u)*.8);opacity:.95}
+.rg-sky .sk-hint .ic{font-size:calc(var(--u)*6);color:#fff;filter:drop-shadow(0 calc(var(--u)*.5) 0 #000)}
+.rg-sky .sk-hint.sk-cool{opacity:.45}
+.rg-sky .sk-cap{min-width:calc(var(--u)*6);height:calc(var(--u)*5.4);padding:0 calc(var(--u)*1.2);border-radius:calc(var(--u)*1.3);display:grid;place-items:center;
   background:linear-gradient(180deg,#ffe97a,#ffd93b 55%,#f2b400);border:calc(var(--u)*.5) solid #000;box-shadow:0 0 0 calc(var(--u)*.35) #fff,0 calc(var(--u)*.8) 0 calc(var(--u)*.35) #000;
   color:#15110a;font-size:calc(var(--u)*3)}
-.rg-sky .cap.pad{border-radius:50%;min-width:calc(var(--u)*5.4);padding:0}
-.rg-sky .cap .bar{width:calc(var(--u)*9);height:calc(var(--u)*1.2);border:calc(var(--u)*.4) solid #15110a;border-top:none;border-radius:0 0 calc(var(--u)*.5) calc(var(--u)*.5);margin-top:calc(var(--u)*1)}
-.rg-sky .podium{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.6);opacity:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.6);
+.rg-sky .sk-cap.pad{border-radius:50%;min-width:calc(var(--u)*5.4);padding:0}
+.rg-sky .sk-cap .sk-bar{width:calc(var(--u)*9);height:calc(var(--u)*1.2);border:calc(var(--u)*.4) solid #15110a;border-top:none;border-radius:0 0 calc(var(--u)*.5) calc(var(--u)*.5);margin-top:calc(var(--u)*1)}
+.rg-sky .sk-podium{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.6);opacity:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.6);
   background:radial-gradient(ellipse at center,rgba(16,20,42,.95),rgba(16,20,42,.85));border:calc(var(--u)*.7) solid #fff;border-radius:calc(var(--u)*4);
   padding:calc(var(--u)*2.4) calc(var(--u)*4);box-shadow:0 calc(var(--u)*1.2) 0 #000;transition:transform .35s cubic-bezier(.3,1.6,.5,1),opacity .2s}
-.rg-sky .podium.on{transform:translate(-50%,-50%) scale(1);opacity:1}
-.rg-sky .steps{display:flex;align-items:flex-end;gap:calc(var(--u)*1.2)}
-.rg-sky .step{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.6)}
-.rg-sky .step .ic{font-size:calc(var(--u)*6)}
-.rg-sky .step .blk{width:calc(var(--u)*11);display:grid;place-items:center;background:#ffd93b;color:#15110a;border:calc(var(--u)*.55) solid #000;border-radius:calc(var(--u)*1) calc(var(--u)*1) 0 0;font-size:calc(var(--u)*5)}
-.rg-sky .step.p1 .blk{height:calc(var(--u)*12)}
-.rg-sky .step.p2 .blk{height:calc(var(--u)*8.5);background:#e9ecf5}
-.rg-sky .step.p3 .blk{height:calc(var(--u)*6);background:#c9cde0}
-.rg-sky .step.you .ic{animation:rg-sky-bounce .6s ease-in-out infinite alternate}
-.rg-sky .step .sc{font-size:calc(var(--u)*3.2)}
-.rg-sky .stars{display:flex;gap:calc(var(--u)*.8);font-size:calc(var(--u)*6)}
-.rg-sky .stars .ic{color:#3a3f5c}
-.rg-sky .stars .ic.got{color:#ffd93b;animation:rg-sky-pop .5s ease-out both}
-.rg-sky .prize{display:flex;align-items:center;gap:calc(var(--u)*1);font-size:calc(var(--u)*5)}
-.rg-sky .prize .ic{color:#9ff3ff}
-.rg-sky .again{display:flex;align-items:center;gap:calc(var(--u)*1);font-size:calc(var(--u)*3);opacity:.9}
-.rg-sky .tour{position:absolute;top:calc(var(--u)*2);left:50%;transform:translateX(-50%);display:none;gap:calc(var(--u)*1.2)}
-.rg-sky.tour-on .tour{display:flex}
-.rg-sky.tour-on .hints{display:flex}
+.rg-sky .sk-podium.on{transform:translate(-50%,-50%) scale(1);opacity:1}
+.rg-sky .sk-steps{display:flex;align-items:flex-end;gap:calc(var(--u)*1.2)}
+.rg-sky .sk-step{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.6)}
+.rg-sky .sk-step .ic{font-size:calc(var(--u)*6)}
+.rg-sky .sk-step .sk-blk{width:calc(var(--u)*11);display:grid;place-items:center;background:#ffd93b;color:#15110a;border:calc(var(--u)*.55) solid #000;border-radius:calc(var(--u)*1) calc(var(--u)*1) 0 0;font-size:calc(var(--u)*5)}
+.rg-sky .sk-step.sk-p1 .sk-blk{height:calc(var(--u)*12)}
+.rg-sky .sk-step.sk-p2 .sk-blk{height:calc(var(--u)*8.5);background:#e9ecf5}
+.rg-sky .sk-step.sk-p3 .sk-blk{height:calc(var(--u)*6);background:#c9cde0}
+.rg-sky .sk-step.sk-you .ic{animation:rg-sky-bounce .6s ease-in-out infinite alternate}
+.rg-sky .sk-step .sk-sc{font-size:calc(var(--u)*3.2)}
+.rg-sky .sk-stars{display:flex;gap:calc(var(--u)*.8);font-size:calc(var(--u)*6)}
+.rg-sky .sk-stars .ic{color:#3a3f5c}
+.rg-sky .sk-stars .ic.sk-got{color:#ffd93b}
+.rg-sky .sk-prize{display:flex;align-items:center;gap:calc(var(--u)*1);font-size:calc(var(--u)*5)}
+.rg-sky .sk-prize .ic{color:#9ff3ff}
+.rg-sky .sk-again{display:flex;align-items:center;gap:calc(var(--u)*1);font-size:calc(var(--u)*3);opacity:.9}
+.rg-sky .sk-tour{position:absolute;top:calc(var(--u)*13.5);left:50%;transform:translateX(-50%);display:none;gap:calc(var(--u)*1.2)}
+.rg-sky.tour-on .sk-tour{display:flex}
+.rg-sky.tour-on .sk-hints{display:flex}
 @keyframes rg-sky-pop{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}30%{transform:translate(-50%,-50%) scale(1.15);opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
-.rg-sky .stars .ic.got{animation-name:rg-sky-star}
+.rg-sky .sk-stars .ic.sk-got{animation:rg-sky-star .5s ease-out both}
 @keyframes rg-sky-star{0%{transform:scale(.2)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
 @keyframes rg-sky-rise{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}20%{transform:translate(-50%,-80%) scale(1.15);opacity:1}100%{transform:translate(-50%,-260%) scale(1);opacity:0}}
 @keyframes rg-sky-pulse{to{transform:scale(1.1)}}
@@ -131,28 +131,29 @@ export function createSkyHud(root: HTMLElement): SkyHud {
   el.className = 'rg-sky';
   el.setAttribute('data-testid', 'sky-hud');
   el.innerHTML =
-    '<div class="top"><div class="pill clock t">' + iconHtml('clock') + '<span class="sec">90</span></div><div class="racers"></div></div>' +
-    '<div class="tour"><div class="pill t">' + iconHtml('gem') + '<span class="tr">0</span></div><div class="pill t">' + iconHtml('cloud') + '<span class="cl">0</span></div></div>' +
-    '<div class="count t"></div><div class="pops"></div><div class="hints"></div>' +
-    '<div class="podium" data-testid="sky-podium"><div class="steps"></div><div class="stars"></div><div class="prize t"></div></div>';
+    '<div class="sk-top"><div class="sk-pill sk-clock t">' + iconHtml('clock') + '<span class="sk-sec">90</span></div><div class="sk-racers"></div></div>' +
+    '<div class="sk-tour"><div class="sk-pill t">' + iconHtml('gem') + '<span class="sk-tr">0</span></div><div class="sk-pill t">' + iconHtml('cloud') + '<span class="sk-cl">0</span></div></div>' +
+    '<div class="sk-count t"></div><div class="sk-pops"></div><div class="sk-hints"></div>' +
+    '<div class="sk-podium" data-testid="sky-podium"><div class="sk-steps"></div><div class="sk-stars"></div><div class="sk-prize t"></div></div>';
   root.appendChild(el);
   const q = <T extends HTMLElement>(s: string): T => el.querySelector(s) as T;
-  const sec = q('.sec');
-  const clock = q('.clock');
-  const racers = q('.racers');
-  const count = q('.count');
-  const pops = q('.pops');
-  const hints = q('.hints');
-  const podiumEl = q('.podium');
-  const steps = q('.steps');
-  const stars = q('.stars');
-  const prize = q('.prize');
-  const tr = q('.tr');
-  const cl = q('.cl');
+  const sec = q('.sk-sec');
+  const clock = q('.sk-clock');
+  const racers = q('.sk-racers');
+  const count = q('.sk-count');
+  const pops = q('.sk-pops');
+  const hints = q('.sk-hints');
+  const podiumEl = q('.sk-podium');
+  const steps = q('.sk-steps');
+  const stars = q('.sk-stars');
+  const prize = q('.sk-prize');
+  const tr = q('.sk-tr');
+  const cl = q('.sk-cl');
   let lastSec = -1;
   let lastRacers = '';
   let lastHints = '';
   let lastTour = '';
+  let popN = 0;
 
   return {
     root: el,
@@ -172,7 +173,7 @@ export function createSkyHud(root: HTMLElement): SkyHud {
       if (s === lastSec) return;
       lastSec = s;
       sec.textContent = String(s);
-      clock.classList.toggle('low', s <= 10);
+      clock.classList.toggle('sk-low', s <= 10);
     },
     setRacers(r) {
       const key = r.map((x) => `${x.id}:${x.score}`).join('|');
@@ -182,8 +183,8 @@ export function createSkyHud(root: HTMLElement): SkyHud {
       racers.innerHTML = r
         .map(
           (x) =>
-            `<div class="racer t${x.id === 'you' ? ' you' : ''}${x.score === best && best > 0 ? ' lead' : ''}" data-racer="${x.id}">` +
-            `<span class="crown">${iconHtml('crown')}</span>${iconHtml('plane', x.color)}<span>${x.score}</span></div>`,
+            `<div class="sk-racer t${x.id === 'you' ? ' sk-you' : ''}${x.score === best && best > 0 ? ' sk-lead' : ''}" data-racer="${x.id}">` +
+            `<span class="sk-crown">${iconHtml('crown')}</span>${iconHtml('plane', x.color)}<span>${x.score}</span></div>`,
         )
         .join('');
     },
@@ -202,10 +203,10 @@ export function createSkyHud(root: HTMLElement): SkyHud {
         .map((x) => {
           let cap = '';
           if (!touch) {
-            if (x.key === 'space') cap = gamepad ? '<span class="cap pad">A</span>' : '<span class="cap"><span class="bar"></span></span>';
-            else cap = gamepad ? '<span class="cap">LB</span>' : '<span class="cap">Q</span>';
+            if (x.key === 'space') cap = gamepad ? '<span class="sk-cap sk-pad">A</span>' : '<span class="sk-cap"><span class="sk-bar"></span></span>';
+            else cap = gamepad ? '<span class="sk-cap">LB</span>' : '<span class="sk-cap">Q</span>';
           }
-          return `<div class="hint${x.cool ? ' cool' : ''}">${iconHtml(x.icon)}${cap}</div>`;
+          return `<div class="sk-hint${x.cool ? ' sk-cool' : ''}">${iconHtml(x.icon)}${cap}</div>`;
         })
         .join('');
     },
@@ -218,9 +219,11 @@ export function createSkyHud(root: HTMLElement): SkyHud {
     },
     pop(icon, text) {
       const p = document.createElement('div');
-      p.className = 'pop t';
+      p.className = 'sk-pop t';
       p.innerHTML = `${iconHtml(icon)}<span>${text}</span>`;
-      p.style.left = `${Math.round((Math.random() - 0.5) * 30)}vmin`;
+      popN++;
+      p.style.left = `${((popN % 5) - 2) * 9}vmin`;
+      p.style.top = `${(popN % 2) * 6}vmin`;
       pops.appendChild(p);
       while (pops.childElementCount > 5) pops.firstElementChild?.remove();
       setTimeout(() => p.remove(), 1200);
@@ -231,11 +234,11 @@ export function createSkyHud(root: HTMLElement): SkyHud {
         .map((place) => {
           const x = r.places[place - 1];
           if (!x) return '';
-          return `<div class="step p${place}${x.id === 'you' ? ' you' : ''}" data-place="${place}" data-racer="${x.id}">${iconHtml('plane', x.color)}<span class="sc t">${x.score}</span><div class="blk">${place}</div></div>`;
+          return `<div class="sk-step sk-p${place}${x.id === 'you' ? ' sk-you' : ''}" data-place="${place}" data-racer="${x.id}">${iconHtml('plane', x.color)}<span class="sk-sc t">${x.score}</span><div class="sk-blk">${place}</div></div>`;
         })
         .join('');
       stars.innerHTML = [0, 1, 2]
-        .map((i) => `<span class="ic${i < r.stars ? ' got' : ''}" style="animation-delay:${0.3 + i * 0.25}s"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON.star}</svg></span>`)
+        .map((i) => `<span class="ic${i < r.stars ? ' sk-got' : ''}" style="animation-delay:${0.3 + i * 0.25}s"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON.star}</svg></span>`)
         .join('');
       prize.innerHTML = r.prize > 0 ? `${iconHtml('gem')}<span>+${r.prize}</span>` : '';
       podiumEl.dataset.you = String(r.you);
