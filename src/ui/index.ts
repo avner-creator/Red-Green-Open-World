@@ -11,6 +11,7 @@ import { createNav } from './nav';
 import { createCredits, createEnd, createPause, createTitle } from './screens';
 import type { Actions, Screen } from './screens';
 import { createSettings } from './settingsScreen';
+import { createTouchUi } from './touch';
 import { createTutorial } from './tutorial';
 
 export function createUi(ctx: GameContext): UiApi {
@@ -84,6 +85,7 @@ export function createUi(ctx: GameContext): UiApi {
   for (const s of all) root.append(s.el);
   const hud = createHud(ctx);
   const tutorial = createTutorial(ctx);
+  const touch = createTouchUi(ctx);
 
   const phase = (): SessionPhase => ctx.session.state.phase;
   const base = (): Screen | null => {
@@ -146,6 +148,7 @@ export function createUi(ctx: GameContext): UiApi {
       if (shown === gate) gate.update(dt, pad.aHeld);
       hud.update(dt);
       tutorial.update(dt, phase() === 'playing');
+      touch.update(dt, phase() === 'playing' && !calibrating);
     },
     get menuOpen(): boolean {
       return menuOpen();
