@@ -14,7 +14,9 @@ import { buildGearShack } from './gear-shack';
 import { buildChestSpots, buildGemSpots, type ChestSpot, type Spot } from './spots';
 import { LOTS } from './village-data';
 import type { Keepout, ManualTree } from './scatter';
-import { buildWayfinding, type Wayfinding } from './wayfinding';
+import { buildWayfinding, roadEdgeDistance, type Wayfinding } from './wayfinding';
+import { buildOuterAreas, type OuterAreas } from './outer';
+import { dressPaths } from './outer/paths';
 
 export interface Content {
   trees: ManualTree[];
@@ -22,6 +24,7 @@ export interface Content {
   gemSpots: Spot[];
   chestSpots: ChestSpot[];
   wayfinding: Wayfinding;
+  outer: OuterAreas;
 }
 
 export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m: THREE.Mesh) => void): Content {
@@ -31,6 +34,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   const areas = buildAreas(kit);
   const core = buildCoreAreas(kit);
   const shack = buildGearShack(kit);
+  const outer = buildOuterAreas(kit, terrain.roads);
   const keepouts: Keepout[] = [
     { x: PLAZA.x, z: PLAZA.z, r: PLAZA.r + 1, paved: true },
     { x: 0, z: -37, hx: 8.5, hz: 22, paved: true },
@@ -39,6 +43,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
     ...areas.keepouts,
     ...core.keepouts,
     ...shack,
+    ...outer.keepouts,
   ];
   const gemSpots = buildGemSpots(kit.h, terrain.roads);
   const chestSpots = buildChestSpots(kit.h);
@@ -53,7 +58,11 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   const wayfinding = buildWayfinding(kit, terrain.roads, blocked);
   keepouts.push(...wayfinding.keepouts);
   const roadTrees = buildRoadDressing(kit, terrain.roads, blocked);
+  const pathTrees = dressPaths(kit, terrain.roads, blocked, (x, z) => roadEdgeDistance(terrain.roads, x, z));
   // Nothing scattered (trees, rocks) on top of a gem or chest.
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });
-  return { trees: [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...roadTrees], keepouts, gemSpots, chestSpots, wayfinding };
+  return {
+    trees: [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...outer.trees, ...roadTrees, ...pathTrees],
+    keepouts, gemSpots, chestSpots, wayfinding, outer,
+  };
 }

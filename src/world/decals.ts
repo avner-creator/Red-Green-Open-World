@@ -4,7 +4,7 @@
  * Pure geometry: the atlas texture is attached at runtime (`createDecalMesh`).
  */
 import * as THREE from 'three';
-import { pictoUv, type PictoId } from './pictograms';
+import { ATLAS_H, ATLAS_SIZE, pictoUv, type PictoId } from './pictograms';
 
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
@@ -28,12 +28,13 @@ export class Decals {
   private quad(id: PictoId, m: THREE.Matrix4, w: number, h: number, z: number): void {
     const [u0, v0, du, dv] = pictoUv(id);
     // Half a texel inset so mip levels never sample the neighbour cell.
-    const e = 0.5 / 2048;
+    const e = 0.5 / ATLAS_SIZE;
+    const f = 0.5 / ATLAS_H;
     const corners: [number, number, number, number][] = [
-      [-w / 2, -h / 2, u0 + e, v0 + e],
-      [w / 2, -h / 2, u0 + du - e, v0 + e],
-      [w / 2, h / 2, u0 + du - e, v0 + dv - e],
-      [-w / 2, h / 2, u0 + e, v0 + dv - e],
+      [-w / 2, -h / 2, u0 + e, v0 + f],
+      [w / 2, -h / 2, u0 + du - e, v0 + f],
+      [w / 2, h / 2, u0 + du - e, v0 + dv - f],
+      [-w / 2, h / 2, u0 + e, v0 + dv - f],
     ];
     _nm.getNormalMatrix(m);
     _n.set(0, 0, 1).applyMatrix3(_nm).normalize();
