@@ -74,7 +74,7 @@ export interface SecretsInfo {
     selected: number;
   }[];
   arrows: number;
-  trails: { target: string; count: number; visible: boolean }[];
+  trails: { target: string; count: number; visible: boolean; first: [number, number, number] | null; last: [number, number, number] | null }[];
 }
 
 /** Test hook (`window.__rgSecrets`, only with `?test=1`). */
@@ -647,7 +647,17 @@ export function createSecrets(ctx: GameContext): Secrets {
           selected: d.selected,
         })),
         arrows: arrows.count,
-        trails: trails.map((t) => ({ target: t.target, count: t.places.length, visible: t.visible })),
+        trails: trails.map((t) => {
+          const f = t.places[0];
+          const l = t.places[t.places.length - 1];
+          return {
+            target: t.target,
+            count: t.places.length,
+            visible: t.visible,
+            first: f ? ([f.x, f.y, f.z] as [number, number, number]) : null,
+            last: l ? ([l.x, l.y, l.z] as [number, number, number]) : null,
+          };
+        }),
       }),
       overlaps() {
         const out: string[] = [];
