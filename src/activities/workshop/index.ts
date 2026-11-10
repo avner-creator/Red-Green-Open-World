@@ -301,14 +301,15 @@ export function createWorkshop(ctx: GameContext): Workshop {
     // Bubbles from the exhausts while the engine runs (and gently on the turntable).
     if (fitted.has('bubbleExhaust') && ctx.camera.position.distanceTo(car.position) < 70) {
       const speed = Math.abs(hooks.forwardSpeed);
-      const rate = hooks.driven || open ? 5 + speed * 1.4 : 0;
+      // A gentle stream on the turntable; a trail while driving (none while parked or held).
+      const rate = open ? 4 : hooks.driven && speed > 2 ? 2 + speed * 0.7 : 0;
       bubbleAcc += rate * dt;
       while (bubbleAcc >= 1) {
         bubbleAcc -= 1;
         bubbleSeed++;
         const tip = EXHAUST_TIPS[bubbleSeed & 1];
         bodyToWorld(tip, tmpV);
-        tmpV2.set(0, 0, -1.2).applyQuaternion(obj.quaternion);
+        tmpV2.set(bubbleSeed & 1 ? 0.9 : -0.9, 1.2, -0.4).applyQuaternion(obj.quaternion);
         bubbles.emit(tmpV, tmpV2, bubbleSeed);
       }
     }
@@ -421,7 +422,7 @@ export function createWorkshop(ctx: GameContext): Workshop {
       closing = null;
       ui.show(false);
       ctx.cameraRig.setOverride(null);
-      ctx.input.capturePointer();
+      if (!ctx.testMode) ctx.input.capturePointer(); // (headless lock changes would pause tests at random)
       if (how === 'drive' && car) {
         // Turn the buggy to face out of the workshop, towards the road.
         car.teleport(centre.clone().setY(centre.y + TT_HEIGHT), yaw0);

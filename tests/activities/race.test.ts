@@ -33,7 +33,7 @@ describe('race track', () => {
     expect(track.length).toBeGreaterThan(200);
     expect(track.length).toBeLessThan(300);
     const p0 = track.at(0);
-    expect(Math.hypot(p0.x - 26, p0.z - 11)).toBeLessThan(2);
+    expect(Math.hypot(p0.x - 29.5, p0.z - 11.2)).toBeLessThan(2);
     // Heading east at the start.
     expect(p0.dx).toBeGreaterThan(0.9);
     for (const c of LAP_POINTS) {

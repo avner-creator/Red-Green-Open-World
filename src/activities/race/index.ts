@@ -210,7 +210,7 @@ export function createRace(ctx: GameContext): Race {
           front.add(off);
           front.y = heightAt(front.x, front.z) + 0.05;
           ctx.player.teleport(front, site.podiumYaw);
-          ctx.input.capturePointer();
+          if (!ctx.testMode) ctx.input.capturePointer(); // (headless lock changes would pause tests at random)
         }
         cleanup();
       }
@@ -236,6 +236,7 @@ export function createRace(ctx: GameContext): Race {
     site.showPodium(false);
     if (hooks) hooks.hold = false;
     if (autopilot) ctx.input.inject(null);
+    if (phase === 'countdown') ctx.cameraRig.setOverride(null);
     phase = 'idle';
     phaseT = 0;
     exitRace = false;
@@ -290,6 +291,8 @@ export function createRace(ctx: GameContext): Race {
     hud.status(1, laps, 1);
     glow?.setVisible(true);
     site.setLamps(0);
+    // Countdown framing: a little higher and further back, so the lamps and the gantry show.
+    ctx.cameraRig.setOverride({ distance: 7, height: 2.6, fov: 56, lookAhead: 0 });
     ctx.audio.play('click');
     return true;
   }
@@ -577,6 +580,7 @@ export function createRace(ctx: GameContext): Race {
             hud.countdown('go');
             ctx.audio.play('start');
             if (hooks) hooks.hold = false;
+            ctx.cameraRig.setOverride(null);
             phase = 'racing';
             phaseT = 0;
           }

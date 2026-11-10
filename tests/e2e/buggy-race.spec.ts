@@ -122,8 +122,8 @@ test('workshop: open at the tool cart, buy only with enough gems, fit parts, dri
     window.__rgWorkshop!.close('drive');
     window.__rg!.step(1 / 60, 40, false);
   });
-  const driving = await page.evaluate(() => window.__rg!.state().playerMode);
-  expect(driving).toBe('driving');
+  const driving = await page.evaluate(() => ({ mode: window.__rg!.state().playerMode, open: window.__rgWorkshop!.isOpen, pos: window.__rg!.state().playerPosition }));
+  expect(driving.mode, JSON.stringify(driving)).toBe('driving');
   await press({ flopPressed: true }, 30);
   const boost = await page.evaluate(() => {
     const rg = window.__rg!;
