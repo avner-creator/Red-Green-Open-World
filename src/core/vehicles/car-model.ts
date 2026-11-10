@@ -434,6 +434,8 @@ function blobTexture(): THREE.Texture {
 export function createCarModel(): CarModel {
   const root = new THREE.Group();
   root.name = 'buggy';
+  /** Other systems (chests/outfits) restore this paint on a session reset. */
+  root.userData.defaultColor = DEFAULT_PAINT;
   const body = new THREE.Group();
   body.name = 'buggy-body';
   root.add(body);
