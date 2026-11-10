@@ -259,3 +259,194 @@ folder and registers itself with one line, so merges stay trivial.
 > WebGL-missing screen (launch Chromium without GPU flags), context-loss recovery
 > (`WEBGL_lose_context`), and tab-hidden pause; keep the suite's total time flat. Notes with the
 > before/after table in `docs/streams/boot-loading.md`.
+
+## Carnival Island streams J–N (owner playtest 2; each is one Opus 5.5 session)
+
+Common rules for J–N, in addition to "Rules for every stream": read the "Carnival Island pass"
+section of `docs/GAME_DESIGN.md`. Each attraction lives in its own NEW folder under
+`src/activities/` and registers with one line in `src/activities/index.ts`. **Site**: use
+`ctx.world.anchors[<name>]` if the main build has added it (names below); until then, pick a flat
+land spot yourself with `ctx.world.heightAt`/`isLand` near the stated place, clear of roads and
+existing anchor radii, and build your own ground pad and local dressing inside your radius only
+(report the coordinates you used in your notes file). **Friends**: rival/teammate AIs are the
+other heroes from `src/core/characters/catalog.ts` loaded with `loadCharacter` (cheerful, a bit
+clumsy, never mean; they should lose to an 8-year-old who tries). **Glasses twist**: the bonus
+elements named in the brief are registered ONLY with `ctx.vision.add(obj, VisionLayer.WeakOnly)`
+(brightness-only materials from `src/vision`), never hinted in the main scene, HUD or by a
+position-revealing sound, and each stream adds a canvas-readback channel test like
+`tests/e2e/vision.spec.ts` (weak-eye objects change only the weak channel for all 4 lens/eye
+combinations). **Economy** (on `main` after Stream C merges; code defensively if absent): pay
+prizes with `ctx.profile.earn(n, 'mission')`, first play per session free then a 3-gem ticket via
+`ctx.profile.spend`, never lock a child with 0 gems out of everything. **Feel**: start with E at
+a booth/gate, a 3-2-1 with pictograms, 30–60 s rounds, big juicy feedback (squash/stretch,
+confetti in brightness-safe colours, `ctx.audio.play` of existing SfxName values, camera
+override), a result jingle with stars, instant replay or exit, R always leaves safely. Emit
+`stunt` events for stars and a custom done signal through `ui:toast`. Controls work on keyboard,
+gamepad and touch through `ctx.input.state` only. Performance: ≤ ~12 draw calls and ≤ 40k
+triangles per attraction when idle, shadow proxies on layer 7, nothing updates when the player
+is far away. Non-violent: foam, bubbles, water balloons, bouncing; nothing is a weapon and nobody
+is hurt. Unit tests for scoring/AI maths; one Playwright e2e per attraction (`?test=1&quality=low`,
+`step(dt, n, false)`) that plays a full round to a result; screenshots full/R/G in
+`test-results/<stream>/`; notes in `docs/streams/<stream>.md`.
+
+## Stream J — carnival games row (branch `agent/carnival-games`, folder `src/activities/carnival/`)
+
+> Site: anchor `carnivalRow` (the village main street by the plaza, among the houses). Build a row
+> of five striped booths with a friendly AI stall-keeper each, all playable against 1–2 friends:
+> (1) **Balloon Pop**: throw soft beanbags at a wall of bobbing balloons; ordinary balloons are
+> both-eye, the prize balloons are weak-eye-only and worth 3×; aim with the camera, Space/E to
+> throw, generous aim assist. (2) **Ring Toss**: lob hoops onto wobbling pegs; charge-and-release
+> power bar. (3) **Duck Pond**: scoop floating rubber ducks with a net; the lucky ducks carry a
+> weak-eye-only mark on their back. (4) **Strength Bell**: time a press (or a hero's ground-pound)
+> to send the puck up the tower to ring the bell; 5 height tiers with silly labels as pictograms.
+> (5) **Glow Dodge tent**: a dark tent with neon tape lines where soft foam balls roll and lob
+> toward you; dodge for 30 s — the glowing balls are weak-eye-only, their shadows are not drawn,
+> a hit is a soft bonk and a giggle. (6) if time allows, **Ball Scramble**: lie on a wheeled board,
+> get launched into a ball pit, trap balls under a basket for 30 s; golden weak-eye balls count
+> triple. Prizes: gems plus plush-toy trinkets that appear on a shelf at the row.
+
+## Stream K — Scoops, the ice-cream shop (branch `agent/ice-cream`, folder `src/activities/scoops/`)
+
+> Site: anchor `iceCream` (the existing ice-cream shop prop in the village; replace/upgrade it
+> with a proper open-fronted parlour and a counter you walk up to). E at the counter opens a
+> 3D build-your-own-cone station: pick cone, stack up to 5 scoops (physics wobble — a too-tall
+> cone leans and can topple comically), sauces, and silly toppings (gummy worms, popcorn, a
+> pickle, a rubber duck, sprinkles cannon); a recipe card from a friend asks for a specific
+> cone by pictures for bonus gems; the **secret topping of the day** is weak-eye-only on the
+> shelf. Eating the cone (big chomp animation) gives a funny 30-second effect chosen by the
+> toppings: giant head, tiny hero, rainbow trail, super speed, moon-jump, bubble burps. Friends
+> queue up and react to your creation. Keyboard, gamepad and touch (tap/drag) controls.
+
+## Stream L — Bubble Ball arena and Dino Sumo ring (branch `agent/bumper-arena`, folders `src/activities/bubbleball/`, `src/activities/dinosumo/`)
+
+> Sites: anchors `bubbleArena` (a grassy field near the Bouncy Park) and `dinoRing` (next to it).
+> **Bubble Ball**: the hero and five friends each wear a giant transparent inflatable bubble
+> (legs free); arcade physics for bumping, rolling, flipping upside down and bouncing back up;
+> 3-a-side soccer with a huge light ball, two inflatable goals, 60 s matches, kick-off, goal
+> celebrations; bonus goal rings that appear in mid-air are weak-eye-only and score double.
+> **Dino Sumo**: everyone wears a wobbly inflatable dinosaur suit (procedural, with a big clumsy
+> tail and delayed secondary motion); a pool-noodle ring; bump friends out of the circle (they
+> roll away giggling and waddle back), swing your tail (Space) to pop hanging water balloons —
+> ordinary ones splash you, the weak-eye-only ones soak everybody and score triple. Use Rapier
+> dynamic bodies or a simple custom circle-collision solver; nobody is hurt, everything bounces.
+
+## Stream M — Foam Lava course (branch `agent/foam-lava`, folder `src/activities/foamlava/`)
+
+> Site: anchor `foamCourse` (the open ground between the plaza and the lake). A backyard-style
+> obstacle run across a sea of soapy foam "lava": pool floats that tip, upside-down bins,
+> balance blocks, a wobbly plank bridge, a rope swing, a slip-and-slide chute, foam cannons that
+> puff across the path on a rhythm, a bubble machine finale. Timed run with a friend ghost to
+> beat, three medal times, checkpoints. The **secret shortcut tiles** and a few **safe-in-the-
+> foam stepping stones** are weak-eye-only (visual on the WeakOnly layer with real invisible
+> colliders). Falling into the foam = a comic flop, a bubble beard on the hero for 10 s, respawn
+> at the last checkpoint with no penalty beyond time. Foam is a nice cheap shader (animated
+> bubbly surface, both-eye, brightness-readable), with foam particles when you splash.
+
+## Stream N — buggy workshop and race (branch `agent/buggy-race`, folders `src/activities/workshop/`, `src/activities/race/`)
+
+> Sites: the existing `garage` anchor (workshop) and anchor `raceStart` (on the road loop by the
+> garage). **Workshop**: E at the lift opens a turntable view of the buggy with silly upgrades
+> bought with gems (read how `src/core/vehicles/` builds the buggy and `VehicleApi`; if
+> `src/activities/gear/` from the economy stream is on `main`, add the items to its catalog and
+> applier instead of inventing a parallel one): monster wheels (bigger, bouncier), spring bumper
+> (bigger comic bounces), bubble exhaust, rocket boost (a short burst on the skill key), musical
+> horns, a rubber-duck roof ornament, confetti cannon; visual parts attach to the buggy and
+> gameplay effects go through small additive hooks you may add to `src/core/vehicles/` (list
+> them). **Race**: a 60–90 s lap on the island roads against one or two friends in their own
+> buggies (simple waypoint AI with rubber-banding so it is always close), start lights by
+> pictogram, checkpoints as inflatable arches, mini-map-free (use the arches and chevrons),
+> podium celebration. **Glasses twist**: boost pads and a glowing best racing line are
+> weak-eye-only; hitting three boosts in a row gives a rocket surge. Bumping rivals is bouncy and
+> comic. Works with every hero in the seat.
+
+## Stream O — sky rides: stunt plane and friendly dragon (branch `agent/sky-rides`, folder `src/activities/skyrides/`)
+
+> Follow the common rules for J–N above. Owner idea: "a plane air battle, or riding dragons".
+> The game is strictly non-violent (no weapons, nobody shot at or hurt), so the air "battle" is a
+> **stunt-and-splash sky contest**, not combat. Build ONE shared arcade flight controller (an
+> `ExternalController`; read `src/activities/skydive/` and `src/activities/flight.ts` for how
+> rides take and release the player, camera overrides, wind audio, and how rides must never take
+> the player from one another) and two rides on top of it:
+> **Stunt plane** at anchor `airstrip` (a short grass runway near the balloon field): a chunky
+> toy biplane (original design, procedural, propeller blur, wobbling wings, hero visible in the
+> open cockpit with scarf physics, the buddy puppy in the back seat if `src/buddy/` exists).
+> E to board, auto take-off, forgiving controls (pitch/roll/yaw blended into "steer where you
+> look" with auto-level, a boost on Shift, loops and barrel rolls on the skill key that score
+> trick stars), can't crash: the ground and sea bounce you back up with a comic boing, the island
+> edge turns you around. A 90-second sky contest against two friends in their own planes:
+> fly through hoops, pop cloud-balloons by flying through them, drop water balloons (Space) on
+> big floating bullseye rafts and on a giant inflatable duck, write a smoke trail; friends
+> splash you with harmless confetti puffs when they overtake. Auto landing at the end with a
+> podium. **Friendly dragon** at anchor `dragonRoost` (a rocky perch by the lighthouse or the
+> highest hill): a round, goofy, smiling dragon (procedural, big eyes, stubby wings with
+> secondary motion, wagging tail) that you feed a treat to befriend, then ride: wing-flap
+> rhythm on Space for height, glide and swoop, a happy roar, and it breathes **bubbles and
+> sparkles** (never fire at anything) that pop cloud-balloons; a relaxed free-flight tour of the
+> whole island with a treasure trail, ending with a gentle landing back at the roost.
+> **Glasses twist** (WeakOnly layer only): the bonus hoops, the golden cloud-balloons, the best
+> flight line through the contest and the dragon's treasure trail are visible only to the weak
+> eye; ordinary hoops and balloons are both-eye. Skies must stay readable in R-only and G-only
+> (bright objects need dark outlines against the sky). Both rides keep gem pickup working at
+> speed (segment tests), cost a ticket after the first free flight per session, and hand the
+> player back on the ground in walk mode. Batch each vehicle to ≤ 8 draws with a shadow proxy.
+
+## Stream P — red-green depth pass (branch `agent/glasses-depth`, orchestrated: Fable 5.2 + Opus/Sonnet builders)
+
+> You are the orchestrator for Stream P of Red-Green Open World; other sessions are building the
+> rest at the same time. Read `docs/DIRECTIVES.md` (you write no code; builders are Opus/Sonnet
+> subagents, never Fable, never fork; the red-green system must be complete and excellent; no
+> health or medical wording anywhere), `CLAUDE.md` (the red-green rule), `docs/HANDOFF.md`,
+> `docs/BUILD_PLAN.md`, and `docs/GAME_DESIGN.md` — your scope is the whole "Red-green depth
+> pass" section: more kinds of play that make the player want to use the weaker eye. Also read
+> `src/vision/` (compositor, `VisionLayer.WeakOnly`/`StrongOnly`, `createGlowMaterial`,
+> `createLayerMaterial`, calibration), `tests/e2e/vision.spec.ts` (canvas-readback channel
+> tests), and how gems, chests and (if merged) secrets use the layers.
+>
+> **Phase 1 — start now, new files only** (`src/vision/` additions by `dichoptic-engineer`;
+> a new folder `src/activities/glasses/` by `activities-designer` or an Opus builder; UI in new
+> files under `src/ui/` by `ui-designer`):
+> 1. Vision toolkit: reusable, tested building blocks on the layers — animated weak/strong
+>    rings and reticles, world-space text/number sprites for a layer, half-symbol pairs
+>    (one half per eye that complete each other), red-green dot pictures (a different dot
+>    pattern per channel with a hidden shape that appears only with both eyes; generator +
+>    material), tier presets (size / brightness / speed), a per-layer fade so objects can get
+>    fainter smoothly, and a debug overlay for tests. Layer objects must stay depth-tested
+>    against the world, never leak into the other channel or blue, and cost little.
+> 2. Standalone mini-mechanics in `src/activities/glasses/`, placed with
+>    `ctx.world.heightAt`/`isLand` near the plaza and existing anchors (no anchor changes):
+>    **Glow-flies** (catch drifting weak-eye fireflies by running through them; faster and
+>    fainter ones worth more), **Pip's lost toys** (follow a weak-eye paw-print trail to a
+>    both-eye toy; works without the buddy code), **Odd one out pedestals** (three weak-eye
+>    shapes, press the button under the different one; detail gets finer after hits and coarser
+>    after misses within a session), **Line-up targets** (a weak-eye reticle that follows the
+>    camera aim; hold it on a strong-eye target for a second to pop it), **Half-symbol gates**
+>    (two halves, one per eye, show which of three arches to run through), **Dot-picture signs**
+>    (the hidden shape is the answer to a nearby both-eye three-button pedestal).
+>    Each pays gems through `ctx.profile.earn` if the economy is on `main` (code defensively),
+>    has a wordless pictogram board, and never reveals a weak-eye position to the strong eye
+>    through the main scene, the HUD or a positional sound.
+> 3. Adaptive challenge (grown-up setting, off by default, behind the existing gate; labels in
+>    plain game words such as "Auto challenge"): a gentle per-session staircase that nudges
+>    weak-eye object brightness/size down and the other eye's dimmer up after successes and
+>    back after misses, clamped to the calibrated limits in settings, never changing the saved
+>    calibration itself. Plus a grown-up-only end-of-session summary screen (counts by kind and
+>    tier, hit rates, in neutral words; no advice, no claims). Additive settings fields only.
+>
+> **Phase 2 — after `main` contains the economy and the merged attractions** (rebase first;
+> coordinate through `docs/streams/glasses-depth.md`; additive changes, smallest diffs in other
+> owners' folders): weave the toolkit into what exists — weak-eye perfect-bounce ring on the
+> trampoline, parachute-open ring and gem-through-strong-hoop bonus in the skydive, boost-pad
+> timing on the buggy/race if present, weak-eye skill-ready ring and combo number over the hero,
+> a "real gem among fakes" variant at a few gem spots, dot-picture prize codes at the Gear Shack.
+> Each as a small, optional, clearly rewarded layer on top of the existing fun.
+>
+> Quality bar: every mechanic is obvious to an 8-year-old from its pictogram board, fun without
+> reading, and impossible to do with the weak eye shut — add an automated proof for each: with
+> the weak layer hidden (`setLayerVisible`) the strong-channel frame carries no information that
+> identifies the answer (compare frames across different answers), and the canvas-readback
+> channel test holds for all 4 lens/eye combinations. Performance: each mechanic ≤ 6 draw calls,
+> idle when the player is far. Work on branch `agent/glasses-depth` (subagent worktrees merged
+> into it), change `src/types.ts` additively only, rebase on `origin/main` at least hourly, push
+> often (plain push), keep `npm run verify` green, write `docs/streams/glasses-depth.md` (what
+> was built, interface additions, how to test, what phase 2 touched), and tell the project owner
+> when phase 1 and then phase 2 are ready to merge.
