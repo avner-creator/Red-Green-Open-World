@@ -1,7 +1,7 @@
 /**
  * The rideable horse on the real island: two horses idle in the ranch paddock; E mounts (riding
  * mode, the rider follows the saddle so gem pickup works), the horse gallops at ~13 m/s with
- * Shift, jumps ~1.6 m on Space, R puts horse and rider back on a safe spot (still mounted), E
+ * Shift, jumps ~1.6 m on Space, R puts the horse on a safe spot and lets the rider go, E
  * dismounts to the side. Screenshots (full / R-only / G-only) in test-results/horse/.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -192,16 +192,31 @@ test('Space jumps about 1.6 m', async () => {
   expect((await horseState()).grounded).toBe(true);
 });
 
-test('R puts horse and rider on a safe spot, still mounted', async () => {
+test('R puts the horse on a safe spot and the rider down beside it (R always lets go)', async () => {
   await steps(1, { respawnPressed: true });
   await steps(10);
   const s = await horseState();
-  expect(s.mode).toBe('riding');
+  expect(s.mode).toBe('walk');
+  expect(s.riding).toBe(false);
   expect(s.onLand).toBe(true);
-  expect(s.playerDist).toBeLessThan(0.8);
+  expect(s.playerDist).toBeLessThan(3.5);
 });
 
 test('E dismounts to a free side', async () => {
+  // Back in the saddle first (R let go above).
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    const h = rg.ctx.vehicles.all.find((v) => v.kind === 'horse')!;
+    const q = h.object.quaternion;
+    const yaw = Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+    const x = h.position.x + Math.cos(yaw) * 1.8;
+    const z = h.position.z - Math.sin(yaw) * 1.8;
+    rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.2, z, yaw);
+    rg.step(1 / 60, 20, false);
+  });
+  await steps(1, { usePressed: true });
+  await steps(150);
+  expect((await horseState()).mode).toBe('riding');
   await steps(60);
   await steps(1, { usePressed: true });
   await steps(60);

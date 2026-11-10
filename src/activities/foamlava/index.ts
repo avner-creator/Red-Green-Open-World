@@ -472,7 +472,10 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     window.__rgFoam = {
       phase: () => phase,
       sim,
-      start: () => begin(),
+      // Same rule as E at the booth: never take the player from another ride.
+      start: () => {
+        if (phase === 'result' || ctx.player.mode === 'walk') begin();
+      },
       autopilot: (plan) => {
         botPlan = plan;
         bot = plan && phase === 'run' ? new Autopilot(plan === 'main' ? MAIN_PLAN : SHORTCUT_PLAN) : bot;

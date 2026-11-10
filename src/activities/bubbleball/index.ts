@@ -474,7 +474,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
         },
       booth: () => [model.booth.x, model.booth.y, model.booth.z],
       start: () => {
-        if (phase === 'idle') begin();
+        // Same rule as E at the booth: never take the player from another ride.
+        if (phase === 'idle' && player.mode === 'walk') begin();
       },
       ring: (x, z) => {
         if (match) match.ring = { x, z, z0: z, age: 0, popT: 0, alive: true };

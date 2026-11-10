@@ -593,6 +593,12 @@ export interface TestApi {
   /** Hide/show every registered layer object whose name starts with `prefix`. Returns how many matched. */
   setLayerObjectsVisible(prefix: string, visible: boolean): number;
   setRemaining(seconds: number): void;
+  /** Every E target added after the core systems (activities): id and current prompt position. */
+  interactables(): { id: string; position: [number, number, number] }[];
+  /** True while some system holds a camera override (setOverride with a non-null value). */
+  cameraOverridden(): boolean;
+  /** Sound loops currently on (intensity > 0): 'wind' | 'engine' | 'gallop'. */
+  audioLoops(): string[];
   inject(patch: Partial<InputState> | null): void;
   state(): SessionState & { playerPosition: [number, number, number]; playerMode: PlayerMode };
   /** Uncaught errors seen since boot. */

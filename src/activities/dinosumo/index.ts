@@ -435,7 +435,8 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
         },
       booth: () => [model.booth.x, model.booth.y, model.booth.z],
       start: () => {
-        if (phase === 'idle') begin();
+        // Same rule as E at the booth: never take the player from another ride.
+        if (phase === 'idle' && player.mode === 'walk') begin();
       },
       setClock: (s) => {
         if (round) round.clock = s;

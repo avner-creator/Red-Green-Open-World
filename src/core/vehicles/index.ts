@@ -90,12 +90,8 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
 
   /** R while driving: vehicle upright on the nearest road, player standing beside it. */
   const rescue = (): void => {
-    if (active?.rescueKeepsRider) {
-      // Horse: horse and rider together on the last safe spot; the rider stays in the saddle.
-      active.rescue();
-      ctx.events.emit('player:respawn', {});
-      return;
-    }
+    // R always lets go (every ride, the horse too): the vehicle goes back to a safe spot and the
+    // rider stands beside it. (The horse used to keep its rider on R; batch-2 rule: R releases.)
     const v = detach();
     if (!v) return;
     player.setVehicle(null);

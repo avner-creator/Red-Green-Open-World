@@ -13,7 +13,7 @@ import { VisionLayer } from './types';
 import type { Object3D } from 'three';
 import { createBootLoader, hasWebGL2, nextPaint, showContextLost, watchContextLoss, watchVisibility, whenVisible } from './boot';
 import type { FailureScreen } from './boot';
-import type { GameContext, TestApi } from './types';
+import type { GameContext, Interactable, TestApi } from './types';
 
 const params = new URLSearchParams(location.search);
 const testMode = params.get('test') === '1';
@@ -132,6 +132,30 @@ async function boot(): Promise<void> {
   ctx.cameraRig = core.cameraRig;
   ctx.interactions = core.interactions;
   ctx.vehicles = core.vehicles;
+  // Test mode: record what rides leave behind (camera override, sound loops) and every E target.
+  const probe = { override: false, loops: new Map<string, number>(), targets: [] as Interactable[] };
+  if (testMode) {
+    const setOverride = ctx.cameraRig.setOverride.bind(ctx.cameraRig);
+    ctx.cameraRig.setOverride = (o) => {
+      probe.override = o !== null;
+      setOverride(o);
+    };
+    const setLoop = audio.setLoop.bind(audio);
+    audio.setLoop = (name, intensity, pitch) => {
+      probe.loops.set(name, intensity);
+      setLoop(name, intensity, pitch);
+    };
+    const add = ctx.interactions.add.bind(ctx.interactions);
+    ctx.interactions.add = (t) => {
+      probe.targets.push(t);
+      const off = add(t);
+      return () => {
+        const i = probe.targets.indexOf(t);
+        if (i >= 0) probe.targets.splice(i, 1);
+        off();
+      };
+    };
+  }
   const { createActivities } = await chunks.activities;
   loader.stage('activities');
   await nextPaint();
@@ -294,6 +318,18 @@ async function boot(): Promise<void> {
       },
       setRemaining(seconds) {
         session.setRemaining(seconds);
+      },
+      interactables() {
+        return probe.targets.map((t) => {
+          const p = t.position();
+          return { id: t.id, position: [p.x, p.y, p.z] as [number, number, number] };
+        });
+      },
+      cameraOverridden() {
+        return probe.override;
+      },
+      audioLoops() {
+        return [...probe.loops].filter(([, v]) => v > 0).map(([k]) => k);
       },
       inject(patch) {
         ctx.input.inject(patch);
