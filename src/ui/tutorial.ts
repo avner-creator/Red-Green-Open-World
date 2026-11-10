@@ -1,8 +1,11 @@
 /** Wordless tutorial strip shown for the first ~6 s of play: animated key caps or gamepad glyphs. */
 import type { GameContext } from '../types';
 import { clear, h } from './dom';
-import { cap, GAMEPAD_GLYPH, padButton } from './glyphs';
+import { controlIcon, controlKeys } from './controlGlyphs';
+import type { ControlId } from './controlGlyphs';
+import { cap } from './glyphs';
 import { icon } from './icons';
+import { pictogram } from './wayIcons';
 
 export const TUTORIAL_SECONDS = 6;
 
@@ -26,23 +29,19 @@ export function createTutorial(ctx: GameContext): Tutorial {
 
   const build = (): void => {
     clear(el);
+    const group = (id: ControlId, device: 'keyboard' | 'gamepad'): HTMLElement =>
+      h('div', 'tgroup', {}, controlKeys(id, device, true), pictogram(controlIcon(id)));
     if (gamepad) {
-      el.append(
-        h('div', 'tgroup', {}, padButton('L', 'press'), icon('stick')),
-        h('div', 'tgroup', {}, padButton('R', 'press d1'), icon('eye')),
-        h('div', 'tgroup', {}, padButton(GAMEPAD_GLYPH.jump, 'press d2'), icon('trampoline')),
-        h('div', 'tgroup', {}, padButton(GAMEPAD_GLYPH.use, 'press d3'), icon('hand')),
-        h('div', 'tgroup', {}, padButton(GAMEPAD_GLYPH.sprint, 'press'), icon('bolt')),
-      );
+      el.append(...(['move', 'look', 'jump', 'use', 'sprint'] as const).map((id) => group(id, 'gamepad')));
       return;
     }
     const row = (...c: HTMLElement[]): HTMLElement => h('div', 'row', {}, ...c);
     el.append(
-      h('div', 'tgroup', {}, h('div', 'tkeys', {}, row(cap('W', 'press')), row(cap('A', 'press d1'), cap('S', 'press d2'), cap('D', 'press d3'))), icon('flop')),
+      h('div', 'tgroup', {}, h('div', 'tkeys', {}, row(cap('W', 'press')), row(cap('A', 'press d1'), cap('S', 'press d2'), cap('D', 'press d3'))), icon('stick')),
       h('div', 'tgroup', {}, icon('mouse', 'mouse'), icon('eye')),
-      h('div', 'tgroup', {}, cap('␣', 'wide press'), icon('trampoline')),
-      h('div', 'tgroup', {}, cap('E', 'press'), icon('hand')),
-      h('div', 'tgroup', {}, cap('⇧', 'wide press d1'), icon('bolt')),
+      group('jump', 'keyboard'),
+      group('use', 'keyboard'),
+      group('sprint', 'keyboard'),
     );
   };
 

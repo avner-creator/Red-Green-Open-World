@@ -20,8 +20,8 @@ function headerIcon(name: HeaderIcon): HTMLElement {
 }
 
 const GROUPS: { id: string; icon: HeaderIcon; rows: ControlId[] }[] = [
-  { id: 'foot', icon: 'walker', rows: ['move', 'look', 'jump', 'sprint', 'use', 'respawn'] },
-  { id: 'driving', icon: 'car', rows: ['steer', 'drive', 'hop', 'horn', 'exit'] },
+  { id: 'foot', icon: 'walker', rows: ['move', 'look', 'jump', 'sprint', 'air', 'use', 'respawn'] },
+  { id: 'driving', icon: 'car', rows: ['steer', 'drive', 'hop', 'slide', 'horn', 'exit'] },
   { id: 'skydive', icon: 'parachute', rows: ['move', 'chute', 'look'] },
 ];
 

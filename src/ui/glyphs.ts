@@ -1,9 +1,10 @@
 /** Key caps, gamepad glyphs and id -> icon mappings. */
 import type { IconName, StuntKind } from '../types';
+import { padLabel } from './controlMap';
 import { h } from './dom';
 
-/** Gamepad button labels shown in prompts (standard mapping). Change here if core remaps. */
-export const GAMEPAD_GLYPH = { use: 'X', jump: 'A', sprint: 'RB' } as const;
+/** Gamepad labels for prompts; derived from the one control table (controlMap.ts). */
+export const GAMEPAD_GLYPH = { use: padLabel('use'), jump: padLabel('jump'), sprint: padLabel('sprint') };
 
 export const STUNT_ICON: Record<StuntKind, IconName> = {
   bigBounce: 'trampoline',
