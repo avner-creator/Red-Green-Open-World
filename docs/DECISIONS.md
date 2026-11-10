@@ -34,3 +34,7 @@
 - `TestApi.step(dt, n, render = true)`: `render=false` steps the simulation without drawing. Reason: e2e speed on the software renderer.
 - The calibration "weak strength" slider also scales StrongOnly objects. Reason: one strength control for all layer objects keeps calibration simple.
 - Unverified merges go to an `integration/*` branch and are pushed there; `main` only moves when verify is green. Reason: Netlify deploys `main`.
+- Sky is procedural golden hour with a baked environment map (no HDRI download); AO is baked into vertex colours; one soft shadow map follows the camera. Reason: world-artist's call for look per cost; no asset licensing needed.
+- `heightAt` uses Rapier's triangle split instead of bilinear. Reason: bilinear was up to 13 cm off the collider.
+- E2e boots at Low quality (`?test=1&quality=low`) except smoke, vision and screenshots. Reason: shadows cost ~330 of ~520 ms per frame on the software renderer.
+- Next wave scope follows the DIRECTIVES core list: one car, balloon skydive, both-eye chests with 3 outfits; horse, bungee and Silly Zone only if the timeboxes allow.
