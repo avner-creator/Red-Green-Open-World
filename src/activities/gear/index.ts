@@ -7,6 +7,7 @@ import { createApplier } from './applier';
 import type { WornSlot } from './look';
 import { GEAR_CATALOG } from './catalog';
 import { createEmotes } from './emotes';
+import { withPreviews } from './previews';
 import { createTrails } from './trails';
 
 export { GEAR_CATALOG } from './catalog';
@@ -36,7 +37,7 @@ declare global {
 }
 
 export function createGear(ctx: GameContext): GameSystem {
-  ctx.economy.registerItems(GEAR_CATALOG);
+  ctx.economy.registerItems(withPreviews(GEAR_CATALOG));
 
   const applier = createApplier(ctx);
   const trails = createTrails(ctx);
