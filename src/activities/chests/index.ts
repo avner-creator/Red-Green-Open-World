@@ -34,6 +34,8 @@ export interface ChestInfo {
   key: [number, number, number];
   keyState: 'ground' | 'carried' | 'used';
   open: boolean;
+  /** Where the key model is drawn right now (follows the player while carried). */
+  keyNow: [number, number, number];
 }
 
 /** Test hook (`window.__rgChests`, only with `?test=1`). */
@@ -423,6 +425,7 @@ export function createChests(ctx: GameContext): Chests {
           key: [e.keyPos.x, e.keyPos.y, e.keyPos.z],
           keyState: e.lock.key,
           open: e.lock.opened,
+          keyNow: [e.keyModel.group.position.x, e.keyModel.group.position.y, e.keyModel.group.position.z],
         })),
       sidePoint(i, side, dist = 1.9) {
         const e = entries[i];

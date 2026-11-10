@@ -161,6 +161,173 @@ test('holding jump on the trampoline grows the bounce up to ~40 m and awards big
   expect(Math.max(...big.map((s) => s.value))).toBeLessThanOrEqual(40);
 });
 
+/**
+ * Play-check: carry a chest key on a full balloon ride (auto-jump, steer along the gem trail,
+ * auto-chute, land near the rings), open the chest, then ride again wearing the outfit. Checks
+ * that pickups sit on the tilted body, the carried key keeps up and stays weak-eye only, and the
+ * outfit stays on the body in every pose.
+ */
+test('balloon ride with a carried key, open the chest, ride again wearing the hat', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const THREE_V = ctx.player.position.constructor as new (x?: number, y?: number, z?: number) => typeof ctx.player.position;
+    rg.start();
+    rg.step(1 / 60, 3, false);
+    const collected = new Set<string>();
+    const offGem = ctx.events.on('gem:collected', (e) => collected.add(`${e.position.x.toFixed(2)},${e.position.z.toFixed(2)}`));
+    const trail = ctx.world.gemSpots.filter((s) => s.tag === 'skydive').map((s) => s.position);
+    const isTaken = (p: { x: number; z: number }): boolean => collected.has(`${p.x.toFixed(2)},${p.z.toFixed(2)}`);
+    const rings = ctx.world.anchors.landingRings.position;
+    const pad = ctx.world.anchors.balloon.position;
+    const spin = ctx.player.object.children[0].children[0];
+    const head = ctx.player.object.getObjectByName('attach-head')!;
+    const centre = new THREE_V();
+    const hp = new THREE_V();
+
+    const ride = () => {
+      const g = ctx.world.heightAt(pad.x, pad.z);
+      rg.teleport(pad.x + 1.7, g + 0.4, pad.z, -Math.PI / 2);
+      rg.step(1 / 60, 10, false);
+      const focus = ctx.interactions.focused?.id ?? null;
+      rg.inject({ usePressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      const canopy = ctx.scene.getObjectByName('canopy')!;
+      const gemsBefore = collected.size;
+      let maxPickupErr = 0;
+      let maxKeyDist = 0;
+      let freefallFrames = 0;
+      let canopyFrames = 0;
+      let headDevFree = 0;
+      let headDevCanopy = 0;
+      let bellyDown = true;
+      let maxCamYawChange = 0;
+      let lastCamYaw = ctx.cameraRig.yaw;
+      let landedAt = -1;
+      const dt = 1 / 30;
+      ctx.player.object.updateMatrixWorld(true);
+      const standHead = head.getWorldPosition(hp).distanceTo(spin.getWorldPosition(centre));
+      for (let i = 0; i < 70 / dt; i++) {
+        // Steer to the nearest trail gem still below us (camera-relative stick, like a player).
+        const p = ctx.player.position;
+        let inject: { moveX: number; moveY: number } | null = null;
+        if (ctx.player.mode === 'external' && !canopy.visible && ctx.player.velocity.y < -5) {
+          let best: { x: number; y: number; z: number } | null = null;
+          for (const t of trail) if (!isTaken(t) && t.y < p.y - 1 && (!best || t.y > best.y)) best = t;
+          if (best) {
+            const dx = best.x - p.x;
+            const dz = best.z - p.z;
+            const l = Math.hypot(dx, dz);
+            if (l > 0.5) {
+              const s = Math.sin(ctx.cameraRig.yaw);
+              const c = Math.cos(ctx.cameraRig.yaw);
+              const k = Math.min(1, l / 4);
+              inject = { moveY: (s * dx + c * dz) / l * k, moveX: (-c * dx + s * dz) / l * k };
+            }
+          }
+        }
+        rg.inject(inject);
+        rg.step(dt, 1, false);
+        const yawNow = ctx.cameraRig.yaw;
+        if (ctx.player.mode === 'external' && !canopy.visible && ctx.player.velocity.y > -1) {
+          maxCamYawChange = Math.max(maxCamYawChange, Math.abs(yawNow - lastCamYaw));
+        }
+        lastCamYaw = yawNow;
+        ctx.player.object.updateMatrixWorld(true);
+        spin.getWorldPosition(centre);
+        const falling = ctx.player.mode === 'external' && ctx.player.velocity.y < -20;
+        if (falling) {
+          freefallFrames++;
+          const pick = new THREE_V(p.x, p.y + 0.85, p.z);
+          maxPickupErr = Math.max(maxPickupErr, pick.distanceTo(centre));
+          head.getWorldPosition(hp);
+          headDevFree = Math.max(headDevFree, Math.abs(hp.distanceTo(centre) - standHead));
+          if (freefallFrames > 30 && hp.y - centre.y > 0.45) bellyDown = false;
+        }
+        if (canopy.visible && ctx.player.mode === 'external') {
+          canopyFrames++;
+          headDevCanopy = Math.max(headDevCanopy, Math.abs(head.getWorldPosition(hp).distanceTo(centre) - standHead));
+        }
+        const k = window.__rgChests!.info()[0];
+        if (k.keyState === 'carried') maxKeyDist = Math.max(maxKeyDist, Math.hypot(k.keyNow[0] - p.x, k.keyNow[1] - p.y, k.keyNow[2] - p.z));
+        if (ctx.player.mode === 'walk' && i > 30) {
+          landedAt = i * dt;
+          break;
+        }
+      }
+      rg.inject(null);
+      rg.step(1 / 60, 20, false);
+      const q = ctx.player.position;
+      return {
+        focus,
+        landedAt,
+        mode: ctx.player.mode,
+        ringDist: Math.hypot(q.x - rings.x, q.z - rings.z),
+        trailGems: collected.size - gemsBefore,
+        maxPickupErr,
+        maxKeyDist,
+        freefallFrames,
+        canopyFrames,
+        headDevFree,
+        headDevCanopy,
+        bellyDown,
+        maxCamYawChange,
+        tiltReset: spin.parent!.rotation.x === 0 && spin.parent!.position.lengthSq() === 0,
+      };
+    };
+
+    // Pick up chest 0's key (hat chest), then ride carrying it.
+    const c0 = window.__rgChests!.info()[0];
+    rg.teleport(c0.key[0], ctx.world.heightAt(c0.key[0], c0.key[2]) + 0.1, c0.key[2], 0);
+    rg.step(1 / 60, 24, false);
+    const keyState = window.__rgChests!.info()[0].keyState;
+    const ride1 = ride();
+
+    // Open chest 0 from its keyhole side.
+    const [rx, rz] = window.__rgChests!.sidePoint(0, c0.keyholeSide);
+    rg.teleport(rx, ctx.world.heightAt(rx, rz) + 0.1, rz, Math.atan2(c0.position[0] - rx, c0.position[2] - rz));
+    rg.step(1 / 60, 24, false);
+    const chestFocus = ctx.interactions.focused?.id ?? null;
+    rg.inject({ usePressed: true, use: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 40, false);
+    const afterOpen = rg.state();
+    const hatWorn = head.children.length > 0;
+
+    const ride2 = ride();
+    offGem();
+    return { keyState, ride1, chestFocus, chests: afterOpen.chests, outfits: afterOpen.outfits, hatWorn, ride2, hatAfter: head.children.length > 0, keyInMainScene: ctx.scene.getObjectByName('chest-key') !== undefined };
+  });
+  console.log(JSON.stringify(r));
+  expect(r.keyState).toBe('carried');
+  for (const ride of [r.ride1, r.ride2]) {
+    expect(ride.focus).toBe('balloon');
+    expect(ride.landedAt).toBeGreaterThan(20);
+    expect(ride.mode).toBe('walk');
+    expect(ride.ringDist).toBeLessThan(20);
+    expect(ride.freefallFrames).toBeGreaterThan(60);
+    expect(ride.canopyFrames).toBeGreaterThan(60);
+    expect(ride.maxPickupErr).toBeLessThan(0.1);
+    expect(ride.bellyDown).toBe(true);
+    expect(ride.tiltReset).toBe(true);
+    expect(ride.maxCamYawChange).toBeGreaterThan(0);
+  }
+  expect(r.ride1.trailGems).toBeGreaterThanOrEqual(3);
+  // The carried key orbits ~1.8 m from the feet; it must keep up at freefall speed.
+  expect(r.ride1.maxKeyDist).toBeGreaterThan(1);
+  expect(r.ride1.maxKeyDist).toBeLessThan(2.6);
+  expect(r.keyInMainScene).toBe(false);
+  expect(r.chestFocus).toBe('chest0-key');
+  expect(r.chests).toBe(1);
+  expect(r.outfits).toEqual(['hat-explorer']);
+  expect(r.hatWorn).toBe(true);
+  expect(r.hatAfter).toBe(true);
+  expect(r.ride2.headDevFree).toBeLessThan(0.05);
+  expect(r.ride2.headDevCanopy).toBeLessThan(0.05);
+});
+
 test('no errors', async () => {
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
