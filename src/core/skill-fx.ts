@@ -52,11 +52,11 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
   const ring = new THREE.Group();
   ring.name = 'skill-shockwave';
   const ringLight = new THREE.Mesh(
-    new THREE.RingGeometry(0.78, 1, 48).rotateX(-Math.PI / 2),
+    new THREE.RingGeometry(0.66, 0.94, 48).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xfff6cf, transparent: true, depthWrite: false, toneMapped: false }),
   );
   const ringDark = new THREE.Mesh(
-    new THREE.RingGeometry(1, 1.08, 48).rotateX(-Math.PI / 2),
+    new THREE.RingGeometry(0.94, 1.1, 48).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0x1e2229, transparent: true, depthWrite: false }),
   );
   ring.add(ringLight, ringDark);
@@ -179,12 +179,12 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
       }
       // Shockwave.
       if (ringT < 1) {
-        ringT = Math.min(1, ringT + dt / 0.55);
-        const k = 1 - (1 - ringT) ** 3;
+        ringT = Math.min(1, ringT + dt / 0.75);
+        const k = 1 - (1 - ringT) ** 2;
         const r = 0.4 + k * ringR;
         ring.scale.set(r, 1, r);
         (ringLight.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - ringT);
-        (ringDark.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - ringT);
+        (ringDark.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - ringT * ringT);
         if (ringT >= 1) ring.visible = false;
       }
       // Speed lines: a ring of streaks around the body that stream backwards and fade out.

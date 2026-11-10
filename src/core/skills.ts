@@ -49,7 +49,7 @@ export const SKILL = {
     boost: 1.25,
   },
   groundPound: {
-    minAir: 0.12,
+    minAir: 0.08,
     hang: 0.16,
     speed: 30,
     cooldown: 0.5,
