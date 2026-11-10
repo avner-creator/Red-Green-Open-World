@@ -7,6 +7,7 @@ import { createCameraRig } from './camera';
 import { CHARACTERS } from './characters/catalog';
 import { createInteractions } from './interactions';
 import { createPlayer } from './player';
+import { shadowProxyWatcher } from './shadow-proxy';
 import { createVehicles } from './vehicles';
 
 export { createInput } from './input';
@@ -41,6 +42,8 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
   });
   const interactions = createInteractions(ctx);
   const vehicles = createVehicles(ctx, player, camera, interactions.api);
+  // Shadow-only proxies (buggy, balloon, thrills) need the sun's shadow camera to see their layer.
+  const watchShadows = shadowProxyWatcher(ctx.scene);
 
   return {
     player: player.api,
@@ -50,6 +53,7 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
     system: {
       update(dt) {
         // Vehicles first: the rider then sits exactly where the vehicle is this frame.
+        watchShadows(dt);
         vehicles.update(dt);
         player.update(dt);
         vehicles.lateUpdate(dt);

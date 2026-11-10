@@ -61,3 +61,6 @@
 - Characters come from Quaternius CC0 packs via the trebeljahr/quaternius-showcase GitHub mirror (pinned commit). Reason: quaternius.com, opengameart.org and jsDelivr are blocked from that cloud session; raw.githubusercontent.com works and the mirror lists every pack as CC0-1.0.
 - Cast: robot + four space-suit animals (frog, red panda, bee, flamingo; one shared rig) + a T-rex. Reason: the only fully animated, kid-friendly CC0 characters reachable; no robot re-skins were needed.
 - Missing clips (dance, flop, sit, spin, hop, dino wave/fall) are hand-keyed in code with a two-bone leg IK, because these rigs pin the feet to separate root joints.
+- Hero objects (buggy, balloon, player, thrills) are batched by material with per-vertex finishes, and cast shadows through low-poly shadow-only proxies on render layer 7 (core enables that layer on the sun's shadow camera). Reason: whole frame at spawn on Medium went from 442 draws / 811k triangles to 198 / 534k with no visible change.
+- The balloon burner's point light was replaced by an emissive glow inside the envelope. Reason: per-object lights are expensive; the basket no longer gets warm light during burns.
+- Boot loads only the saved character (`CHARACTER_KEY` in `src/config.ts`); music loads after Play. Reason: first-visit download to the title screen is ~2.2 MB gzip.
