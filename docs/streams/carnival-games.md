@@ -27,7 +27,7 @@ cheer when you win.
 | Balloon Pop (+12) | aim with the camera (mouse / stick / drag), Space/E throws a beanbag, generous aim assist (0.62 m) | 4 **prize balloons** worth 3× (they reappear elsewhere after a pop) | 30 s, ★★ 8, ★★★ 16 |
 | Ring Toss (+6) | aim left/right, hold Space/E to charge (power bar ping-pongs), release; further pegs 1/2/3 points; landing marker while charging | a **gold star on one peg** doubles it; it hops to another peg when ringed | 35 s, 8 / 16 |
 | Duck Pond (0) | steer the net over the water, Space/E scoops (up to 2 ducks) | 3 **lucky ducks** carry a star on their back (3 points); luck moves on when caught | 30 s, 8 / 15 |
-| Strength Bell (−6) | see "Strength Bell" below | the **sweet-spot arc** on the dial | turn-based |
+| Strength Bell (−6) | three towers (yours in the middle); a needle sweeps a dial above your head, Space/E stomps the springy pad (no mallet), the puck flies up past 5 pictogram tiers (snail, chick, cat, rocket, crown) to ring the bell; a ground-pound hero (Q) gets +0.15 power | the **sweet-spot wedge** on the dial; it moves to a random place before every stomp, so the both-eye dial (even ticks, no centre mark) gives nothing away | 3 stomps each, tier points (bell = 6), 9 / 14 |
 | Glow Dodge tent (−12) | three lanes; sidestep (A/D, stick) foam lobs and hop (Space) over rollers | the **glowing foam balls** themselves (no shadows, no launch sound, sounds only on outcomes) | 30 s, 10 / 15 |
 
 Friends never aim at weak-eye targets, so nothing they do reveals one. Prize hits pop with a
@@ -50,11 +50,12 @@ uses it automatically (+Z of yaw = the side the booths face).
 
 ## Budgets (idle, measured)
 
-7 draw calls in the main scene (booths + boardwalk + arch + shelf frame merged into one vertex-
-colour mesh; one pictogram sign mesh; keepers 2 instanced; balloons, pegs, ducks instanced),
-plus ≤ 4 small weak-layer draws (prize balloons, peg star, lucky stars, bell sweet spot); plush
-shelf +1 once a plush is won; one merged shadow proxy on layer 7 (meshes cast no shadows).
-≈ 40k triangles. Nothing updates beyond 48 m from the row (except a running round). Friends add
+10 draw calls in the main scene (booths + boardwalk + arch + shelf frame + all static game
+dressing merged into one vertex-colour mesh; one pictogram sign mesh; keepers 2 instanced;
+balloons, pegs, ducks, bell pucks, bells instanced; bell needle), plus small weak-layer draws in
+the vision pass (prize balloons, peg star, lucky stars, idle demo glow balls; the bell sweet spot
+during a round); plush shelf +1 once a plush is won; one merged shadow proxy on layer 7 (the
+meshes themselves cast no shadows). **≈ 38k triangles** (measured by `scripts/shots-carnival.mjs`). Nothing updates beyond 48 m from the row (except a running round). Friends add
 their character draws only during a round.
 
 ## Requests for the shared files (not edited)
@@ -69,8 +70,8 @@ their character draws only during a round.
 
 ## Tests
 
-- Unit (36): round results/tickets/economy fallbacks, rival tuning (friends average < 8 points in
-  30 s), site maths, booth spacing, shelf slots, friend picking, aim maths, balloon/ring/duck/dodge
+- Unit (45): round results/tickets/economy fallbacks, rival tuning (friends average < 8 points in
+  30 s), site maths, booth spacing, shelf slots, friend picking, aim maths, balloon/ring/duck/dodge/bell
   rules.
 - E2E `tests/e2e/carnival.spec.ts` (`?test=1&quality=low`, `step(dt, n, false)`): E at a booth
   starts a round and R leaves safely; every playable booth plays a full autopilot round to a won
@@ -78,3 +79,10 @@ their character draws only during a round.
   each booth's weak-eye objects change only the weak channel, strong channel and blue bit-identical,
   for all 4 lens/eye combinations; no console errors. Test hook: `window.__rgCarnival`
   (`info/start/autopilot/replay/exit/boothPoint`).
+
+## Build notes
+
+Balloon Pop, Ring Toss, Duck Pond and the framework were written in the main stream session;
+Strength Bell and Glow Dodge by two Opus helpers on `agent/carnival-games-bell` /
+`agent/carnival-games-dodge` (merged here). Ball Scramble (optional item 6) was not built.
+`npm run verify` adds about one minute of e2e for the carnival spec (5 tests).

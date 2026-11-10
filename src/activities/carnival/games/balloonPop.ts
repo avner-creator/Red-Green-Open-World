@@ -68,7 +68,7 @@ export function createBalloonPop(env: GameEnv): BoothGame {
   env.addStatic(G.box, 0xffcf33, T(0, 1.0, WALL_Z - 0.3, 0, 4.86, 2.08, 0.05));
   for (let i = 0; i < N; i++) {
     const [x, y] = slotXY(i);
-    env.addStatic(G.sphereLo, 0xffffff, T(x, y - 0.67, WALL_Z - 0.22, 0, 0.06, 0.06, 0.06), 0.4);
+    env.addStatic(G.bulb, 0xffffff, T(x, y - 0.67, WALL_Z - 0.22, 0, 0.06, 0.06, 0.06), 0.4);
   }
   // A basket of beanbags on the counter.
   env.addStatic(G.cyl, 0x9a6a3a, T(-1.75, 1.04, -0.42, 0, 0.6, 0.26, 0.5));

@@ -81,10 +81,10 @@ export function kitMaterial(opts: { roughness?: number; metalness?: number } = {
 export const G = {
   box: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
   boxC: new THREE.BoxGeometry(1, 1, 1),
-  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 14).translate(0, 0.5, 0),
+  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 10).translate(0, 0.5, 0),
   cylLo: new THREE.CylinderGeometry(0.5, 0.5, 1, 8).translate(0, 0.5, 0),
-  cone: new THREE.ConeGeometry(0.5, 1, 14).translate(0, 0.5, 0),
-  sphere: new THREE.SphereGeometry(0.5, 14, 10),
+  cone: new THREE.ConeGeometry(0.5, 1, 10).translate(0, 0.5, 0),
+  sphere: new THREE.SphereGeometry(0.5, 12, 8),
   sphereMid: new THREE.SphereGeometry(0.5, 11, 8),
   sphereLo: new THREE.SphereGeometry(0.5, 8, 6),
   /** Tiny self-lit bulbs: 20 triangles. */

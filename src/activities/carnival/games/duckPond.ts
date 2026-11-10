@@ -81,7 +81,7 @@ export function createDuckPond(env: GameEnv): BoothGame {
   env.addStatic(water, 0x23679a, T(px, waterY, pz));
   water.dispose();
   for (let i = 0; i < 10; i++) {
-    const ring = new THREE.TorusGeometry(0.95 + (i % 3) * 0.28, 0.012, 4, 40, 0.7).rotateX(Math.PI / 2);
+    const ring = new THREE.TorusGeometry(0.95 + (i % 3) * 0.28, 0.012, 3, 14, 0.7).rotateX(Math.PI / 2);
     env.addStatic(ring, 0x9fd8f0, T(px, waterY + 0.006, pz, i * 0.63));
     ring.dispose();
   }
