@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { PoseLayer, aimBone, findBone, rotateBoneWorld } from './bone-pose';
 import type { Gait } from './horse-math';
@@ -103,6 +104,40 @@ function strap(a: THREE.Vector3, b: THREE.Vector3, radius: number): THREE.Buffer
   return g;
 }
 
+/**
+ * Bake every child mesh of `group` (in group space) and merge them by material: one mesh per
+ * material. Returns the source geometries (the caller disposes them).
+ */
+function mergeByMaterial(group: THREE.Group): THREE.BufferGeometry[] {
+  group.updateMatrixWorld(true);
+  const inv = group.matrixWorld.clone().invert();
+  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  const sources: THREE.BufferGeometry[] = [];
+  for (const child of [...group.children]) {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) continue;
+    const baked = mesh.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld));
+    const flat = baked.index ? baked.toNonIndexed() : baked;
+    if (flat !== baked) baked.dispose();
+    for (const name of Object.keys(flat.attributes)) if (name !== 'position' && name !== 'normal') flat.deleteAttribute(name);
+    const material = mesh.material as THREE.Material;
+    const list = byMat.get(material) ?? [];
+    list.push(flat);
+    byMat.set(material, list);
+    if (!sources.includes(mesh.geometry)) sources.push(mesh.geometry);
+    group.remove(mesh);
+  }
+  for (const [material, list] of byMat) {
+    const merged = mergeGeometries(list);
+    for (const g of list) g.dispose();
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.castShadow = true;
+    group.add(mesh);
+  }
+  return sources;
+}
+
 interface Tack {
   group: THREE.Group;
   bridle: THREE.Group;
@@ -167,6 +202,10 @@ function buildTack(): Tack {
     return m;
   });
   bridle.add(nose, crown, brow, ...cheeks, ...rings);
+  // One draw per material instead of one per strap.
+  geometries.push(...mergeByMaterial(group), ...mergeByMaterial(bridle));
+  for (const g of geometries.splice(0)) g.dispose();
+  for (const o of [group, bridle]) for (const c of o.children) geometries.push((c as THREE.Mesh).geometry);
 
   // Reins: 2 segments per side (a little sag), unit cylinders stretched each frame.
   const reinGeo = add(new THREE.CylinderGeometry(0.012, 0.012, 1, 5).translate(0, 0.5, 0).rotateX(Math.PI / 2));
@@ -184,6 +223,125 @@ function buildTack(): Tack {
     });
   }
   return { group, bridle, reins, materials: [leather, blanket, trim, brass], geometries };
+}
+
+interface MergedBody {
+  /** Set the vertex colour of every vertex that came from source material `name`. */
+  paint(name: string, color: THREE.Color): void;
+  dispose(): void;
+}
+
+/**
+ * The GLB horse is 8 skinned meshes (one per material) on one skeleton: 8 draws per pass. Merge
+ * them into ONE skinned mesh with vertex colours (coat parts are re-painted by `paint`), and give
+ * it a generous fixed bounding sphere so the horse is frustum-culled when off screen.
+ */
+function mergeBody(model: THREE.Object3D): MergedBody | null {
+  const parts: THREE.SkinnedMesh[] = [];
+  model.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) parts.push(o as THREE.SkinnedMesh);
+  });
+  const fallback = (): MergedBody => {
+    const mats = new Map<string, THREE.MeshStandardMaterial>();
+    for (const m of parts) {
+      const src = m.material as THREE.MeshStandardMaterial;
+      const own = mats.get(src.name) ?? src.clone();
+      mats.set(src.name, own);
+      m.material = own;
+      m.castShadow = true;
+      m.frustumCulled = false;
+    }
+    return {
+      paint: (name, c) => mats.get(name)?.color.copy(c),
+      dispose: () => mats.forEach((m) => m.dispose()),
+    };
+  };
+  if (parts.length === 0) return null;
+  const first = parts[0];
+  const sameSkin = parts.every(
+    (p) => p.parent === first.parent && p.skeleton.bones.length === first.skeleton.bones.length && p.skeleton.bones.every((b, i) => b === first.skeleton.bones[i]) && p.bindMatrix.equals(first.bindMatrix),
+  );
+  if (!sameSkin) return fallback();
+
+  let vertices = 0;
+  let indices = 0;
+  for (const p of parts) {
+    vertices += p.geometry.attributes.position.count;
+    indices += p.geometry.index ? p.geometry.index.count : p.geometry.attributes.position.count;
+  }
+  const pos = new Float32Array(vertices * 3);
+  const nrm = new Float32Array(vertices * 3);
+  const col = new Float32Array(vertices * 3);
+  const si = new Uint16Array(vertices * 4);
+  const sw = new Float32Array(vertices * 4);
+  const index = vertices > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
+  const ranges = new Map<string, [number, number][]>();
+  let v0 = 0;
+  let i0 = 0;
+  for (const p of parts) {
+    const g = p.geometry;
+    const n = g.attributes.position.count;
+    const color = (p.material as THREE.MeshStandardMaterial).color;
+    const name = (p.material as THREE.Material).name;
+    for (let v = 0; v < n; v++) {
+      const o = v0 + v;
+      for (let k = 0; k < 3; k++) {
+        pos[o * 3 + k] = g.attributes.position.getComponent(v, k);
+        nrm[o * 3 + k] = g.attributes.normal.getComponent(v, k);
+      }
+      col[o * 3] = color.r;
+      col[o * 3 + 1] = color.g;
+      col[o * 3 + 2] = color.b;
+      for (let k = 0; k < 4; k++) {
+        si[o * 4 + k] = g.attributes.skinIndex.getComponent(v, k);
+        sw[o * 4 + k] = g.attributes.skinWeight.getComponent(v, k);
+      }
+    }
+    if (g.index) for (let i = 0; i < g.index.count; i++) index[i0++] = g.index.getX(i) + v0;
+    else for (let i = 0; i < n; i++) index[i0++] = v0 + i;
+    const list = ranges.get(name) ?? [];
+    list.push([v0, v0 + n]);
+    ranges.set(name, list);
+    v0 += n;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  const colors = new THREE.BufferAttribute(col, 3);
+  geo.setAttribute('color', colors);
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 });
+  const mesh = new THREE.SkinnedMesh(geo, material);
+  mesh.name = 'horse-body';
+  mesh.position.copy(first.position);
+  mesh.quaternion.copy(first.quaternion);
+  mesh.scale.copy(first.scale);
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  (first.parent as THREE.Object3D).add(mesh);
+  mesh.bind(first.skeleton, first.bindMatrix);
+  for (const p of parts) {
+    p.removeFromParent();
+    p.geometry.dispose();
+  }
+  // Bounds at rest, grown for gallop strides, rearing and the jump tuck.
+  mesh.updateMatrixWorld(true);
+  mesh.computeBoundingSphere();
+  if (mesh.boundingSphere) mesh.boundingSphere.radius *= 1.6;
+  return {
+    paint(name, c) {
+      for (const [a, b] of ranges.get(name) ?? []) {
+        for (let v = a; v < b; v++) colors.setXYZ(v, c.r, c.g, c.b);
+      }
+      colors.needsUpdate = true;
+    },
+    dispose() {
+      geo.dispose();
+      material.dispose();
+    },
+  };
 }
 
 let blobTex: THREE.DataTexture | null = null;
@@ -232,8 +390,7 @@ export function createHorseModel(scene: THREE.Scene, coat: THREE.ColorRepresenta
   const actions = new Map<string, THREE.AnimationAction>();
   let current: THREE.AnimationAction | null = null;
   let currentName = '';
-  const coatMats: { main?: THREE.MeshStandardMaterial; light?: THREE.MeshStandardMaterial; dark?: THREE.MeshStandardMaterial; hair?: THREE.MeshStandardMaterial } = {};
-  const ownMaterials: THREE.Material[] = [];
+  let merged: MergedBody | null = null;
   const layer = new PoseLayer();
   const bones: Record<string, THREE.Object3D | null> = {};
   const saddleAnchor = new THREE.Object3D();
@@ -242,11 +399,12 @@ export function createHorseModel(scene: THREE.Scene, coat: THREE.ColorRepresenta
   const maneColor = new THREE.Color(mane);
 
   const applyCoat = (): void => {
-    if (!coatMats.main) return;
-    coatMats.main.color.copy(coatColor);
-    coatMats.light?.color.copy(coatColor).lerp(new THREE.Color(1, 1, 1), 0.45);
-    coatMats.dark?.color.copy(coatColor).multiplyScalar(0.62);
-    coatMats.hair?.color.copy(maneColor);
+    if (!merged) return;
+    const white = new THREE.Color(1, 1, 1);
+    merged.paint('Main', coatColor);
+    merged.paint('Main_Light', coatColor.clone().lerp(white, 0.45));
+    merged.paint('Main_Dark', coatColor.clone().multiplyScalar(0.62));
+    merged.paint('Hair', maneColor);
   };
 
   loadHorseGltf()
@@ -254,22 +412,9 @@ export function createHorseModel(scene: THREE.Scene, coat: THREE.ColorRepresenta
       if (disposed) return;
       const model = cloneSkinned(gltf.scene) as THREE.Group;
       model.scale.setScalar(HORSE_SCALE);
-      model.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        mesh.castShadow = true;
-        mesh.receiveShadow = false;
-        mesh.frustumCulled = false; // skinned bounds don't follow the animation
-        const src = mesh.material as THREE.MeshStandardMaterial;
-        const key = ({ Main: 'main', Main_Light: 'light', Main_Dark: 'dark', Hair: 'hair' } as const)[src.name as 'Main'];
-        if (key) {
-          const m = coatMats[key] ?? src.clone();
-          coatMats[key] = m;
-          if (!ownMaterials.includes(m)) ownMaterials.push(m);
-          mesh.material = m;
-        }
-      });
       inner.add(model);
+      root.updateMatrixWorld(true);
+      merged = mergeBody(model);
       for (const name of ['Torso2', 'Head', 'Neck1', 'Neck2', 'Neck3', 'Tail1', 'Tail2', 'Tail3', 'Tail4', 'Tail5', 'Tail6', 'Ear1L', 'Ear1R',
         'FrontUpperLegL', 'FrontLowerLegL', 'FrontUpperLegR', 'FrontLowerLegR', 'FFL', 'FFR', 'IKFrontLegL', 'IKFrontLegR']) {
         bones[name] = findBone(model, name);
@@ -472,7 +617,7 @@ export function createHorseModel(scene: THREE.Scene, coat: THREE.ColorRepresenta
       tack.bridle.removeFromParent();
       for (const m of tack.materials) m.dispose();
       for (const g of tack.geometries) g.dispose();
-      for (const m of ownMaterials) m.dispose();
+      merged?.dispose();
       blob.geometry.dispose();
       (blob.material as THREE.Material).dispose();
       mixer?.stopAllAction();

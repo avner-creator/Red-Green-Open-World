@@ -69,13 +69,14 @@ function detectRig(root: THREE.Object3D): Rig | null {
   const rexLegs = [limb(root, 'BackUpLegL', 'BackLowLegL', 'BackFootL', 1), limb(root, 'BackUpLegR', 'BackLowLegR', 'BackFootR', -1)];
   if (rexLegs[0] && rexLegs[1]) {
     const arms = [limb(root, 'FrontUpLegL', 'FrontLowLegL', 'FrontFootL', 1), limb(root, 'FrontUpLegR', 'FrontLowLegR', 'FrontFootR', -1)].filter((x): x is Limb => !!x);
-    // Tail lies down over the horse's rump, neck curls up so the head is not on the horse's.
+    // The catalog's seated pose already lays the tail down and lifts the head (buggy); on the
+    // horse he also sits back a little, so the neck tips forward a touch to look ahead.
     const bends: { bone: THREE.Object3D; pitch: number }[] = [];
-    for (const [n, pitch] of [['Tail1', 0.2], ['Tail2', 0.15], ['Tail3', 0.1], ['Neck', -0.25]] as const) {
+    for (const [n, pitch] of [['Neck', -0.2]] as const) {
       const bone = findBone(root, n);
       if (bone) bends.push({ bone, pitch });
     }
-    return { probe: rexLegs[0].upper, legs: rexLegs as Limb[], arms, seatDrop: 0.16, kind: 'rex', lean: 0.38, bends };
+    return { probe: rexLegs[0].upper, legs: rexLegs as Limb[], arms, seatDrop: 0.16, kind: 'rex', lean: 0.22, bends };
   }
   return null;
 }
