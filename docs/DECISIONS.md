@@ -27,3 +27,6 @@
 - Removed the "eye care professional" line from the running UI and calibration briefs. Reason: DIRECTIVES §4 (no health wording at all).
 - World-artist told to spend polish on the compact core (plaza, Bouncy Park, garage, balloon field, roads) and keep bridge/ranch/lighthouse/lake/silly zone as tidy blockouts. Reason: DIRECTIVES §3 (AAA look over breadth; cut order).
 - M0 workers stay as in-session worktree subagents (already running); child cloud sessions will be used for the big M2+ streams. Reason: restarting would lose work.
+- Player feel tuning lives in `src/core/tuning.ts`; flop is procedural and the model's "Death"/"Punch" clips are never used. Reason: non-violence and one place to tune feel.
+- `CameraApi.yaw` is the camera's look direction; forward is (sin yaw, cos yaw), the same convention as `player.yaw`. Reason: one convention for every system.
+- The player's safe respawn spot is saved only where `world.isLand()` is true, so the world must return false for water and outside the island.
