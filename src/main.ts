@@ -43,7 +43,7 @@ function hasSavedSettings(): boolean {
   }
 }
 
-const loader = createBootLoader(document.getElementById('boot'));
+const loader = createBootLoader(document.getElementById('boot'), { still: testMode });
 
 async function boot(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;

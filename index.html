@@ -99,6 +99,9 @@
         #boot .bt-glasses { width: calc(var(--u) * 24); }
         #boot .bt-tips { height: calc(var(--u) * 11); }
       }
+      /* Test mode (src/boot/loader.ts): no decorative motion, the bar still moves. */
+      #boot.still *, #boot.still *::after { animation: none !important; }
+      #boot.still .bt-tips svg:first-child { opacity: 1; }
       @media (prefers-reduced-motion: reduce) {
         #boot *, #boot *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
         #boot .bt-tips svg:first-child { opacity: 1; animation: none; }

@@ -21,10 +21,18 @@ export interface BootLoader {
 export const FILL_MS = 220;
 export const REVEAL_MS = 450;
 
-export function createBootLoader(root: HTMLElement | null): BootLoader {
+/**
+ * `still`: stop the decorative loading-screen animations (test mode). Under the software renderer
+ * the e2e suite uses, they compete with the first frame's shader compile for the CPU.
+ */
+export function createBootLoader(root: HTMLElement | null, opts: { still?: boolean } = {}): BootLoader {
   root?.classList.add('js'); // hides the no-JavaScript fallback retry link
+  if (opts.still) root?.classList.add('still');
   const fill = root?.querySelector<HTMLElement>('#boot-fill') ?? null;
   let progress = 0;
+  // Test mode: no pause on a full bar and a short fade (every e2e boot waits for the reveal).
+  const fillMs = opts.still ? 0 : FILL_MS;
+  const revealMs = opts.still ? 150 : REVEAL_MS;
 
   const show = (value: number, ms: number, ease = 'cubic-bezier(.25,.7,.35,1)'): void => {
     progress = nextProgress(progress, value);
@@ -53,12 +61,13 @@ export function createBootLoader(root: HTMLElement | null): BootLoader {
       });
     },
     async done() {
-      show(1, FILL_MS);
+      show(1, fillMs);
       if (!root) return;
       root.dataset.stage = 'done';
-      await new Promise((r) => setTimeout(r, FILL_MS));
+      if (fillMs) await new Promise((r) => setTimeout(r, fillMs));
+      root.style.transitionDuration = `${revealMs}ms`;
       root.classList.add('out');
-      await new Promise((r) => setTimeout(r, REVEAL_MS));
+      await new Promise((r) => setTimeout(r, revealMs));
       root.remove();
     },
     fail(kind) {

@@ -4,13 +4,15 @@ import { defineConfig } from 'vitest/config';
 
 /**
  * Security headers for every response. Netlify sets them from `netlify.toml`; `vite preview` sets
- * them from this object so the e2e suite runs under the same policy. tests/boot.test.ts checks the
+ * them from this object so the e2e suite runs under the same policy. tests/boot/boot.test.ts checks the
  * two stay identical.
  *
  * - `'wasm-unsafe-eval'`: lets Rapier compile its WebAssembly without allowing JS `eval`.
  * - `style-src 'unsafe-inline'`: the UI builds its styles at runtime (`<style>` + style attributes).
  * - `blob:`/`data:`: glTF textures and procedural images/audio may be decoded from blobs.
  * - No third-party origins at all: the game makes no network calls except to its own files.
+ * - No Cross-Origin-Opener-Policy: the game opens no windows, and in Chromium it made every page
+ *   load start with a cold shader cache (first frame ~1.5 s slower under SwiftShader).
  */
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -31,7 +33,6 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
-  'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
 /**
@@ -43,7 +44,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
  */
 function rapierWasmFile(): Plugin {
   const wasmPath = join(process.cwd(), 'node_modules/@dimforge/rapier3d-compat/dist/rapier_wasm3d_bg.wasm').replace(/\\/g, '/');
-  const inline = /module_or_path:([\w$]+)\.toByteArray\("[A-Za-z0-9+/=]+"\)/g;
+  const inline = /module_or_path:([\w$]+)\.toByteArray\("[A-Za-z0-9+/=]+"\)(\.buffer)?/g;
   return {
     name: 'rg:rapier-wasm-file',
     apply: 'build',
