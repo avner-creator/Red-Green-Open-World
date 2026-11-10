@@ -60,8 +60,9 @@ test.describe('touch', () => {
     await touch(cdp, 'touchStart', [{ x: 120, y: 290 }]);
     await touch(cdp, 'touchMove', [{ x: 122, y: 200 }]);
     await step(page, 3);
-    const mv = await page.evaluate(() => ({ x: window.__rg!.ctx.input.state.moveX, y: window.__rg!.ctx.input.state.moveY }));
+    const mv = await page.evaluate(() => ({ x: window.__rg!.ctx.input.state.moveX, y: window.__rg!.ctx.input.state.moveY, device: window.__rg!.ctx.input.state.device }));
     expect(mv.y).toBeGreaterThan(0.8);
+    expect(mv.device).toBe('touch');
     await step(page, 60, true);
     await save(page, 'phone-stick');
     const p1 = await page.evaluate(() => window.__rg!.state().playerPosition);
@@ -173,6 +174,7 @@ test.describe('touch', () => {
     await page.keyboard.press('KeyW');
     await step(page, 2);
     await expect(page.getByTestId('touch-hud')).toBeHidden();
+    expect(await page.evaluate(() => window.__rg!.ctx.input.state.device)).toBe('keyboard');
 
     // Skydive with the same controls: Use boards the balloon, the jump button (cued) jumps out,
     // the stick steers the fall, and the landing hands back walk mode.
