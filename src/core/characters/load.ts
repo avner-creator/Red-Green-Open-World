@@ -19,7 +19,7 @@ export interface LoadedCharacter {
   readonly anchors: Readonly<Record<AttachPart, THREE.Object3D>>;
   readonly mixer: THREE.AnimationMixer;
   /** Play a PlayerAnim (or the signature emote), cross-fading from the current clip. */
-  play(anim: PlayerAnim | 'emote', rate?: number, fade?: number): void;
+  play(anim: PlayerAnim | 'emote', rate?: number, fade?: number, restart?: boolean): void;
   update(dt: number): void;
 }
 
@@ -77,12 +77,17 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
     object,
     anchors,
     mixer,
-    play(anim, rate = 1, fade = 0.18) {
+    play(anim, rate = 1, fade = 0.18, restart = false) {
       const ref = anim === 'emote' ? def.emote : def.anims[anim];
       const next = actions.get(ref.clip);
       if (!next) return;
       next.timeScale = rate * (ref.rate ?? 1);
-      if (next === current && ref === currentRef && next.isRunning()) return;
+      // Same clip again: keep it (a finished one-shot stays clamped on its last frame instead of
+      // restarting every frame; the robot's jump → fall share one clip and just continue).
+      if (next === current && !restart && (ref === currentRef || !ref.loop)) {
+        currentRef = ref;
+        return;
+      }
       next.reset();
       next.setLoop(ref.loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
       next.clampWhenFinished = !ref.loop;

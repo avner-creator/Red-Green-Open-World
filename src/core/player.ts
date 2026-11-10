@@ -1,16 +1,28 @@
 /**
  * Player: Rapier KinematicCharacterController capsule with arcade feel (camera-relative movement,
  * smooth turning, sprint, coyote time + jump buffer, variable jump height, a little air control),
- * launches, comic flop, respawn, external controllers and (later) vehicles.
+ * launches, comic flop, respawn, external controllers, vehicles, swappable characters with one
+ * skill each (skills.ts) and a signature emote.
  */
 import * as THREE from 'three';
 import { PLAYER } from '../config';
-import type { ExternalController, GameContext, PlayerAnim, PlayerApi, PlayerMode, VehicleApi } from '../types';
+import type { ExternalController, GameContext, PlayerAnim, PlayerApi, PlayerMode, PlayerSkillView, VehicleApi } from '../types';
+import { CHARACTER_IDS, DEFAULT_CHARACTER, getCharacter } from './characters/catalog';
+import type { CharacterId } from './characters/catalog';
+import { loadCharacter } from './characters/load';
+import type { LoadedCharacter } from './characters/load';
 import { GROUP_AVATAR, groups } from './physics';
-import { angleDelta, approachVec2, cameraRelative, canJump, damp, integrateVertical } from './motion-math';
+import { angleDelta, approach, approachVec2, cameraRelative, canJump, damp, integrateVertical } from './motion-math';
 import { createPlayerFx } from './player-fx';
 import { createPlayerModel } from './player-model';
+import type { ModelAnim } from './player-model';
+import { createSkillFx } from './skill-fx';
+import { SKILL, SkillMachine } from './skills';
+import type { SkillEvent } from './skills';
 import { ANIM, CONTROLLER, MOVE } from './tuning';
+
+const TAU = Math.PI * 2;
+const easeOut = (k: number): number => 1 - (1 - Math.min(1, Math.max(0, k))) ** 2;
 
 const HALF = (PLAYER.height - 2 * PLAYER.radius) / 2;
 const CENTRE = HALF + PLAYER.radius;
@@ -31,10 +43,31 @@ export interface PlayerInternal {
 export async function createPlayer(ctx: GameContext, cameraYaw: () => number): Promise<PlayerInternal> {
   const R = ctx.physics.rapier;
   const world = ctx.physics.world;
-  const model = await createPlayerModel(`${import.meta.env.BASE_URL}assets/models/RobotExpressive.glb`);
+  const model = createPlayerModel();
   const fx = createPlayerFx(model);
   const object = model.root;
   ctx.scene.add(object);
+  const sfx = createSkillFx(ctx.scene, model.anchors.back);
+  const skills = new SkillMachine(getCharacter(DEFAULT_CHARACTER).skill, PLAYER.gravity);
+
+  // ── Characters: loaded lazily, one instance each (cached), swapped inside the stable rig.
+  const loaded = new Map<CharacterId, Promise<LoadedCharacter>>();
+  const loadById = (id: CharacterId): Promise<LoadedCharacter> => {
+    let p = loaded.get(id);
+    if (!p) {
+      p = loadCharacter(getCharacter(id));
+      loaded.set(id, p);
+      p.catch(() => loaded.delete(id));
+    }
+    return p;
+  };
+  let characterId: CharacterId = DEFAULT_CHARACTER;
+  let swapToken = 0;
+  try {
+    model.setCharacter(await loadById(DEFAULT_CHARACTER));
+  } catch (err) {
+    console.warn('default character failed to load, using the fallback robot', err);
+  }
 
   const spawn = ctx.world.anchors.spawn;
   const position = object.position;
@@ -129,6 +162,44 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     clearVisual();
   };
   const tiltPivot = new THREE.Vector3();
+  // ── Skill state used by the motion code.
+  const dashDir = new THREE.Vector3(0, 0, 1);
+  let dashSpeed = 0;
+  let dashOnGround = true;
+  /** Visual-only skill pose timers (spring flip after a super-bounce). */
+  let springFlipT = -1;
+  let emoting = false;
+  let windOn = false;
+  const tmpV = new THREE.Vector3();
+  const skillView: PlayerSkillView = {
+    get id() {
+      return skills.id;
+    },
+    get ready() {
+      return skills.ready;
+    },
+    get cooldown() {
+      return skills.cooldown;
+    },
+    get active() {
+      return skills.active;
+    },
+    get bounceBoost() {
+      return skills.bounceBoost;
+    },
+  };
+  /** Stop a running skill and its effects (mode change, respawn, ride). */
+  const stopSkill = (): void => {
+    skills.cancel();
+    springFlipT = -1;
+    fx.setSkillPose(0, 0, 0);
+    sfx.setWings(false);
+    if (windOn) {
+      ctx.audio.setLoop('wind', 0);
+      windOn = false;
+    }
+  };
+
   /** Activity pose layer (setVisualRotation / setVisualStretch); cleared on every hand-back. */
   let visualRot: THREE.Quaternion | null = null;
   let visualStretch = 0;
@@ -147,6 +218,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       if (v) {
         releaseExternal();
         clearVisual();
+        stopSkill();
+        skills.consumeBoost();
+        emoting = false;
         if (mode === 'flop') fx.reset();
         vehicle = v;
         seat = s ?? null;
@@ -176,6 +250,53 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   };
 
   const api: PlayerApi = {
+    get characterId() {
+      return characterId;
+    },
+    skill: skillView,
+    async setCharacter(id) {
+      if (!(CHARACTER_IDS as readonly string[]).includes(id)) {
+        console.warn(`setCharacter: unknown character "${id}"`);
+        return;
+      }
+      const cid = id as CharacterId;
+      const token = ++swapToken;
+      let c: LoadedCharacter;
+      try {
+        c = await loadById(cid);
+      } catch (err) {
+        console.warn(`character "${id}" failed to load`, err);
+        return;
+      }
+      if (token !== swapToken) return; // a newer pick won
+      const changed = cid !== characterId || model.character !== c;
+      model.setCharacter(c);
+      characterId = cid;
+      const def = getCharacter(cid);
+      stopSkill();
+      skills.setSkill(def.skill, cid === 'flamingo');
+      emoting = false;
+      if (changed) {
+        // Poof: elastic scale pop + a sparkle burst around the body.
+        fx.pop();
+        if (object.visible) {
+          tmpV.copy(position).setY(position.y + 0.9);
+          sfx.sparkle(tmpV, 22, 3.2, 1.2);
+          ctx.audio.play('star', { volume: 0.7, pitch: 1.2 });
+        }
+      }
+      ctx.events.emit('player:character', { id: cid });
+    },
+    emote() {
+      if (mode !== 'walk' || !grounded || skills.active || emoting) return;
+      emoting = true;
+      const clip = getCharacter(characterId).emote.clip;
+      ctx.audio.play('star', { volume: 0.6, pitch: 1.35 });
+      tmpV.copy(position).setY(position.y + 1.8);
+      sfx.sparkle(tmpV, 8, 1.6, 0.8);
+      fx.kick(1.5);
+      ctx.events.emit('player:emote', { id: clip.toLowerCase() });
+    },
     object,
     position,
     velocity,
@@ -208,6 +329,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       internal.onTeleport?.(api.yaw);
     },
     launch(v) {
+      stopSkill();
+      emoting = false;
       velocity.copy(v);
       intended.valid = false;
       if (mode === 'flop') {
@@ -220,6 +343,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     },
     flop() {
       if (mode !== 'walk') return;
+      stopSkill();
+      emoting = false;
       flopT = 0;
       clearVisual();
       fx.startFlop();
@@ -230,6 +355,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       releaseExternal();
       if (vehicle) internal.setVehicle(null);
       clearVisual();
+      stopSkill();
+      skills.consumeBoost();
+      emoting = false;
       fx.reset();
       if (mode !== 'walk') setMode('walk');
       api.teleport(new THREE.Vector3(safeSpot.x, safeSpot.y + 0.05, safeSpot.z), safeYaw);
@@ -243,6 +371,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       if (!c) return;
       if (vehicle) internal.setVehicle(null);
       if (mode === 'flop') fx.reset();
+      stopSkill();
+      skills.consumeBoost(); // the bounce/ride that takes over has read it already
+      emoting = false;
       external = c;
       externalAnim = 'idle';
       intended.valid = false;
@@ -292,7 +423,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     if (e.phase === 'title' && e.previous !== 'title') api.respawn();
   });
 
-  function playAnim(next: PlayerAnim, rate = 1): void {
+  function playAnim(next: ModelAnim, rate = 1): void {
     model.play(next, rate);
   }
 
@@ -321,7 +452,30 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     const mag = Math.min(1, Math.hypot(dir.x, dir.z));
     const top = input.sprint && inputActive ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
 
-    if (grounded) {
+    // Skills first: they may replace the jump, the gravity or the horizontal motion this frame.
+    const airJump = inputActive && input.jumpPressed && !grounded && sinceGrounded > MOVE.coyoteTime;
+    const ev = skills.update({
+      dt,
+      pressed: inputActive && input.skillPressed,
+      held: inputActive && input.skill,
+      jumpPressed: airJump,
+      grounded,
+      airTime,
+      vy: velocity.y,
+      canUse: inputActive && mode === 'walk',
+    });
+    let jumpUsed = false;
+    if (ev) jumpUsed = onSkill(ev, dir, mag, hv);
+    const phase = skills.phase;
+
+    if (phase === 'dash') {
+      hv.x = dashDir.x * dashSpeed;
+      hv.z = dashDir.z * dashSpeed;
+    } else if (phase === 'hang' || phase === 'slam') {
+      approachVec2(hv, 0, 0, 80 * dt);
+    } else if (phase === 'charge') {
+      approachVec2(hv, 0, 0, MOVE.groundDecel * 1.5 * dt);
+    } else if (grounded) {
       const accel = mag > 0.01 ? MOVE.groundAccel : MOVE.groundDecel;
       approachVec2(hv, dir.x * top, dir.z * top, accel * dt);
     } else if (mag > 0.01) {
@@ -338,14 +492,14 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     if (mode === 'flop' && grounded) approachVec2(hv, 0, 0, MOVE.groundDecel * 0.4 * dt);
 
     // Face the movement direction (smooth).
-    if (mag > 0.05 && mode === 'walk') {
+    if (mag > 0.05 && mode === 'walk' && phase !== 'dash' && phase !== 'charge') {
       const target = Math.atan2(dir.x, dir.z);
       api.yaw += angleDelta(api.yaw, target) * damp(MOVE.turnRate, dt);
     }
 
     // Jump: buffered press + coyote time.
-    if (inputActive && input.jumpPressed) sincePressed = 0;
-    if (mode === 'walk' && canJump(sinceGrounded, sincePressed, MOVE.coyoteTime, MOVE.jumpBuffer)) {
+    if (inputActive && input.jumpPressed && !jumpUsed) sincePressed = 0;
+    if (mode === 'walk' && phase !== 'charge' && canJump(sinceGrounded, sincePressed, MOVE.coyoteTime, MOVE.jumpBuffer)) {
       velocity.y = PLAYER.jumpSpeed;
       grounded = false;
       sinceGrounded = Infinity;
@@ -363,14 +517,31 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       jumpCut = true;
     }
 
-    // Exact constant-gravity integration (accurate apex for 40 m trampoline launches).
+    // Exact constant-gravity integration (accurate apex for 40 m trampoline launches); skills bend it.
     const vy0 = velocity.y;
-    const step = integrateVertical(vy0, PLAYER.gravity, dt);
-    const dy = step.dy;
-    let vy = Math.max(step.vy, -MOVE.maxFallSpeed);
+    let dy: number;
+    let vy: number;
+    const hover = (phase === 'dash' && !dashOnGround) || phase === 'hang';
+    if (hover) {
+      dy = 0;
+      vy = 0;
+    } else if (phase === 'slam') {
+      vy = -SKILL.groundPound.speed;
+      dy = vy * dt;
+    } else if (phase === 'glide') {
+      const fall = -SKILL.glide.fallSpeed;
+      const step = integrateVertical(vy0, PLAYER.gravity, dt);
+      vy = vy0 < fall ? approach(vy0, fall, 45 * dt) : Math.max(step.vy, fall);
+      dy = ((vy0 + vy) / 2) * dt;
+    } else {
+      const floaty = phase === 'spin' && skills.floaty && vy0 > 0;
+      const step = integrateVertical(vy0, PLAYER.gravity * (floaty ? SKILL.doubleJump.floatyGravity : 1), dt);
+      dy = step.dy;
+      vy = Math.max(step.vy, -MOVE.maxFallSpeed);
+    }
     desired.set(hv.x * dt, dy, hv.z * dt);
 
-    if (vy0 > 0) cc.disableSnapToGround();
+    if (vy0 > 0 || hover) cc.disableSnapToGround();
     else cc.enableSnapToGround(CONTROLLER.snapDistance);
     cc.computeColliderMovement(collider, desired, R.QueryFilterFlags.EXCLUDE_SENSORS, MOVE_GROUPS);
     const moved = cc.computedMovement();
@@ -385,7 +556,12 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     if (wantH > 1e-5 && dt > 0) {
       const gotH = Math.hypot(moved.x, moved.z);
       if (gotH < wantH * 0.9) {
-        if (startGrounded) {
+        if (phase === 'dash' && gotH < wantH * 0.5) {
+          // A dash stops at walls (a little bonk, no bounce-back).
+          skills.cancel();
+          fx.kick(-2);
+          ctx.audio.play('bump', { volume: 0.5 });
+        } else if (startGrounded) {
           intended.x = hv.x;
           intended.z = hv.z;
           intended.valid = true;
@@ -396,9 +572,19 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     }
     // Bumped the ceiling.
     if (vy0 > 0 && moved.y < dy * 0.5 - 1e-4) vy = Math.min(vy, 0);
+    // The dash just ended (or hit a wall): settle back to running speed.
+    if (phase === 'dash' && skills.phase !== 'dash') {
+      const sp = Math.hypot(hv.x, hv.z);
+      const keep = Math.min(sp, PLAYER.sprintSpeed);
+      if (sp > 1e-3) {
+        hv.x *= keep / sp;
+        hv.z *= keep / sp;
+      }
+    }
 
     const wasGrounded = grounded;
-    grounded = cc.computedGrounded() && vy0 <= 0;
+    // An air dash and the pound's hang float: they never land mid-move.
+    grounded = cc.computedGrounded() && vy0 <= 0 && !hover;
     if (grounded) {
       if (!wasGrounded) land(-Math.min(vy0, 0));
       vy = 0;
@@ -418,7 +604,145 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     velocity.set(hv.x, vy, hv.z);
   }
 
+  /** Turn a skill event into motion and juice. Returns true if it used up the jump press. */
+  function onSkill(ev: SkillEvent, dir: { x: number; z: number }, mag: number, hv: { x: number; z: number }): boolean {
+    emoting = false;
+    if (ev.kind === 'charge') {
+      ctx.audio.play('click', { volume: 0.5, pitch: 0.7 });
+      return false;
+    }
+    if (ev.kind === 'end') return false;
+    const id = ev.id;
+    tmpV.copy(position);
+    switch (id) {
+      case 'doubleJump':
+        velocity.y = ev.value;
+        jumping = true;
+        jumpCut = true;
+        sincePressed = Infinity;
+        fx.kick(2.6);
+        model.play('jump', 1.2, true);
+        sfx.sparkle(tmpV.setY(position.y + 0.1), 12, 2.6, 0.9);
+        ctx.audio.play('jump', { pitch: 1.35 });
+        ctx.audio.play('whoosh', { volume: 0.5, pitch: 1.6 });
+        break;
+      case 'glide':
+        ctx.audio.play('whoosh', { volume: 0.6, pitch: 0.8 });
+        sfx.sparkle(tmpV.setY(position.y + 1.1), 8, 1.5, 0.7);
+        break;
+      case 'dash': {
+        if (mag > 0.2) dashDir.set(dir.x, 0, dir.z).normalize();
+        else dashDir.set(Math.sin(api.yaw), 0, Math.cos(api.yaw));
+        api.yaw = Math.atan2(dashDir.x, dashDir.z);
+        object.rotation.y = api.yaw;
+        dashSpeed = ev.value;
+        dashOnGround = grounded;
+        hv.x = dashDir.x * dashSpeed;
+        hv.z = dashDir.z * dashSpeed;
+        fx.kick(-1.5);
+        sfx.sparkle(tmpV.setY(position.y + 0.3), 10, 2.2, 0.8);
+        ctx.audio.play('whoosh', { pitch: 1.5 });
+        break;
+      }
+      case 'superBounce':
+        velocity.y = ev.value;
+        grounded = false;
+        sinceGrounded = Infinity;
+        sincePressed = Infinity;
+        jumping = true;
+        jumpCut = true;
+        launched = true; // a 9 m spring lands softly, never a flop
+        takeoffY = position.y;
+        airPeak = 0;
+        springFlipT = 0;
+        fx.kick(4.5);
+        sfx.sparkle(tmpV.setY(position.y + 0.1), 20, 4, 1.1);
+        ctx.audio.play('bigBoing', { pitch: 1.1 });
+        break;
+      case 'groundPound':
+        launched = true; // the slam lands with a shockwave, not a flop
+        jumping = false;
+        ctx.audio.play('whoosh', { pitch: 0.75 });
+        break;
+    }
+    ctx.events.emit('player:skill', { id });
+    return id === 'doubleJump';
+  }
+
+  /** The slam landed: shockwave ring, bounce nearby props, rumble. */
+  function poundLanded(): void {
+    const r = SKILL.groundPound.radius;
+    sfx.shockwave(position, r);
+    tmpV.copy(position).setY(position.y + 0.2);
+    sfx.sparkle(tmpV, 18, 5, 1);
+    fx.kick(-5);
+    ctx.audio.play('land', { volume: 1, pitch: 0.55 });
+    ctx.audio.play('boing', { volume: 0.8, pitch: 0.6 });
+    ctx.cameraRig.shake(0.55);
+    // Gentle hop for dynamic props in reach (balls, crates, the buggy): up and away.
+    const seen = new Set<number>();
+    const centre = { x: position.x, y: position.y + 0.5, z: position.z };
+    world.intersectionsWithShape(centre, { x: 0, y: 0, z: 0, w: 1 }, new R.Ball(r), (col) => {
+      const body = col.parent();
+      if (!body || !body.isDynamic() || seen.has(body.handle)) return true;
+      seen.add(body.handle);
+      const t = body.translation();
+      const dx = t.x - centre.x;
+      const dz = t.z - centre.z;
+      const d = Math.hypot(dx, dz);
+      const k = Math.max(0, 1 - d / r);
+      const m = body.mass();
+      const out = (1.5 + 3 * k) * m;
+      const up = (2.5 + 4 * k) * m;
+      body.applyImpulse({ x: d > 1e-3 ? (dx / d) * out : 0, y: up, z: d > 1e-3 ? (dz / d) * out : 0 }, true);
+      return true;
+    });
+  }
+
+  /** Per-frame skill visuals: pose layer, wings, speed lines, glide wind. */
+  function skillVisuals(dt: number): void {
+    const ph = skills.phase;
+    const t = skills.t;
+    let flip = 0;
+    let spin = 0;
+    let stretch = 0;
+    if (ph === 'spin') {
+      spin = easeOut(t / SKILL.doubleJump.spinTime) * TAU;
+      stretch = 0.12 * Math.sin(Math.min(1, t / SKILL.doubleJump.spinTime) * Math.PI);
+    } else if (ph === 'glide') {
+      flip = 0.45 * easeOut(t / 0.25);
+      stretch = -0.06;
+    } else if (ph === 'dash') {
+      flip = 0.38;
+      stretch = -0.12;
+    } else if (ph === 'charge') {
+      const k = Math.min(1, t / SKILL.superBounce.charge);
+      stretch = -0.38 * k + Math.sin(t * 70) * 0.025 * k;
+    } else if (ph === 'hang') {
+      flip = easeOut(t / SKILL.groundPound.hang) * TAU;
+      stretch = -0.22;
+    } else if (ph === 'slam') {
+      stretch = 0.28;
+    }
+    if (springFlipT >= 0) {
+      springFlipT += dt;
+      const k = springFlipT / 0.75;
+      if (k >= 1 || grounded) springFlipT = -1;
+      else flip += easeOut(k) * TAU;
+    }
+    fx.setSkillPose(flip, spin, stretch);
+    sfx.setWings(ph === 'glide');
+    sfx.speedLines(ph === 'dash', position, dashDir);
+    const wantWind = ph === 'glide';
+    if (wantWind !== windOn) {
+      ctx.audio.setLoop('wind', wantWind ? 0.3 : 0, 1.6);
+      windOn = wantWind;
+    }
+  }
+
   function land(speed: number): void {
+    const pound = skills.land() === 'pound';
+    if (pound) poundLanded();
     const wasLaunched = launched;
     launched = false;
     if (airTime < 0.12 && speed < 3) return; // stepping off a kerb isn't a landing
@@ -456,7 +780,14 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   function chooseAnim(): void {
     const hs = Math.hypot(velocity.x, velocity.z);
     if (mode === 'flop') return playAnim('flop');
+    const ph = skills.phase;
+    if (ph === 'dash') return playAnim('run', 1.7);
+    if (ph === 'glide' || ph === 'hang' || ph === 'slam') return playAnim('fall');
     if (!grounded && airTime > 0.12) return playAnim(velocity.y > 0 ? 'jump' : 'fall');
+    if (emoting) {
+      if (hs > 0.6 || mode !== 'walk' || ph !== 'idle') emoting = false;
+      else return playAnim('emote');
+    }
     if (ctx.session.state.phase === 'title') return playAnim('wave');
     if (hs < 0.35) return playAnim('idle');
     const clampRate = (v: number, r: readonly [number, number]): number => Math.min(r[1], Math.max(r[0], v));
@@ -502,6 +833,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
         /* the press that got us out of the vehicle is not also a respawn/flop */
       } else if (input.respawnPressed && (mode === 'walk' || mode === 'flop')) api.respawn();
       else if (input.flopPressed && mode === 'walk') api.flop();
+      else if (input.emotePressed && mode === 'walk') api.emote();
+      // Moving, jumping or using a skill cancels the emote.
+      if (emoting && (Math.abs(input.moveX) + Math.abs(input.moveY) > 0.1 || input.jumpPressed || input.skillPressed)) emoting = false;
       if (mode === 'flop') {
         flopT += dt;
         if (flopT >= MOVE.flopDuration) setMode('walk');
@@ -511,8 +845,14 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       updateSafeSpot(dt);
       checkHazards();
       chooseAnim();
+      skillVisuals(dt);
+    }
+    if (external || vehicle) {
+      if (skills.active || springFlipT >= 0) stopSkill();
+      emoting = false;
     }
     justLeftVehicle = false;
+    sfx.update(dt);
     fx.update(dt);
     model.update(dt);
   }
