@@ -295,7 +295,7 @@ function balloonField(k: Kit): CoreAreas {
   const y = k.h(a.x, a.z);
   const b = k.b;
   // Mown launch circle with a darker edge band, then painted markings.
-  groundDisc(k, a.x, a.z, 0, 15.5, 0.05, mown(a.x, a.z, 0.5, 2.2, 0x7fae46, 0x5f9238), 12, 80);
+  groundDisc(k, a.x, a.z, 0, 15.5, 0.05, mown(a.x, a.z, 0.5, 2.2, 0x88b64c, 0x5a8a34), 12, 80);
   groundDisc(k, a.x, a.z, 15.5, 16.3, 0.05, () => 0xb59a72, 1, 80);
   const white = (): number => 0xf3efe4;
   groundDisc(k, a.x, a.z, 9.0, 9.7, 0.09, white, 1, 80);
@@ -323,15 +323,15 @@ function balloonField(k: Kit): CoreAreas {
     // Leave the side facing the road (south-west, towards the camera approach) open.
     const px = a.x + Math.cos(ang) * 17.2;
     const pz = a.z + Math.sin(ang) * 17.2;
-    flagpole(k, px, pz, 5.2, cols[i % cols.length], 1.3);
-    poles.push(new THREE.Vector3(px, k.h(px, pz) + 4.6, pz));
+    flagpole(k, px, pz, 6.6, cols[i % cols.length], 1.3);
+    poles.push(new THREE.Vector3(px, k.h(px, pz) + 6.1, pz));
   }
   for (let i = 0; i < n; i++) {
     const p = poles[i];
     const q = poles[(i + 1) % n];
     // Skip the span across the entrance (the one facing the road).
     if (i === 5) continue;
-    bunting(b, p, q, [0xc8433a, 0xf4efe6, 0x2f5d7c, 0xf2c14e], 1.1);
+    bunting(b, p, q, [0xc8433a, 0xf4efe6, 0x2f5d7c, 0xf2c14e], 0.8);
   }
   // Windsock on a striped mast.
   const wx = a.x + 19.5;
@@ -399,7 +399,7 @@ function landingField(k: Kit): CoreAreas {
   const a = ANCHORS.landingRings;
   const b = k.b;
   // Mown landing target in the middle (flat paint only; the rings are built above it by others).
-  groundDisc(k, a.x, a.z, 0, 21, 0.05, mown(a.x, a.z, -0.3, 2.6, 0x7cab44, 0x62953a), 12, 80);
+  groundDisc(k, a.x, a.z, 0, 21, 0.05, mown(a.x, a.z, -0.3, 2.6, 0x86b44a, 0x5c8e36), 12, 80);
   const white = (): number => 0xf3efe4;
   for (const [r0, r1] of [[19.4, 20.1], [12.4, 13.0], [6.0, 6.6]]) groundDisc(k, a.x, a.z, r0, r1, 0.09, white, 1, 72);
   groundDisc(k, a.x, a.z, 0, 1.6, 0.09, () => 0xc8433a, 2, 32);
