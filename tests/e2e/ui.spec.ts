@@ -17,9 +17,8 @@ function channel(png: PNG, c: number): Buffer {
 }
 
 async function save(page: Page, name: string): Promise<void> {
-  // Let CSS animations settle without advancing the game.
-  await page.waitForTimeout(1100);
-  const buf = await page.screenshot({ type: 'png' });
+  // Finish CSS transitions/animations instantly (the game loop is frozen) instead of waiting.
+  const buf = await page.screenshot({ type: 'png', animations: 'disabled' });
   writeFileSync(`${OUT}/${name}.png`, buf);
   const png = PNG.sync.read(buf);
   writeFileSync(`${OUT}/${name}-R.png`, channel(png, 0));
@@ -197,48 +196,7 @@ test.describe('ui', () => {
     await expect(page.getByTestId('tutorial')).not.toHaveClass(/on/);
   });
 
-  test('1080p views', async ({ page }) => {
-    test.setTimeout(420_000); // software WebGL at 1920x1080 is slow
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await boot(page);
-    await page.evaluate(() => window.__rg!.freeze(true));
-    await step(page);
-    await save(page, 'title-1080');
-    await page.getByTestId('play').click();
-    await page.evaluate(() => {
-      const rg = window.__rg!;
-      rg.ctx.session.setTotals({ gems: 60 });
-      rg.ctx.events.emit('gem:collected', { id: 'g1', count: 3, total: 60, position: rg.ctx.player.position.clone() });
-      rg.ctx.events.emit('interact:focus', { target: { id: 'x', icon: 'chest', position: () => rg.ctx.player.position.clone(), radius: 3, onUse: () => {} } });
-      rg.step(1 / 60, 5);
-    });
-    await save(page, 'hud-1080');
-    await page.evaluate(() => {
-      window.__rg!.ctx.session.pause();
-      window.__rg!.step(1 / 60, 2);
-    });
-    await save(page, 'pause-1080');
-    await page.getByTestId('pause-grownups').click();
-    await page.evaluate(() => {
-      const m = /(\d+) × (\d+)/.exec(document.querySelector('[data-testid="gate-question"]')!.textContent!)!;
-      (document.querySelector(`[data-testid="gate-answer"][data-value="${Number(m[1]) * Number(m[2])}"]`) as HTMLElement).click();
-    });
-    await expect(page.getByTestId('settings')).toBeVisible();
-    await save(page, 'settings-1080');
-    await page.getByTestId('tab-game').click();
-    await save(page, 'settings-game-1080');
-    await page.getByTestId('settings-done').click();
-    await page.getByTestId('resume').click();
-    await page.evaluate(() => {
-      const rg = window.__rg!;
-      rg.ctx.events.emit('chest:opened', { chestId: 'c1', outfitId: 'hat_party' });
-      rg.ctx.events.emit('stunt', { kind: 'bigBounce', value: 22, stars: 4 });
-      rg.setRemaining(0.05);
-      rg.step(1 / 60, 30);
-    });
-    await expect(page.getByTestId('play-again')).toBeVisible();
-    await save(page, 'end-1080');
-  });
+  // 1080p screenshots live in scripts/shots-ui-1080.mjs (npm run shots:ui1080): minutes on SwiftShader.
 
   test('keyboard navigation and credits', async ({ page }) => {
     await boot(page);

@@ -1,9 +1,23 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { boot, lumaStdDev, shot } from './helpers';
 
-test('boots, renders a frame, starts a session, no console errors', async ({ page }) => {
-  // The one smoke boot at the shipped default quality (Medium: shadows, full post).
-  const { consoleErrors } = await boot(page, '&quality=medium');
+test.describe.configure({ mode: 'serial' });
+
+// One page: the one smoke boot at the shipped default quality (Medium: shadows, full post).
+let page: Page;
+let consoleErrors: string[] = [];
+
+test.beforeAll(async ({ browser }) => {
+  page = await browser.newPage();
+  ({ consoleErrors } = await boot(page, '&quality=medium'));
+});
+
+test.afterAll(async () => {
+  await page.close();
+});
+
+test('boots, renders a frame, starts a session, no console errors', async () => {
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.freeze(true);
@@ -18,14 +32,13 @@ test('boots, renders a frame, starts a session, no console errors', async ({ pag
   expect(consoleErrors).toEqual([]);
 });
 
-test('session ends when the timer runs out', async ({ page }) => {
-  await boot(page);
+test('session ends when the timer runs out', async () => {
   const phase = await page.evaluate(() => {
     const rg = window.__rg!;
     rg.freeze(true);
     rg.start();
     rg.setRemaining(0.05);
-    rg.step(1 / 60, 10);
+    rg.step(1 / 60, 10, false);
     return rg.state().phase;
   });
   expect(phase).toBe('ended');

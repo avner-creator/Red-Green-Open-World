@@ -1,8 +1,24 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { boot } from './helpers';
 
-test('balloon skydive: ride up, auto-jump, auto-chute, soft landing in walk mode', async ({ page }) => {
-  const { consoleErrors } = await boot(page);
+test.describe.configure({ mode: 'serial' });
+
+// One page for the whole file (a boot costs several seconds on SwiftShader); every test starts a
+// fresh session with rg.start().
+let page: Page;
+let consoleErrors: string[] = [];
+
+test.beforeAll(async ({ browser }) => {
+  page = await browser.newPage();
+  ({ consoleErrors } = await boot(page));
+});
+
+test.afterAll(async () => {
+  await page.close();
+});
+
+test('balloon skydive: ride up, auto-jump, auto-chute, soft landing in walk mode', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -105,8 +121,7 @@ test('balloon skydive: ride up, auto-jump, auto-chute, soft landing in walk mode
   expect(consoleErrors).toEqual([]);
 });
 
-test('R during the balloon ride respawns at the pad and releases the ride', async ({ page }) => {
-  const { consoleErrors } = await boot(page);
+test('R during the balloon ride respawns at the pad and releases the ride', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;

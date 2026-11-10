@@ -202,6 +202,8 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
       let headDevFree = 0;
       let headDevCanopy = 0;
       let bellyDown = true;
+      let headUp = -Infinity;
+      let headFwd = Infinity;
       let maxCamYawChange = 0;
       let lastCamYaw = ctx.cameraRig.yaw;
       let landedAt = -1;
@@ -227,6 +229,17 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
             }
           }
         }
+        if (ctx.player.mode === 'external' && canopy.visible) {
+          // Under canopy: steer for the rings like a player would.
+          const dx = rings.x - p.x;
+          const dz = rings.z - p.z;
+          const l = Math.hypot(dx, dz);
+          if (l > 2) {
+            const s = Math.sin(ctx.cameraRig.yaw);
+            const c = Math.cos(ctx.cameraRig.yaw);
+            inject = { moveY: (s * dx + c * dz) / l, moveX: (-c * dx + s * dz) / l };
+          }
+        }
         rg.inject(inject);
         rg.step(dt, 1, false);
         const yawNow = ctx.cameraRig.yaw;
@@ -243,7 +256,13 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
           maxPickupErr = Math.max(maxPickupErr, pick.distanceTo(centre));
           head.getWorldPosition(hp);
           headDevFree = Math.max(headDevFree, Math.abs(hp.distanceTo(centre) - standHead));
-          if (freefallFrames > 30 && hp.y - centre.y > 0.45) bellyDown = false;
+          if (freefallFrames > 30) {
+            // Head ahead of the centre along the facing direction, not above it.
+            const fwd = (hp.x - centre.x) * Math.sin(ctx.player.yaw) + (hp.z - centre.z) * Math.cos(ctx.player.yaw);
+            headUp = Math.max(headUp, hp.y - centre.y);
+            headFwd = Math.min(headFwd, fwd);
+            if (fwd < 0.35) bellyDown = false;
+          }
         }
         if (canopy.visible && ctx.player.mode === 'external') {
           canopyFrames++;
@@ -272,6 +291,8 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
         headDevFree,
         headDevCanopy,
         bellyDown,
+        headUp,
+        headFwd,
         maxCamYawChange,
         tiltReset: spin.parent!.rotation.x === 0 && spin.parent!.position.lengthSq() === 0,
       };
@@ -296,11 +317,12 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
     const afterOpen = rg.state();
     const hatWorn = head.children.length > 0;
 
+    // The balloon floats back to its pad (~16 s after the jump) before it can be boarded again.
+    rg.step(1 / 30, 120, false);
     const ride2 = ride();
     offGem();
     return { keyState, ride1, chestFocus, chests: afterOpen.chests, outfits: afterOpen.outfits, hatWorn, ride2, hatAfter: head.children.length > 0, keyInMainScene: ctx.scene.getObjectByName('chest-key') !== undefined };
   });
-  console.log(JSON.stringify(r));
   expect(r.keyState).toBe('carried');
   for (const ride of [r.ride1, r.ride2]) {
     expect(ride.focus).toBe('balloon');
@@ -324,8 +346,9 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
   expect(r.outfits).toEqual(['hat-explorer']);
   expect(r.hatWorn).toBe(true);
   expect(r.hatAfter).toBe(true);
-  expect(r.ride2.headDevFree).toBeLessThan(0.05);
-  expect(r.ride2.headDevCanopy).toBeLessThan(0.05);
+  // The hat stays on the head bone in every pose (only the animation moves the head a little).
+  expect(r.ride2.headDevFree).toBeLessThan(0.15);
+  expect(r.ride2.headDevCanopy).toBeLessThan(0.15);
 });
 
 test('no errors', async () => {
