@@ -75,6 +75,10 @@ export interface DragonRide {
   readonly course: Course;
   /** Test hook: shorter tours. */
   tourSeconds: number;
+  /** Test hook: put the dragon at a pose during the tour (returns false if not touring). */
+  testPose(x: number, y: number, z: number, yaw: number): boolean;
+  /** Treasure trail spots (tests aim at them). */
+  readonly treasureSpots: readonly THREE.Vector3[];
   update(dt: number): void;
   dispose(): void;
 }
@@ -720,6 +724,18 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     set tourSeconds(s: number) {
       tourSeconds = s;
     },
+    testPose(x, y, z, yaw) {
+      if (phase !== 'tour') return false;
+      fly.x = x;
+      fly.y = y;
+      fly.z = z;
+      fly.yaw = yaw;
+      fly.pitch = fly.roll = fly.lift = fly.yawRate = 0;
+      prevChest.set(x, y + DRAGON_DIMS.seat.y + 0.8, z);
+      progress = course.nearest(fly);
+      return true;
+    },
+    treasureSpots,
     weakObjects: [treasureMesh, goldMesh, weakSparks.mesh],
     course,
     update,

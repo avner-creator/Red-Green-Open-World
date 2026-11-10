@@ -16,6 +16,8 @@ import { createSkyHud } from './skyHud';
 export interface SkyTestApi {
   plane: PlaneRide;
   dragon: DragonRide;
+  /** Can a sky ride take the player right now (on foot, not on another ride)? */
+  canTake(): boolean;
   /** Every weak-eye-only object the sky rides own (channel tests toggle them). */
   weakObjects(): THREE.Object3D[];
   setWeakVisible(v: boolean): void;
@@ -37,6 +39,7 @@ export function createSkyRides(ctx: GameContext): GameSystem {
     window.__rgSky = {
       plane,
       dragon,
+      canTake: () => getSkyPilot(ctx).canTake(),
       weakObjects,
       setWeakVisible(v) {
         for (const o of weakObjects()) o.visible = v;

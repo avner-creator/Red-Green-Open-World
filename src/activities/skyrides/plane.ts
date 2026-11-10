@@ -41,6 +41,8 @@ export interface PlaneRide {
   readonly contest: ContestScene | null;
   /** Test hook: shorter contests. */
   contestSeconds: number;
+  /** Test hook: put the plane at a pose while racing (returns false if not racing). */
+  testPose(x: number, y: number, z: number, yaw: number): boolean;
   update(dt: number): void;
   dispose(): void;
 }
@@ -565,6 +567,17 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     },
     set contestSeconds(s: number) {
       contestSeconds = s;
+    },
+    testPose(x, y, z, yaw) {
+      if (phase !== 'race') return false;
+      fly.x = x;
+      fly.y = y;
+      fly.z = z;
+      fly.yaw = yaw;
+      fly.pitch = fly.roll = fly.lift = fly.yawRate = 0;
+      prevChest.set(x, y + 0.8, z);
+      if (contest) playerS = contest.course.nearest(fly);
+      return true;
     },
     update(dt) {
       time += dt;
