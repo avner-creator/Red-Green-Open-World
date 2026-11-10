@@ -28,13 +28,16 @@ const WHITE = 0xf2eee6;
  * north-east corner, so that corner is the open entrance (fence stops 3 m short of it on the north
  * side and starts at z + 3 on the east side); the west side has a jumpable farm gate to the barn.
  */
-export const PADDOCK = { hx: 18, hz: 14, northEnd: 3, eastStart: -3, westGate: [-3, 3] as const };
+export const PADDOCK = { hx: 18, hz: 14, northEnd: 3, eastStart: -1, westGate: [-3, 3] as const, beachGap: [-14.8, -10.6] as const };
 /** Ranch entrance arch over the west road (centre on the road, yaw along it). */
 export const ARCH = { x: -54, z: 32.5, yaw: Math.atan2(-8, 10), half: 4.6 };
 /** Riding track centreline (rounded rect inside the fence) and its width. */
-export const TRACK = { hx: 15.6, hz: 11.6, r: 4.2, width: 2.6 };
-/** Show jumps on the track: local (x, z) of each fence's centre (outside the anchor's clear radius). */
-export const JUMPS: readonly [number, number][] = [[-12.6, -11.6], [12.6, -11.6], [-12.6, 11.6], [12.6, 11.6]];
+export const TRACK = { hx: 15.6, hz: 11.6, r: 2.3, width: 2.6 };
+/**
+ * Show jumps at the ends of the long straights (local x, z), outside the anchor's clear radius. The
+ * beach path leaves through the north-west, so that end of the north straight has no jump.
+ */
+export const JUMPS: readonly [number, number][] = [[13.3, -11.6], [-13.3, 11.6], [13.3, 11.6]];
 
 function barn(k: Kit): void {
   const a = ANCHORS.ranch;
@@ -278,7 +281,9 @@ export function buildRanch(k: Kit): RanchResult {
   // ── Fences: the old box with two gates (east at the road, west towards the barn) ──
   const rail = { post: 0xd9cdb6, rail: 0xefe7d6, height: 1.25 };
   const [w0, w1] = PADDOCK.westGate;
-  fence(k, [[xR - PADDOCK.northEnd, zT], [xL, zT], [xL, a.z + w0]], rail);
+  // North side: open where the beach path leaves the paddock (north-west).
+  fence(k, [[xR - PADDOCK.northEnd, zT], [a.x + PADDOCK.beachGap[1], zT]], rail);
+  fence(k, [[xL, zT], [xL, a.z + w0]], rail);
   fence(k, [[xL, a.z + w1], [xL, zB], [xR, zB], [xR, a.z + PADDOCK.eastStart]], rail);
   farmGate(k, xL, a.z + w0, a.z + w1);
   // Pennants on the fence (every ~4.4 m) mark the riding loop; tall flags at the corners.
@@ -294,7 +299,7 @@ export function buildRanch(k: Kit): RanchResult {
       markerFlag(k, x, z, 1.95, cols[f++ % cols.length], Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2);
     }
   };
-  along(xL + 0.15, zT + 0.15, xR - PADDOCK.northEnd, zT + 0.15);
+  along(a.x + PADDOCK.beachGap[1], zT + 0.15, xR - PADDOCK.northEnd, zT + 0.15);
   along(xL + 0.15, zB - 0.15, xR - 0.15, zB - 0.15);
   for (const [cx, cz, c] of [[xL - 0.9, zT - 0.9, 0xc8433a], [xL - 0.9, zB + 0.9, 0x2f5d7c], [xR + 0.9, zB + 0.9, 0xc8433a]] as const) {
     tallPennant(k, cx, cz, 5.2, c);

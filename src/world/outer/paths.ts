@@ -5,7 +5,7 @@
  */
 import { T } from '../batch';
 import { C, lamp, type Kit } from '../props';
-import { rbox } from '../shapes';
+import { boxG } from '../shapes';
 import { shrubBed } from '../core-areas';
 import type { ProcessedRoad } from '../terrain';
 import type { ManualTree } from '../scatter';
@@ -53,7 +53,7 @@ export function dressPaths(k: Kit, roads: readonly ProcessedRoad[], blocked: (x:
           const p = at(nextPost, s * (hw + 0.35));
           if (!p) continue;
           const y = k.h(p[0], p[1]);
-          k.b.add('paint', rbox(0.14, 0.55, 0.14, 0.03), C.woodDark, T(p[0], y - 0.05, p[1], Math.atan2(ux, uz)), { aoY: y, aoH: 0.3, ao: 0.3 });
+          k.b.add('paint', boxG(), C.woodDark, T(p[0], y - 0.05, p[1], Math.atan2(ux, uz), 0.14, 0.55, 0.14), { aoY: y, aoH: 0.3, ao: 0.3 });
         }
         nextPost += 3;
       }

@@ -46,6 +46,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   const kit: Kit = { b, col, h: heightAt };
   const content = buildContent(kit, terrain, (m) => void ctx.physics.addStaticMesh(m));
   const staticMeshes = b.build(root, mats);
+  for (const ob of content.outer.batchers) staticMeshes.push(...ob.build(root, mats));
   const gemSpots = content.gemSpots.map((s) => ({ position: new THREE.Vector3(s.x, s.y, s.z), tag: s.tag }));
   const chestSpots = content.chestSpots.map((c) => ({ position: new THREE.Vector3(c.x, c.y, c.z), yaw: c.yaw }));
   const scatter = buildScatter(terrain, mats, col, content.trees, content.keepouts, terrainMesh.colorAt);

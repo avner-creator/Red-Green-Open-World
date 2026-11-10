@@ -20,7 +20,7 @@ export interface OuterLive {
 }
 
 function waterMat(key: string, flow: string): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, metalness: 0.05 });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, metalness: 0.05, side: THREE.DoubleSide });
   patch(m, key, {
     vertexPre: 'attribute float aFoam; varying float vFoam;',
     vertex: 'vFoam = aFoam;',
@@ -81,6 +81,7 @@ function beamGeo(): THREE.BufferGeometry {
   for (let i = 0; i < fade.length; i++) fade[i] = 1 - Math.min(1, Math.abs(pos[i * 3]) / 26);
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('aFade', new THREE.BufferAttribute(fade, 1));
+  g.computeVertexNormals();
   [a, b, pa, pb].forEach((x) => x.dispose());
   return g;
 }
@@ -102,9 +103,26 @@ export function createOuterLive(d: OuterLiveDefs): OuterLive {
 
   // Lighthouse beams: additive, soft, rotating; stronger as the sun goes down.
   const beamMat = new THREE.ShaderMaterial({
-    uniforms: { uGlow: U.glow },
-    vertexShader: 'attribute float aFade; varying float vFade; void main() { vFade = aFade; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: 'uniform float uGlow; varying float vFade; void main() { gl_FragColor = vec4(vec3(1.0, 0.92, 0.7) * vFade * vFade * (0.07 + 0.38 * uGlow), 1.0); }',
+    uniforms: { uGlow: U.glow, uLamp: { value: new THREE.Vector3(d.lamp.x, d.lamp.y, d.lamp.z) } },
+    vertexShader: /* glsl */ `
+      attribute float aFade; varying float vFade; varying vec3 vW; varying vec3 vN;
+      void main() {
+        vFade = aFade;
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vW = w.xyz;
+        vN = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    // Soft edges (fades where the cone is seen edge-on) and nothing when the camera is close to the
+    // lamp (standing on the gallery), so the beam never washes out the view.
+    fragmentShader: /* glsl */ `
+      uniform float uGlow; uniform vec3 uLamp; varying float vFade; varying vec3 vW; varying vec3 vN;
+      void main() {
+        vec3 v = normalize(cameraPosition - vW);
+        float soft = pow(abs(dot(v, normalize(vN))), 1.5);
+        float near = smoothstep(9.0, 22.0, distance(cameraPosition, uLamp));
+        gl_FragColor = vec4(vec3(1.0, 0.92, 0.7) * vFade * vFade * soft * near * (0.04 + 0.26 * uGlow), 1.0);
+      }`,
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,

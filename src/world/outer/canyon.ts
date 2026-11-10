@@ -143,7 +143,7 @@ function bridge(k: Kit): void {
   b.add('gloss', torusG(0.08, 16), 0xd9b34a, T(px1 + 0.6, top + 3.05, gz, 0, 0.22, 1, 0.22, Math.PI / 2));
 }
 
-/** Find the z on a canyon wall (side −1 south / +1 north of the axis) where the ground reaches y. */
+/** Find the z on a canyon wall (side −1 north, towards −Z / +1 south of the axis) where the ground reaches y. */
 function wallZ(k: Kit, x: number, y: number, side: number): number | null {
   let za = CANYON.z + side * 5;
   let zb = CANYON.z + side * 20;
@@ -201,7 +201,7 @@ function wallBand(k: Kit, xs: readonly number[], y0: number, y1: number, side: n
 /** Sandstone strata on both canyon walls: alternating light/dark bands (they read by brightness). */
 function strata(k: Kit): void {
   const xs: number[] = [];
-  for (let x = -52; x <= 38; x += 1.5) xs.push(x);
+  for (let x = -52; x <= 38; x += 1.25) xs.push(x);
   const bands: [number, number, number][] = [
     [2.0, 5.5, 0x8a6a4e], [5.5, 8.0, 0xd8c3a0], [8.0, 11.5, 0xa4785a], [11.5, 13.0, 0x5e4a3e], [13.0, 17.5, 0xcdb48c],
     [17.5, 20.0, 0x9c6e52], [20.0, 23.5, 0xe2d2b2], [23.5, 25.0, 0x6e5444], [25.0, 28.5, 0xbf9a74],
@@ -209,10 +209,10 @@ function strata(k: Kit): void {
   for (const side of [-1, 1]) {
     for (const [y0, y1, base] of bands) {
       const tone = new THREE.Color(base);
-      const g = wallBand(k, xs, y0, y1, side, 0.14, (x, y) => {
+      const g = wallBand(k, xs, y0, y1, side, 0.5, (x, y) => {
         const n = 0.9 + 0.12 * Math.sin(x * 0.37 + y * 1.3) + 0.06 * Math.sin(x * 1.9 - y * 0.7);
         return new THREE.Color(tone.r * n, tone.g * n, tone.b * n).getHex();
-      }, Math.max(1, Math.round((y1 - y0) / 1.2)));
+      }, Math.max(2, Math.round((y1 - y0) / 0.7)));
       if (g) {
         k.b.add('road', g, 0xffffff);
         g.dispose();
@@ -277,7 +277,7 @@ function water(k: Kit): { waterfall: THREE.BufferGeometry; river: THREE.BufferGe
       const z = cz + nz * across[q] * hw;
       pos.push(x, Math.min(cy + 0.02, surf(x, z)), z);
       const nearPool = Math.max(0, 1 - Math.hypot(cx - POOL.x, cz - POOL.z) / 6);
-      foam.push(Math.max(Math.abs(across[q]) ** 2 * 0.85, nearPool * 0.8));
+      foam.push(Math.max(Math.abs(across[q]) ** 3 * 0.6, nearPool * 0.55));
       if (i > 0 && q > 0) {
         const a1 = i * across.length + q;
         idx.push(a1 - across.length - 1, a1 - 1, a1 - across.length, a1 - across.length, a1 - 1, a1);
@@ -321,10 +321,10 @@ function water(k: Kit): { waterfall: THREE.BufferGeometry; river: THREE.BufferGe
   for (let j = 0; j <= rows; j++) {
     const y = top + ((py - top) * j) / rows;
     for (let i = 0; i < xs.length; i++) {
-      const wz = wallZ(k, xs[i], Math.max(y, py + 0.6), 1) ?? POOL.z - 2;
-      const out = 0.35 + 0.25 * (j / rows) ** 2;
+      const wz = wallZ(k, xs[i], Math.max(y, py + 0.6), -1) ?? POOL.z - 2;
+      const out = 0.45 + 0.35 * (j / rows) ** 2;
       const yy = j === rows ? py + 0.05 : y;
-      fpos.push(xs[i], yy, j === rows ? POOL.z - 1.4 : wz - out);
+      fpos.push(xs[i], yy, j === rows ? POOL.z - 1.0 : wz + out);
       ffoam.push(Math.min(1, 0.25 + Math.abs(i - 2) * 0.25 + (j > rows - 5 ? 0.6 : 0)));
       if (j > 0 && i > 0) {
         const a1 = j * xs.length + i;
@@ -339,10 +339,8 @@ function water(k: Kit): { waterfall: THREE.BufferGeometry; river: THREE.BufferGe
   waterfall.computeVertexNormals();
   waterfall.computeBoundingSphere();
 
-  // Spring on the ridge feeding the falls: a rock pile and a short brook to the rim.
-  const brook: [number, number][] = [[-41, -133], [-42.5, -129.5], [-44, -126.5], [FALL_X, -124]];
-  ribbon(k, brook, [-1.4, -0.7, 0.7, 1.4], [0x9f9a7e, 0x2f6f8a, 0x2f6f8a, 0x9f9a7e], 0.09, false, (x, z, i) => (i === 1 || i === 2 ? 0.9 + 0.3 * Math.max(0, Math.sin(x * 5 + z * 3)) : 1));
-  pebbles(k, -40.5, -134, 1.4, 10, 7);
+  // Spring at the rim: the falls burst out between boulders.
+  pebbles(k, FALL_X, -124.6, 2.2, 14, 7);
   return { waterfall, river, line: line.map(([x, z, hw]) => ({ x, z, hw })) };
 }
 
@@ -379,9 +377,10 @@ export function buildCanyon(k: Kit): CanyonResult {
     { x: L.x + 14, z: L.z - 5.6, kind: 'rock', scale: 0.8 },
     { x: POOL.x - 3.4, z: POOL.z - 1.6, kind: 'rock', scale: 1.4 },
     { x: POOL.x + 4.5, z: POOL.z - 1.4, kind: 'rock', scale: 1.2 },
-    { x: -39, z: -134.5, kind: 'rock', scale: 1.3 },
-    { x: -42.5, z: -135.2, kind: 'rock', scale: 0.8 },
-    { x: -37, z: -131, kind: 'bush', scale: 1.0 },
+    { x: FALL_X - 3.4, z: -124.8, kind: 'rock', scale: 1.5 },
+    { x: FALL_X + 3.3, z: -125.2, kind: 'rock', scale: 1.3 },
+    { x: FALL_X + 1.2, z: -127.5, kind: 'rock', scale: 0.9 },
+    { x: FALL_X - 5.5, z: -127, kind: 'bush', scale: 1.0 },
     { x: 22, z: -104, kind: 'rock', scale: 1.4 },
     { x: 30, z: -108.4, kind: 'rock', scale: 0.9 },
   ];
@@ -390,7 +389,7 @@ export function buildCanyon(k: Kit): CanyonResult {
     { x: L.x, z: CANYON.z, hx: 20, hz: 4 },
     { x: POOL.x, z: POOL.z, r: POOL.r + 0.8, paved: true },
     ...w.line.filter((_, i) => i % 3 === 0).map((p) => ({ x: p.x, z: p.z, r: p.hw + 1.2, paved: true })),
-    { x: -42, z: -130, hx: 3, hz: 5, paved: true },
+    { x: FALL_X, z: -125, hx: 4, hz: 2.5 },
   ];
   return { trees, keepouts, waterfall: w.waterfall, river: w.river, riverLine: w.line };
 }

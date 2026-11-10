@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { M, T } from '../batch';
 import { bunting, icon, type Kit } from '../props';
-import { coneG, cylG, rbox, sphereG, torusG } from '../shapes';
+import { boxG, coneG, cylG, rbox, sphereG, torusG } from '../shapes';
 import { ANCHORS } from '../layout';
 import type { Keepout, ManualTree } from '../scatter';
 import { groundDisc } from '../core-areas';
@@ -125,12 +125,12 @@ export function buildSillySurroundings(k: Kit, roadEdge: (x: number, z: number) 
     const yaw = Math.atan2(x1 - x0, z1 - z0);
     const l = Math.hypot(x1 - x0, z1 - z0);
     const pitch = -Math.atan2(k.h(x1, z1) - y0, l);
-    for (const [ry, cc] of [[0.35, YEL], [0.85, CREAM]] as const) b.add('paint', rbox(0.07, 0.12, l, 0.02), cc, T(mx, my + ry, mz, yaw, 1, 1, 1, pitch));
+    for (const [ry, cc] of [[0.35, YEL], [0.85, CREAM]] as const) b.add('paint', boxG(), cc, T(mx, my + ry, mz, yaw, 0.07, 0.12, l, pitch));
     for (let j = 0; j < 3; j++) {
       const t = (j + 0.5) / 3;
       const px = x0 + (x1 - x0) * t;
       const pz = z0 + (z1 - z0) * t;
-      b.add('paint', rbox(0.1, 0.95, 0.04, 0.02), j % 2 ? PLUM : CREAM, T(px, k.h(px, pz) - 0.05, pz, yaw));
+      b.add('paint', boxG(), j % 2 ? PLUM : CREAM, T(px, k.h(px, pz) - 0.05, pz, yaw, 0.1, 0.95, 0.04));
     }
     k.col.box(T(mx, my, mz, yaw), 0, 0.6, 0, 0.08, 0.65, l / 2);
     if (i % 4 === 0) pinwheel(k, x0 + Math.cos(a0) * 0.05, z0 + Math.sin(a0) * 0.05, y0 + 1.75, a0 + Math.PI / 2, pw++);
@@ -145,7 +145,7 @@ export function buildSillySurroundings(k: Kit, roadEdge: (x: number, z: number) 
     const t = (i / nb) * Math.PI;
     const px = Math.cos(t) * R;
     const py = Math.sin(t) * (R * 0.95) + 0.6;
-    b.add('gloss', sphereG(2), i % 2 ? YEL : PINK, M(am, T(px, py, 0, 0, 0.62, 0.62, 0.62)), i < 2 || i > nb - 2 ? { aoY: ay, aoH: 0.8 } : undefined);
+    b.add('gloss', sphereG(1), i % 2 ? YEL : PINK, M(am, T(px, py, 0, 0, 0.62, 0.62, 0.62)), i < 2 || i > nb - 2 ? { aoY: ay, aoH: 0.8 } : undefined);
   }
   for (const s of [-1, 1]) {
     b.add('gloss', sphereG(2), 0x2f8fb0, M(am, T(s * R, 0.0, 0, 0, 0.85, 0.7, 0.85)));

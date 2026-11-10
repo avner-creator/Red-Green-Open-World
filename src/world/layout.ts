@@ -60,6 +60,8 @@ export interface RoadDef {
   width: number;
   /** Village lane: asphalt with stone kerbs, centre dashes, lamps and verge planting. */
   kerb?: boolean;
+  /** Kerbed lanes only: landmark trees/rocks back from the verge (default true). */
+  landmarks?: boolean;
   /** [x, z] or [x, z, fixedHeight]. */
   points: readonly (readonly [number, number] | readonly [number, number, number])[];
 }
@@ -67,15 +69,15 @@ export interface RoadDef {
 export const ROADS: readonly RoadDef[] = [
   { id: 'main', kind: 'street', width: 8, points: [[0, -10], [0, -58, VILLAGE_Y]] },
   {
-    id: 'ridge', kind: 'road', width: 7, kerb: true,
+    id: 'ridge', kind: 'road', width: 7, kerb: true, landmarks: false,
     points: [[0, -58, VILLAGE_Y], [22, -64], [46, -70], [62, -76], [60, -82], [40, -82, DECK_Y - 0.6], [16, -80, DECK_Y], [4, -80, DECK_Y], [0, -84, DECK_Y]],
   },
   { id: 'north', kind: 'path', width: 5, points: [[0, -128, DECK_Y], [0, -136, DECK_Y - 0.6], [-20, -140], [-42, -138], [-56, -134]] },
   { id: 'park', kind: 'road', width: 7, kerb: true, points: [[14, -8], [28, -14], [42, -18]] },
   { id: 'east', kind: 'road', width: 7, kerb: true, points: [[12, 8], [26, 11], [46, 12], [60, 24], [67, 40], [72, 50], [96, 44], [106, 36]] },
-  { id: 'south', kind: 'road', width: 7, kerb: true, points: [[0, 16], [2, 40], [5, 60], [7, 74]] },
+  { id: 'south', kind: 'road', width: 7, kerb: true, landmarks: false, points: [[0, 16], [2, 40], [5, 60], [7, 74]] },
   { id: 'loop', kind: 'road', width: 7, points: [[7, 74], [28, 80], [46, 82], [60, 78], [66, 70], [68, 58], [72, 50]] },
-  { id: 'west', kind: 'road', width: 7, kerb: true, points: [[-14, 6], [-34, 16], [-52, 30], [-60, 40]] },
+  { id: 'west', kind: 'road', width: 7, kerb: true, landmarks: false, points: [[-14, 6], [-34, 16], [-52, 30], [-60, 40]] },
   { id: 'rocket', kind: 'path', width: 4.5, points: [[61.6, 28.5], [70.5, 26]] },
   { id: 'parklink', kind: 'path', width: 4.5, points: [[73, 2.5], [76.5, 14.5]] },
   { id: 'beach', kind: 'path', width: 4.5, points: [[-86, 34], [-96, 16], [-100, 0], [-102, -10]] },

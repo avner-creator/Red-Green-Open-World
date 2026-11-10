@@ -126,7 +126,7 @@ export function buildLighthouse(k: Kit): LighthouseResult {
   const segPerTurn = 28;
   const n = LH.turns * segPerTurn;
   const span = endAng - LH.start;
-  const swing = 3.6; // radians before the end where the walkway swings out past the gallery edge
+  const swing = 4.2; // radians before the end where the walkway swings out past the gallery edge
   const innerAt = (ang: number, yy: number): number => {
     const tr = towerR(yy) + 0.05;
     const u = Math.min(1, Math.max(0, (ang - (endAng - swing)) / 0.7));
