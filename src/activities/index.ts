@@ -6,12 +6,14 @@ import type { GameContext, GameSystem } from '../types';
 import { createBungee } from './bungee';
 import { createChests } from './chests';
 import { createGems } from './gems';
+import { createSilly } from './silly';
 import { createSkydive } from './skydive';
 import { createThrills } from './thrills';
 
 export { setLaunchGate } from './rocket';
 export { thrillSpots } from './thrillSpots';
 export { bungeeSpots } from './bungee';
+export { sillySpots } from './silly';
 
 export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const gems = createGems(ctx);
@@ -19,6 +21,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const chests = createChests(ctx);
   const skydive = createSkydive(ctx);
   const bungee = createBungee(ctx);
+  const silly = createSilly(ctx);
   return {
     update(dt) {
       // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
@@ -28,6 +31,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       }
       skydive.update(dt);
       bungee.update(dt);
+      silly.update(dt);
       gems.update(dt);
       chests.update(dt);
     },
@@ -37,6 +41,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       chests.dispose();
       skydive.dispose();
       bungee.dispose();
+      silly.dispose();
     },
   };
 }
