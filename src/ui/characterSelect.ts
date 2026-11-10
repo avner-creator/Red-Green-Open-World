@@ -46,7 +46,9 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
   injectCharacterCss();
   let sel = 0;
   let active = false;
-  let device: 'keyboard' | 'gamepad' = 'keyboard';
+  let device: 'keyboard' | 'gamepad' | 'touch' = 'keyboard';
+  /** Key glyphs for a control; none on touch (this screen is tapped directly). */
+  const keysFor = (id: 'emote' | 'skill'): HTMLElement | null => (device === 'touch' ? null : controlKeys(id, device));
   let celeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── static structure ──
@@ -212,7 +214,7 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     // left card: name, backstory, emote
     left.setAttribute('style', colors(c));
     left.dataset.id = c.id;
-    const emoteBtn = h('button', 'b d cs-emote', { type: 'button', 'aria-label': 'Emote', 'data-testid': 'csel-emote' }, icon('sparkle'), controlKeys('emote', device));
+    const emoteBtn = h('button', 'b d cs-emote', { type: 'button', 'aria-label': 'Emote', 'data-testid': 'csel-emote' }, icon('sparkle'), keysFor('emote'));
     emoteBtn.addEventListener('click', () => ctx.player.emote());
     clear(left);
     left.append(
@@ -248,7 +250,7 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
       );
     }
     right.append(
-      h('div', 'cs-skill', {}, h('div', 'cs-tile', { 'data-testid': 'csel-skill', 'data-skill': c.skill }, skillPicto(c.skill)), h('div', 'cs-skname', {}, SKILL_NAMES[c.skill]), controlKeys('skill', device)),
+      h('div', 'cs-skill', {}, h('div', 'cs-tile', { 'data-testid': 'csel-skill', 'data-skill': c.skill }, skillPicto(c.skill)), h('div', 'cs-skname', {}, SKILL_NAMES[c.skill]), keysFor('skill')),
       act,
     );
     if (animate) {

@@ -1,18 +1,19 @@
 /** Boot + frame loop. Only the orchestrator edits this file. */
 import * as THREE from 'three';
-import { CAMERA, FIXED_DT, MAX_FRAME_DT } from './config';
+import { CAMERA, FIXED_DT, MAX_FRAME_DT, SETTINGS_KEY } from './config';
 import { createEventBus } from './events';
 import { createSettings } from './settings';
 import { createSession } from './session';
 import { createAudio } from './audio';
 import { createVision } from './vision';
 import { createInput, createPhysics, createPlayerSystems } from './core';
+import { isPhoneViewport, touchPixelRatioCap } from './core/input-touch-math';
 import { createWorld } from './world';
 import { createActivities } from './activities';
 import { createEconomy } from './activities/economy';
 import { createProfile } from './profile';
 import { createUi } from './ui';
-import type { GameContext, Quality, TestApi } from './types';
+import type { GameContext, TestApi } from './types';
 
 const params = new URLSearchParams(location.search);
 const testMode = params.get('test') === '1';
@@ -25,7 +26,25 @@ const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(`unhandledrejection: ${String(e.reason)}`));
 
-const PIXEL_RATIO_CAP: Record<Quality, number> = { low: 1, medium: 1.5, high: 2 };
+/** A phone: coarse primary pointer and a phone-sized viewport (short side). */
+function isPhone(w = window.innerWidth, h = window.innerHeight): boolean {
+  let coarse = false;
+  try {
+    coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  } catch {
+    /* no matchMedia: not a phone */
+  }
+  return coarse && isPhoneViewport(Math.max(1, w), Math.max(1, h));
+}
+
+/** True when a settings object was saved before (a grown-up's choice wins over device defaults). */
+function hasSavedSettings(): boolean {
+  try {
+    return localStorage.getItem(SETTINGS_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
 
 async function boot(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -33,7 +52,10 @@ async function boot(): Promise<void> {
   const bootEl = document.getElementById('boot');
 
   const events = createEventBus();
+  const firstRun = !hasSavedSettings();
   const settings = createSettings(events);
+  // First run on a phone: start at Low (smooth on phone GPUs). Saved settings are never overridden.
+  if (!testMode && firstRun && isPhone()) settings.set({ quality: 'low' });
   if (testQuality === 'low' || testQuality === 'medium' || testQuality === 'high') settings.set({ quality: testQuality });
   const session = createSession(events, settings);
   const audio = createAudio({ settings, events, testMode });
@@ -73,7 +95,8 @@ async function boot(): Promise<void> {
     const h = Math.max(1, window.innerHeight);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    const cap = testMode ? 1 : PIXEL_RATIO_CAP[settings.get().quality];
+    // Phones get a lower pixel-ratio cap at every quality (see touchPixelRatioCap).
+    const cap = testMode ? 1 : touchPixelRatioCap(settings.get().quality, isPhone(w, h));
     ctx.vision.setSize(w, h, Math.min(window.devicePixelRatio || 1, cap));
   };
   window.addEventListener('resize', resize);

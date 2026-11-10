@@ -1,12 +1,15 @@
 // Where each character comes from. All CC0 1.0 by Quaternius (quaternius.com), fetched from the
 // trebeljahr/quaternius-showcase mirror on GitHub (its LICENSES.md lists each pack as CC0-1.0),
-// except the robot, which is the three.js example copy already in public/assets/models.
+// except the robot, which is the three.js example copy (r170) on jsDelivr.
 const MIRROR = 'https://raw.githubusercontent.com/trebeljahr/quaternius-showcase/c06a6fa9a1b13576edf3bd62d7b52aba334f8fc0/public/glb';
 
 export const SOURCES = [
   {
     id: 'robot',
-    path: 'public/assets/models/RobotExpressive.glb',
+    url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r170/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+    cacheName: 'RobotExpressive.glb',
+    // The exact bytes the shipped robot.glb was built from (was public/assets/models/, now unused).
+    sha256: '047f5e5fb3bb6d378bd1df16ca6137f2a596c99b3a1b5690b4020c05aaf6f319',
     pack: 'Animated Robot (three.js example copy)',
     // Same both-channel palette the game already uses for the robot: light body, dark joints.
     materials: { Main: '#eae6dc', Grey: '#3d434d', Black: '#15171a' },

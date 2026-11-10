@@ -228,8 +228,11 @@ export interface InputState {
   skillPressed: boolean;
   /** Edge-triggered: emote (C or G, gamepad D-pad up, touch emote button). */
   emotePressed: boolean;
-  /** Last device used; UI shows matching button icons. */
-  device: 'keyboard' | 'gamepad';
+  /**
+   * Last device used; UI shows matching button icons. 'touch' while the on-screen touch controls
+   * are active (touch-first device or the last input was a finger): no key caps, touch pictograms.
+   */
+  device: 'keyboard' | 'gamepad' | 'touch';
 }
 
 export interface InputApi {

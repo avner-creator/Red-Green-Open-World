@@ -55,6 +55,8 @@ export const PADS = {
   chainWindow: 6,
   chainForBigAir: 3,
   cooldown: 0.3,
+  /** Largest skill boost on a pad launch (a ground-pound counts as a super-bounce here). */
+  maxBoost: 1.25,
 } as const;
 
 /** Rocket pads and the landing net. */
