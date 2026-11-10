@@ -58,6 +58,8 @@ export interface FoamLavaTestApi {
   booth(): [number, number, number];
   lastResult(): { time: number; medal: Medal; prize: number; beatFriend: boolean } | null;
   friendReady(): boolean;
+  /** Show/hide only this course's weak-eye objects (channel test control). */
+  setWeakVisible(on: boolean): void;
 }
 
 declare global {
@@ -114,6 +116,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     const w = toWorld(x, 0, z);
     return ctx.world.heightAt(w.x, w.z) - oy;
   };
+  vis.update(sim, 0, true); // place every instance once (correct culling bounds from the start)
   const ghostKeys = ghostTimeline();
   const friendTime = ghostTime(ghostKeys);
   const ui = createFoamUi(ctx.uiRoot);
@@ -131,6 +134,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   let beardT = 0;
   let stretch = 0;
   let lastCount: number | 'go' | null = null;
+  let pendingExit = false;
   const profile = (): ProfileLike | null => (ctx as unknown as { profile?: ProfileLike }).profile ?? null;
 
   const sfx = (name: SfxName, volume = 1, pitch = 1): void => ctx.audio.play(name, { volume, pitch });
@@ -203,7 +207,8 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     ui.showHud(true, friend.color);
     ui.hud(0, 0, 0);
     if (ctx.player.mode !== 'external') ctx.player.setExternalController(controller);
-    ctx.cameraRig.setOverride({ distance: 6.8, height: 2.9, yawOffset: 0 });
+    // Countdown: look at the hero and the friend from the front, then swing behind at GO.
+    ctx.cameraRig.setOverride({ distance: 6, height: 2.2, yawOffset: Math.PI * 0.82 });
     heroWorld();
     friend.setVisible(true);
     void friend.prepare(ctx.player.characterId, runs - 1).then(() => {
@@ -223,11 +228,15 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     friend.setVisible(false);
     vis.setCheckpoint(0, false);
     ctx.cameraRig.setOverride(null);
-    if (wasActive && teleport) {
-      const p = toWorld(BOOTH.use.x, 0, BOOTH.use.z - 0.8);
-      p.y = ctx.world.heightAt(p.x, p.z) + 0.05;
-      ctx.player.teleport(p, yaw + Math.PI);
-    }
+    // Teleport once the ride has let go (inside the controller the player would turn the jump
+    // into a huge velocity).
+    if (wasActive && teleport) pendingExit = true;
+  }
+
+  function exitToBooth(): void {
+    const p = toWorld(BOOTH.use.x, 0, BOOTH.use.z - 0.8);
+    p.y = ctx.world.heightAt(p.x, p.z) + 0.05;
+    ctx.player.teleport(p, yaw + Math.PI);
   }
 
   function finishRun(time: number): void {
@@ -366,6 +375,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
           phase = 'run';
           phaseT = 0;
           sim.running = true;
+          ctx.cameraRig.setOverride({ distance: 6.2, height: 2.8, yawOffset: 0 });
           bot = botPlan ? new Autopilot(botPlan === 'main' ? MAIN_PLAN : SHORTCUT_PLAN) : null;
         }
       } else if (phase === 'run') {
@@ -431,12 +441,19 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       booth: () => boothPos.toArray() as [number, number, number],
       lastResult: () => last,
       friendReady: () => friend.id !== null,
+      setWeakVisible: (on) => {
+        vis.weakRoot.visible = on;
+      },
     };
   }
 
   let wadeT = 0;
   return {
     update(dt) {
+      if (pendingExit && ctx.player.mode !== 'external') {
+        pendingExit = false;
+        exitToBooth();
+      }
       const near = phase !== 'idle' || ctx.player.position.distanceTo(centre) < NEAR;
       // Beard timer (also after the run ends).
       if (beardT > 0) {

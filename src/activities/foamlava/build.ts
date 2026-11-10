@@ -5,6 +5,7 @@
  * All geometry is authored in the course frame (see layout.ts) under `root`.
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { finish, finishMaterial, mergeFinished, placed, rodBetween } from '../../core/vertex-finish';
 import { asShadowProxy } from '../../core/shadow-proxy';
 import { createLayerMaterial } from '../../vision';
@@ -555,7 +556,13 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
   // ───────────── Weak-eye layer: shortcut tiles and safe stones ─────────────
   const tileIds = SOLIDS.map((s, i) => (s.kind === 'tile' ? i : -1)).filter((i) => i >= 0);
   const stoneIds = SOLIDS.map((s, i) => (s.kind === 'stone' ? i : -1)).filter((i) => i >= 0);
-  const tileGeo = keep(new THREE.BoxGeometry(1, 1, 1));
+  // Tile = slab + a thin raised frame just outside it (one geometry, unit footprint).
+  const tileGeo = keep(
+    mergeGeometries([
+      new THREE.BoxGeometry(1, 1, 1).toNonIndexed(),
+      new THREE.RingGeometry(0.74, 0.83, 4, 1).rotateX(-Math.PI / 2).rotateY(Math.PI / 4).translate(0, 0.56, 0).toNonIndexed(),
+    ]) ?? new THREE.BoxGeometry(1, 1, 1),
+  );
   const tiles = new THREE.InstancedMesh(tileGeo, keep(createLayerMaterial(1)), tileIds.length);
   tiles.name = 'foam-lava-tiles';
   tileIds.forEach((i, k) => {
@@ -577,23 +584,15 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
     stones.setMatrixAt(k, dummy.matrix);
   });
   weakRoot.add(stones);
-  // A thin pulsing outline frame on each tile (still weak-eye only) so the path reads as "magic".
-  const frames = new THREE.InstancedMesh(keep(new THREE.RingGeometry(0.62, 0.7, 4, 1).rotateX(-Math.PI / 2).rotateY(Math.PI / 4)), keep(createLayerMaterial(0.75, 0.9)), tileIds.length);
-  frames.name = 'foam-lava-tile-frames';
-  tileIds.forEach((i, k) => {
-    const s = SOLIDS[i];
-    dummy.position.set(s.x, s.top + 0.01, s.z);
-    dummy.scale.set(1, 1, 1);
-    dummy.updateMatrix();
-    frames.setMatrixAt(k, dummy.matrix);
-  });
-  weakRoot.add(frames);
+  tiles.computeBoundingSphere();
+  stones.computeBoundingSphere();
 
   scene.add(root);
 
   // ───────────── Per-frame update ─────────────
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
+  let primed = false;
   function setFlags(cp: number, running: boolean, t: number): void {
     flagSpots.forEach((f, k) => {
       const reached = running && cp >= k + 1;
@@ -658,6 +657,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
       bubbles.instanceMatrix.needsUpdate = true;
       // Blowers swell before a puff; puffs roll across the walkway.
       const clock = sim.cannonClock();
+      let puffing = false;
       CANNONS.forEach((c, k) => {
         const cs = cannonState(clock, c.offset);
         const swell = cs.state === 'warn' ? 1 + 0.25 * cs.t + 0.05 * Math.sin(cs.t * 40) : cs.state === 'blast' ? 1.25 - 0.3 * cs.t : 1;
@@ -669,6 +669,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
         for (let j = 0; j < PUFFS; j++) {
           const idx = k * PUFFS + j;
           if (cs.state === 'blast' || (cs.state === 'idle' && cs.t < 0.12)) {
+            puffing = true;
             const age = cs.state === 'blast' ? cs.t * CANNON.blast : CANNON.blast + cs.t * (CANNON.period - CANNON.warn - CANNON.blast);
             const f = Math.min(1, age / CANNON.blast);
             const spread = j / (PUFFS - 1);
@@ -687,13 +688,16 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
       });
       blowers.instanceMatrix.needsUpdate = true;
       puffs.instanceMatrix.needsUpdate = true;
+      puffs.visible = puffing;
       // Rope.
       ropePivot.rotation.z = sim.rope.theta;
-      // Spray particles.
+      // Spray particles (the mesh is only drawn while some are flying).
+      let flying = 0;
       for (let k = 0; k < SPRAY; k++) {
         const pp = spray[k];
         pp.age += dt;
         if (pp.age < pp.life) {
+          flying++;
           pp.vy -= 9 * dt;
           pp.x += pp.vx * dt;
           pp.y += pp.vy * dt;
@@ -707,6 +711,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
         sprayMesh.setMatrixAt(k, dummy.matrix);
       }
       sprayMesh.instanceMatrix.needsUpdate = true;
+      sprayMesh.visible = flying > 0;
       // Machine bubbles.
       overdrive = Math.max(0, overdrive - dt);
       const rate = overdrive > 0 ? 3 : 1;
@@ -734,6 +739,14 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
       }
       mbMesh.instanceMatrix.needsUpdate = true;
       setFlags(flagCp, flagRunning, t);
+      if (!primed) {
+        // Bounds from the real instance poses (plus slack for tipping and bobbing).
+        primed = true;
+        for (const m of [floats, boxes, bubbles, blowers, flags]) {
+          m.computeBoundingSphere();
+          if (m.boundingSphere) m.boundingSphere.radius += 1.5;
+        }
+      }
     },
     splash(x, z, strength = 1) {
       const r = uniforms.ripples.value[rippleNext];
@@ -768,7 +781,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
     dispose() {
       scene.remove(root);
       for (const d of disposables) d.dispose();
-      for (const m of [floats, boxes, bubbles, blowers, puffs, sprayMesh, mbMesh, flags, tiles, stones, frames]) m.dispose();
+      for (const m of [floats, boxes, bubbles, blowers, puffs, sprayMesh, mbMesh, flags, tiles, stones]) m.dispose();
     },
   };
 }

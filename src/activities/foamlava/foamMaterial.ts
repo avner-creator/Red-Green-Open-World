@@ -105,15 +105,16 @@ export function createFoamMaterial(): { material: THREE.MeshStandardMaterial; un
         float rim1 = 1.0 - smoothstep(0.015, 0.06, b1.y);
         float rim2 = 1.0 - smoothstep(0.012, 0.05, b2.y);
         float rim3 = 1.0 - smoothstep(0.01, 0.045, b3.y);
-        float shine = smoothstep(0.14, 0.0, abs(b1.x - 0.24)) * smoothstep(0.5, 0.2, b1.x);
-        vec3 foamBase = vec3(1.0, 0.9, 0.9);
-        vec3 peach = vec3(1.0, 0.74, 0.7);
-        vec3 shadowCol = vec3(0.86, 0.68, 0.74);
+        // A soft highlight in the middle of the bigger bubbles.
+        float shine = smoothstep(0.2, 0.04, b1.x) * 0.8 + smoothstep(0.12, 0.02, b2.x) * 0.4;
+        vec3 foamBase = vec3(1.0, 0.9, 0.86);
+        vec3 peach = vec3(1.0, 0.72, 0.62);
+        vec3 shadowCol = vec3(0.9, 0.66, 0.66);
         vec3 c = mix(peach, foamBase, smoothstep(0.35, 0.75, bill));
         c = mix(c, shadowCol, rim1 * 0.55);
         c = mix(c, shadowCol, rim2 * 0.4);
         c = mix(c, shadowCol, rim3 * 0.25 * smoothstep(0.4, 0.8, bill));
-        c += vec3(1.0, 0.95, 0.97) * shine * 0.35;
+        c = mix(c, vec3(1.0, 0.98, 0.96), clamp(shine, 0.0, 1.0) * 0.6);
         // Splash rings: a bright crest.
         for (int i = 0; i < ${MAX_RIPPLES}; i++) {
           vec4 r = fRipples[i];
