@@ -131,7 +131,8 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
     setForced(mods) {
       const before = target().level;
       forced = mods ? forcedModifiers(mods) : null;
-      if (forced) applied = { ...forced };
+      // Test/debug: both forcing and releasing apply at once (releasing lands on the staircase's own target).
+      applied = { ...target() };
       if (target().level !== before) announce();
     },
     summary() {
