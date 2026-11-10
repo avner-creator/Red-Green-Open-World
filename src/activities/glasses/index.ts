@@ -16,7 +16,7 @@ import { VisionLayer } from '../../types';
 import type { GameContext, GameSystem } from '../../types';
 import { createBoard, createBoardMaterial } from './board';
 import type { Board } from './board';
-import { GLASSES } from './constants';
+import { BOARD, GLASSES } from './constants';
 import { FarIdle, hashString, seededRng } from './idle';
 import { MECHANICS } from './mechanics';
 import type { MechanicDef } from './mechanics';
@@ -108,12 +108,155 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
         if (hit && hit.point.y > gy + 0.5) return true;
       }
     }
-    for (const y of [1, 2.2]) {
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        const hit = ctx.physics.raycast(tmp.set(x, h + y, z), new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), r);
-        if (hit) return true;
+    // The play area itself (the rim beyond it only needs to be free of buildings: down rays above).
+    for (const y of [0.45, 1.2, 2.2]) if (!discClear(x, z, (r - 1.5) * 0.6, h + y)) return true;
+    // Visual-only things have no collider (tree canopies, low fences, bushes): probe the main
+    // scene's meshes too. Only reached by candidates that passed every cheaper rule.
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 4) * Math.PI * 2;
+      const sx = k === 4 ? x : x + Math.cos(a) * r * 0.6;
+      const sz = k === 4 ? z : z + Math.sin(a) * r * 0.6;
+      const gy = ctx.world.heightAt(sx, sz);
+      if (sceneHit(tmp2.set(sx, gy + 14, sz), DOWN, 14 - 0.9)) return true;
+    }
+    for (let k = 0; k < 12; k++) {
+      const a = (k / 12) * Math.PI * 2;
+      if (sceneHit(tmp2.set(x, h + 0.75, z), dir.set(Math.cos(a), 0, Math.sin(a)), r)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * No wall, fence or trunk crosses the disc (x, z, r) at height `y`: parallel scanline rays 0.4 m
+   * apart (thinner than any trunk collider), so nothing slips between them.
+   */
+  function discClear(x: number, z: number, r: number, y: number): boolean {
+    const east = new THREE.Vector3(1, 0, 0);
+    for (let o = -r + 0.2; o < r; o += 0.4) {
+      const half = Math.sqrt(Math.max(0, r * r - o * o));
+      const hit = ctx.physics.raycast(tmp.set(x - half, y, z + o), east, 2 * half);
+      // Rising ground (a walkable normal) is not an obstacle; fences, walls and trunks are.
+      if (hit && hit.normal.y < 0.7) return false;
+    }
+    return true;
+  }
+
+  /** No trunk/wall within `half` metres of the ground path from (ex, ez) to (bx, bz), at trunk height. */
+  function corridorClear(ex: number, ez: number, bx: number, bz: number, half = 2.5): boolean {
+    const gx = bx - ex;
+    const gz = bz - ez;
+    const glen = Math.hypot(gx, gz);
+    if (glen < 1e-6) return true;
+    const px = -gz / glen;
+    const pz = gx / glen;
+    const side = new THREE.Vector3(px, 0, pz);
+    for (let t = 0.4; t < glen - 1; t += 0.4) {
+      const cx = ex + (gx / glen) * t;
+      const cz = ez + (gz / glen) * t;
+      const hit = ctx.physics.raycast(tmp2.set(cx - px * half, ctx.world.heightAt(cx, cz) + 1.2, cz - pz * half), side, half * 2);
+      if (hit && hit.normal.y < 0.7) return false;
+    }
+    return true;
+  }
+
+  /** Nothing at all (terrain included) between an eye at (x, z, ground + `eyeH`) and the board's panel. */
+  function sightClear(x: number, z: number, eyeH: number, site: GlassesSite): boolean {
+    const by = ctx.world.heightAt(site.board.x, site.board.z) + BOARD.panelY;
+    const from = new THREE.Vector3(x, ctx.world.heightAt(x, z) + eyeH, z);
+    const d = new THREE.Vector3(site.board.x, by, site.board.z).sub(from);
+    const len = d.length();
+    return !ctx.physics.raycast(from, d, len - 0.6);
+  }
+
+  /**
+   * Clear view of the board from the approach (12 m and 22 m out, eye height): direct sightlines
+   * to the panel and the badge, then a band of trunk-height cross rays along the way. Canopies
+   * have no collider and far trees are not in the scene's instance buffers, but every tree has a
+   * trunk collider: a trunk within 3.5 m of the near sightline means its canopy is in the way.
+   */
+  function view(x: number, z: number, yaw: number, b: { x: number; z: number }): boolean {
+    const by = ctx.world.heightAt(b.x, b.z);
+    const eye = new THREE.Vector3();
+    const to = new THREE.Vector3();
+    const wall = (fx: number, fy: number, fz: number, dx: number, dy: number, dz: number, len: number): boolean => {
+      const hit = ctx.physics.raycast(eye.set(fx, fy, fz), to.set(dx, dy, dz), len);
+      return !!hit && hit.normal.y < 0.7;
+    };
+    // Around the board itself (a trunk there means a canopy over or in front of it).
+    if (!discClear(b.x, b.z, 3.5, by + 1.2)) return false;
+    for (const d of [12, 22]) {
+      const ex = x + Math.sin(yaw) * d;
+      const ez = z + Math.cos(yaw) * d;
+      const ey = Math.max(ctx.world.heightAt(ex, ez), ctx.world.waterLevel) + 1.7;
+      for (const ty of [BOARD.panelY, BOARD.topperY]) {
+        const dx = b.x - ex;
+        const dy = by + ty - ey;
+        const dz = b.z - ez;
+        const len = Math.hypot(dx, dy, dz);
+        if (wall(ex, ey, ez, dx / len, dy / len, dz / len, len - 0.4)) return false;
+        eye.set(ex, ey, ez);
+        if (sceneHit(eye, to.set(dx, dy, dz).normalize(), len - 0.6)) return false;
       }
+      if (d <= 12 && !corridorClear(ex, ez, b.x, b.z, 3.5)) return false; // the far viewpoint only needs the direct sightlines
+    }
+    // Last, the costly one: the big merged batches (decor trees and props without colliders live
+    // there) along the near sightlines. Capped so a crowded area cannot stall the boot.
+    if (heavyBudget > 0) {
+      heavyBudget--;
+      const ex = x + Math.sin(yaw) * 12;
+      const ez = z + Math.cos(yaw) * 12;
+      const ey = Math.max(ctx.world.heightAt(ex, ez), ctx.world.waterLevel) + 1.7;
+      for (const ty of [BOARD.panelY, BOARD.topperY]) {
+        eye.set(ex, ey, ez);
+        to.set(b.x, by + ty, b.z).sub(eye);
+        const len = to.length();
+        if (sceneHit(eye, to.normalize(), len - 0.6, true)) return false;
+      }
+    }
+    return true;
+  }
+  let heavyBudget = 0;
+
+  // Main-scene props for visual-only probes (no terrain, roads or paving: those are the ground).
+  const raycaster = new THREE.Raycaster();
+  raycaster.camera = ctx.camera;
+  raycaster.params.Points = { threshold: 0 };
+  raycaster.params.Line = { threshold: 0 };
+  const tmp2 = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  let props: THREE.Object3D[] | null = null;
+  const batches: THREE.Object3D[] = [];
+  const propList = (): THREE.Object3D[] => {
+    if (props) return props;
+    const list: THREE.Object3D[] = [];
+    props = list;
+    ctx.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !o.visible || /^(terrain|road|paving|water|sky)/i.test(o.name)) return;
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible || p === ctx.player.object) return;
+      // Big merged static batches (chunks of the village, park…) cost milliseconds per ray: their
+      // solid parts have colliders, so the physics probes cover them. Keep single props and instances.
+      if (!(m as THREE.InstancedMesh).isInstancedMesh) {
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        const bs = m.geometry.boundingSphere;
+        if (!bs || bs.radius * m.matrixWorld.getMaxScaleOnAxis() > 25) {
+          if (bs && bs.radius * m.matrixWorld.getMaxScaleOnAxis() < 150) batches.push(o);
+          return;
+        }
+      }
+      list.push(o);
+    });
+    return props;
+  };
+  /** First visible prop mesh (or, with `heavy`, merged batch) along the ray that is not at ground level. */
+  function sceneHit(origin: THREE.Vector3, direction: THREE.Vector3, far: number, heavy = false): boolean {
+    raycaster.set(origin, direction);
+    raycaster.near = 0;
+    raycaster.far = far;
+    const list = propList();
+    for (const hh of raycaster.intersectObjects(heavy ? batches : list, false)) {
+      if (hh.point.y < ctx.world.heightAt(hh.point.x, hh.point.z) + 0.3) continue;
+      return true;
     }
     return false;
   }
@@ -149,6 +292,10 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
       chestSpots: ctx.world.chestSpots,
       roads: ROADS,
       blocked,
+      view,
+      beginSite: () => {
+        heavyBudget = 40;
+      },
     };
     const sites = findSites(world, plans);
     atlas = createGlassesAtlas();
@@ -236,14 +383,21 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
         // Aim between the site centre and its board so both are in view.
         const aim = { x: site.x * 0.55 + site.board.x * 0.45, z: site.z * 0.55 + site.board.z * 0.45 };
         let best: { x: number; z: number } | null = null;
-        outer: for (const d of [GLASSES.viewDistance, 12, 18, 10]) {
-          for (const off of [0, 0.35, -0.35, 0.7, -0.7]) {
-            const yaw = site.yaw + off;
-            const c = { x: site.x + Math.sin(yaw) * d, z: site.z + Math.cos(yaw) * d };
-            if (!ctx.world.isLand(c.x, c.z) || ctx.world.heightAt(c.x, c.z) < ctx.world.waterLevel + 0.5) continue;
-            if (blocked(c.x, c.z, 0.7)) continue;
-            best = c;
-            break outer;
+        outer: for (const half of [4, 3, 2, 0]) {
+          for (const d of [GLASSES.viewDistance, 14, 10, 17, 8, 20]) {
+            for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4]) {
+              const yaw = site.yaw + off;
+              const c = { x: site.x + Math.sin(yaw) * d, z: site.z + Math.cos(yaw) * d };
+              if (!ctx.world.isLand(c.x, c.z) || ctx.world.heightAt(c.x, c.z) < ctx.world.waterLevel + 0.5) continue;
+              if (blocked(c.x, c.z, 0.7)) continue;
+              // The camera sits ~5 m behind the player: keep both sightlines to the board clear.
+              const k = 5 / Math.hypot(c.x - aim.x, c.z - aim.z);
+              const back = { x: c.x + (c.x - aim.x) * k, z: c.z + (c.z - aim.z) * k };
+              if (half > 0 && (!corridorClear(c.x, c.z, site.board.x, site.board.z, half) || !corridorClear(back.x, back.z, site.board.x, site.board.z, half))) continue;
+              if (!sightClear(c.x, c.z, 1.7, site) || !sightClear(back.x, back.z, 3.2, site)) continue;
+              best = c;
+              break outer;
+            }
           }
         }
         const at = best ?? { x: site.x + Math.sin(site.yaw) * GLASSES.viewDistance, z: site.z + Math.cos(site.yaw) * GLASSES.viewDistance };

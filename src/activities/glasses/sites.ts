@@ -33,13 +33,17 @@ export interface SiteWorld {
   roads: readonly Pick<RoadDef, 'width' | 'points'>[];
   /** Runtime probe: true if something solid stands inside the circle (colliders). */
   blocked?(x: number, z: number, radius: number): boolean;
+  /** Runtime probe: true if a board at `board` for a site at (x, z) facing `yaw` is in clear view from the approach. */
+  view?(x: number, z: number, yaw: number, board: XZ): boolean;
+  /** Called before each site's search (lets runtime probes reset per-site budgets). */
+  beginSite?(index: number): void;
 }
 
 /**
  * Where a site would like to be.
  *  - `plaza`: `distance` metres from the spawn anchor at `angle` (radians, atan2(dx, dz) convention).
- *  - `near`: just outside the first existing anchor in `anchors`, on the side facing the spawn
- *    (the approach), rotated by `angle` radians around the anchor.
+ *  - `near`: just outside an anchor, on the side facing the spawn (the approach), rotated by
+ *    `angle` radians around it. `anchors` are tried in order until one has a valid spot.
  */
 export type SitePrefer =
   | { kind: 'plaza'; angle: number; distance: number }
@@ -62,7 +66,7 @@ export interface GlassesSite {
   radius: number;
   /** Anchor name the site belongs to ('spawn' for the plaza ones). */
   near: string;
-  /** Where the pictogram board stands (front-left edge of the site, facing `yaw`). */
+  /** Where the pictogram board stands (on the approach edge of the site, facing `yaw`; see `BOARD_SLOTS`). */
   board: XZ;
 }
 
@@ -73,9 +77,10 @@ export const SITE_PLANS: readonly SitePlan[] = [
   { id: 'oddone', prefer: { kind: 'plaza', angle: 2.6, distance: 22 } },
   { id: 'lineup', prefer: { kind: 'plaza', angle: -2.4, distance: 22 } },
   // Beside the approaches to the attractions.
-  { id: 'toys', prefer: { kind: 'near', anchors: ['garage'], angle: 0.5, gap: 6 } },
+  { id: 'toys', prefer: { kind: 'near', anchors: ['garage', 'launchPads'], angle: 0.5, gap: 6 } },
   { id: 'gates', prefer: { kind: 'near', anchors: ['trampoline', 'bouncePads'], angle: 0.3, gap: 6 } },
-  { id: 'dotsigns', prefer: { kind: 'near', anchors: ['balloon'], angle: -0.4, gap: 6 } },
+  // The balloon field is ringed by roads on its plaza side: this lands by the road that leads to it.
+  { id: 'dotsigns', prefer: { kind: 'near', anchors: ['balloon', 'launchPads', 'landingRings'], angle: -0.4, gap: 6 } },
 ];
 
 // ───────────────────────────── geometry helpers ─────────────────────────────
@@ -123,7 +128,14 @@ export function spiralPoint(cx: number, cz: number, i: number, step = GLASSES.se
 
 // ───────────────────────────── rules ─────────────────────────────
 
-export type Reject = 'land' | 'water' | 'slope' | 'anchor' | 'spot' | 'road' | 'site' | 'band' | 'blocked' | null;
+/** Board spots tried in order, site-local (x right, z towards the approach), as fractions of the radius. */
+export const BOARD_SLOTS: readonly (readonly [number, number])[] = [
+  [-0.5, 0.75],
+  [0.5, 0.75],
+  [0, 0.95],
+];
+
+export type Reject = 'land' | 'water' | 'slope' | 'anchor' | 'spot' | 'road' | 'site' | 'band' | 'blocked' | 'view' | null;
 
 export interface CheckOptions {
   radius: number;
@@ -134,7 +146,7 @@ export interface CheckOptions {
 }
 
 /** First rule a candidate breaks, or null if it is a valid site centre. Cheap rules first; `blocked` last. */
-export function checkSite(world: SiteWorld, x: number, z: number, o: CheckOptions): Reject {
+export function checkSite(world: SiteWorld, x: number, z: number, o: CheckOptions, out?: { slot: number }): Reject {
   const dBand = Math.hypot(x - o.band.cx, z - o.band.cz);
   if (dBand < o.band.min || dBand > o.band.max) return 'band';
   const R = o.radius;
@@ -150,7 +162,7 @@ export function checkSite(world: SiteWorld, x: number, z: number, o: CheckOption
   const h = world.heightAt(x, z);
   if (h < world.waterLevel + GLASSES.minAboveWater) return 'water';
   // Rim samples (plus a little beyond, where the board stands): land, dry and gentle.
-  for (const rr of [R * 0.6, R + 1]) {
+  for (const rr of [R * 0.6, R + 1.5]) {
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2;
       const sx = x + Math.cos(a) * rr;
@@ -161,29 +173,44 @@ export function checkSite(world: SiteWorld, x: number, z: number, o: CheckOption
       if (Math.abs(sh - h) > GLASSES.maxRise * (rr / R)) return 'slope';
     }
   }
-  if (world.blocked?.(x, z, R + 1)) return 'blocked';
-  return null;
+  // The board (≈ 5.5 m wide, front-left) reaches ≈ R + 1.3 from the centre.
+  if (world.blocked?.(x, z, R + 1.5)) return 'blocked';
+  const spawn = world.anchors.spawn?.position ?? { x: 0, z: 0 };
+  const yaw = yawTowards({ x, z }, spawn);
+  for (let i = 0; i < BOARD_SLOTS.length; i++) {
+    const board = siteToWorld({ x, z, yaw }, BOARD_SLOTS[i][0] * R, BOARD_SLOTS[i][1] * R);
+    if (!world.view || world.view(x, z, yaw, board)) {
+      if (out) out.slot = i;
+      return null;
+    }
+  }
+  return 'view';
 }
 
-function preferredPoint(world: SiteWorld, plan: SitePlan): { start: XZ; band: CheckOptions['band']; near: string } {
+type Start = { start: XZ; band: CheckOptions['band']; near: string };
+
+/** Search starts for a plan: one for a plaza site, one per existing anchor (in order) for a near site. */
+function preferredPoints(world: SiteWorld, plan: SitePlan): Start[] {
   const spawn = world.anchors.spawn?.position ?? { x: 0, y: 0, z: 0 };
   const p = plan.prefer;
   if (p.kind === 'plaza') {
-    return {
+    return [{
       start: { x: spawn.x + Math.sin(p.angle) * p.distance, z: spawn.z + Math.cos(p.angle) * p.distance },
       band: { cx: spawn.x, cz: spawn.z, min: GLASSES.plazaMin, max: GLASSES.plazaMax },
       near: 'spawn',
-    };
+    }];
   }
-  const name = p.anchors.find((n) => world.anchors[n]) ?? 'spawn';
-  const a = world.anchors[name] ?? { position: spawn, radius: 0 };
-  const dist = a.radius + GLASSES.siteRadius + GLASSES.anchorMargin + p.gap;
-  const toward = yawTowards(a.position, spawn) + p.angle;
-  return {
-    start: { x: a.position.x + Math.sin(toward) * dist, z: a.position.z + Math.cos(toward) * dist },
-    band: { cx: a.position.x, cz: a.position.z, min: 0, max: GLASSES.nearMax },
-    near: name,
-  };
+  const starts = p.anchors.filter((n) => world.anchors[n]).map((name): Start => {
+    const a = world.anchors[name];
+    const dist = a.radius + GLASSES.siteRadius + GLASSES.anchorMargin + p.gap;
+    const toward = yawTowards(a.position, spawn) + p.angle;
+    return {
+      start: { x: a.position.x + Math.sin(toward) * dist, z: a.position.z + Math.cos(toward) * dist },
+      band: { cx: a.position.x, cz: a.position.z, min: 0, max: GLASSES.nearMax },
+      near: name,
+    };
+  });
+  return starts.length ? starts : [{ start: { x: spawn.x, z: spawn.z }, band: { cx: spawn.x, cz: spawn.z, min: 0, max: GLASSES.plazaMax }, near: 'spawn' }];
 }
 
 /**
@@ -194,14 +221,23 @@ export function findSites(world: SiteWorld, plans: readonly SitePlan[] = SITE_PL
   const out: (GlassesSite & { valid: boolean })[] = [];
   const spawn = world.anchors.spawn?.position ?? { x: 0, y: 0, z: 0 };
   plans.forEach((plan, index) => {
-    const { start, band, near } = preferredPoint(world, plan);
+    world.beginSite?.(index);
+    const starts = preferredPoints(world, plan);
     let found: XZ | null = null;
-    for (let i = 0; i < GLASSES.searchCount && !found; i++) {
-      const c = spiralPoint(start.x, start.z, i);
-      if (checkSite(world, c.x, c.z, { radius, others: out, band }) === null) found = c;
+    let near = starts[0].near;
+    const pick = { slot: 0 };
+    for (const st of starts) {
+      for (let i = 0; i < GLASSES.searchCount && !found; i++) {
+        const c = spiralPoint(st.start.x, st.start.z, i);
+        if (checkSite(world, c.x, c.z, { radius, others: out, band: st.band }, pick) === null) found = c;
+      }
+      if (found) {
+        near = st.near;
+        break;
+      }
     }
     const valid = found !== null;
-    const at = found ?? start;
+    const at = found ?? starts[0].start;
     const yaw = yawTowards(at, spawn);
     const site: GlassesSite & { valid: boolean } = {
       id: plan.id,
@@ -215,7 +251,7 @@ export function findSites(world: SiteWorld, plans: readonly SitePlan[] = SITE_PL
       board: { x: 0, z: 0 },
       valid,
     };
-    site.board = siteToWorld(site, -radius * 0.62, radius * 0.72);
+    site.board = siteToWorld(site, BOARD_SLOTS[pick.slot][0] * radius, BOARD_SLOTS[pick.slot][1] * radius);
     out.push(site);
   });
   return out;

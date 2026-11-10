@@ -6,8 +6,8 @@ export const GLASSES = {
   siteSpacing: 14,
   /** Extra clearance around every anchor radius / target radius. */
   anchorMargin: 2,
-  /** Clearance from every gem and chest spot to the site's edge. */
-  spotClear: 4,
+  /** Clearance from every gem and chest spot to the site's edge (so ≥ radius + 1 ≈ 7 m from the centre). */
+  spotClear: 1,
   /** Clearance from a road's edge to the site's edge. */
   roadMargin: 1.5,
   /** Ground must be this far above the water level. */
@@ -17,8 +17,8 @@ export const GLASSES = {
   /** Plaza sites: distance band from `anchors.spawn`. */
   plazaMin: 15,
   plazaMax: 45,
-  /** Attraction sites: at most this far from the attraction anchor's centre. */
-  nearMax: 35,
+  /** Attraction sites: at most this far from the attraction anchor's centre (the balloon field is ringed by roads: ~38 m). */
+  nearMax: 40,
   /** Spiral search: step between candidates (golden-angle spiral) and number of candidates. */
   searchStep: 1.25,
   searchCount: 1600,
@@ -26,17 +26,17 @@ export const GLASSES = {
   activateRadius: 60,
   deactivateRadius: 70,
   /** `goto` viewing distance from the site centre (the approach side). */
-  viewDistance: 15,
+  viewDistance: 12,
 } as const;
 
 /** Board (wordless pictogram sign) dimensions, metres. The board faces local +Z. */
 export const BOARD = {
-  cell: 1.35,
-  gap: 0.12,
-  postHeight: 3.7,
-  post: 0.24,
-  panelY: 2.75,
-  panelDepth: 0.16,
-  topperY: 4.75,
-  topperSize: 1.6,
+  cell: 1.6,
+  gap: 0.14,
+  postHeight: 3.95,
+  post: 0.28,
+  panelY: 2.9,
+  panelDepth: 0.18,
+  topperY: 5.15,
+  topperSize: 1.9,
 } as const;
