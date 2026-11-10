@@ -226,12 +226,12 @@ export function addBowlContents(k: Kit, t: ToppingId, m: THREE.Matrix4): void {
 
 /** A flavour dome in a tub (tub rim at the origin), with a scoop dent and chips. */
 export function addTubDome(k: Kit, f: FlavourId, m: THREE.Matrix4, seed: number): void {
-  k.add(hemi(14, 5), FLAVOUR_COLOR[f], m.clone().multiply(T(0, -0.02, 0, 0, 0.17, 0.07, 0.17)));
+  k.add(hemi(14, 5), FLAVOUR_COLOR[f], m.clone().multiply(T(0, -0.02, 0, 0, 0.155, 0.07, 0.155)));
   k.add(sphere(10, 8), new THREE.Color(FLAVOUR_COLOR[f]).multiplyScalar(0.9), m.clone().multiply(T(0.03, 0.05, 0.02, 0, 0.075, 0.06, 0.075)));
   const chips = FLAVOUR_CHIPS[f];
   for (let i = 0; i < chips; i++) {
     const a = hash(seed * 9 + i) * Math.PI * 2;
-    const rr = 0.04 + hash(seed * 5 + i) * 0.11;
+    const rr = 0.03 + hash(seed * 5 + i) * 0.1;
     k.add(blob(), FLAVOUR_CHIP[f], m.clone().multiply(T(Math.sin(a) * rr, 0.035 - rr * 0.12, Math.cos(a) * rr, a, 0.014, 0.01, 0.018)));
   }
 }

@@ -14,10 +14,10 @@ import type { FlavourId, SauceId, ToppingId, ConeId } from './logic';
 import { Kit, T, box, cyl, disc, glossMaterial, paintMaterial, sphere, torus } from './kit';
 import { addBottle, addBowlContents, addCone, addTubDome, hash } from './ingredients';
 
-export const FLOOR = 0.15;
+/** Floor top above the ground: high enough to keep the island's grass tufts under it. */
+export const FLOOR = 0.5;
 const COUNTER_TOP = FLOOR + 1.0;
 const BACK_TOP = FLOOR + 1.0;
-const SHELF_Y = FLOOR + 2.05;
 
 /** Every spot the station needs, in the parlour's local frame. */
 export const LAYOUT = {
@@ -29,13 +29,13 @@ export const LAYOUT = {
   /** The E prompt. */
   prompt: new THREE.Vector3(0, COUNTER_TOP + 0.35, 2.2),
   /** The cone stands here while it is built (tip of the cone). */
-  holder: new THREE.Vector3(0, COUNTER_TOP + 0.12, 1.72),
-  coneRack: (i: number): THREE.Vector3 => new THREE.Vector3(-2.95 + i * 0.28, COUNTER_TOP + 0.16, 1.72),
-  bottle: (i: number): THREE.Vector3 => new THREE.Vector3(-1.95 + i * 0.36, COUNTER_TOP, 1.62),
-  cannon: new THREE.Vector3(-0.72, COUNTER_TOP, 1.72),
-  tub: (i: number): THREE.Vector3 => new THREE.Vector3(0.82 + i * 0.44, COUNTER_TOP, 1.72),
-  bowl: (i: number): THREE.Vector3 => new THREE.Vector3((i < 3 ? -3.0 : 1.9) + (i % 3) * 0.55, BACK_TOP + 0.07, -2.42),
-  jar: (i: number): THREE.Vector3 => new THREE.Vector3(-1.45 + i * 1.45, SHELF_Y + 0.05, -2.72),
+  holder: new THREE.Vector3(0.45, COUNTER_TOP + 0.12, 1.72),
+  coneRack: (i: number): THREE.Vector3 => new THREE.Vector3(-1.55 + i * 0.3, BACK_TOP + 0.16, -2.42),
+  bottle: (i: number): THREE.Vector3 => new THREE.Vector3(-1.02 + i * 0.33, COUNTER_TOP, 1.62),
+  cannon: new THREE.Vector3(-0.05, COUNTER_TOP, 1.78),
+  tub: (i: number): THREE.Vector3 => new THREE.Vector3(1.02 + i * 0.4, COUNTER_TOP, 1.72),
+  bowl: (i: number): THREE.Vector3 => new THREE.Vector3((i < 3 ? -3.25 : 1.0) + (i % 3) * 0.6, BACK_TOP + 0.09, -2.42),
+  jar: (i: number): THREE.Vector3 => new THREE.Vector3(-2.42 + i * 0.46, COUNTER_TOP + 0.06, 1.72),
   /** Friends wait here (customer side), facing the hero. */
   queue: [new THREE.Vector3(-2.45, FLOOR, 2.55), new THREE.Vector3(2.45, FLOOR, 2.6)] as const,
   /** Friends hang out here while nobody is building. */
@@ -134,23 +134,19 @@ function counters(k: Kit, g: Kit): void {
   k.box(0, FLOOR + 0.5, -2.45, 7.5, 1.0, 0.66, MINT);
   for (let i = 0; i < 13; i++) k.box(-3.6 + i * 0.6, FLOOR + 0.5, -2.11, 0.3, 0.84, 0.02, CREAM);
   k.box(0, BACK_TOP + 0.03, -2.45, 7.6, 0.06, 0.72, 0xf6f4f0);
-  // High shelf with brackets.
-  k.box(0, SHELF_Y, -2.72, 6.2, 0.06, 0.36, WOOD);
-  for (const sx of [-2.8, -0.7, 0.7, 2.8]) k.box(sx, SHELF_Y - 0.14, -2.84, 0.05, 0.26, 0.12, WOOD_DARK);
-
   // Flavour tubs set into the counter.
   FLAVOURS.forEach((f: FlavourId, i) => {
     const p = (LAYOUT.tub(i) as THREE.Vector3).clone();
-    k.add(cyl(16, 1, 0.85), STEEL, T(p.x, p.y - 0.04, p.z, 0, 0.2, 0.1, 0.2));
-    k.add(torus(0.2, 0.016, Math.PI * 2, 20).rotateX(Math.PI / 2), 0xe8edf2, T(p.x, p.y + 0.06, p.z));
+    k.add(cyl(16, 1, 0.85), STEEL, T(p.x, p.y - 0.04, p.z, 0, 0.18, 0.1, 0.18));
+    k.add(torus(0.18, 0.016, Math.PI * 2, 20).rotateX(Math.PI / 2), 0xe8edf2, T(p.x, p.y + 0.06, p.z));
     addTubDome(g, f, T(p.x, p.y + 0.07, p.z), i + 1);
   });
-  // Cone rack with the three cones.
-  k.box(-2.67, COUNTER_TOP + 0.08, 1.72, 0.9, 0.1, 0.24, WOOD);
+  // Cone rack with the three cones (back counter).
+  k.box(-1.25, BACK_TOP + 0.1, -2.42, 1.0, 0.14, 0.26, WOOD);
   CONES.forEach((c: ConeId, i) => {
     const p = LAYOUT.coneRack(i);
-    k.add(torus(0.09, 0.015, Math.PI * 2, 16).rotateX(Math.PI / 2), WOOD_DARK, T(p.x, COUNTER_TOP + 0.14, p.z));
-    addCone(k, c, T(p.x, COUNTER_TOP + 0.02, p.z), 0.7);
+    k.add(torus(0.1, 0.016, Math.PI * 2, 16).rotateX(Math.PI / 2), WOOD_DARK, T(p.x, BACK_TOP + 0.18, p.z));
+    addCone(k, c, T(p.x, BACK_TOP + 0.02, p.z), 0.8);
   });
   // Squeeze bottles.
   SAUCES.forEach((s: SauceId, i) => addBottle(g, s, T(LAYOUT.bottle(i).x, COUNTER_TOP + 0.06, LAYOUT.bottle(i).z)));
@@ -170,19 +166,18 @@ function counters(k: Kit, g: Kit): void {
   // Topping bowls on the back counter.
   TOPPINGS.forEach((t: ToppingId, i) => {
     const p = LAYOUT.bowl(i);
-    k.add(new THREE.SphereGeometry(1, 16, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), 0xffffff, T(p.x, p.y, p.z, 0, 0.17, 0.11, 0.17));
-    k.add(torus(0.17, 0.012, Math.PI * 2, 20).rotateX(Math.PI / 2), 0x2f3b52, T(p.x, p.y, p.z));
-    addBowlContents(g, t, T(p.x, p.y - 0.02, p.z));
+    k.add(new THREE.SphereGeometry(1, 16, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), 0xffffff, T(p.x, p.y, p.z, 0, 0.24, 0.14, 0.24));
+    k.add(torus(0.24, 0.016, Math.PI * 2, 20).rotateX(Math.PI / 2), 0x2f3b52, T(p.x, p.y, p.z));
+    addBowlContents(g, t, T(p.x, p.y - 0.02, p.z, 0, 1.4, 1.4, 1.4));
   });
-  // Shelf decorations: stacked cups and a striped tin.
-  for (const [x, c] of [[-2.6, 0xffffff], [2.5, 0xffd93b]] as const) {
-    for (let j = 0; j < 3; j++) k.add(cyl(12, 1, 0.8), j % 2 ? c : RASPBERRY, T(x + j * 0.02, SHELF_Y + 0.03 + j * 0.05, -2.72, 0, 0.09, 0.09, 0.09));
-  }
 }
 
 function floorAndTerrace(k: Kit): void {
   // Plinth (deep enough to hide small terrain dips) and a checkered floor.
-  k.box(0, FLOOR - 0.45, 0.75, 9.2, 0.9, 8.6, 0xe8dcc8);
+  k.box(0, FLOOR - 0.55, 0.75, 9.2, 1.1, 8.6, 0xe8dcc8);
+  // A step all the way round (two easy 25 cm steps up), with a dark edge line.
+  k.box(0, (FLOOR / 2 - 0.6) / 2, 0.75, 10.0, FLOOR / 2 + 0.6, 9.4, 0xd2c2a6);
+  k.box(0, FLOOR / 2 - 0.01, 0.75, 10.02, 0.03, 9.42, 0x5a3a2a);
   const tile = 0.6;
   for (let ix = 0; ix < 15; ix++) {
     for (let iz = 0; iz < 14; iz++) {
@@ -284,7 +279,8 @@ export function buildParlour(): Parlour {
   for (let i = 0; i < 3; i++) setLid(i, 0, 0);
 
   const colliders: ParlourCollider[] = [
-    { kind: 'box', c: new THREE.Vector3(0, FLOOR - 0.45, 0.75), h: new THREE.Vector3(4.6, 0.45, 4.3) },
+    { kind: 'box', c: new THREE.Vector3(0, FLOOR - 0.55, 0.75), h: new THREE.Vector3(4.6, 0.55, 4.3) },
+    { kind: 'box', c: new THREE.Vector3(0, (FLOOR / 2 - 0.6) / 2, 0.75), h: new THREE.Vector3(5.0, (FLOOR / 2 + 0.6) / 2, 4.7) },
     { kind: 'box', c: new THREE.Vector3(0, FLOOR + 1.9, -3.05), h: new THREE.Vector3(4.15, 1.9, 0.15) },
     { kind: 'box', c: new THREE.Vector3(-4.0, FLOOR + 1.9, -0.4), h: new THREE.Vector3(0.15, 1.9, 2.5) },
     { kind: 'box', c: new THREE.Vector3(4.0, FLOOR + 1.9, -0.4), h: new THREE.Vector3(0.15, 1.9, 2.5) },
