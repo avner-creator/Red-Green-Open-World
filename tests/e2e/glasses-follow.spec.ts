@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, canvasShot } from './helpers';
+import { boot, canvasShot, SHOTS } from './helpers';
 import { channelOnly, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
 import type { GlassesSiteInfo } from '../../src/activities/glasses';
 
@@ -94,7 +94,6 @@ test('glow-flies: weak layer only, answer-blind, catch and fly-off, budget', asy
   const site = sites.find((s) => s.id === id)!;
   const from = local(site, 1, 7.5);
   await look(from.x, from.z, site.x, site.z);
-  await shots('flies', 'test-results/glasses/glowflies');
 
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: id });
   const seedA = async (): Promise<void> => page.evaluate((i) => window.__rgGlasses!.force(i, { seed: 101 }), id);
@@ -118,8 +117,7 @@ test('glow-flies: weak layer only, answer-blind, catch and fly-off, budget', asy
   const after = await dbg(id);
   expect(after.caught).toBeGreaterThanOrEqual(1);
   expect(after.flies[fly.slot].state).toBe('gone');
-  await page.evaluate(() => window.__rg!.step(1 / 60, 8));
-  await shots('catch', 'test-results/glasses/glowflies');
+  await page.evaluate(() => window.__rg!.step(1 / 60, 8, false));
   await expectDrawBudget(page, id, 6);
 
   // Outside the patch a timed-out fly is renewed quietly: no miss.
@@ -162,7 +160,6 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
     await look(p1.x + side.x, p1.z + side.z, p5.x + side.x * 0.5, p5.z + side.z * 0.5);
   }
   expect((await dbg(id)).next).toBeGreaterThanOrEqual(1);
-  await shots('trail', 'test-results/glasses/toys');
   expect(d0.valid, 'trail passes every ground rule').toBe(true);
   expect(d0.toysShown, 'no toy before the last print').toBe(0);
   expect(d0.toyVisible).toBe(false);
@@ -193,20 +190,8 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
   let d = await dbg(id);
   expect(d.state).toBe('found');
   expect(d.toysShown).toBe(1);
-  // Watch the toy hop out, from a little way back along the trail.
-  await page.evaluate(
-    ([e, b]) => {
-      const rg = window.__rg!;
-      const len = Math.hypot(e.x - b.x, e.z - b.z);
-      const fx = b.x + ((e.z - b.z) / len) * 0.8;
-      const fz = b.z - ((e.x - b.x) / len) * 0.8;
-      rg.teleport(fx, rg.ctx.world.heightAt(fx, fz) + 0.05, fz, Math.atan2(e.x - fx, e.z - fz));
-      rg.step(1 / 60, 32, false);
-      rg.step(1 / 60, 1);
-    },
-    [d.end, prints[prints.length - 3]],
-  );
-  await shots('found', 'test-results/glasses/toys');
+  // Mid-show (launch): toy + sparkle ring are both drawn.
+  await page.evaluate(() => window.__rg!.step(1 / 60, 40, false));
   await expectDrawBudget(page, id, 6);
 
   // Into the basket, then a new tier-2 trail.
@@ -235,23 +220,104 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
   expect(d2.seed).not.toBe(d.seed);
 });
 
-test('both are idle when the player is far; no errors', async () => {
-  const far = sites.reduce((a, b) => {
-    const gf = sites.find((s) => s.id === 'glowflies')!;
-    const ty = sites.find((s) => s.id === 'toys')!;
-    const da = Math.min(Math.hypot(a.x - gf.x, a.z - gf.z), Math.hypot(a.x - ty.x, a.z - ty.z));
-    const db = Math.min(Math.hypot(b.x - gf.x, b.z - gf.z), Math.hypot(b.x - ty.x, b.z - ty.z));
-    return db > da ? b : a;
+/** Default-camera screenshots: the patch with every tier, a catch, the trail, the toy at the top of its pop. */
+async function capture(tag: string): Promise<void> {
+  const F = 'test-results/glasses/glowflies';
+  const T = 'test-results/glasses/toys';
+  const gf = sites.find((s) => s.id === 'glowflies')!;
+  await page.evaluate(() => {
+    window.__rgGlasses!.reset('glowflies');
+    window.__rgGlasses!.force('glowflies', { seed: 33 });
   });
-  await page.evaluate((s) => {
-    window.__rg!.teleport(s.x, s.y + 0.1, s.z);
-    window.__rg!.step(1 / 60, 2, false);
-  }, far);
-  for (const id of ['glowflies', 'toys']) {
-    const s = sites.find((x) => x.id === id)!;
-    const dist = Math.hypot(s.x - far.x, s.z - far.z);
-    if (dist > 75) expect(await page.evaluate((i) => window.__rgGlasses!.active(i), id), `${id} idle at ${dist.toFixed(0)} m`).toBe(false);
-    expect(await expectDrawBudget(page, id, 6)).toBeGreaterThanOrEqual(1);
+  const from = local(gf, 6.5, 2);
+  await look(from.x, from.z, gf.x, gf.z);
+  expect((await dbg('glowflies')).tiers.every((n: number) => n > 0), 'every tier in the air').toBe(true);
+  await shots(`${tag}-patch`, F);
+  // A catch: run into the nearest tier-1 fly, then a few frames of the burst.
+  const flies = (await dbg('glowflies')).flies.filter((f: { state: string }) => f.state === 'alive');
+  const fly = flies.find((f: { tier: number }) => f.tier === 1) ?? flies[0];
+  await page.evaluate((f) => {
+    const rg = window.__rg!;
+    const p = rg.ctx.player.position;
+    rg.teleport(f.x, f.y - 0.85, f.z, Math.atan2(f.x - p.x, f.z - p.z));
+    rg.step(1 / 60, 9, false);
+    rg.step(1 / 60, 1);
+  }, fly);
+  await shots(`${tag}-catch`, F);
+
+  await page.evaluate(() => {
+    window.__rgGlasses!.reset('toys');
+    window.__rgGlasses!.force('toys', { seed: 7 });
+  });
+  const d = await dbg('toys');
+  const [p1, p5] = [d.prints[1], d.prints[5]];
+  const len = Math.hypot(p5.x - p1.x, p5.z - p1.z);
+  const side = { x: ((p5.z - p1.z) / len) * 1.6, z: (-(p5.x - p1.x) / len) * 1.6 };
+  await look(p1.x + side.x, p1.z + side.z, p5.x + side.x * 0.5, p5.z + side.z * 0.5);
+  await shots(`${tag}-trail`, T);
+  // Walk the prints; the last step faces along the trail, then wait for the top of the pop.
+  await page.evaluate((prints: { x: number; y: number; z: number }[]) => {
+    const rg = window.__rg!;
+    for (let i = 0; i < prints.length; i++) {
+      const a = prints[Math.max(0, i - 1)];
+      const b = prints[i];
+      rg.teleport(b.x, b.y + 0.05, b.z, i > 0 ? Math.atan2(b.x - a.x, b.z - a.z) : undefined);
+      rg.step(1 / 60, 2, false);
+    }
+    rg.step(1 / 60, 76, false);
+    rg.step(1 / 60, 1);
+  }, d.prints);
+  const top = await dbg('toys');
+  expect(top.state).toBe('found');
+  await shots(`${tag}-pop`, T);
+  await page.evaluate(() => {
+    window.__rgGlasses!.reset('glowflies');
+    window.__rgGlasses!.reset('toys');
+  });
+}
+
+test('screenshots from the default camera (640×360; 1280×720 with RG_SHOTS=1)', async () => {
+  await capture('640');
+  if (SHOTS) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => window.__rg!.step(1 / 60, 2, false));
+    await capture('1280');
+    await page.setViewportSize({ width: 640, height: 360 });
+    await page.evaluate(() => window.__rg!.step(1 / 60, 2, false));
+  }
+});
+
+test('both are idle when the player is far; no errors', async () => {
+  const gf = sites.find((s) => s.id === 'glowflies')!;
+  const ty = sites.find((s) => s.id === 'toys')!;
+  // Explicitly > 75 m from both sites (on land if possible).
+  const at = await page.evaluate(
+    ([a, b]) => {
+      const rg = window.__rg!;
+      const mx = (a.x + b.x) / 2;
+      const mz = (a.z + b.z) / 2;
+      let pt = { x: mx + 100, z: mz };
+      for (let k = 0; k < 16; k++) {
+        const ang = (k / 16) * Math.PI * 2;
+        const c = { x: mx + Math.cos(ang) * 100, z: mz + Math.sin(ang) * 100 };
+        if (rg.ctx.world.isLand(c.x, c.z) && rg.ctx.world.heightAt(c.x, c.z) > rg.ctx.world.waterLevel + 0.5) {
+          pt = c;
+          break;
+        }
+      }
+      rg.teleport(pt.x, rg.ctx.world.heightAt(pt.x, pt.z) + 0.1, pt.z);
+      rg.step(1 / 60, 2, false);
+      const p = rg.ctx.player.position;
+      return { x: p.x, z: p.z };
+    },
+    [gf, ty],
+  );
+  for (const s of [gf, ty]) {
+    const dist = Math.hypot(s.x - at.x, s.z - at.z);
+    expect(dist, `${s.id}: player is far`).toBeGreaterThan(75);
+    expect(await page.evaluate((i) => window.__rgGlasses!.active(i), s.id), `${s.id} idle at ${dist.toFixed(0)} m`).toBe(false);
+    expect((await dbg(s.id)).active).toBe(false);
+    expect(await expectDrawBudget(page, s.id, 6)).toBeGreaterThanOrEqual(1);
   }
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
