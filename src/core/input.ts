@@ -73,7 +73,12 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
     mouseY += sanitizeMouseDelta(e.movementY);
   };
   const onLockChange = (): void => {
-    if (locked()) return;
+    if (locked()) {
+      // A fresh lock supersedes an earlier release request whose exit never came (the browser
+      // re-locked first); a stale flag would swallow the next real lock loss (no pause).
+      intentionalRelease = false;
+      return;
+    }
     if (intentionalRelease) intentionalRelease = false;
     else if (gameplay) {
       pauseFromLockLoss = true;
