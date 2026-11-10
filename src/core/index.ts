@@ -52,6 +52,7 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
         // Vehicles first: the rider then sits exactly where the vehicle is this frame.
         vehicles.update(dt);
         player.update(dt);
+        vehicles.lateUpdate(dt);
         interactions.update(dt);
         camera.update(dt);
       },

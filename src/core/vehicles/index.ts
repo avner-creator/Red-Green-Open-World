@@ -1,18 +1,27 @@
 /**
  * Vehicles manager: E to get in (interaction prompt) and out (hop to a free side), R to unstick,
  * chase camera on/off, parking on a new session. Kind-agnostic: anything implementing
- * `VehicleInternal` (the buggy now, a horse later) plugs in here.
+ * `VehicleInternal` (the buggy, the two ranch horses) plugs in here.
  */
 import * as THREE from 'three';
 import type { ExternalController, GameContext, InteractionApi, VehiclesApi } from '../../types';
 import type { CameraInternal } from '../camera';
 import type { PlayerInternal } from '../player';
 import { createCar } from './car';
+import { createHorse } from './horse';
 import type { VehicleInternal } from './types';
+
+/** The two paddock horses: offsets from the ranch anchor (metres, world axes), yaw offset, coat, mane. */
+const HORSES = [
+  { id: 'horse-biscuit', dx: -3.2, dz: -3, dyaw: 0, coat: 0xd9a35a, mane: 0xf6f0e2 },
+  { id: 'horse-pepper', dx: 3.6, dz: 2.8, dyaw: 2.5, coat: 0xe8e4dc, mane: 0x34302d },
+] as const;
 
 export interface VehiclesInternal {
   api: VehiclesApi;
   update(dt: number): void;
+  /** After the player's update: rider posing (legs around the horse, hands on the reins). */
+  lateUpdate(dt: number): void;
   dispose(): void;
 }
 
@@ -34,6 +43,13 @@ function hopOut(ctx: GameContext, to: THREE.Vector3, yaw: number): ExternalContr
 
 export function createVehicles(ctx: GameContext, player: PlayerInternal, camera: CameraInternal, interactions: InteractionApi): VehiclesInternal {
   const list: VehicleInternal[] = [createCar(ctx, 'buggy', () => camera.api)];
+  const ranch = ctx.world.anchors.ranch;
+  HORSES.forEach((h, i) => {
+    const x = ranch.position.x + h.dx;
+    const z = ranch.position.z + h.dz;
+    const home = { position: new THREE.Vector3(x, ctx.world.heightAt(x, z), z), yaw: ranch.yaw + h.dyaw };
+    list.push(createHorse(ctx, h.id, home, h.coat, h.mane, () => camera.api, i + 1));
+  });
   const removers: (() => void)[] = [];
   let active: VehicleInternal | null = null;
   let sinceEnter = 0;
@@ -69,6 +85,12 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
 
   /** R while driving: vehicle upright on the nearest road, player standing beside it. */
   const rescue = (): void => {
+    if (active?.rescueKeepsRider) {
+      // Horse: horse and rider together on the last safe spot; the rider stays in the saddle.
+      active.rescue();
+      ctx.events.emit('player:respawn', {});
+      return;
+    }
     const v = detach();
     if (!v) return;
     player.setVehicle(null);
@@ -83,9 +105,9 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
       interactions.add({
         id: `vehicle:${v.api.id}`,
         position: () => v.promptPosition(),
-        radius: 3.1,
+        radius: v.mode === 'riding' ? 3.4 : 3.1,
         icon: v.icon,
-        enabled: () => active === null,
+        enabled: () => active === null && (v.api as { ready?: boolean }).ready !== false,
         onUse: () => enter(v),
       }),
     );
@@ -110,10 +132,14 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
       const playing = ctx.session.state.phase === 'playing';
       const input = ctx.input.state;
       for (const v of list) v.update(dt, v === active && playing ? input : null);
+      for (const v of list) v.beforePlayer?.();
       if (!active || !playing) return;
       sinceEnter += dt;
       if (input.respawnPressed) rescue();
       else if (input.usePressed && sinceEnter > 0.45) exit();
+    },
+    lateUpdate(dt) {
+      for (const v of list) v.lateUpdate?.(dt, v === active && ctx.player.vehicle === v.api);
     },
     dispose() {
       for (const r of removers) r();
