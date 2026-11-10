@@ -33,6 +33,8 @@ export interface RaceSite {
   readonly boothPrompt: THREE.Vector3;
   /** Start lamps: 0 = all off, 1..3 = that many lit, 4 = GO flash (all bright). */
   setLamps(n: number): void;
+  /** Place the checkpoint arches (lap distance + lateral centre); index 0 (the gantry) is skipped. */
+  setCheckpoints(list: readonly { s: number; lateral: number }[]): void;
   /** An arch was passed: wobble it. index 0 = gantry (no wobble). */
   bounceArch(index: number): void;
   showPodium(on: boolean): void;
@@ -207,14 +209,23 @@ export function createRaceSite(scene: THREE.Scene, track: Track, heightAt: (x: n
   const archProxy = asShadowProxy(new THREE.InstancedMesh(archProxyGeo, undefined, Math.max(1, checkpoints.length - 1)));
   const archBase: THREE.Matrix4[] = [];
   const archWobble: { t: number }[] = [];
-  checkpoints.slice(1).forEach((s, i) => {
-    const pl = along(s, 0);
-    const m = M(pl);
-    archBase.push(m);
-    archWobble.push({ t: 9 });
-    arches.setMatrixAt(i, m);
-    archProxy.setMatrixAt(i, m);
-  });
+  const placeArches = (list: readonly { s: number; lateral: number }[]): void => {
+    archBase.length = 0;
+    archWobble.length = 0;
+    list.slice(1).forEach((c, i) => {
+      if (i >= arches.instanceMatrix.count) return;
+      const m = M(along(c.s, c.lateral));
+      archBase.push(m);
+      archWobble.push({ t: 9 });
+      arches.setMatrixAt(i, m);
+      archProxy.setMatrixAt(i, m);
+    });
+    arches.count = archProxy.count = archBase.length;
+    arches.instanceMatrix.needsUpdate = archProxy.instanceMatrix.needsUpdate = true;
+    arches.computeBoundingSphere();
+    archProxy.computeBoundingSphere();
+  };
+  placeArches(checkpoints.map((s) => ({ s, lateral: 0 })));
   arches.computeBoundingSphere();
   archProxy.computeBoundingSphere();
   root.add(arches, archProxy);
@@ -284,6 +295,9 @@ export function createRaceSite(scene: THREE.Scene, track: Track, heightAt: (x: n
     root,
     boothPrompt,
     setLamps,
+    setCheckpoints(list) {
+      placeArches(list);
+    },
     bounceArch(index) {
       const w = archWobble[index - 1];
       if (w) w.t = 0;

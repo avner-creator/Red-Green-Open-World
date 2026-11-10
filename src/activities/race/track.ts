@@ -40,7 +40,7 @@ export const LAP_POINTS: readonly (readonly [number, number])[] = [
 ];
 
 /** Where the start/finish line goes (the lap is rotated so s = 0 is the closest point). */
-export const START_NEAR: readonly [number, number] = [34, 11.4];
+export const START_NEAR: readonly [number, number] = [26, 11];
 
 /** Centripetal-ish closed Catmull-Rom through the control points, sampled every `step` metres. */
 export function buildTrack(ctrl: readonly (readonly [number, number])[] = LAP_POINTS, start: readonly [number, number] = START_NEAR, step = 2): Track {

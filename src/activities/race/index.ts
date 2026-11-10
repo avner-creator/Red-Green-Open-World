@@ -71,7 +71,7 @@ export function createRace(ctx: GameContext): Race {
   const track = buildTrack();
   const L = track.length;
   const line = racingLine(track);
-  const cps = checkpointDistances(L, RACE.checkpoints);
+  let cps = checkpointDistances(L, RACE.checkpoints);
   const padDist = boostPadDistances(track, 5);
   const heightAt = (x: number, z: number): number => ctx.world.heightAt(x, z);
   const site = createRaceSite(ctx.scene, track, heightAt, cps, ctx.physics);
@@ -114,10 +114,37 @@ export function createRace(ctx: GameContext): Race {
   }
   function ensureBuilt(): void {
     if (glow) return;
-    corridor = probeCorridor();
-    safe = safeLine(corridor, idealAt);
+    const c = probeCorridor();
+    corridor = c;
+    safe = safeLine(c, idealAt);
     glow = createRaceGlow(ctx.vision, track, safeAt, padDist, heightAt);
+    // Checkpoint arches where they stand clear of props, straddling the safe line.
+    const nl = c.lats.length;
+    const blockedUnder = (s: number, centre: number): number => {
+      const i = Math.round(s / c.ds);
+      let n = 0;
+      for (let k = -1; k <= 1; k++) {
+        const ii = (((i + k) % c.count) + c.count) % c.count;
+        for (let j = 0; j < nl; j++) if (c.blocked[ii * nl + j] && Math.abs(c.lats[j] - centre) <= 5.8) n++;
+      }
+      return n;
+    };
+    cps = cps.map((target, k) => {
+      if (k === 0) return target;
+      let best = target;
+      let bestScore = Infinity;
+      for (let d = -18; d <= 18; d++) {
+        const sc = blockedUnder(target + d, safeAt(target + d)) * 100 + Math.abs(d);
+        if (sc < bestScore) {
+          bestScore = sc;
+          best = target + d;
+        }
+      }
+      return ((best % L) + L) % L;
+    });
+    site.setCheckpoints(cps.map((s, k) => ({ s, lateral: k === 0 ? 0 : safeAt(s) })));
   }
+  let framesSeen = 0;
   const hud = createRaceHud(ctx.uiRoot);
   const confetti = new ThrillConfetti();
   ctx.scene.add(confetti.group);
@@ -411,21 +438,35 @@ export function createRace(ctx: GameContext): Race {
     if (raceT > RACE.maxSeconds || (friendsDone && lastRivalFinish !== null && raceT - lastRivalFinish > RACE.afterFriends)) finishRace();
   }
 
+  let stuckT = 0;
+  let reverseT = 0;
   function updateAutopilot(): void {
     if (!autopilot || !car || !hooks || ctx.player.vehicle !== car) return;
     const pr = track.project(car.position.x, car.position.z);
-    const look = 3 + car.speed * 0.2;
+    const look = 4 + car.speed * 0.25;
     const ahead = track.at(pr.s + look);
     const l = leftOf(ahead.dx, ahead.dz);
     const lat = safeAt(pr.s + look);
     const want = Math.atan2(ahead.x + l.x * lat - car.position.x, ahead.z + l.z * lat - car.position.z);
     const diff = wrapAngle(want - hooks.heading());
-    const steer = Math.max(-1, Math.min(1, -diff * 2.4));
+    let steer = Math.max(-1, Math.min(1, -diff * 1.8));
     // Brake for corners: the cornering speed of the tightest bend in the next ~20 m.
     let k = 0;
     for (let d = 2; d <= 20; d += 3) k = Math.max(k, track.curvatureNear(pr.s + d, 3));
-    const target = Math.min(16, Math.sqrt(7 / Math.max(1e-3, k)));
-    const throttle = car.speed > target + 1.5 ? -0.7 : car.speed > target ? 0 : 1;
+    const target = Math.min(15, Math.sqrt(4.5 / Math.max(1e-3, k)), Math.abs(diff) > 0.5 ? 6 : 99);
+    let throttle = car.speed > target + 1.5 ? -0.7 : car.speed > target ? 0 : 1;
+    // Pinned against something: back up for a moment, steering the other way.
+    if (phase === 'racing' && car.speed < 0.8 && throttle > 0) stuckT += 1 / 60;
+    else if (car.speed > 2) stuckT = 0;
+    if (stuckT > 0.8) {
+      reverseT = 1.1;
+      stuckT = 0;
+    }
+    if (reverseT > 0) {
+      reverseT -= 1 / 60;
+      throttle = -1;
+      steer = -steer;
+    }
     ctx.input.inject({ moveX: steer, moveY: phase === 'countdown' ? 0 : throttle });
   }
 
@@ -489,6 +530,8 @@ export function createRace(ctx: GameContext): Race {
       return phase;
     },
     update(dt) {
+      // Probe the lap a few frames after boot (the physics world has stepped by then).
+      if (!glow && ++framesSeen > 3) ensureBuilt();
       if (pendingReplay && ctx.player.mode === 'walk') {
         pendingReplay = false;
         cleanup();

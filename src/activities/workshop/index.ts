@@ -422,7 +422,12 @@ export function createWorkshop(ctx: GameContext): Workshop {
       ui.show(false);
       ctx.cameraRig.setOverride(null);
       ctx.input.capturePointer();
-      if (how === 'drive') pendingDrive = true;
+      if (how === 'drive' && car) {
+        // Turn the buggy to face out of the workshop, towards the road.
+        car.teleport(centre.clone().setY(centre.y + TT_HEIGHT), yaw0);
+        turntable.rotation.y = yaw0 - startYaw;
+        pendingDrive = true;
+      }
       else if (how === 'exit' && car) {
         // Step off on the console side.
         const spot = centre.clone().lerp(consolePos, 0.62);
