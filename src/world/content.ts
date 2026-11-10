@@ -14,12 +14,14 @@ import { buildGearShack } from './gear-shack';
 import { buildChestSpots, buildGemSpots, type ChestSpot, type Spot } from './spots';
 import { LOTS } from './village-data';
 import type { Keepout, ManualTree } from './scatter';
+import { buildWayfinding, type Wayfinding } from './wayfinding';
 
 export interface Content {
   trees: ManualTree[];
   keepouts: Keepout[];
   gemSpots: Spot[];
   chestSpots: ChestSpot[];
+  wayfinding: Wayfinding;
 }
 
 export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m: THREE.Mesh) => void): Content {
@@ -48,8 +50,10 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
     keepouts.some((k) =>
       k.r !== undefined ? Math.hypot(x - k.x, z - k.z) < k.r + 0.5 : Math.abs(x - k.x) < (k.hx ?? 0) + 0.5 && Math.abs(z - k.z) < (k.hz ?? 0) + 0.5,
     );
+  const wayfinding = buildWayfinding(kit, terrain.roads, blocked);
+  keepouts.push(...wayfinding.keepouts);
   const roadTrees = buildRoadDressing(kit, terrain.roads, blocked);
   // Nothing scattered (trees, rocks) on top of a gem or chest.
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });
-  return { trees: [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...roadTrees], keepouts, gemSpots, chestSpots };
+  return { trees: [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...roadTrees], keepouts, gemSpots, chestSpots, wayfinding };
 }

@@ -109,7 +109,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   LOTS.forEach((lot, i) => house(k, lot, opts, 100 + i * 17));
 
   // ── Plaza furniture ──
-  const benchAngles = [-132, -50, 14, 70, 114, -168];
+  const benchAngles = [-132, -50, -2, 70, 114, -168];
   for (const a of benchAngles) {
     // (angles avoid the five road entrances: −90, −23, 40, 90, 150 degrees)
     const r = THREE.MathUtils.degToRad(a);
@@ -122,7 +122,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
     lamp(k, px + Math.cos(r) * 17.5, pz + Math.sin(r) * 17.5);
   }
   // Big round planters with plaza trees.
-  for (const a of [-122, -58, 22, 160]) {
+  for (const a of [-122, -58, 110, 160]) {
     const r = THREE.MathUtils.degToRad(a);
     const tx = px + Math.cos(r) * 19.5;
     const tz = pz + Math.sin(r) * 19.5;
@@ -140,17 +140,13 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
     k.b.add('paint', sphereG(0), [0xfff0b0, 0xf2a0b8, 0xffffff, 0xf07a50][i % 4], T(fx, y + 0.5, fz, 0, 0.09, 0.09, 0.09));
   }
 
-  // Signposts with icons (no text): one where the player spawns, one at the street end.
+  // Signposts with icons (no text): one by the plaza's west side, one at the street end.
   const sp = ANCHORS;
-  signpost(k, 6.5, 4.5, [
-    { yaw: dir(6.5, 4.5, sp.trampoline.x, sp.trampoline.z), icon: 'trampoline', color: 0xb8433a },
-    { yaw: dir(6.5, 4.5, sp.garage.x, sp.garage.z), icon: 'car', color: 0x2f5d7c },
-    { yaw: dir(6.5, 4.5, sp.balloon.x, sp.balloon.z), icon: 'balloon', color: 0x3b6b45 },
-  ]);
-  signpost(k, -6.5, 8.5, [
-    { yaw: dir(-6.5, 8.5, sp.ranch.x, sp.ranch.z), icon: 'horse', color: 0x7a5232 },
-    { yaw: dir(-6.5, 8.5, sp.sillyZone.x, sp.sillyZone.z), icon: 'star', color: 0x6a3f7c },
-    { yaw: dir(-6.5, 8.5, 0, -100), icon: 'bridge', color: 0x2f5d7c },
+  // (The big fingerpost at the spawn is built by wayfinding.ts.)
+  signpost(k, -11, 6, [
+    { yaw: dir(-11, 6, sp.ranch.x, sp.ranch.z), icon: 'horse', color: 0x7a5232 },
+    { yaw: dir(-11, 6, sp.sillyZone.x, sp.sillyZone.z), icon: 'star', color: 0x6a3f7c },
+    { yaw: dir(-11, 6, 0, -100), icon: 'bridge', color: 0x2f5d7c },
   ]);
   signpost(k, 6.8, -58, [
     { yaw: dir(6.8, -58, 0, -106), icon: 'bridge', color: 0x2f5d7c },
