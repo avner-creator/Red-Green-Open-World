@@ -5,6 +5,7 @@
 import type { GameContext, GameSystem } from '../types';
 import { createChests } from './chests';
 import { createGems } from './gems';
+import { createGlasses } from './glasses';
 import { createSkydive } from './skydive';
 import { createThrills } from './thrills';
 
@@ -16,6 +17,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const thrills = createThrills(ctx);
   const chests = createChests(ctx);
   const skydive = createSkydive(ctx);
+  const glasses = createGlasses(ctx); // last: its site probe sees every other activity's colliders
   return {
     update(dt) {
       // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
@@ -26,12 +28,14 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       skydive.update(dt);
       gems.update(dt);
       chests.update(dt);
+      glasses.update(dt);
     },
     dispose() {
       gems.dispose();
       thrills.dispose();
       chests.dispose();
       skydive.dispose();
+      glasses.dispose?.();
     },
   };
 }
