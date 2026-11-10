@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER, TRAMPOLINE } from '../../src/config';
+import { PLAYER } from '../../src/config';
 import {
   angleDelta, apexHeight, approachVec2, cameraRelative, canJump, integrateVertical, speedForApex,
 } from '../../src/core/motion-math';
@@ -10,8 +10,8 @@ describe('jump maths', () => {
     expect(apexHeight(PLAYER.jumpSpeed, PLAYER.gravity)).toBeCloseTo(1.278, 2);
   });
   it('speedForApex inverts apexHeight', () => {
-    const v = speedForApex(TRAMPOLINE.maxHeight, PLAYER.gravity);
-    expect(apexHeight(v, PLAYER.gravity)).toBeCloseTo(TRAMPOLINE.maxHeight, 6);
+    const v = speedForApex(45, PLAYER.gravity);
+    expect(apexHeight(v, PLAYER.gravity)).toBeCloseTo(45, 6);
   });
   it('frame integration reaches the analytic apex at any frame rate', () => {
     for (const dt of [1 / 30, 1 / 60, 1 / 144, 1 / 20]) {

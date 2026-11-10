@@ -385,3 +385,200 @@ test('screenshots: trampoline peak, rocket pad, landing net', async () => {
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+// ── Integration play-check: thrills + core visual API + balloon skydive ──
+
+test('trampoline: held bounces reach ~45 m, a flip poses the avatar (outfit attached), then it resets and walks off', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const player = ctx.player.object;
+    const squash = player.children[0];
+    const spin = squash.children[0];
+    const identity = player.quaternion.clone().identity();
+    const hat = player.clone(false);
+    const removeHat = ctx.player.attach('head', hat);
+    const stunts: { kind: string; value: number }[] = [];
+    const off = ctx.events.on('stunt', (e) => stunts.push({ kind: e.kind, value: e.value }));
+    const c = window.__rgThrills!.trampoline();
+    rg.step(1 / 60, 120, false);
+    rg.teleport(c.x, c.y + 0.1, c.z, 0);
+    rg.step(1 / 60, 2, false);
+    rg.inject({ jump: true });
+    let peak = 0;
+    let maxSpinAngle = 0;
+    let hatAttached = true;
+    let flipping = false;
+    let done = false;
+    for (let i = 0; i < 60 * 40 && !done; i++) {
+      rg.step(1 / 60, 1, false);
+      const h = ctx.player.position.y - c.y;
+      peak = Math.max(peak, h);
+      if (peak > 43 && !flipping && ctx.player.velocity.y < 0 && h > 30) {
+        flipping = true;
+        rg.inject({ jump: false, moveY: 1 });
+      }
+      if (flipping) {
+        maxSpinAngle = Math.max(maxSpinAngle, spin.quaternion.angleTo(identity));
+        let o: typeof hat | null = hat;
+        while (o && o !== player) o = o.parent;
+        if (!o) hatAttached = false;
+        if (stunts.some((s) => s.kind === 'bigAir')) rg.inject({ jump: false });
+        if (ctx.player.mode === 'walk' && ctx.player.grounded) done = true;
+      }
+    }
+    rg.inject(null);
+    rg.step(1 / 60, 240, false); // bounces decay
+    const settled = {
+      mode: ctx.player.mode,
+      spinAngle: spin.quaternion.angleTo(identity),
+      squashY: squash.scale.y,
+      h: ctx.player.position.y - c.y,
+    };
+    // Walk off along the camera's forward until well clear of the mat.
+    rg.inject({ moveY: 1 });
+    let walkedOff = false;
+    for (let i = 0; i < 60 * 8 && !walkedOff; i++) {
+      rg.step(1 / 60, 1, false);
+      const p = ctx.player.position;
+      if (Math.hypot(p.x - c.x, p.z - c.z) > 16 && ctx.player.mode === 'walk' && ctx.player.grounded) walkedOff = true;
+    }
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    removeHat();
+    off();
+    const flips = stunts.filter((s) => s.kind === 'bigAir').length;
+    return { peak, maxSpinAngle, hatAttached, flips, settled, walkedOff, mode: ctx.player.mode };
+  });
+  expect(r.peak).toBeGreaterThan(43);
+  expect(r.peak).toBeLessThan(45.6);
+  expect(r.flips).toBeGreaterThanOrEqual(1);
+  expect(r.maxSpinAngle).toBeGreaterThan(1);
+  expect(r.hatAttached).toBe(true);
+  expect(r.settled.mode).toBe('walk');
+  expect(r.settled.spinAngle).toBeLessThan(0.01);
+  expect(Math.abs(r.settled.squashY - 1)).toBeLessThan(0.05);
+  expect(r.settled.h).toBeLessThan(0.5);
+  expect(r.walkedOff).toBe(true);
+  expect(r.mode).toBe('walk');
+});
+
+test('bounce-pad chain ends on the trampoline', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const th = window.__rgThrills!;
+    const c = th.trampoline();
+    const pad0 = th.spots().find((s) => s.tag === 'pad0')!;
+    rg.teleport(pad0.x, pad0.y - 2.5 + 0.05, pad0.z, 0);
+    let onMat = false;
+    let wentExternal = false;
+    for (let i = 0; i < 60 * 25; i++) {
+      rg.step(1 / 60, 1, false);
+      const p = ctx.player.position;
+      if (ctx.player.mode === 'external') wentExternal = true;
+      if (wentExternal && Math.hypot(p.x - c.x, p.z - c.z) < 5 && Math.abs(p.y - c.y) < 0.6) onMat = true;
+      if (onMat && ctx.player.mode === 'walk' && ctx.player.grounded) break;
+    }
+    rg.step(1 / 60, 240, false);
+    const p = ctx.player.position;
+    return { wentExternal, onMat, mode: ctx.player.mode, dist: Math.hypot(p.x - c.x, p.z - c.z) };
+  });
+  expect(r.wentExternal).toBe(true);
+  expect(r.onMat).toBe(true);
+  expect(r.mode).toBe('walk');
+  expect(r.dist).toBeLessThan(8);
+});
+
+test('rocket: E mid-flight does nothing, lands on the net, camera and pose reset; then a balloon ride still works', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const info = window.__rgThrills!.rocket()!;
+    const spin = ctx.player.object.children[0].children[0];
+    let override: unknown = 'unset';
+    const setOverride = ctx.cameraRig.setOverride.bind(ctx.cameraRig);
+    ctx.cameraRig.setOverride = (o) => {
+      override = o;
+      setOverride(o);
+    };
+    const pad = info.pads[1];
+    rg.step(1 / 60, 120, false); // cooldown
+    rg.teleport(pad.x, pad.y + 0.05, pad.z, 0);
+    let pressedE = false;
+    let modeAfterE = '';
+    let landed = false;
+    for (let i = 0; i < 60 * 14; i++) {
+      rg.step(1 / 60, 1, false);
+      if (!pressedE && ctx.player.mode === 'external' && ctx.player.airTime > 1.5) {
+        pressedE = true;
+        rg.inject({ usePressed: true, moveY: 1 });
+        rg.step(1 / 60, 1, false);
+        rg.inject({ moveY: 1 });
+        modeAfterE = ctx.player.mode;
+      }
+      if (pressedE && ctx.player.airTime > 2.5) rg.inject(null);
+      if (pressedE && ctx.player.mode === 'walk' && ctx.player.grounded) {
+        landed = true;
+        break;
+      }
+    }
+    rg.inject(null);
+    rg.step(1 / 60, 150, false); // a possible flop plays out
+    const p = ctx.player.position;
+    const rocket = {
+      modeAfterE,
+      landed,
+      netDist: Math.hypot(p.x - info.net.x, p.z - info.net.z),
+      mode: ctx.player.mode,
+      override,
+      spinX: spin.rotation.x,
+      spinY: spin.rotation.y,
+      lines: (document.querySelector('.rg-speed-lines') as HTMLElement | null)?.style.opacity ?? '0',
+    };
+    const a = ctx.world.anchors.balloon.position;
+    const netToBalloon = Math.hypot(info.net.x - a.x, info.net.z - a.z);
+
+    // Balloon ride end to end.
+    const g = ctx.world.heightAt(a.x, a.z);
+    rg.teleport(a.x + 1.7, g + 0.4, a.z, -Math.PI / 2);
+    rg.step(1 / 60, 10, false);
+    const focus = ctx.interactions.focused?.icon ?? null;
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    const rideMode = ctx.player.mode;
+    let maxUp = 0;
+    let back = false;
+    for (let i = 0; i < 70 * 30; i++) {
+      rg.step(1 / 30, 1, false);
+      maxUp = Math.max(maxUp, ctx.player.position.y - g);
+      if (ctx.player.mode === 'walk') {
+        back = true;
+        break;
+      }
+    }
+    rg.step(1 / 60, 20, false);
+    ctx.cameraRig.setOverride = setOverride;
+    const rotX = ctx.player.object.children[0].rotation.x;
+    return { rocket, netToBalloon, balloon: { focus, rideMode, maxUp, back, override, rotX, mode: ctx.player.mode }, errors: rg.errors };
+  });
+  console.log(`net to balloon pad: ${r.netToBalloon.toFixed(1)} m`);
+  expect(r.rocket.modeAfterE).toBe('external');
+  expect(r.rocket.landed).toBe(true);
+  expect(r.rocket.netDist).toBeLessThan(8);
+  expect(r.rocket.mode).toBe('walk');
+  expect(r.rocket.override).toBeNull();
+  expect(Math.abs(r.rocket.spinX)).toBeLessThan(1e-3);
+  expect(Math.abs(r.rocket.spinY)).toBeLessThan(1e-3);
+  expect(r.rocket.lines).toBe('0');
+  expect(r.balloon.focus).toBe('balloon');
+  expect(r.balloon.rideMode).toBe('external');
+  expect(r.balloon.maxUp).toBeGreaterThan(170);
+  expect(r.balloon.back).toBe(true);
+  expect(r.balloon.mode).toBe('walk');
+  expect(r.balloon.override).toBeNull();
+  expect(r.balloon.rotX).toBe(0);
+  expect(r.errors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});

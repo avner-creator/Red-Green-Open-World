@@ -11,7 +11,7 @@ export const MAT = {
   stepRise: 0.33,
 } as const;
 
-/** Giant trampoline rules (replaces the old TRAMPOLINE block of src/config.ts, which is now unused). */
+/** Giant trampoline rules. */
 export const BOUNCE = {
   /** Walking onto the mat is already a proper bounce: apex in metres. */
   firstBounce: 12,

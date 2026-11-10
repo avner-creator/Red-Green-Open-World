@@ -106,6 +106,8 @@ export class Flight {
   /** Start flying `arc` from the player's current position (or continue as a new owner). */
   begin(owner: string, arc: Arc, hooks: FlightHooks): void {
     const player = this.ctx.player;
+    // Never take the player from another ride (balloon skydive, vehicle…).
+    if (!this.active && player.mode !== 'walk') return;
     this.owner = owner;
     this.hooks = hooks;
     this.setArc(arc);
@@ -115,7 +117,10 @@ export class Flight {
       this.active = true;
       player.setExternalController(this.controller);
       // setExternalController may have refused (another system owns the player): stay inactive.
-      if (player.mode !== 'external') this.active = false;
+      if (player.mode !== 'external') {
+        this.active = false;
+        this.hooks = null;
+      }
     }
   }
 
@@ -227,7 +232,18 @@ export class Flight {
     this.tricks.reset();
     this.visual.clear();
     if (cancelled) this.flopAtEnd = false;
+    // Hand the camera back right away, so a ride taking over next sets its own view without us
+    // clearing it a frame later (and nothing stays overridden if updates pause, e.g. end screen).
+    this.releaseCamera();
+    this.lineOpacity = 0;
+    if (this.lines) this.lines.style.opacity = '0';
     hooks?.onEnd?.(cancelled);
+  }
+
+  private releaseCamera(): void {
+    if (!this.cameraOwned) return;
+    this.ctx.cameraRig.setOverride(null);
+    this.cameraOwned = false;
   }
 
   /** Per-frame work that must run AFTER the core controller (avatar visuals, camera, speed lines). */
@@ -244,10 +260,7 @@ export class Flight {
     } else {
       if (this.hooks !== null) this.finish(false);
       this.visual.clear();
-      if (this.cameraOwned) {
-        ctx.cameraRig.setOverride(null);
-        this.cameraOwned = false;
-      }
+      this.releaseCamera();
       if (this.flopAtEnd && ctx.player.mode === 'walk') {
         this.flopAtEnd = false;
         ctx.player.flop();
@@ -281,7 +294,7 @@ export class Flight {
 
   dispose(): void {
     this.stop();
-    if (this.cameraOwned) this.ctx.cameraRig.setOverride(null);
+    this.releaseCamera();
     this.lines?.remove();
     this.style?.remove();
     this.lines = null;

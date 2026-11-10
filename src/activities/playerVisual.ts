@@ -1,21 +1,13 @@
 /**
  * Visual-only tricks for the player avatar: flips/spins about the BODY CENTRE and a big
- * squash-and-stretch, layered on top of what the core controller sets each frame.
+ * squash-and-stretch, through PlayerApi.setVisualRotation / setVisualStretch.
  *
- * Core builds `object → squash (feet) → spin (body centre)` and re-sets both groups every frame, so
- * multiplying after `core.update` never accumulates and never fights the controller.
- *
- * WANTED CORE API (so this stops relying on the group layout):
- *   PlayerApi.setVisualRotation(q: THREE.Quaternion | null): void   // applied about the body centre
- *   PlayerApi.setVisualStretch(s: number): void                     // extra squash(-)/stretch(+) 0..1
+ * Core clears both whenever an external controller is released, on respawn and on flop; this
+ * class also clears them itself once the trick has ended and the spring has settled, and never
+ * writes during a flop (the flop tumble owns the pose).
  */
 import * as THREE from 'three';
 import type { PlayerApi } from '../types';
-
-export interface PlayerVisualHook {
-  setVisualRotation?: (q: THREE.Quaternion | null) => void;
-  setVisualStretch?: (s: number) => void;
-}
 
 export class PlayerVisual {
   /** Extra stretch (+) / squash (-), a damped spring. */
@@ -23,16 +15,12 @@ export class PlayerVisual {
   private stretchV = 0;
   private pitch = 0;
   private yaw = 0;
+  /** Something non-neutral was written to the player last frame. */
+  private applied = false;
   private readonly q = new THREE.Quaternion();
   private readonly e = new THREE.Euler(0, 0, 0, 'YXZ');
-  private readonly squash: THREE.Object3D | null;
-  private readonly spin: THREE.Object3D | null;
 
-  constructor(private readonly player: PlayerApi) {
-    const sq = player.object.children[0] ?? null;
-    this.squash = sq;
-    this.spin = sq?.children[0] ?? null;
-  }
+  constructor(private readonly player: PlayerApi) {}
 
   /** Kick the stretch spring (positive = tall and thin, negative = flat and wide). */
   kick(amount: number): void {
@@ -50,27 +38,35 @@ export class PlayerVisual {
 
   /** Advance the spring and write the result onto the avatar. Call once per frame after core. */
   update(dt: number): void {
+    const player = this.player;
+    if (player.mode === 'flop') {
+      // Core already cleared the layer when the flop started; drop our spring too.
+      this.stretch = this.stretchV = 0;
+      this.pitch = this.yaw = 0;
+      this.applied = false;
+      return;
+    }
     this.stretchV += (-170 * this.stretch - 11 * this.stretchV) * dt;
     this.stretch += this.stretchV * dt;
     this.stretch = Math.max(-0.55, Math.min(0.75, this.stretch));
-    const hook = this.player as unknown as PlayerVisualHook;
     const tricking = this.pitch !== 0 || this.yaw !== 0;
     const stretching = Math.abs(this.stretch) > 0.004 || Math.abs(this.stretchV) > 0.02;
-    if (!tricking && !stretching) return;
-    if (hook.setVisualRotation && hook.setVisualStretch) {
-      this.e.set(this.pitch, this.yaw, 0);
-      hook.setVisualRotation(this.q.setFromEuler(this.e));
-      hook.setVisualStretch(this.stretch);
+    if (!tricking && !stretching) {
+      this.stretch = this.stretchV = 0;
+      if (this.applied) {
+        player.setVisualRotation(null);
+        player.setVisualStretch(0);
+        this.applied = false;
+      }
       return;
     }
     if (tricking) {
       this.e.set(this.pitch, this.yaw, 0);
-      this.q.setFromEuler(this.e);
-      (this.spin ?? this.player.object).quaternion.premultiply(this.q);
+      player.setVisualRotation(this.q.setFromEuler(this.e));
+    } else {
+      player.setVisualRotation(null);
     }
-    if (stretching && this.squash) {
-      const s = this.stretch;
-      this.squash.scale.multiply(new THREE.Vector3(1 - s * 0.5, 1 + s, 1 - s * 0.5));
-    }
+    player.setVisualStretch(stretching ? this.stretch : 0);
+    this.applied = true;
   }
 }
