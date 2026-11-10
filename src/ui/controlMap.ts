@@ -11,7 +11,7 @@ export type Device = 'keyboard' | 'gamepad';
 
 export type ControlId =
   | 'move' | 'look' | 'jump' | 'sprint' | 'use' | 'flop' | 'respawn' | 'pause' | 'air'
-  | 'steer' | 'drive' | 'hop' | 'slide' | 'horn' | 'exit' | 'chute';
+  | 'steer' | 'drive' | 'hop' | 'slide' | 'horn' | 'exit' | 'chute' | 'skill' | 'emote';
 
 export interface ControlDef {
   /** Clusters shown side by side for one press. */
@@ -32,6 +32,9 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   use: { keys: [['E']], pad: [['X']], icon: 'hand' },
   flop: { keys: [['F']], pad: [['B']], icon: 'flop' },
   respawn: { keys: [['R']], pad: [['Y']], icon: 'restart' },
+  // Character skill (hold for glide / bounce charge) and signature emote; LB and D-pad up.
+  skill: { keys: [['Q']], pad: [['LB']], icon: 'bolt' },
+  emote: { keys: [['C']], pad: [['↑']], icon: 'sparkle' },
   pause: { keys: [['Esc']], pad: [['START']], icon: 'pause' },
   // In the air, the move keys flip and spin.
   air: { keys: [['W', 'A', 'S', 'D']], pad: [['L']], icon: 'wAir' },
