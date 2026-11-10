@@ -11,6 +11,7 @@ import type { CameraApi, ExternalController, GameContext, InputState } from '../
 import { stepVertical, timeToLand } from './ballistics';
 import { trickStars } from './bounceLogic';
 import { PlayerVisual } from './playerVisual';
+import { getStuntGate } from './stuntGate';
 import { TrickState } from './tricks';
 
 export interface Arc {
@@ -52,7 +53,7 @@ export interface FlightHooks {
 
 const SPEED_LINES_CSS = `
 .rg-speed-lines{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:2;
-background:repeating-conic-gradient(from 3deg at 50% 50%,rgba(255,255,255,0) 0deg 3.2deg,rgba(255,255,255,.85) 3.2deg 3.9deg,rgba(255,255,255,0) 3.9deg 9deg);
+background:repeating-conic-gradient(from 3deg at 50% 50%,rgba(255,255,255,0) 0deg 2.4deg,rgba(255,255,255,.9) 2.4deg 3.2deg,rgba(255,255,255,0) 3.2deg 5.6deg,rgba(8,12,34,.75) 5.6deg 6.4deg,rgba(255,255,255,0) 6.4deg 9deg);
 -webkit-mask-image:radial-gradient(ellipse at 50% 50%,transparent 42%,#000 92%);
 mask-image:radial-gradient(ellipse at 50% 50%,transparent 42%,#000 92%);transition:opacity .08s linear}
 `;
@@ -164,6 +165,7 @@ export class Flight {
       hooks.onDwell?.(t, dt, this);
       p.y = this.baseY - this.dip * Math.sin(Math.PI * Math.min(1, t));
       player.setAnimation('idle');
+      this.tricks.update(dt, input.moveX, input.moveY, 0, 9); // lets go of keys count as released
       this.last.copy(p);
       this.hasLast = true;
       if (this.dwellLeft > 0) return true;
@@ -189,7 +191,7 @@ export class Flight {
 
     const toLand = s.arrived ? 0 : timeToLand(p.y, this.vy, this.endY);
     for (const e of this.tricks.update(dt, input.moveX, input.moveY, this.arcTime, toLand)) {
-      this.ctx.events.emit('stunt', { kind: 'bigAir', value: e.count, stars: trickStars(e.total) });
+      getStuntGate(this.ctx).stunt({ kind: 'bigAir', value: e.count, stars: trickStars(e.total) });
     }
     player.setAnimation(this.vy > 0 ? 'jump' : 'fall');
     this.last.copy(p);
@@ -202,8 +204,7 @@ export class Flight {
     const rotations = this.tricks.rotations;
     if (rotations > 0 && this.lastUpright) {
       // Stuck the landing.
-      this.ctx.events.emit('stunt', { kind: 'bigAir', value: rotations, stars: 1 });
-      this.ctx.events.emit('ui:toast', { icon: 'star' });
+      getStuntGate(this.ctx).stunt({ kind: 'bigAir', value: rotations, stars: 1 });
     }
     const info: ArrivalInfo = {
       pos: p,

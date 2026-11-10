@@ -4,18 +4,19 @@
  */
 import type { AnchorName, GameContext } from '../types';
 import { h } from './dom';
-import { icon } from './icons';
-import type { UiIconName } from './icons';
-import { distanceDots, pickHighlight, relativeBearing, stripPosition } from './compassMath';
+import { pictogram } from './wayIcons';
+import type { PictoName } from './wayIcons';
+import { distanceDots, relativeBearing } from './compassMath';
+import { layoutMarkers, pickFocus } from './compassLayout';
 
 /** Attractions shown on the strip, in draw order. */
-export const COMPASS_TARGETS: readonly { anchor: AnchorName; icon: UiIconName }[] = [
-  { anchor: 'trampoline', icon: 'trampoline' },
-  { anchor: 'bouncePads', icon: 'bolt' },
-  { anchor: 'garage', icon: 'car' },
-  { anchor: 'balloon', icon: 'balloon' },
-  { anchor: 'landingRings', icon: 'target' },
-  { anchor: 'launchPads', icon: 'rocket' },
+export const COMPASS_TARGETS: readonly { anchor: AnchorName; icon: PictoName }[] = [
+  { anchor: 'trampoline', icon: 'wTrampoline' },
+  { anchor: 'bouncePads', icon: 'wPads' },
+  { anchor: 'garage', icon: 'wCar' },
+  { anchor: 'balloon', icon: 'wBalloon' },
+  { anchor: 'landingRings', icon: 'wTarget' },
+  { anchor: 'launchPads', icon: 'wRocket' },
 ];
 
 /** Closer than this the marker hides (you are already there). */
@@ -47,6 +48,7 @@ interface Marker {
   nDots: number;
   arrL: HTMLElement;
   arrR: HTMLElement;
+  arrow: number;
 }
 
 export interface Compass {
@@ -64,14 +66,26 @@ export function createCompass(ctx: GameContext): Compass {
       'div',
       'wf-m hidden',
       { 'data-testid': 'compass-marker', 'data-anchor': t.anchor },
-      icon(t.icon),
+      pictogram(t.icon),
       arrL,
       arrR,
       h('span', 'dots', {}, ...dots),
     );
     el.append(m);
-    return { anchor: t.anchor, el: m, dots, left: '', cls: '', nDots: 0, arrL, arrR };
+    return { anchor: t.anchor, el: m, dots, left: '', cls: 'hidden', nDots: 0, arrL, arrR, arrow: 9 };
   });
+
+  // Strip half width in HUD units (1 unit = the CSS --u); re-measured when the window resizes.
+  let halfU = 24;
+  const measure = (): void => {
+    const w = el.clientWidth;
+    const hgt = el.clientHeight;
+    // The strip is 6.4 units tall with a 0.5 unit border each side, so the padding box is 5.4.
+    if (w > 0 && hgt > 0) halfU = w / (hgt / 5.4) / 2;
+  };
+  window.addEventListener('resize', measure);
+  let measured = false;
+  let prevFocus: AnchorName | null = null;
 
   return {
     el,
@@ -80,41 +94,44 @@ export function createCompass(ctx: GameContext): Compass {
       const player = ctx.player?.position;
       const yaw = ctx.cameraRig?.yaw;
       if (!anchors || !player || yaw === undefined) return;
-      const info = markers.map((m) => {
+      if (!measured) {
+        measure();
+        measured = el.clientWidth > 0;
+      }
+      const shown: { m: Marker; dist: number; rel: number }[] = [];
+      for (const m of markers) {
         const a = anchors[m.anchor];
-        if (!a) return null;
-        const dist = Math.hypot(a.position.x - player.x, a.position.z - player.z);
-        return { dist, rel: relativeBearing(yaw, player, a.position) };
-      });
-      const visible = info.map((c) => (c && c.dist > ARRIVED ? c : null));
-      const list = visible.filter((c): c is { dist: number; rel: number } => c !== null);
-      const hlIdx = list.length ? pickHighlight(list) : -1;
-      const hl = hlIdx >= 0 ? list[hlIdx] : null;
-      markers.forEach((m, i) => {
-        const c = visible[i];
-        if (!c) {
-          if (m.cls !== 'hidden') {
-            m.cls = 'hidden';
-            m.el.className = 'wf-m hidden';
-          }
-          return;
+        const dist = a ? Math.hypot(a.position.x - player.x, a.position.z - player.z) : 0;
+        if (a && dist > ARRIVED) shown.push({ m, dist, rel: relativeBearing(yaw, player, a.position) });
+        else if (m.cls !== 'hidden') {
+          m.cls = 'hidden';
+          m.el.className = 'wf-m hidden';
         }
-        const pos = stripPosition(c.rel);
-        const left = `${(50 + pos.x * 50).toFixed(2)}%`;
+      }
+      const prevIdx = shown.findIndex((c) => c.m.anchor === prevFocus);
+      const focusIdx = shown.length ? pickFocus(shown, prevIdx) : -1;
+      prevFocus = focusIdx >= 0 ? shown[focusIdx].m.anchor : null;
+      const placed = layoutMarkers(shown.map((c, i) => ({ rel: c.rel, focus: i === focusIdx })), halfU);
+      shown.forEach((c, i) => {
+        const m = c.m;
+        const p = placed[i];
+        const left = `calc(50% + ${p.x.toFixed(2)} * var(--u))`;
         if (left !== m.left) {
           m.left = left;
           m.el.style.left = left;
         }
-        const cls = `${c === hl ? 'hl' : ''}${pos.clamped ? ' cl' : ''}`;
+        const cls = `${i === focusIdx ? 'hl' : p.size === 'sm' ? 'sm' : ''}${p.clamped ? ' cl' : ''}`;
         if (cls !== m.cls) {
           m.cls = cls;
           m.el.className = `wf-m ${cls}`.trim();
-          m.el.dataset.clamped = pos.clamped ? '1' : '0';
+          m.el.dataset.clamped = p.clamped ? '1' : '0';
         }
-        // Arrow only on the outward side.
-        m.arrL.style.display = pos.side < 0 ? 'block' : 'none';
-        m.arrR.style.display = pos.side > 0 ? 'block' : 'none';
-        if (c === hl) {
+        if (p.arrow !== m.arrow) {
+          m.arrow = p.arrow;
+          m.arrL.style.display = p.arrow < 0 ? 'block' : 'none';
+          m.arrR.style.display = p.arrow > 0 ? 'block' : 'none';
+        }
+        if (i === focusIdx) {
           const n = distanceDots(c.dist);
           if (n !== m.nDots) {
             m.nDots = n;

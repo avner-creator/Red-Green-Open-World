@@ -1,12 +1,15 @@
 /**
  * Big both-eye celebration for the thrill rides (bigger pieces than the chest confetti): a pooled field of tumbling confetti (instanced, one draw
- * call) plus an additive flash. Palette mixes bright and dark entries so the burst reads in the red
- * channel and the green channel separately.
+ * call) plus an additive flash. Palette mixes bright and dark entries (see PALETTE).
  */
 import * as THREE from 'three';
 
 const MAX = 420;
-const PALETTE = [0xffd21f, 0xffffff, 0x2349ff, 0xff4a2a, 0x22d9c8, 0xff4fb8, 0x6b2cff, 0xffa238];
+/**
+ * Every piece is clearly bright or clearly dark in BOTH the red and the green channel (no cyan,
+ * pink or orange mid-tones), so the burst reads by brightness against light and dark backgrounds.
+ */
+const PALETTE = [0xffffff, 0x0b0e1c, 0xfff4a8, 0x15245a, 0xffe03a, 0x111111];
 
 interface Particle {
   alive: boolean;

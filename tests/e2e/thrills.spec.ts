@@ -232,6 +232,52 @@ test('rocket pad: wind-up, high arc, lands on the net (walk mode, on land)', asy
   expect(launch[0].stars).toBeGreaterThanOrEqual(1);
 });
 
+test('running onto the mat with W held does not flip or flop; release then press flips', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const c = window.__rgThrills!.trampoline();
+    const stunts: string[] = [];
+    const off = ctx.events.on('stunt', (e) => stunts.push(e.kind));
+    let flops = 0;
+    const offFlop = ctx.events.on('player:flop', () => flops++);
+    rg.teleport(c.x, c.y + 0.1, c.z + 8, Math.PI);
+    rg.step(1 / 60, 2, false);
+    rg.inject({ moveY: 1, jump: true });
+    let external = 0;
+    let maxAir = 0;
+    for (let i = 0; i < 60 * 12; i++) {
+      rg.step(1 / 60, 1, false);
+      if (ctx.player.mode === 'external') external++;
+      maxAir = Math.max(maxAir, ctx.player.position.y - c.y);
+    }
+    const heldFlips = stunts.filter((s) => s === 'bigAir').length;
+    const heldFlops = flops;
+    // Now let go, then press forward in the air: the flip counts.
+    rg.inject({ moveY: 0, jump: true });
+    rg.step(1 / 60, 30, false);
+    let flipped = false;
+    for (let i = 0; i < 60 * 20 && !flipped; i++) {
+      rg.step(1 / 60, 1, false);
+      if (ctx.player.mode === 'external' && ctx.player.position.y - c.y > 8) {
+        rg.inject({ moveY: 1, jump: true });
+        for (let k = 0; k < 90 && !flipped; k++) {
+          rg.step(1 / 60, 1, false);
+          flipped = stunts.filter((s) => s === 'bigAir').length > heldFlips;
+        }
+      }
+    }
+    rg.inject(null);
+    off();
+    offFlop();
+    return { heldFlips, heldFlops, external, maxAir, flipped };
+  });
+  expect(r.external).toBeGreaterThan(60); // it really bounced
+  expect(r.heldFlips).toBe(0);
+  expect(r.heldFlops).toBe(0);
+  expect(r.flipped).toBe(true);
+});
+
 test('a flip on the rocket arc is counted', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
@@ -384,6 +430,47 @@ test('screenshots: trampoline peak, rocket pad, landing net', async () => {
 
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
+});
+
+test('screenshots: confetti burst and a flip in progress', async () => {
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const c = window.__rgThrills!.trampoline();
+    rg.teleport(c.x, c.y + 0.1, c.z, Math.PI);
+    rg.step(1 / 60, 2, false);
+    rg.inject({ jump: true });
+    // The 30 m threshold bursts confetti; stop a few frames after it.
+    let seen = false;
+    const off = ctx.events.on('stunt', (e) => {
+      if (e.kind === 'bigBounce' && e.stars >= 2) seen = true;
+    });
+    for (let i = 0; i < 60 * 30 && !seen; i++) rg.step(1 / 60, 1, false);
+    off();
+    rg.step(1 / 60, 24, false);
+    rg.step(1 / 60, 1, true);
+  });
+  await save('confetti-burst');
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const c = window.__rgThrills!.trampoline();
+    rg.inject({ jump: true, moveY: 0 });
+    for (let i = 0; i < 60 * 20; i++) {
+      rg.step(1 / 60, 1, false);
+      if (ctx.player.position.y - c.y > 20 && ctx.player.velocity.y > 0) break;
+    }
+    rg.step(1 / 60, 20, false);
+    rg.inject({ jump: true, moveY: 1 });
+    rg.step(1 / 60, 22, false);
+    rg.step(1 / 60, 1, true);
+  });
+  await save('flip-in-progress');
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.inject(null);
+    rg.step(1 / 60, 60 * 14, false);
+  });
 });
 
 // ── Integration play-check: thrills + core visual API + balloon skydive ──

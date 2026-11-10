@@ -8,6 +8,7 @@ const TAU = Math.PI * 2;
 /** Run `seconds` of air with constant keys; returns the events. */
 function run(t: TrickState, x: number, y: number, from: number, seconds: number, total: number) {
   const events = [];
+  t.update(0, 0, 0, 0, 9); // keys were released at take-off (arms both axes)
   for (let s = 0; s < seconds; s += DT) {
     const air = from + s;
     events.push(...t.update(DT, x, y, air, Math.max(0.2, total - air)));
@@ -21,6 +22,56 @@ describe('turnError', () => {
     expect(turnError(TAU)).toBeCloseTo(0);
     expect(turnError(Math.PI)).toBeCloseTo(Math.PI);
     expect(turnError(-TAU + 0.2)).toBeCloseTo(0.2);
+  });
+});
+
+describe('accidental flips', () => {
+  it('keys held since before take-off never start a trick', () => {
+    const t = new TrickState();
+    for (let s = 0; s < 2; s += DT) t.update(DT, 0, 1, s, Math.max(0.2, 3 - s));
+    expect(t.pitch).toBe(0);
+    expect(t.rotations).toBe(0);
+    expect(t.upright).toBe(true);
+  });
+
+  it('release then press starts the flip and it counts', () => {
+    const t = new TrickState();
+    const ev = [];
+    for (let s = 0; s < 0.7; s += DT) ev.push(...t.update(DT, 0, s < 0.3 ? 1 : 0, s, 5)); // held, then released
+    expect(t.pitch).toBe(0);
+    for (let s = 0.7; s < 3; s += DT) ev.push(...t.update(DT, 0, 1, s, 5));
+    expect(ev.filter((e) => e.kind === 'flip').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('arming is per axis: a held forward key does not block a deliberate spin', () => {
+    const t = new TrickState();
+    for (let s = 0; s < 1.5; s += DT) t.update(DT, s > 0.7 ? 1 : 0, 1, s, 5);
+    expect(t.pitch).toBe(0);
+    expect(Math.abs(t.yaw)).toBeGreaterThan(0.5);
+  });
+
+  it('no tricks before the minimum air time even when armed', () => {
+    const t = new TrickState();
+    t.update(DT, 0, 0, 0, 5);
+    for (let s = 0; s < TRICK.minAir - 0.05; s += DT) t.update(DT, 0, 1, s, 5);
+    expect(t.pitch).toBe(0);
+  });
+
+  it('a body within 60 degrees of upright counts as upright and is levelled in the last 0.3 s', () => {
+    const t = new TrickState();
+    t.pitch = 0.9; // about 52 degrees
+    expect(t.upright).toBe(true);
+    for (let s = 0; s < 0.3; s += DT) t.update(DT, 0, 0, 2, 0.3 - s);
+    expect(t.uprightError()).toBeLessThan(0.15);
+  });
+
+  it('more than 60 degrees from upright is a flop', () => {
+    const t = new TrickState();
+    t.update(DT, 0, 0, 0, 9); // armed
+    t.pitch = 1.3;
+    expect(t.upright).toBe(false);
+    for (let s = 0; s < 0.25; s += DT) t.update(DT, 0, 1, 2, 0.25 - s);
+    expect(t.upright).toBe(false);
   });
 });
 

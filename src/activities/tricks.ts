@@ -29,8 +29,15 @@ export class TrickState {
   spins = 0;
   private maxPitch = 0;
   private maxYaw = 0;
+  /**
+   * A move axis only starts tricks after it has been released once since take-off, so running
+   * onto a pad with W held never flips the child.
+   */
+  private armedPitch = false;
+  private armedYaw = false;
 
   reset(): void {
+    this.armedPitch = this.armedYaw = false;
     this.pitch = this.yaw = this.pitchVel = this.yawVel = 0;
     this.flips = this.spins = 0;
     this.maxPitch = this.maxYaw = 0;
@@ -56,11 +63,16 @@ export class TrickState {
 
   /**
    * Advance by `dt`. `x`/`y` are the raw move keys (x right+, y forward+), `airTime` the seconds
-   * since the arc began and `toLand` the seconds until it ends. Returns newly completed rotations.
+   * since the arc began (tricks only start after TRICK.minAir) and `toLand` the seconds until it ends. Returns newly completed rotations.
    */
   update(dt: number, x: number, y: number, airTime: number, toLand: number): TrickEvent[] {
+    if (Math.abs(y) < TRICK.releaseBelow) this.armedPitch = true;
+    if (Math.abs(x) < TRICK.releaseBelow) this.armedYaw = true;
+    if (!this.armedPitch) y = 0;
+    if (!this.armedYaw) x = 0;
     const keys = this.spinning(x, y);
-    const active = airTime >= TRICK.minAir && toLand > 0.05;
+    const nearly = toLand < TRICK.levelWindow && this.uprightError() <= TRICK.uprightTolerance;
+    const active = airTime >= TRICK.minAir && toLand > 0.05 && !nearly;
     const k = 1 - Math.exp(-TRICK.response * dt);
     if (active && keys) {
       this.pitchVel += (y * TRICK.flipRate - this.pitchVel) * k;
@@ -73,7 +85,7 @@ export class TrickState {
     this.yaw += this.yawVel * dt;
 
     // Idle keys near the ground: level out smoothly to the nearest whole turn.
-    if (!keys && toLand < TRICK.restoreWindow) {
+    if ((!keys && toLand < TRICK.restoreWindow) || nearly) {
       const r = 1 - Math.exp(-14 * dt);
       this.pitch += (TAU * Math.round(this.pitch / TAU) - this.pitch) * r;
       this.yaw += (TAU * Math.round(this.yaw / TAU) - this.yaw) * r;

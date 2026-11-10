@@ -5,17 +5,18 @@ export const WAYFINDING_CSS = `
 .rg[data-mode="driving"] .tut,.rg[data-mode="external"] .tut{display:none}
 
 /* compass */
-.rg .wf-compass{position:absolute;left:50%;top:calc(var(--u)*2.4);transform:translateX(-50%);width:min(calc(var(--u)*68),48vw);height:calc(var(--u)*6.4);
+.rg .wf-compass{position:absolute;left:50%;top:calc(var(--u)*2.4);transform:translateX(-50%);width:min(calc(var(--u)*76),49vw);height:calc(var(--u)*6.4);
   border-radius:calc(var(--u)*4);background:linear-gradient(180deg,#1d2346b8,#0b0f22b8);border:calc(var(--u)*.5) solid #ffffffd9;
   box-shadow:0 0 0 calc(var(--u)*.4) #000,0 calc(var(--u)*.7) calc(var(--u)*1.8) rgba(0,0,0,.45),inset 0 0 calc(var(--u)*2) rgba(0,0,0,.5)}
 .rg .wf-compass::before{content:"";position:absolute;left:50%;top:12%;bottom:12%;width:calc(var(--u)*.35);margin-left:calc(var(--u)*-.17);background:#ffffff40;border-radius:9px}
 .rg .wf-m{position:absolute;top:50%;left:50%;width:calc(var(--u)*4.8);height:calc(var(--u)*4.8);margin:calc(var(--u)*-2.4) 0 0 calc(var(--u)*-2.4);border-radius:50%;
   display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#2b3360,#10142a);border:calc(var(--u)*.45) solid #fff;box-shadow:0 0 0 calc(var(--u)*.35) #000;
-  font-size:calc(var(--u)*3);transition:width .15s,height .15s,margin .15s,opacity .2s}
+  font-size:calc(var(--u)*3);transition:width .15s,height .15s,margin .15s,opacity .2s,left .12s}
 .rg .wf-m .ic{color:var(--y)}
 .rg .wf-m.hl{width:calc(var(--u)*7.2);height:calc(var(--u)*7.2);margin:calc(var(--u)*-3.6) 0 0 calc(var(--u)*-3.6);font-size:calc(var(--u)*4.6);border-color:var(--y);z-index:2;
   box-shadow:0 0 0 calc(var(--u)*.4) #000,0 0 calc(var(--u)*2) rgba(255,217,59,.75)}
-.rg .wf-m.cl{opacity:.85}
+.rg .wf-m.sm{width:calc(var(--u)*3.6);height:calc(var(--u)*3.6);margin:calc(var(--u)*-1.8) 0 0 calc(var(--u)*-1.8);font-size:calc(var(--u)*2.4)}
+.rg .wf-m.cl{opacity:.9}
 .rg .wf-m.hidden{opacity:0}
 .rg .wf-m .arr{position:absolute;top:50%;width:calc(var(--u)*1.7);height:calc(var(--u)*1.9);margin-top:calc(var(--u)*-.95);display:none}
 .rg .wf-m .arr svg{width:100%;height:100%;overflow:visible}
@@ -59,7 +60,8 @@ export const WAYFINDING_CSS = `
 /* mode hint strip */
 .rg .wf-strip{--u:clamp(3.8px,.82vmin,18px);position:absolute;left:calc(var(--u)*3);bottom:calc(var(--u)*3);display:flex;gap:calc(var(--u)*2);align-items:flex-end;padding:calc(var(--u)*1.2) calc(var(--u)*2);
   background:linear-gradient(180deg,#1d2346e6,#0b0f22e6);border:calc(var(--u)*.6) solid #fff;border-radius:calc(var(--u)*2.8);box-shadow:0 0 0 calc(var(--u)*.45) #000,0 calc(var(--u)*.8) calc(var(--u)*2) rgba(0,0,0,.5);
-  font-size:calc(var(--u)*3);opacity:0;pointer-events:none;transition:opacity .6s;max-width:34vw}
+  font-size:calc(var(--u)*3);opacity:0;pointer-events:none;transition:opacity .6s;max-width:48vw}
+.rg .wf-strip .tgroup{flex-wrap:nowrap}.rg .wf-strip .keys{display:inline-flex;gap:calc(var(--u)*.4);flex-wrap:nowrap;align-items:center}
 .rg .wf-strip.on{opacity:1}
 .rg .wf-strip .cap.wide{min-width:2.6em}
 .rg .wf-strip .tkeys{display:flex;gap:calc(var(--u)*.4)}

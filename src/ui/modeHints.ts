@@ -3,7 +3,7 @@ import type { GameContext, PlayerMode } from '../types';
 import { controlIcon, controlKeys } from './controlGlyphs';
 import type { ControlId } from './controlGlyphs';
 import { clear, h } from './dom';
-import { icon } from './icons';
+import { pictogram } from './wayIcons';
 
 export const MODE_HINT_SECONDS = 6;
 
@@ -15,7 +15,7 @@ export function hintKind(mode: PlayerMode): 'driving' | 'skydive' | null {
 }
 
 const ROWS: Record<'driving' | 'skydive', ControlId[]> = {
-  driving: ['steer', 'drive', 'hop', 'horn', 'exit'],
+  driving: ['steer', 'drive', 'hop', 'slide', 'horn', 'exit'],
   skydive: ['move', 'chute'],
 };
 
@@ -34,7 +34,7 @@ export function createModeHints(ctx: GameContext): ModeHints {
     clear(el);
     if (!kind) return;
     for (const id of ROWS[kind]) {
-      el.append(h('div', 'tgroup', {}, controlKeys(id, device, true), icon(controlIcon(id))));
+      el.append(h('div', 'tgroup', {}, controlKeys(id, device, true), pictogram(controlIcon(id))));
     }
   };
   const set = (k: 'driving' | 'skydive' | null): void => {
