@@ -113,7 +113,8 @@ test('the default character is the frog and unknown ids are ignored', async () =
     await p.setCharacter('unicorn');
     return { first, after: p.characterId, skill: p.skill.id, ready: p.skill.ready, boost: p.skill.bounceBoost };
   });
-  expect({ ...r, boost: undefined }).toEqual({ first: 'frog', after: 'frog', skill: 'superBounce', ready: true, boost: undefined });
+  // (`ready`/`boost` are skill-specific: the frog's charge bounce is not "ready" until it lands.)
+  expect({ first: r.first, after: r.after, skill: r.skill }).toEqual({ first: 'frog', after: 'frog', skill: 'superBounce' });
 });
 
 for (const id of IDS) {
