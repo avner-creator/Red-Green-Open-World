@@ -21,3 +21,9 @@
 - Initial download budget tightened to 15 MB (hard cap 40 MB). Reason: procedural-first makes it easy, and practices often have slow Wi-Fi.
 - Cross-browser DoD: automated on Chromium only; Edge/Firefox/Safari are a manual check for the user. Reason: only Chromium exists in the build container.
 - Touch/mobile controls are out of scope for v1.0. Reason: red-green therapy use is on a monitor with keyboard/gamepad.
+
+## Directives adopted mid-M0 (docs/DIRECTIVES.md, commit d161c4a, pushed to `main` from another session)
+- From this point the orchestrator writes no code; the M0 scaffold it had already written stays, and all further scaffold/glue changes go to the `integrator` agent. Reason: DIRECTIVES §1.
+- Removed the "eye care professional" line from the running UI and calibration briefs. Reason: DIRECTIVES §4 (no health wording at all).
+- World-artist told to spend polish on the compact core (plaza, Bouncy Park, garage, balloon field, roads) and keep bridge/ranch/lighthouse/lake/silly zone as tidy blockouts. Reason: DIRECTIVES §3 (AAA look over breadth; cut order).
+- M0 workers stay as in-session worktree subagents (already running); child cloud sessions will be used for the big M2+ streams. Reason: restarting would lose work.
