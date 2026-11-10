@@ -9,6 +9,7 @@ import { getFlight } from './flight';
 import { createBouncePads } from './pads';
 import { createRocketPads, setLaunchGate } from './rocket';
 import type { RocketInfo, RocketPads } from './rocket';
+import { getStuntGate } from './stuntGate';
 import { thrillSpots } from './thrillSpots';
 import { createTrampoline } from './trampoline';
 
@@ -63,8 +64,10 @@ export function createThrills(ctx: GameContext): Thrills {
       rocket.update(dt);
       flight.update(dt);
       confetti.update(dt);
+      getStuntGate(ctx).update(dt);
     },
     dispose() {
+      getStuntGate(ctx).reset();
       flight.dispose();
       trampoline.dispose();
       pads.dispose();

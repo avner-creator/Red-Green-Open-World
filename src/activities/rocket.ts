@@ -17,6 +17,7 @@ import { buildNet, buildRocketPad } from './rocketModels';
 import type { NetModel, RocketPadModel } from './rocketModels';
 import { findNetSite } from './rocketSite';
 import type { NetSite, SiteWorld } from './rocketSite';
+import { getStuntGate } from './stuntGate';
 import { thrillSpots } from './thrillSpots';
 
 let gate: () => boolean = () => true;
@@ -219,7 +220,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
       // Locked: friendly wobble and a little hop back off the pad.
       p.wobble = ROCKET.wobble;
       ctx.audio.play('boing', { pitch: 0.7 });
-      ctx.events.emit('ui:toast', { icon: 'lock' });
+      getStuntGate(ctx).toast({ icon: 'lock' });
       const away = Math.atan2(ctx.player.position.x - p.x, ctx.player.position.z - p.z);
       ctx.player.launch(tmp.set(Math.sin(away) * 3, 5.5, Math.cos(away) * 3));
       return;

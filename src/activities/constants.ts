@@ -108,8 +108,12 @@ export const TRICK = {
   idleInput: 0.25,
   /** A rotation counts this many radians early (the levelling finishes it). */
   countSlop: 0.5,
-  /** Landing within this many radians of upright is a clean landing. */
-  uprightTolerance: 0.9,
+  /** Landing within this many radians (60 degrees) of upright is a clean landing; further is a flop. */
+  uprightTolerance: Math.PI / 3,
+  /** In the last seconds before landing a near-upright body is levelled even with keys held. */
+  levelWindow: 0.3,
+  /** A key below this (per axis) counts as released; it arms that axis for tricks. */
+  releaseBelow: 0.25,
 } as const;
 
 export const GEM_FX = {
