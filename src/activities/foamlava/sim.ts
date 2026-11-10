@@ -258,7 +258,7 @@ export class CourseSim {
       const on = this.running && this.grounded && this.ground === i && (this.mode === 'run' || this.mode === 'slide');
       if (s.kind === 'float' || s.kind === 'plank' || s.kind === 'block') {
         // Tilt toward where the hero stands; spring back when empty.
-        let wantX = 0;
+        let wantX: number;
         let wantZ = 0;
         if (on) {
           const ox = clamp((this.p.x - s.x) / halfX(s), -1, 1);
@@ -350,7 +350,7 @@ export class CourseSim {
     const speed = input.sprint ? RUN.sprint : RUN.walk;
     let tx = mag > 0 ? (input.mx / Math.hypot(input.mx, input.mz)) * mag * speed : 0;
     let tz = mag > 0 ? (input.mz / Math.hypot(input.mx, input.mz)) * mag * speed : 0;
-    let accel = wasGrounded ? RUN.accelGround : RUN.accelAir;
+    let accel: number = wasGrounded ? RUN.accelGround : RUN.accelAir;
     if (gs && groundSolid && (groundSolid.kind === 'float' || groundSolid.kind === 'plank' || groundSolid.kind === 'block')) {
       if (groundSolid.kind !== 'block') accel = RUN.accelSoapy;
       const slope = Math.hypot(gs.tx, gs.tz);
