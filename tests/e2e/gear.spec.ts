@@ -202,10 +202,11 @@ test('screenshots: gear on the robot and every trail (full / R / G)', async () =
       rg.inject({ moveY: 1 });
       rg.step(1 / 60, 70, false);
       const pl = ctx.player;
-      const out = { p: pl.position.toArray() as [number, number, number], fx: Math.sin(pl.yaw), fz: Math.cos(pl.yaw), n: window.__rgGear!.particles() };
+      const out = { p: pl.position.toArray() as [number, number, number], fx: Math.sin(pl.yaw), fz: Math.cos(pl.yaw), n: window.__rgGear!.particles(), ribbon: window.__rgGear!.ribbonSamples() };
       return out;
     }, id);
-    expect(info.n).toBeGreaterThan(3);
+    if (id === 'trail-rainbow') expect(info.ribbon).toBeGreaterThan(5);
+    else expect(info.n).toBeGreaterThan(3);
     const { p, fx, fz } = info;
     await cam([p[0] - fx * 3.2 + fz * 1.6, p[1] + 1.6, p[2] - fz * 3.2 - fx * 1.6], [p[0] - fx * 1.2, p[1] + 0.3, p[2] - fz * 1.2], 55);
     await save(id);

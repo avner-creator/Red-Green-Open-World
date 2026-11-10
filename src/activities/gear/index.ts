@@ -19,8 +19,10 @@ export interface GearTestApi {
   carColor(): number | null;
   /** Active trail kind (sparkle | bubbles | rainbow) or null. */
   trail(): string | null;
-  /** Trail particles alive right now. */
+  /** Trail particles alive right now (the rainbow ribbon is not counted). */
   particles(): number;
+  /** Path samples in the rainbow ribbon right now. */
+  ribbonSamples(): number;
   /** Emote playing right now, or null. */
   emote(): string | null;
   /** Play an emote now (equipped one when omitted); false if it cannot start. */
@@ -55,6 +57,7 @@ export function createGear(ctx: GameContext): GameSystem {
       carColor: () => applier.carColor(),
       trail: () => trails.active(),
       particles: () => trails.particleCount(),
+      ribbonSamples: () => trails.ribbonSamples(),
       emote: () => emotes.playing(),
       playEmote: (id) => emotes.play(id),
     };

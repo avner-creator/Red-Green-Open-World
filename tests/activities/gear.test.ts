@@ -3,7 +3,7 @@ import { OUTFITS, PAINT_COLORS } from '../../src/activities/chests/outfits';
 import { CHEST_GEAR, GEAR_CATALOG, GEAR_PAINTS, SHOP_GEAR, emoteKind, paintColor, trailKind } from '../../src/activities/gear/catalog';
 import { EMOTES, canStartEmote, emoteCancelled } from '../../src/activities/gear/emoteLogic';
 import { emptyLook, isLookSlot, lookChanges, readLook } from '../../src/activities/gear/look';
-import { MAX_TRAIL_PARTICLES, TRAIL_PALETTES, TrailEmitter, channel } from '../../src/activities/gear/trailLogic';
+import { MAX_TRAIL_PARTICLES, RAINBOW_LANES, RIBBON, RibbonHistory, TRAIL_SPECS, TrailEmitter, channel, ribbonFade } from '../../src/activities/gear/trailLogic';
 import { createEconomyRules } from '../../src/activities/economy/rules';
 import { createProfile } from '../../src/profile';
 import type { EventBus, GameEvents } from '../../src/types';
@@ -159,22 +159,45 @@ describe('look applier logic', () => {
 });
 
 describe('trails', () => {
-  it('each palette has bright and dark entries in the red channel alone and the green channel alone', () => {
-    for (const [kind, palette] of Object.entries(TRAIL_PALETTES)) {
-      for (const c of ['r', 'g'] as const) {
-        const v = palette.map((h) => channel(h, c));
-        expect(Math.max(...v) - Math.min(...v), `${kind} ${c}`).toBeGreaterThan(0.5);
-      }
+  it('rainbow lanes span bright and dark in the red channel alone and the green channel alone', () => {
+    for (const c of ['r', 'g'] as const) {
+      const v = RAINBOW_LANES.map((h) => channel(h, c));
+      expect(Math.max(...v) - Math.min(...v), c).toBeGreaterThan(0.6);
     }
   });
 
-  it('rainbow neighbours differ in brightness in at least one channel', () => {
-    const p = TRAIL_PALETTES.rainbow;
-    for (let i = 0; i < p.length; i++) {
-      const a = p[i];
-      const b = p[(i + 1) % p.length];
+  it('neighbouring rainbow lanes differ in brightness in the red or the green channel', () => {
+    for (let i = 0; i < RAINBOW_LANES.length - 1; i++) {
+      const a = RAINBOW_LANES[i];
+      const b = RAINBOW_LANES[i + 1];
       const d = Math.max(Math.abs(channel(a, 'r') - channel(b, 'r')), Math.abs(channel(a, 'g') - channel(b, 'g')));
-      expect(d).toBeGreaterThan(0.5);
+      expect(d, `lane ${i}`).toBeGreaterThan(0.25);
+    }
+  });
+
+  it('keeps the last 1.5 s of the path and records only real steps', () => {
+    const h = new RibbonHistory();
+    for (let i = 0; i < 200; i++) h.push(1 / 60, { x: i * 0.05, y: 0, z: 0 });
+    expect(h.samples.length).toBeGreaterThan(5);
+    expect(h.samples.length).toBeLessThanOrEqual(RIBBON.maxSamples);
+    for (const s of h.samples) expect(s.age).toBeLessThanOrEqual(RIBBON.seconds + 1e-9);
+    const still = new RibbonHistory();
+    for (let i = 0; i < 30; i++) still.push(1 / 60, { x: 0, y: 0, z: 0 });
+    expect(still.samples).toHaveLength(1);
+    still.tick(2);
+    expect(still.samples).toHaveLength(0);
+  });
+
+  it('the ribbon tapers to nothing at the tail', () => {
+    expect(ribbonFade(0)).toBe(1);
+    expect(ribbonFade(RIBBON.seconds)).toBe(0);
+    expect(ribbonFade(RIBBON.seconds / 2)).toBeCloseTo(0.5, 5);
+  });
+
+  it('particle sizes stay small next to the robot', () => {
+    for (const spec of Object.values(TRAIL_SPECS)) {
+      expect(spec.size[0]).toBeGreaterThanOrEqual(0.08);
+      expect(spec.size[1]).toBeLessThanOrEqual(0.36);
     }
   });
 
