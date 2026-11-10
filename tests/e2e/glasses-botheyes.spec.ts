@@ -51,6 +51,7 @@ interface DotsDebug {
 }
 
 const debug = <T>(id: string): Promise<T> => page.evaluate((i) => window.__rgGlasses!.debug(i), id) as Promise<T>;
+const wallet = (): Promise<number> => page.evaluate(() => window.__rg!.ctx.profile.wallet);
 const force = (id: string, params: Record<string, unknown>): Promise<void> => page.evaluate(({ i, p }) => window.__rgGlasses!.force(i, p), { i: id, p: params });
 
 /** Teleport the player (feet on the ground) facing `yaw`, let the camera settle, render once. */
@@ -189,6 +190,7 @@ test('gates: neither eye alone can tell the answer', async () => {
 test('gates: run through the right arch → hit, wrong arch → miss, the plate starts a new round', async () => {
   await events();
   await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left', tier: 1 });
+  const before = await wallet();
   let d = await debug<GatesDebug>('gates');
   const facing = d.yaw + Math.PI;
   // Walking round the outside of an arch does not count.
@@ -207,6 +209,7 @@ test('gates: run through the right arch → hit, wrong arch → miss, the plate 
   expect(d.hits).toBe(1);
   expect(d.tier).toBe(2);
   expect(d.gems).toBe(3);
+  expect(await wallet()).toBe(before + 3);
   // Turn round behind the arch: the camera now looks back at it (squash, confetti).
   await standAt(d.arches[1].back, d.yaw, 16);
   await shots('gates', 'hit');
