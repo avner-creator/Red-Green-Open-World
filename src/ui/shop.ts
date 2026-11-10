@@ -114,6 +114,7 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
           'span',
           'price poor',
           {},
+          h('span', 'lk', {}, icon('lock')),
           icon('gem'),
           h('span', '', {}, String(it.price)),
           h('span', 'prog', { style: `--p:${Math.round((1 - miss / Math.max(1, it.price)) * 100)}%` }),
@@ -156,8 +157,14 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
     }
     // Not enough gems (or chest-only): a friendly wiggle, never a dead end.
     ctx.audio.play('bump');
-    retrigger(b, 'shake');
-    if (r === 'tooPoor') wallet.shake();
+    if (r === 'tooPoor') {
+      // The picture stays bright (the child should still want it); the chip says "not yet".
+      const chip = b.querySelector<HTMLElement>('.price');
+      const tag = b.querySelector<HTMLElement>('.miss');
+      if (chip) retrigger(chip, 'shake');
+      if (tag) retrigger(tag, 'pulse');
+      wallet.shake();
+    } else retrigger(b, 'shake');
   };
 
   const tabBtn = (c: ShopCategory): HTMLButtonElement => {

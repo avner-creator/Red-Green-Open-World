@@ -155,14 +155,17 @@ export const ECON_CSS = `
 .rg .card .price{position:relative;display:inline-flex;align-items:center;gap:.2em;padding:calc(var(--u)*.25) calc(var(--u)*1.5) calc(var(--u)*.25) calc(var(--u)*1);border-radius:2em;
   background:linear-gradient(180deg,#ffe97a,var(--y) 55%,#f2b400);color:#15110a;border:calc(var(--u)*.4) solid #000;font-size:calc(var(--u)*3.4);font-variant-numeric:tabular-nums;overflow:hidden}
 .rg .card .price .ic{color:#15110a;--out:#fff;font-size:1.1em}
-.rg .card .price.poor{background:#0b0f22;color:#fff;border:calc(var(--u)*.35) dashed #fff}
+.rg .card .price.poor{background:#05070f;color:#fff;border:calc(var(--u)*.4) solid #fff;box-shadow:inset 0 0 0 calc(var(--u)*.35) #000;padding-left:calc(var(--u)*.5)}
+.rg .card .price .lk{display:inline-flex;align-items:center;justify-content:center;width:1.25em;height:1.25em;margin-right:.1em;border-radius:50%;background:#fff;line-height:0}
+.rg .card .price .lk .ic{color:#05070f;--out:#fff;font-size:.95em}
+.rg .card .price.shake{animation:rg-wshake .45s}
 .rg .card .price.poor .ic{color:#fff;--out:#000}
 .rg .card .price .prog{position:absolute;left:0;bottom:0;height:calc(var(--u)*.7);width:var(--p);background:#fff}
 .rg .card .price.chest{background:#0b0f22;color:#fff;border:calc(var(--u)*.4) solid #fff;padding:calc(var(--u)*.25) calc(var(--u)*1.6)}
 .rg .card .price.chest .ic{color:#fff;--out:#000;font-size:1.25em}
-.rg .card.s-poor{background:linear-gradient(180deg,#1b2042,#0e1228)}
-.rg .card.s-poor .pv .ic,.rg .card.s-poor .pv .sw{opacity:.42;filter:grayscale(1)}
-.rg .card .miss{position:absolute;left:calc(var(--u)*1.2);top:calc(var(--u)*1);display:inline-flex;align-items:center;gap:.1em;font-size:calc(var(--u)*2.8)}
+.rg .card .miss{position:absolute;left:calc(var(--u)*.9);top:calc(var(--u)*.9);display:inline-flex;align-items:center;gap:.1em;padding:0 .35em;border-radius:1em;background:#05070fd0;border:calc(var(--u)*.3) solid #fff;font-size:calc(var(--u)*2.6)}
+.rg .card .miss.pulse{animation:rg-mpulse .5s cubic-bezier(.2,1.8,.4,1)}
+@keyframes rg-mpulse{40%{transform:scale(1.45)}}
 .rg .card .miss .ic{color:#fff;font-size:1.1em}
 .rg .card.s-chest .pv .ic{color:#2a3060;--out:#fff;filter:drop-shadow(0 0 calc(var(--u)*1) #ffffff80)}
 .rg .card.s-chest .pv .sw{opacity:.25}
@@ -256,7 +259,6 @@ export const ECON_CSS = `
 .rg .card .pv .pic{width:100%;height:100%;max-height:calc(var(--u)*17);transition:transform .15s}
 .rg .card:hover .pv .pic,.rg.nav-kb .card:focus .pv .pic{transform:scale(1.08) rotate(-3deg)}
 .rg .card.s-equipped .pv.has-pic{background:radial-gradient(circle at 50% 50%,#ffffffd0,#ffffff00 70%)}
-.rg .card.s-poor .pv .pic{opacity:.5;filter:grayscale(1) brightness(.6) drop-shadow(0 calc(var(--u)*.6) calc(var(--u)*.7) rgba(0,0,0,.65))}
 .rg .card.s-chest .pv .pic{filter:brightness(0) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 calc(var(--u)*1.6) rgba(255,255,255,.85))}
 .rg .celebrate .badge .pic{position:relative;width:80%;height:80%;animation:rg-wig 1.1s ease-in-out .85s infinite;filter:drop-shadow(0 calc(var(--u)*1) calc(var(--u)*1) rgba(0,0,0,.7))}
 .rg .moment .badge .pic{width:82%;height:82%}
