@@ -39,7 +39,8 @@ try {
       const rg = window.__rg;
       const ctx = rg.ctx;
       const V = ctx.camera.position.constructor;
-      const t = s.target === 'balloon' ? ctx.world.anchors.balloon.position.clone() : ctx.scene.getObjectByName(s.target).getWorldPosition(new V());
+      const anchor = ctx.world.anchors[s.target];
+      const t = anchor ? anchor.position.clone() : ctx.scene.getObjectByName(s.target).getWorldPosition(new V());
       const px = t.x + Math.sin(s.yaw + (s.playerSide ?? 0.35)) * (s.playerDist ?? s.dist * 0.7);
       const pz = t.z + Math.cos(s.yaw + (s.playerSide ?? 0.35)) * (s.playerDist ?? s.dist * 0.7);
       rg.teleport(px, ctx.world.heightAt(px, pz) + 0.2, pz, Math.atan2(t.x - px, t.z - pz));
@@ -65,6 +66,10 @@ try {
   await shot('balloon-close', { target: 'balloon', yaw: 0.6, dist: 6.5, up: 2.5, aim: 2.2, fov: 66, hidePlayer: true });
   await shot('player-gameplay', { target: 'player', yaw: 0.3, dist: 5, up: 1.8, aim: 0.9, playerDist: 0, hidePlayer: false });
   await shot('player-close', { target: 'player', yaw: 0.3, dist: 2.2, up: 1.2, aim: 0.9, playerDist: 0, hidePlayer: false });
+  await shot('park', { target: 'trampoline', yaw: 2.4, dist: 24, up: 6, aim: 4, fov: 66, playerDist: 14, hidePlayer: false });
+  await shot('bounce-pads', { target: 'bouncePads', yaw: 1.2, dist: 12, up: 3, aim: 0.5, fov: 60, hidePlayer: true });
+  await shot('rockets', { target: 'launchPads', yaw: 3.6, dist: 13, up: 4, aim: 1, fov: 66, hidePlayer: true });
+  await shot('rockets-close', { target: 'launchPads', yaw: 3.6, dist: 6, up: 2.5, aim: 0.6, fov: 60, hidePlayer: true });
   if (errors.length) console.log('errors:', errors.slice(0, 5));
 } finally {
   await browser?.close();
