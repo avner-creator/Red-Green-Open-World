@@ -84,9 +84,9 @@ interface SliderDef {
 }
 
 const SLIDERS: SliderDef[] = [
-  { key: 'weakStrength', icon: ICONS.ring, label: 'Weak-eye strength', min: 0, max: 100 },
-  { key: 'crosstalkLimit', icon: ICONS.ghost, label: 'Crosstalk limit', min: 5, max: 100 },
-  { key: 'strongContrast', icon: ICONS.contrast, label: 'Strong-eye contrast', min: 40, max: 100 },
+  { key: 'weakStrength', icon: ICONS.ring, label: 'Gem glow', min: 0, max: 100 },
+  { key: 'crosstalkLimit', icon: ICONS.ghost, label: 'Ghosting guard', min: 5, max: 100 },
+  { key: 'strongContrast', icon: ICONS.contrast, label: 'Other-eye dimmer', min: 40, max: 100 },
 ];
 
 export interface CalibrationHandle {
@@ -113,7 +113,7 @@ export function openCalibrationOverlay(ctx: CalibCtx, onClosed: () => void): Cal
     t.innerHTML = `${ICONS.eye}${icon}<span>${text}</span>`;
     root.appendChild(t);
   };
-  tag(0, ICONS.ring, 'Weak eye');
+  tag(0, ICONS.ring, 'Gem eye');
   tag(patternH * 0.5, ICONS.square, 'Strong eye');
 
   const panel = document.createElement('div');
@@ -176,8 +176,8 @@ export function openCalibrationOverlay(ctx: CalibCtx, onClosed: () => void): Cal
     const eye = ctx.settings.get().eye;
     lensBtn.innerHTML = `${glassesSvg(eye.leftLens)}<span>Left lens</span>`;
     lensBtn.setAttribute('aria-label', `Left lens: ${eye.leftLens}. Press to swap.`);
-    eyeBtn.innerHTML = `${weakEyeSvg(eye.weakEye)}<span>Weak eye</span>`;
-    eyeBtn.setAttribute('aria-label', `Weak eye: ${eye.weakEye}. Press to swap.`);
+    eyeBtn.innerHTML = `${weakEyeSvg(eye.weakEye)}<span>Gem eye</span>`;
+    eyeBtn.setAttribute('aria-label', `Gem eye: ${eye.weakEye}. Press to swap.`);
     for (const s of SLIDERS) {
       const el = inputs.get(s.key);
       if (!el) continue;
