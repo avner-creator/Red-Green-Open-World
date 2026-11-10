@@ -5,7 +5,8 @@ Players wear **red-green glasses**, as used in vision therapy. The game is built
 fun stuff (gems, treasures, secret paths) is visible **only to the weaker eye**. That pushes the
 weaker eye to work.
 
-Read `docs/GAME_DESIGN.md` (what we build) and `docs/BUILD_PLAN.md` (milestones, agent ownership)
+**Read `docs/DIRECTIVES.md` first: the user's directives override everything below.**
+Then read `docs/GAME_DESIGN.md` (what we build) and `docs/BUILD_PLAN.md` (milestones, agent ownership)
 before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/DECISIONS.md`.
 
 ## Autonomy rules (the user asked for these explicitly)
@@ -19,10 +20,10 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
   and move on to unblocked work.
 - **Speed matters.** Ship a playable build early and improve it in milestones. Run independent
   work in parallel. Don't gold-plate: at most two polish passes per milestone, then move on.
-- **Models:** only the orchestrator (main session) runs on Fable 5.2. Subagents run on the model
-  in their `.claude/agents/*.md` frontmatter (Opus or Sonnet). Never pass `model: "fable"` and
-  never use `subagent_type: "fork"` (a fork inherits Fable). Use the named subagents, or
-  `general-purpose` with `model: "sonnet"` for ad-hoc tasks.
+- **Models:** only the orchestrator runs on Fable 5.2, and it writes no code (see
+  DIRECTIVES.md). All implementation is done by Opus 5.5 or Sonnet 5.5 workers: named subagents,
+  `general-purpose` with an explicit `model: "opus"`/`"sonnet"`, or child cloud sessions with
+  `claude-opus-5-5`/`claude-sonnet-5-5`. Never `model: "fable"`, never `subagent_type: "fork"`.
 - The user authorized the orchestrator to merge into `main` and push. Netlify deploys `main` to
   https://red-green-open-world.netlify.app. Only push `main` when `npm run verify` passes.
 
@@ -84,8 +85,7 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
   lock is strong-eye-only. This encourages the two eyes to work together.
 - Settings are behind a **grown-up gate** (hold a key for 3 s, or simple math) and saved in
   `localStorage` (wrapped in try/catch).
-- No medical or treatment claims anywhere in the game. A neutral line is fine: "Use as directed
-  by your eye care professional."
+- Not a health app: no medical or therapy wording, claims or disclaimers anywhere in the game.
 
 ## Content rules
 

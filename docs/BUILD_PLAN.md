@@ -1,14 +1,15 @@
 # Build plan
 
-The orchestrator (main session) plans, assigns work to subagents, reviews and merges results,
-runs `npm run verify`, and pushes `main`. Each milestone ends with a **green verify + a Netlify
+The orchestrator (main session, Fable 5.2) plans, briefs workers, reviews and merges results,
+runs `npm run verify`, and pushes `main`. It writes no code (see DIRECTIVES.md). Each milestone ends with a **green verify + a Netlify
 deploy + a PROGRESS.md entry with screenshots**.
 
 ## Agents and ownership (see `.claude/agents/`)
 
 | Agent | Owns | Typical tasks |
 |---|---|---|
-| orchestrator (main session) | `src/main.ts`, `src/config.ts`, `package.json`, docs, merges | plan, integrate, resolve conflicts, deploy |
+| orchestrator (main session, Fable) | docs, git merges, deploys | plan, brief, review, decide; no code |
+| `integrator` (Opus) | `src/main.ts`, `src/types.ts`, `src/config.ts`, `package.json`, tooling | scaffold, shared interfaces, integration fixes, merge conflicts |
 | `dichoptic-engineer` | `src/vision/` | compositor, eye settings, calibration, channel tests |
 | `engine-engineer` | `src/core/` | loop, input, physics, player, camera, cars, horse, ragdoll |
 | `world-artist` | `src/world/`, `public/assets/`, `ASSETS.md` | asset sourcing and optimization, terrain, lighting, post FX, layout |
@@ -17,8 +18,8 @@ deploy + a PROGRESS.md entry with screenshots**.
 | `qa-playtester` | `tests/` (reports only for other code) | e2e runs, screenshots, perf, rules audit |
 
 **Parallel work**: spawn independent agents together with `isolation: "worktree"`. Each agent
-only edits its own folders. Shared interfaces live in `src/types.ts`; only the orchestrator
-changes them, before handing tasks out. Merge each worktree branch, then run verify.
+only edits its own folders. Shared interfaces live in `src/types.ts`; only the `integrator`
+changes them (as the orchestrator directs), before tasks are handed out. Merge each worktree branch, then run verify.
 
 ## Milestones
 
@@ -26,7 +27,7 @@ changes them, before handing tasks out. Merge each worktree branch, then run ver
 GAME_DESIGN.md and the agent briefs. Log changes in DECISIONS.md, push, and start M0.
 
 **M0. Foundation and vision core** (first, because the dichoptic system is the product)
-- Orchestrator (before any agent starts): Vite + TS + Three + Rapier scaffold, `src/types.ts`
+- `integrator` (before the other agents start): Vite + TS + Three + Rapier scaffold, `src/types.ts`
   (all shared interfaces), `src/main.ts` boot with stub systems, `npm run verify`, Playwright
   smoke test, the `?test=1` `window.__rg` hook, `npm run shots:channels`.
 - In parallel: `dichoptic-engineer` (compositor, layers, eye settings, calibration, channel
