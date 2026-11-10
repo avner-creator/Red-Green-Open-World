@@ -46,8 +46,9 @@ export const ANCHORS: Record<AnchorName, AnchorDef> = {
   ranch: { x: -74, z: 44, radius: 16, yaw: Math.PI / 2 + 0.6, onLand: true },
   sillyZone: { x: 8, z: 98, radius: 16, yaw: Math.PI, onLand: true },
   launchPads: { x: -30, z: 102, radius: 10, yaw: Math.PI / 2, onLand: true },
-  // Placeholder (world-artist places and builds the kiosk): west side of the plaza, counter facing spawn.
-  gearShack: { x: -8, z: 2, radius: 3, yaw: Math.atan2(8, 7), onLand: true },
+  // Gem shop kiosk on the west side of the fountain plaza (14 m from spawn, on the spawn camera's
+  // left). +Z of the yaw is the counter side: it faces south-east, towards the spawn point.
+  gearShack: { x: -8.5, z: -2, radius: 3, yaw: Math.atan2(8.5, 9.5), onLand: true },
 };
 
 export type RoadKind = 'street' | 'road' | 'path';
