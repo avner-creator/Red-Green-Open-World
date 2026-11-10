@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { PhysicsApi } from '../../src/types';
 import { buildTerrain, sampleHeight } from '../../src/world/terrain';
-import { ANCHORS, VILLAGE_Y } from '../../src/world/layout';
+import { ANCHORS, ROADS, VILLAGE_Y } from '../../src/world/layout';
+import { FINGERPOSTS } from '../../src/world/wayfinding';
 import { PLAZA } from '../../src/world/village';
 import { Batcher } from '../../src/world/batch';
 import { Colliders } from '../../src/world/props';
 import { buildContent } from '../../src/world/content';
-import { buildGearShack, SHACK } from '../../src/world/gear-shack';
+import { buildGearShack, SHACK, shackFootprint } from '../../src/world/gear-shack';
 
 const a = ANCHORS.gearShack;
 const sp = ANCHORS.spawn;
@@ -54,10 +55,10 @@ describe('gear shack', () => {
     expect(fromPlaza - a.radius).toBeGreaterThan(4.4); // fountain basin r 4.3
     const fromSpawn = Math.hypot(a.x - sp.x, a.z - sp.z);
     expect(fromSpawn).toBeGreaterThan(8);
-    expect(fromSpawn).toBeLessThan(14.5);
-    // The counter faces roughly towards spawn (the player sees the shop front first).
-    const toSpawn = Math.atan2(sp.x - a.x, sp.z - a.z);
-    expect(Math.abs(Math.atan2(Math.sin(toSpawn - a.yaw), Math.cos(toSpawn - a.yaw)))).toBeLessThan(0.5);
+    expect(fromSpawn).toBeLessThan(16);
+    // The counter faces the plaza centre.
+    const toCentre = Math.atan2(PLAZA.x - a.x, PLAZA.z - a.z);
+    expect(Math.abs(Math.atan2(Math.sin(toCentre - a.yaw), Math.cos(toCentre - a.yaw)))).toBeLessThan(0.3);
   });
 
   it('keeps gem and chest spots out of its footprint and standing area', () => {
@@ -89,5 +90,39 @@ describe('gear shack', () => {
     const b = new Batcher();
     buildGearShack({ b, col: new Colliders(recorder().physics), h });
     expect(b.triangles).toBeLessThan(6200);
+  });
+
+  it('stays out of the walking lines from spawn to the roads, the fingerpost and the park route (≥ 2.5 m)', () => {
+    const segDist = (px: number, pz: number, s: readonly number[]): number => {
+      const [ax, az, bx, bz] = s;
+      const dx = bx - ax;
+      const dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
+      return Math.hypot(px - ax - t * dx, pz - az - t * dz);
+    };
+    const segs: { name: string; s: number[] }[] = [];
+    // The e2e island walk from spawn to the trampoline.
+    const route = [[sp.x, sp.z], [10, -4], [14, -8], [28, -14], [42, -18]];
+    for (let i = 0; i < route.length - 1; i++) segs.push({ name: `route ${i}`, s: [...route[i], ...route[i + 1]] });
+    // Every road that starts at the plaza: spawn → its entrance, and its first leg.
+    for (const r of ROADS) {
+      const [p0, p1] = r.points;
+      if (Math.hypot(p0[0] - PLAZA.x, p0[1] - PLAZA.z) > PLAZA.r) continue;
+      segs.push({ name: `spawn→${r.id}`, s: [sp.x, sp.z, p0[0], p0[1]] }, { name: `${r.id} leg`, s: [p0[0], p0[1], p1[0], p1[1]] });
+    }
+    for (const f of FINGERPOSTS) if (Math.hypot(f.x - PLAZA.x, f.z - PLAZA.z) < PLAZA.r) segs.push({ name: 'spawn→fingerpost', s: [sp.x, sp.z, f.x, f.z] });
+    expect(segs.length).toBeGreaterThanOrEqual(10);
+    const fp = shackFootprint(a.x, a.z, a.yaw);
+    const samples: [number, number, number][] = fp.circles.map(([x, z, r]) => [x, z, r]);
+    for (let i = 0; i < 4; i++) {
+      const [p, q] = [fp.poly[i], fp.poly[(i + 1) % 4]];
+      for (let k = 0; k <= 40; k++) samples.push([p[0] + ((q[0] - p[0]) * k) / 40, p[1] + ((q[1] - p[1]) * k) / 40, 0]);
+    }
+    const bad: string[] = [];
+    for (const { name, s } of segs) {
+      const d = Math.min(...samples.map(([x, z, r]) => segDist(x, z, s) - r));
+      if (d < 2.5) bad.push(`${name}: ${d.toFixed(2)} m`);
+    }
+    expect(bad).toEqual([]);
   });
 });

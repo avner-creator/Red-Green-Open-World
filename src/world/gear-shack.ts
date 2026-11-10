@@ -30,6 +30,24 @@ export const SHACK = {
   standZ: 2.6,
 } as const;
 
+/** Rocket collider (local x, z, radius) and the standing mat (local z, radius). */
+export const SHACK_ROCKET = { x: -2.05, z: 0.45, r: 0.3 } as const;
+export const SHACK_MAT = { z: SHACK.standZ - 0.4, r: 1.22 } as const;
+
+/**
+ * World-space footprint of a kiosk at (x, z, yaw): the body box as a polygon plus circles (rocket,
+ * mat). Pure, for layout tests (walking corridors must stay clear of it).
+ */
+export function shackFootprint(x: number, z: number, yaw: number): { poly: [number, number][]; circles: [number, number, number][] } {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  const w = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
+  const poly = [w(-SHACK.hx, SHACK.zBack), w(SHACK.hx, SHACK.zBack), w(SHACK.hx, SHACK.zFront), w(-SHACK.hx, SHACK.zFront)];
+  const r = w(SHACK_ROCKET.x, SHACK_ROCKET.z);
+  const m = w(0, SHACK_MAT.z);
+  return { poly, circles: [[r[0], r[1], SHACK_ROCKET.r], [m[0], m[1], SHACK_MAT.r]] };
+}
+
 const CREAM = 0xf6efe0;
 const TEAL = 0x1d5c6a;
 const NAVY = 0x243046;
@@ -394,13 +412,13 @@ export function buildGearShack(k: Kit): Keepout[] {
   crate(k, cx0, cz0, 0.85, a.yaw + 0.2);
   paintCan(k, T(cx0, k.h(cx0, cz0) + 0.85, cz0, a.yaw), 0, 0, 0, 2.2, 0x2a9d8f, 0.7);
   // Round mat where the player stands (flat paint, nothing to trip on).
-  const [mx, mz] = L(0, SHACK.standZ - 0.4);
+  const [mx, mz] = L(0, SHACK_MAT.z);
   groundDisc(k, mx, mz, 0, 1.0, 0.1, () => TEAL, 1, 32);
-  groundDisc(k, mx, mz, 1.0, 1.22, 0.1, () => CREAM, 1, 32);
+  groundDisc(k, mx, mz, 1.0, SHACK_MAT.r, 0.1, () => CREAM, 1, 32);
 
   // ── Collider: one box for the whole stall (counter front stays a clean wall), the rocket ──
   k.col.box(m, 0, SHACK.height / 2, (SHACK.zBack + SHACK.zFront) / 2, SHACK.hx, SHACK.height / 2, (SHACK.zFront - SHACK.zBack) / 2);
-  const [rx, rz] = L(-2.05, 0.45);
+  const [rx, rz] = L(SHACK_ROCKET.x, SHACK_ROCKET.z);
   k.col.cyl(rx, y, rz, 0.95, 0.3);
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
