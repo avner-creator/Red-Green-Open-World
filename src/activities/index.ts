@@ -3,6 +3,7 @@
  * trampoline, bounce pads, rocket pads). One module per activity; pure logic lives in *Logic.ts.
  */
 import type { GameContext, GameSystem } from '../types';
+import { createCarnival } from './carnival';
 import { createChests } from './chests';
 import { createGems } from './gems';
 import { createSkydive } from './skydive';
@@ -16,6 +17,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const thrills = createThrills(ctx);
   const chests = createChests(ctx);
   const skydive = createSkydive(ctx);
+  const carnival = createCarnival(ctx);
   return {
     update(dt) {
       // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
@@ -26,12 +28,14 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       skydive.update(dt);
       gems.update(dt);
       chests.update(dt);
+      carnival.update(dt);
     },
     dispose() {
       gems.dispose();
       thrills.dispose();
       chests.dispose();
       skydive.dispose();
+      carnival.dispose();
     },
   };
 }
