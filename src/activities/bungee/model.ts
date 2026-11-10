@@ -68,16 +68,10 @@ export function createPlatformModel(g: PlatformGeo): PlatformModel {
   // Cantilever arm from the crossbeam to the pulley, with a diagonal brace.
   const ax = g.anchor.x;
   k.box('gloss', YELLOW, (postX + ax) / 2 - 0.1, top + 0.02, z, postX - ax + 0.5, 0.3, 0.3);
-  k.rod('gloss', YELLOW, new THREE.Vector3(postX, deck + 3.0, z + 0.05), new THREE.Vector3(ax + 0.6, top - 0.05, z + 0.05), 0.09);
-  k.rod('gloss', YELLOW, new THREE.Vector3(postX, deck + 3.0, z - 0.05), new THREE.Vector3(ax + 0.6, top - 0.05, z - 0.05), 0.09);
+  k.rod('gloss', YELLOW, new THREE.Vector3(postX, deck + 3.0, z + 0.05), new THREE.Vector3(ax + 0.6, top - 0.05, z + 0.05), 0.06);
+  k.rod('gloss', YELLOW, new THREE.Vector3(postX, deck + 3.0, z - 0.05), new THREE.Vector3(ax + 0.6, top - 0.05, z - 0.05), 0.06);
   // Pulley cheeks.
   for (const s of [-1, 1]) k.box('metal', DARK, ax, top - 0.3, z + s * 0.14, 0.5, 0.6, 0.04);
-  // A round sign on the crossbeam: a bungee figure pictogram (bright on dark).
-  k.cyl('matte', NAVY, postX + 0.18, top - 0.75, z, 0.55, 0.06, 28, 0, 0, Math.PI / 2);
-  k.cyl('matte', CREAM, postX + 0.2, top - 0.75, z, 0.47, 0.06, 28, 0, 0, Math.PI / 2);
-  k.box('matte', NAVY, postX + 0.24, top - 0.55, z, 0.03, 0.4, 0.06);
-  k.box('matte', NAVY, postX + 0.24, top - 0.82, z, 0.03, 0.06, 0.32);
-  k.cyl('matte', NAVY, postX + 0.24, top - 0.98, z, 0.1, 0.03, 12, 0, 0, Math.PI / 2);
   const fixed = k.build('bungee-gantry');
   root.add(fixed);
 

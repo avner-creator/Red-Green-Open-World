@@ -70,6 +70,8 @@ export interface Bungee {
 const YAW_WEST = -Math.PI / 2;
 const TIMES = { attach: 1.0, windupMax: 4, lower: 5, landed: 1.5, retract: 1.6, winchClip: 0.6, winchRise: 3.4, winchHop: 0.9 } as const;
 const REACH = 1.7;
+/** Camera yaw offset for the side-on view (from the south-west, looking north-east along the cord). */
+const SIDE = -Math.PI / 2 - 0.35;
 
 interface Built {
   platform: PlatformModel;
@@ -389,7 +391,7 @@ export function createBungee(ctx: GameContext): Bungee {
           player.setAnimation(k < 0.85 ? 'walk' : 'idle');
           last.copy(player.position);
           hasLast = true;
-          setCamera({ distance: 6.5, height: 2.6, yawOffset: 0.5, fov: CAMERA.fov + 4 });
+          setCamera({ distance: 6.5, height: 1.8, yawOffset: SIDE, fov: CAMERA.fov + 4 });
           if (phaseT >= TIMES.attach) enter('windup');
           return true;
         }
@@ -404,7 +406,7 @@ export function createBungee(ctx: GameContext): Bungee {
           last.copy(player.position);
           hasLast = true;
           prompt.show('jump', input.device === 'gamepad', pump);
-          setCamera({ distance: 7, height: 3, yawOffset: 0.55, fov: CAMERA.fov + 6 });
+          setCamera({ distance: 6.5, height: 1.6, yawOffset: SIDE, fov: CAMERA.fov + 6 });
           ctx.audio.setLoop('wind', 0.12, 0.7);
           const pressed = input.jumpPressed && phaseT > 0.25;
           if (pressed || phaseT >= TIMES.windupMax) {
@@ -440,7 +442,9 @@ export function createBungee(ctx: GameContext): Bungee {
           player.setAnimation(sim.vel.y > 2 ? 'jump' : 'fall');
           const speed = Math.hypot(sim.vel.x, sim.vel.y, sim.vel.z);
           const sf = Math.min(1, speed / 24);
-          setCamera({ distance: 9 + 3 * sf, height: 1.2, fov: CAMERA.fov + 14 + 8 * sf, yawOffset: Math.PI * 0.85, lookAhead: 0.2 });
+          // Side-on from the south-west; above and looking down while plunging, level on the rebounds.
+          const plunge = Math.max(0, Math.min(1, -sim.vel.y / 14));
+          setCamera({ distance: 7.5 + 1.5 * sf, height: 1.5 + 4.5 * plunge, fov: CAMERA.fov + 12 + 8 * sf, yawOffset: SIDE - 0.25, lookAhead: 0.15 });
           ctx.audio.setLoop('wind', 0.2 + 0.8 * sf, 0.8 + 0.5 * sf);
           pulleySpin += (r.stretch > 0 ? 0 : speed) * dt * 3;
           // 2 boings, then lower from the next peak (or after a while, whatever happens).
@@ -471,7 +475,7 @@ export function createBungee(ctx: GameContext): Bungee {
           player.setAnimation(k > 0.6 ? 'wave' : 'fall');
           const sf = Math.min(1, Math.hypot(lowerV.x, lowerV.y, lowerV.z) / 24) * (1 - phaseT / TIMES.lower);
           ctx.audio.setLoop('wind', 0.12 + 0.4 * sf, 0.7);
-          setCamera({ distance: 9, height: 3, fov: CAMERA.fov + 8 * (1 - k), yawOffset: Math.PI * 0.85 * (1 - k) + 0.5 * k });
+          setCamera({ distance: 9, height: 3, fov: CAMERA.fov + 8 * (1 - k), yawOffset: (SIDE - 0.25) * (1 - k) + 0.5 * k });
           if (phaseT >= TIMES.lower) {
             enter('landed');
             pitch = 0;
