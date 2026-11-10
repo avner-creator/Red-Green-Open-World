@@ -1,7 +1,9 @@
-/** In-game HUD: gems, stars, timer ring, prompt, toasts, "gem nearby" glow. */
+/** In-game HUD: wallet + combo, missions, stars, timer ring, prompt, toasts, "gem nearby" glow. */
 import type { GameContext, IconName } from '../types';
 import { clear, h, retrigger } from './dom';
-import { counterText, formatTime, timeFraction } from './format';
+import type { EconTracker } from './econState';
+import { formatTime, timeFraction } from './format';
+import { createHudEcon } from './hudEcon';
 import { outfitIcon, STUNT_ICON, useKey } from './glyphs';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
@@ -16,12 +18,10 @@ export interface Hud {
   update(dt: number): void;
 }
 
-export function createHud(ctx: GameContext): Hud {
+export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
   const el = h('div', 'hud');
 
-  // counters
-  const gemText = h('span', 't', {}, '0');
-  const gems = h('div', 'pill gems', { 'data-testid': 'gems' }, icon('gem'), gemText);
+  // counters: the wallet (gems are money) is the main one; see hudEcon.ts
   const starText = h('span', 't', {}, '0');
   const stars = h('div', 'pill stars', { 'data-testid': 'stars' }, icon('star'), starText);
 
@@ -52,11 +52,18 @@ export function createHud(ctx: GameContext): Hud {
   // toasts
   const toasts = h('div', 'toasts', { 'data-testid': 'toasts' });
   const glow = h('div', 'glow');
-  el.append(glow, gems, stars, timer, prompt, toasts);
+  const toastNodes = (kids: (HTMLElement | null)[], cls = ''): void => {
+    const t = h('div', `toast ${cls}`.trim(), { 'data-testid': 'toast' }, ...kids);
+    toasts.append(t);
+    while (toasts.children.length > 3) toasts.firstElementChild?.remove();
+    t.addEventListener('animationend', () => t.remove());
+    setTimeout(() => t.remove(), 3200);
+  };
+  const econ = createHudEcon(ctx, tracker, toastNodes);
+  const gems = econ.top;
+  el.append(glow, econ.top, stars, econ.missions, timer, prompt, toasts, econ.moments);
   ctx.uiRoot.append(el);
 
-  let lastGems = -1;
-  let lastTotal = -1;
   let lastStars = -1;
   let lastSecond = -1;
   let lastFrac = -1;
@@ -73,16 +80,12 @@ export function createHud(ctx: GameContext): Hud {
     prompt.classList.add('on');
   };
 
-  const toast = (ic: IconName, text?: string, extra?: UiIconName): void => {
-    const t = h('div', 'toast', {}, icon(ic), extra ? icon(extra) : null, text ? h('span', 't', {}, text) : null);
-    toasts.append(t);
-    while (toasts.children.length > 3) toasts.firstElementChild?.remove();
-    t.addEventListener('animationend', () => t.remove());
-    setTimeout(() => t.remove(), 3200);
-  };
+  const toast = (ic: IconName, text?: string, extra?: UiIconName): void =>
+    toastNodes([icon(ic), extra ? icon(extra) : null, text ? h('span', 't', {}, text) : null]);
+  // Items the shop catalog knows get the bigger unlock moment (item:unlocked) instead of a toast.
+  const known = (id: string): boolean => !!ctx.economy.item(id);
 
   const offs = [
-    ctx.events.on('gem:collected', () => retrigger(gems, 'pop')),
     ctx.events.on('gem:near', () => {
       // Deliberately directionless: a uniform soft glow, no id/distance/position is shown.
       retrigger(glow, 'on');
@@ -97,8 +100,12 @@ export function createHud(ctx: GameContext): Hud {
       toast(STUNT_ICON[e.kind], e.stars > 0 ? `+${e.stars}` : undefined, e.stars > 0 ? 'star' : undefined);
       if (e.stars > 0) retrigger(stars, 'pop');
     }),
-    ctx.events.on('chest:opened', (e) => toast('chest', undefined, outfitIcon(e.outfitId))),
-    ctx.events.on('outfit:unlocked', (e) => toast(outfitIcon(e.outfitId), undefined, 'sparkle')),
+    ctx.events.on('chest:opened', (e) => {
+      if (!known(e.outfitId)) toast('chest', undefined, outfitIcon(e.outfitId));
+    }),
+    ctx.events.on('outfit:unlocked', (e) => {
+      if (!known(e.outfitId)) toast(outfitIcon(e.outfitId), undefined, 'sparkle');
+    }),
     ctx.events.on('session:tick', (e) => {
       const sec = Math.ceil(e.remaining);
       const frac = timeFraction(e.remaining, e.total);
@@ -124,16 +131,12 @@ export function createHud(ctx: GameContext): Hud {
         renderPrompt();
         toasts.replaceChildren();
       } else {
-        lastGems = -1;
+        econ.reset();
       }
     },
-    update() {
+    update(dt) {
       const s = ctx.session.state;
-      if (s.gems !== lastGems || s.gemsTotal !== lastTotal) {
-        lastGems = s.gems;
-        lastTotal = s.gemsTotal;
-        gemText.textContent = counterText(s.gems, s.gemsTotal);
-      }
+      econ.update(dt);
       if (s.stars !== lastStars) {
         lastStars = s.stars;
         starText.textContent = String(s.stars);

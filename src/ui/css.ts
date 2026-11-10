@@ -1,3 +1,5 @@
+import { ECON_CSS } from './cssEcon';
+
 /** All UI CSS, injected once. Sizes use --u (about 1vmin, clamped) so 640x360 up to 4K work. */
 export const UI_CSS = `
 .rg{--u:clamp(5px,1vmin,22px);--y:#ffd93b;--ink:#0a0d1a;--panel:#10142a;--panel2:#1c2240;--out:#000;
@@ -232,6 +234,6 @@ export function injectCss(): void {
   if (injected) return;
   injected = true;
   const el = document.createElement('style');
-  el.textContent = UI_CSS;
+  el.textContent = UI_CSS + ECON_CSS;
   document.head.appendChild(el);
 }

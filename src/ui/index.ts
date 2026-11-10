@@ -4,6 +4,7 @@
  */
 import type { GameContext, SessionPhase, UiApi } from '../types';
 import { injectCss } from './css';
+import { createEconTracker } from './econState';
 import { createGate } from './gateScreen';
 import type { GateScreen } from './gateScreen';
 import { createHud } from './hud';
@@ -11,6 +12,7 @@ import { createNav } from './nav';
 import { createCredits, createEnd, createPause, createTitle } from './screens';
 import type { Actions, Screen } from './screens';
 import { createSettings } from './settingsScreen';
+import { createShop } from './shop';
 import { createTutorial } from './tutorial';
 
 export function createUi(ctx: GameContext): UiApi {
@@ -19,6 +21,9 @@ export function createUi(ctx: GameContext): UiApi {
   root.classList.add('rg');
 
   let calibrating = false;
+  /** The Gear Shack is open: the session is paused and the shop is the base screen. */
+  let shopOpen = false;
+  const tracker = createEconTracker(ctx);
   const stack: Screen[] = [];
   let shown: Screen | null = null;
   let wasMenu = false;
@@ -40,6 +45,12 @@ export function createUi(ctx: GameContext): UiApi {
     ctx.session.resume();
     capture();
   };
+  const closeShop = (): void => {
+    if (!shopOpen) return;
+    shopOpen = false;
+    if (ctx.session.state.phase === 'paused') resume();
+    else render();
+  };
   const pop = (): void => {
     stack.pop();
     render();
@@ -58,11 +69,17 @@ export function createUi(ctx: GameContext): UiApi {
       stack.push(credits);
       render();
     },
+    openWardrobe: () => {
+      stack.push(wardrobe);
+      render();
+    },
   };
 
-  const title = createTitle(actions);
+  const title = createTitle(ctx, actions);
   const pause = createPause(actions);
-  const end = createEnd(ctx, actions);
+  const end = createEnd(ctx, actions, tracker);
+  const shop = createShop(ctx, 'shop', closeShop);
+  const wardrobe = createShop(ctx, 'wardrobe', pop);
   const credits = createCredits({ back: pop });
   const settings = createSettings(ctx, {
     onClose: pop,
@@ -80,15 +97,15 @@ export function createUi(ctx: GameContext): UiApi {
     stack.push(settings);
     render();
   }, pop);
-  const all: Screen[] = [title, pause, end, credits, settings, gate];
+  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe];
   for (const s of all) root.append(s.el);
-  const hud = createHud(ctx);
+  const hud = createHud(ctx, tracker);
   const tutorial = createTutorial(ctx);
 
   const phase = (): SessionPhase => ctx.session.state.phase;
   const base = (): Screen | null => {
     const p = phase();
-    return p === 'title' ? title : p === 'paused' ? pause : p === 'ended' ? end : null;
+    return p === 'title' ? title : p === 'paused' ? (shopOpen ? shop : pause) : p === 'ended' ? end : null;
   };
   const top = (): Screen | null => {
     if (calibrating) return null;
@@ -120,15 +137,28 @@ export function createUi(ctx: GameContext): UiApi {
     layer: () => top()?.el ?? null,
     back: () => {
       if (stack.length) pop();
+      else if (shopOpen) closeShop();
       else if (phase() === 'paused') resume();
     },
     start: () => {
       if (stack.length) pop();
+      else if (shopOpen) closeShop();
       else if (phase() === 'paused') resume();
+    },
+    tab: (dir) => {
+      const t = top();
+      if (t === shop) shop.tab(dir);
     },
   });
 
+  ctx.events.on('shop:open', () => {
+    if (phase() !== 'playing' || calibrating) return;
+    shopOpen = true;
+    ctx.session.pause();
+  });
+
   ctx.events.on('session:phase', (e) => {
+    if (e.phase !== 'paused') shopOpen = false;
     stack.length = 0;
     shown = null;
     nav.notePhaseChange();
@@ -144,6 +174,10 @@ export function createUi(ctx: GameContext): UiApi {
     update(dt: number): void {
       const pad = nav.poll(dt);
       if (shown === gate) gate.update(dt, pad.aHeld);
+      if (shown === settings) settings.update(dt, pad.aHeld);
+      if (shown === shop) shop.update(dt);
+      if (shown === wardrobe) wardrobe.update(dt);
+      if (shown === title) title.wallet.update(dt);
       hud.update(dt);
       tutorial.update(dt, phase() === 'playing');
     },

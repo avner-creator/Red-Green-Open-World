@@ -8,7 +8,12 @@ import type { Screen } from './screens';
 
 export interface SettingsScreen extends Screen {
   refresh(): void;
+  /** Drives the hold-to-confirm profile reset (pointer, keys or gamepad A). */
+  update(dt: number, padHeld: boolean): void;
 }
+
+/** Seconds to hold the "reset gems and items" button. */
+export const PROFILE_RESET_HOLD = 3;
 
 interface SliderOpts {
   ic: UiIconName;
@@ -105,6 +110,37 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     reset.replaceChildren(icon('restart'), 'Reset');
   }
 
+  // Reset the player's profile (gems and items): hold to confirm, like the gate.
+  let held = 0;
+  let pHeld = false;
+  let kHeld = false;
+  let doneFlash = 0;
+  const profileReset = h(
+    'button',
+    'b d holdbar',
+    { type: 'button', 'aria-label': 'Hold to reset gems and items', 'data-testid': 'reset-profile', 'data-hold': '1' },
+    h('span', 'fill'),
+    icon('wallet'),
+    icon('hand'),
+    icon('clock'),
+  );
+  profileReset.addEventListener('pointerdown', (e) => {
+    pHeld = true;
+    profileReset.setPointerCapture?.(e.pointerId);
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) profileReset.addEventListener(ev, () => (pHeld = false));
+  profileReset.addEventListener('keydown', (e) => {
+    if (e.code === 'Enter' || e.code === 'Space') {
+      e.preventDefault();
+      kHeld = true;
+    }
+  });
+  profileReset.addEventListener('keyup', (e) => {
+    if (e.code === 'Enter' || e.code === 'Space') kHeld = false;
+  });
+  profileReset.addEventListener('blur', () => (kHeld = false));
+  const drawHold = (): void => profileReset.style.setProperty('--p', `${Math.min(1, held / PROFILE_RESET_HOLD) * 100}%`);
+
   const glassesRows: HTMLElement[] = [
     row('glasses', 'Lens on the left eye', null, h('div', 'choices', {}, lensBtn('red'), lensBtn('green'))),
     row('eye', 'Gem eye', null, h('div', 'choices', {}, eyeBtn('left'), eyeBtn('right'))),
@@ -129,7 +165,7 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     slider({ ic: 'note', label: 'Music', testid: 'vol-music', ...pct(() => S().volumeMusic, (v) => ctx.settings.set({ volumeMusic: v }), 0) }),
     slider({ ic: 'star', label: 'Sound effects', testid: 'vol-sfx', ...pct(() => S().volumeSfx, (v) => ctx.settings.set({ volumeSfx: v }), 0) }),
     row('sparkle', 'Graphics', null, h('div', 'choices', {}, qualityBtn('low', 'bars1', 'Low'), qualityBtn('medium', 'bars2', 'Medium'), qualityBtn('high', 'bars3', 'High'))),
-    row('restart', 'Reset all settings', null, reset),
+    row('restart', 'Reset', 'Settings · Gems and items (hold)', h('div', 'choices', {}, reset, profileReset)),
   ];
 
   // Two tabs so nothing scrolls on a small screen: Glasses / Game.
@@ -169,9 +205,27 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
   return {
     el,
     refresh,
+    update(dt, padHeld) {
+      const active = pHeld || kHeld || (padHeld && document.activeElement === profileReset);
+      held = active ? held + dt : Math.max(0, held - dt * 2.5);
+      if (doneFlash > 0) {
+        doneFlash -= dt;
+        if (doneFlash <= 0) profileReset.classList.remove('done');
+      }
+      if (held >= PROFILE_RESET_HOLD) {
+        held = 0;
+        pHeld = kHeld = false;
+        ctx.profile.reset();
+        doneFlash = 1.5;
+        profileReset.classList.add('done');
+      }
+      drawHold();
+    },
     onShow() {
       refresh();
       disarm();
+      held = 0;
+      drawHold();
       showTab('glasses');
       return el.querySelector<HTMLElement>('[data-testid="lens-red"]');
     },
