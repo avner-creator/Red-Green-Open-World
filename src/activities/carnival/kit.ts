@@ -85,7 +85,10 @@ export const G = {
   cylLo: new THREE.CylinderGeometry(0.5, 0.5, 1, 8).translate(0, 0.5, 0),
   cone: new THREE.ConeGeometry(0.5, 1, 14).translate(0, 0.5, 0),
   sphere: new THREE.SphereGeometry(0.5, 14, 10),
+  sphereMid: new THREE.SphereGeometry(0.5, 11, 8),
   sphereLo: new THREE.SphereGeometry(0.5, 8, 6),
+  /** Tiny self-lit bulbs: 20 triangles. */
+  bulb: new THREE.IcosahedronGeometry(0.5, 0),
   torus: new THREE.TorusGeometry(0.5, 0.08, 8, 24),
   plane: new THREE.PlaneGeometry(1, 1),
 };

@@ -21,14 +21,14 @@ export const PLUSH_TINT: Readonly<Record<GameId, number>> = {
 function plushGeometry(): THREE.BufferGeometry {
   const k = new Kit();
   const W = 0xffffff;
-  k.add(G.sphere, W, T(0, 0.17, 0, 0, 0.34, 0.32, 0.28));
-  k.add(G.sphere, W, T(0, 0.42, 0, 0, 0.3, 0.28, 0.27));
+  k.add(G.sphereMid, W, T(0, 0.17, 0, 0, 0.34, 0.32, 0.28));
+  k.add(G.sphereMid, W, T(0, 0.42, 0, 0, 0.3, 0.28, 0.27));
   for (const s of [-1, 1]) {
-    k.add(G.sphere, W, T(s * 0.12, 0.55, 0, 0, 0.11, 0.11, 0.07));
-    k.add(G.sphere, W, T(s * 0.15, 0.2, 0.06, 0, 0.11, 0.16, 0.11));
-    k.add(G.sphere, 0x111118, T(s * 0.065, 0.45, 0.13, 0, 0.045, 0.05, 0.03));
+    k.add(G.sphereLo, W, T(s * 0.12, 0.55, 0, 0, 0.11, 0.11, 0.07));
+    k.add(G.sphereLo, W, T(s * 0.15, 0.2, 0.06, 0, 0.11, 0.16, 0.11));
+    k.add(G.sphereLo, 0x111118, T(s * 0.065, 0.45, 0.13, 0, 0.045, 0.05, 0.03));
   }
-  k.add(G.sphere, 0xf0e6dc, T(0, 0.39, 0.12, 0, 0.12, 0.09, 0.06));
+  k.add(G.sphereLo, 0xf0e6dc, T(0, 0.39, 0.12, 0, 0.12, 0.09, 0.06));
   k.add(G.sphereLo, 0x111118, T(0, 0.41, 0.15, 0, 0.04, 0.03, 0.03));
   return k.build();
 }

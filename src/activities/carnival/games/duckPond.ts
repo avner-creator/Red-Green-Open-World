@@ -24,14 +24,14 @@ const COUNTER_Y = 0.72;
 function duckGeometry(): THREE.BufferGeometry {
   const k = new Kit();
   const Y = 0xffd83a;
-  k.add(G.sphere, Y, T(0, 0.08, -0.02, 0, 0.32, 0.22, 0.4));
+  k.add(G.sphereMid, Y, T(0, 0.08, -0.02, 0, 0.32, 0.22, 0.4));
   k.add(G.cone, Y, T(0, 0.1, -0.22, 0, 0.12, 0.16, 0.12, -1.2));
-  k.add(G.sphere, Y, T(0, 0.27, 0.1, 0, 0.21, 0.2, 0.2));
-  k.add(G.sphere, 0xff8a1a, T(0, 0.25, 0.22, 0, 0.11, 0.05, 0.12));
+  k.add(G.sphereLo, Y, T(0, 0.27, 0.1, 0, 0.21, 0.2, 0.2));
+  k.add(G.bulb, 0xff8a1a, T(0, 0.25, 0.22, 0, 0.11, 0.05, 0.12));
   for (const s of [-1, 1]) {
-    k.add(G.sphereLo, 0x0a0a10, T(s * 0.065, 0.31, 0.17, 0, 0.05, 0.06, 0.04));
-    k.add(G.sphereLo, 0xffffff, T(s * 0.072, 0.325, 0.185, 0, 0.018, 0.018, 0.012));
-    k.add(G.sphere, 0xf5c020, T(s * 0.13, 0.12, -0.02, 0, 0.06, 0.12, 0.22));
+    k.add(G.bulb, 0x0a0a10, T(s * 0.065, 0.31, 0.17, 0, 0.05, 0.06, 0.04));
+    k.add(G.bulb, 0xffffff, T(s * 0.072, 0.325, 0.185, 0, 0.018, 0.018, 0.012));
+    k.add(G.sphereLo, 0xf5c020, T(s * 0.13, 0.12, -0.02, 0, 0.06, 0.12, 0.22));
   }
   return k.build();
 }

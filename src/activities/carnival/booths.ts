@@ -94,7 +94,7 @@ function awning(r: RowBuild, B: THREE.Matrix4, color: number, game: GameId, fron
     k.add(G.cylLo, i % 2 ? color : WHITE, mul(B, T(x, frontY - 0.02, 0.62, 0, 0.5, 0.05, 0.5, Math.PI / 2)));
   }
   // Warm bulbs under the valance.
-  for (let i = 0; i < 9; i++) k.add(G.sphereLo, 0xfff0c0, mul(B, T(-2 + i * 0.5, frontY - 0.3, 0.6, 0, 0.13, 0.13, 0.13)), 1);
+  for (let i = 0; i < 9; i++) k.add(G.bulb, 0xfff0c0, mul(B, T(-2 + i * 0.5, frontY - 0.3, 0.6, 0, 0.13, 0.13, 0.13)), 1);
   // Sign: gold frame, night plate, pictogram.
   k.add(G.box, GOLD, mul(B, T(0, frontY + 0.12, 0.42, 0, 1.5, 1.24, 0.08)));
   k.add(G.box, NIGHT, mul(B, T(0, frontY + 0.2, 0.47, 0, 1.3, 1.08, 0.04)));
@@ -116,7 +116,7 @@ function stall(r: RowBuild, game: GameId, B: THREE.Matrix4): void {
     for (const z of [-0.12, -d + 0.08]) {
       k.add(G.cyl, WHITE, mul(B, T(x, 0, z, 0, 0.18, 3.25, 0.18)));
     }
-    k.add(G.sphere, GOLD, mul(B, T(x, 3.3, -0.12, 0, 0.26, 0.26, 0.26)));
+    k.add(G.sphereLo, GOLD, mul(B, T(x, 3.3, -0.12, 0, 0.26, 0.26, 0.26)));
   }
   // Dark back wall (a dark backdrop makes the weak-eye prizes pop) with a gold rail; striped sides.
   k.add(G.box, NIGHT, mul(B, T(0, 0, -d + 0.02, 0, BOOTH_W - 0.1, 3.15, 0.12)));
@@ -175,10 +175,10 @@ function tentBooth(r: RowBuild, game: GameId, B: THREE.Matrix4): void {
     k.add(wedge, i % 2 ? WHITE : c, mul(B, T(0, roofY, -d / 2, Math.PI / 8)));
     wedge.dispose();
   }
-  k.add(G.sphere, GOLD, mul(B, T(0, roofY + 2.42, -d / 2, 0, 0.32, 0.32, 0.32)));
+  k.add(G.sphereLo, GOLD, mul(B, T(0, roofY + 2.42, -d / 2, 0, 0.32, 0.32, 0.32)));
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    k.add(G.sphereLo, 0xfff0c0, mul(B, T(Math.sin(a) * 3.3, roofY + 0.18, -d / 2 + Math.cos(a) * 3.3, 0, 0.14, 0.14, 0.14)), 1);
+    k.add(G.bulb, 0xfff0c0, mul(B, T(Math.sin(a) * 3.3, roofY + 0.18, -d / 2 + Math.cos(a) * 3.3, 0, 0.14, 0.14, 0.14)), 1);
   }
   // Sign over the opening.
   k.add(G.box, GOLD, mul(B, T(0, roofY - 0.05, 0.25, 0, 1.5, 1.24, 0.08)));
@@ -195,7 +195,7 @@ function arch(r: RowBuild): void {
   for (const z of [z0, z1]) {
     k.add(G.cyl, WHITE, T(ARCH_X, 0, z, 0, 0.32, 4.6, 0.32));
     for (let i = 0; i < 6; i++) k.add(G.cylLo, i % 2 ? 0x8c1c34 : 0x23308a, T(ARCH_X, 0.4 + i * 0.7, z, 0, 0.36, 0.3, 0.36));
-    k.add(G.sphere, GOLD, T(ARCH_X, 4.75, z, 0, 0.5, 0.5, 0.5));
+    k.add(G.sphereLo, GOLD, T(ARCH_X, 4.75, z, 0, 0.5, 0.5, 0.5));
   }
   // Curved beam of alternating segments with bulbs.
   const n = 12;
@@ -208,8 +208,8 @@ function arch(r: RowBuild): void {
     const len = Math.hypot(zb - za, yb - ya);
     const pitch = -Math.atan2(yb - ya, zb - za);
     k.add(G.boxC, i % 2 ? WHITE : 0x8c1c34, T(ARCH_X, (ya + yb) / 2, (za + zb) / 2, 0, 0.28, 0.42, len + 0.02, pitch));
-    k.add(G.sphereLo, 0xfff0c0, T(ARCH_X - 0.16, (ya + yb) / 2 - 0.26, (za + zb) / 2, 0, 0.15, 0.15, 0.15), 1);
-    k.add(G.sphereLo, 0xfff0c0, T(ARCH_X + 0.16, (ya + yb) / 2 - 0.26, (za + zb) / 2, 0, 0.15, 0.15, 0.15), 1);
+    k.add(G.bulb, 0xfff0c0, T(ARCH_X - 0.16, (ya + yb) / 2 - 0.26, (za + zb) / 2, 0, 0.15, 0.15, 0.15), 1);
+    k.add(G.bulb, 0xfff0c0, T(ARCH_X + 0.16, (ya + yb) / 2 - 0.26, (za + zb) / 2, 0, 0.15, 0.15, 0.15), 1);
   }
   // Round sign on both faces (tent pictogram).
   for (const s of [-1, 1]) {
@@ -261,13 +261,13 @@ function midway(r: RowBuild): void {
   // Light poles with strings of bulbs across the midway between the booths.
   for (const x of [-9, -3, 3, 9]) {
     k.add(G.cyl, WHITE, T(x, 0, MIDWAY_Z1 - 0.35, 0, 0.14, 4.0, 0.14));
-    k.add(G.sphere, GOLD, T(x, 4.0, MIDWAY_Z1 - 0.35, 0, 0.22, 0.22, 0.22));
+    k.add(G.sphereLo, GOLD, T(x, 4.0, MIDWAY_Z1 - 0.35, 0, 0.22, 0.22, 0.22));
     const za = MIDWAY_Z1 - 0.35;
     const zb = BOOTH_FRONT_Z - 0.2;
     for (let i = 0; i <= 8; i++) {
       const t = i / 8;
       const y = 3.95 - Math.sin(t * Math.PI) * 0.55 - t * 0.6;
-      k.add(G.sphereLo, i % 2 ? 0xfff0c0 : 0xffe07a, T(x, y, za + (zb - za) * t, 0, 0.13, 0.13, 0.13), 1);
+      k.add(G.bulb, i % 2 ? 0xfff0c0 : 0xffe07a, T(x, y, za + (zb - za) * t, 0, 0.13, 0.13, 0.13), 1);
     }
     r.colliders.push({ center: new THREE.Vector3(x, 2, MIDWAY_Z1 - 0.35), half: new THREE.Vector3(0.1, 2, 0.1) });
   }

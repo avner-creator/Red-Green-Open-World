@@ -39,7 +39,7 @@ function pegGeometry(): THREE.BufferGeometry {
   k.add(G.cyl, 0xf4efe4, T(0, 0, 0, 0, 0.15, PEG_H, 0.15));
   k.add(G.cyl, 0x8c1c34, T(0, PEG_H * 0.35, 0, 0, 0.155, 0.07, 0.155));
   k.add(G.cyl, 0x8c1c34, T(0, PEG_H * 0.65, 0, 0, 0.155, 0.07, 0.155));
-  k.add(G.sphere, 0xffcf33, T(0, PEG_H, 0, 0, 0.2, 0.2, 0.2));
+  k.add(G.sphereLo, 0xffcf33, T(0, PEG_H, 0, 0, 0.2, 0.2, 0.2));
   return k.build();
 }
 

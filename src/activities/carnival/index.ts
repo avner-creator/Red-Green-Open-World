@@ -512,8 +512,11 @@ export function createCarnival(ctx: GameContext): Carnival {
       if (ctx.session.state.phase === 'paused') return;
       local.copy(ctx.player.position);
       root.worldToLocal(local);
-      const near = Math.hypot(local.x, local.z) < ACTIVE_RANGE;
+      const dist = Math.hypot(local.x, local.z);
+      const near = dist < ACTIVE_RANGE;
       if (!near && !active) return;
+      // Stream the friends' models in as the player walks up, so they're there at the first 3-2-1.
+      if (!active && dist < 30) friends.prepare(ctx.player.characterId);
       keepers.update(dt, near ? { x: local.x, z: local.z } : null, active?.id ?? null);
       plush.update(dt);
       friends.update(dt);

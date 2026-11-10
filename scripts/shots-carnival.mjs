@@ -50,6 +50,29 @@ try {
     rg.step(1 / 60, 10, false);
   });
   const info = await page.evaluate(() => window.__rgCarnival.info());
+  // Budget check: draws and triangles of the idle row (main scene + weak layer), not counting friends.
+  const perf = await page.evaluate(() => {
+    const ctx = window.__rg.ctx;
+    let draws = 0;
+    let tris = 0;
+    const per = [];
+    const count = (root) =>
+      root.traverseVisible((o) => {
+        if (!o.isMesh || o.name.startsWith('carnival-friend') || o.layers.mask !== 1) return;
+        const g = o.geometry;
+        const n = (g.index ? g.index.count : g.attributes.position.count) / 3;
+        const inst = o.isInstancedMesh ? o.count : 1;
+        if (inst === 0) return;
+        draws++;
+        tris += n * inst;
+        per.push(`${o.name}:${Math.round(n * inst)}`);
+      });
+    const row = ctx.scene.getObjectByName('carnival-row');
+    if (row) count(row);
+    ctx.scene.traverse((o) => o.name.startsWith('carnival-') && o.name.endsWith('-weak') && count(o));
+    return { draws, tris: Math.round(tris), per };
+  });
+  console.log('idle carnival row (visible):', JSON.stringify(perf));
   if (!wanted.length || wanted.includes('row')) {
     // From the plaza end of the midway, looking down the row.
     const [ex, , ez] = await page.evaluate(() => window.__rgCarnival.boothPoint('balloonPop', 5.5, 0, 2.6));

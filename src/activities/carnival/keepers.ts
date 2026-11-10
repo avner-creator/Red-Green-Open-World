@@ -14,24 +14,24 @@ function keeperBody(): THREE.BufferGeometry {
   const k = new Kit();
   // Legs, striped shirt body, bow tie.
   for (const s of [-1, 1]) k.add(G.cylLo, 0x1d2238, T(s * 0.1, 0, 0, 0, 0.17, 0.42, 0.17));
-  k.add(G.cyl, 0xf6f2ea, T(0, 0.38, 0, 0, 0.66, 0.66, 0.56));
-  for (const y of [0.5, 0.68, 0.86]) k.add(G.cyl, 0x8c1c34, T(0, y, 0, 0, 0.675, 0.07, 0.575));
-  k.add(G.sphere, 0xf6f2ea, T(0, 1.02, 0, 0, 0.66, 0.3, 0.56));
+  k.add(G.cylLo, 0xf6f2ea, T(0, 0.38, 0, 0, 0.66, 0.66, 0.56));
+  for (const y of [0.5, 0.68, 0.86]) k.add(G.cylLo, 0x8c1c34, T(0, y, 0, 0, 0.675, 0.07, 0.575));
+  k.add(G.sphereLo, 0xf6f2ea, T(0, 1.02, 0, 0, 0.66, 0.3, 0.56));
   for (const s of [-1, 1]) k.add(G.cone, 0x8c1c34, T(s * 0.08, 1.08, 0.25, 0, 0.12, 0.14, 0.1, 0, s * Math.PI / 2));
   // Big head with big eyes, rosy cheeks, smile, nose.
-  k.add(G.sphere, SKIN, T(0, 1.36, 0, 0, 0.64, 0.6, 0.6));
+  k.add(G.sphereMid, SKIN, T(0, 1.36, 0, 0, 0.64, 0.6, 0.6));
   for (const s of [-1, 1]) {
-    k.add(G.sphere, 0xffffff, T(s * 0.12, 1.42, 0.24, 0, 0.17, 0.2, 0.1));
-    k.add(G.sphere, 0x0a0a10, T(s * 0.12, 1.41, 0.29, 0, 0.1, 0.12, 0.05));
-    k.add(G.sphereLo, 0xffffff, T(s * 0.12 + 0.025, 1.45, 0.31, 0, 0.03, 0.03, 0.02));
-    k.add(G.sphereLo, 0xe88a8a, T(s * 0.2, 1.31, 0.23, 0, 0.1, 0.06, 0.04));
+    k.add(G.sphereLo, 0xffffff, T(s * 0.12, 1.42, 0.24, 0, 0.17, 0.2, 0.1));
+    k.add(G.sphereLo, 0x0a0a10, T(s * 0.12, 1.41, 0.29, 0, 0.1, 0.12, 0.05));
+    k.add(G.bulb, 0xffffff, T(s * 0.12 + 0.025, 1.45, 0.31, 0, 0.03, 0.03, 0.02));
+    k.add(G.bulb, 0xe88a8a, T(s * 0.2, 1.31, 0.23, 0, 0.1, 0.06, 0.04));
   }
-  k.add(G.sphere, 0xe39a6a, T(0, 1.34, 0.31, 0, 0.09, 0.08, 0.08));
-  k.add(new THREE.TorusGeometry(0.07, 0.016, 6, 12, Math.PI), 0x3a1410, T(0, 1.27, 0.285, 0, 1, 1, 1, 0, Math.PI));
+  k.add(G.sphereLo, 0xe39a6a, T(0, 1.34, 0.31, 0, 0.09, 0.08, 0.08));
+  k.add(new THREE.TorusGeometry(0.07, 0.016, 4, 8, Math.PI), 0x3a1410, T(0, 1.27, 0.285, 0, 1, 1, 1, 0, Math.PI));
   // Straw boater.
-  k.add(G.cyl, 0xf2d27a, T(0, 1.58, 0, 0, 0.82, 0.03, 0.82));
-  k.add(G.cyl, 0xf2d27a, T(0, 1.58, 0, 0, 0.5, 0.17, 0.5));
-  k.add(G.cyl, 0x23308a, T(0, 1.61, 0, 0, 0.51, 0.06, 0.51));
+  k.add(G.cylLo, 0xf2d27a, T(0, 1.58, 0, 0, 0.82, 0.03, 0.82));
+  k.add(G.cylLo, 0xf2d27a, T(0, 1.58, 0, 0, 0.5, 0.17, 0.5));
+  k.add(G.cylLo, 0x23308a, T(0, 1.61, 0, 0, 0.51, 0.06, 0.51));
   return k.build();
 }
 
@@ -39,7 +39,7 @@ function keeperArm(): THREE.BufferGeometry {
   // Pivot at the shoulder, hanging down −Y.
   const k = new Kit();
   k.add(G.cylLo, 0xf6f2ea, T(0, -0.42, 0, 0, 0.13, 0.42, 0.13));
-  k.add(G.sphere, SKIN, T(0, -0.46, 0, 0, 0.16, 0.16, 0.16));
+  k.add(G.sphereLo, SKIN, T(0, -0.46, 0, 0, 0.16, 0.16, 0.16));
   return k.build();
 }
 

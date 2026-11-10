@@ -41,7 +41,7 @@ interface Bag {
 
 function balloonGeometry(): THREE.BufferGeometry {
   const k = new Kit();
-  k.add(G.sphere, 0xffffff, T(0, 0, 0, 0, 0.44, 0.52, 0.44));
+  k.add(G.sphereMid, 0xffffff, T(0, 0, 0, 0, 0.44, 0.52, 0.44));
   k.add(G.cone, 0xffffff, T(0, -0.3, 0, 0, 0.09, 0.08, 0.09, Math.PI));
   k.add(G.cylLo, 0xdddddd, T(0, -0.62, 0, 0, 0.012, 0.32, 0.012));
   return k.build();
@@ -50,7 +50,7 @@ function balloonGeometry(): THREE.BufferGeometry {
 function prizeGeometry(): THREE.BufferGeometry {
   // Same balloon, a bit bigger, with a star tag hanging below.
   const k = new Kit();
-  k.add(G.sphere, 0xffffff, T(0, 0, 0, 0, 0.5, 0.6, 0.5));
+  k.add(G.sphereMid, 0xffffff, T(0, 0, 0, 0, 0.5, 0.6, 0.5));
   k.add(G.cone, 0xffffff, T(0, -0.34, 0, 0, 0.1, 0.09, 0.1, Math.PI));
   k.add(G.cylLo, 0xffffff, T(0, -0.62, 0, 0, 0.016, 0.28, 0.016));
   const star = new THREE.CylinderGeometry(0.11, 0.11, 0.03, 5).rotateX(Math.PI / 2);
