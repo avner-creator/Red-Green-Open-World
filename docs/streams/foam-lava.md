@@ -1,7 +1,7 @@
 # Stream M: Foam Lava course (branch `agent/foam-lava`, folder `src/activities/foamlava/`)
 
-Status: **done, ready to merge.** Latest `main` is merged in and `npm run verify` is green on the
-branch (see "Tests" for the numbers).
+Status: **done, ready to merge.** Latest `main` (0bd44a5) is merged in and `npm run verify` is
+green on the branch: 343 unit tests (11 new) and 79 e2e tests (4 new) in 4.6 min.
 
 ## What it is
 
