@@ -233,7 +233,8 @@ test.describe('ui', () => {
     // Play is focused; arrow moves to a corner button; Enter opens credits.
     await page.keyboard.press('ArrowDown');
     const id = await page.evaluate(() => (document.activeElement as HTMLElement).dataset.testid);
-    expect(['grownups', 'credits']).toContain(id);
+    // Below Play: the wardrobe button (title), then the corner buttons.
+    expect(['title-wardrobe', 'grownups', 'credits']).toContain(id);
     await page.getByTestId('credits').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('credits-back')).toBeVisible();

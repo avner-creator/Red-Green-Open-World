@@ -44,7 +44,7 @@ export const ECON_CSS = `
 .rg .econtop .row2 .pill.stars{position:relative;left:auto;top:auto}
 .rg .econtop>.wallet{z-index:2}
 .rg .econtop.near .wallet{animation:rg-near 1.2s ease-out}
-.rg .combo{--cs:1;position:relative;width:calc(var(--u)*9.4);height:calc(var(--u)*9.4);display:none;align-items:center;justify-content:center;font-size:calc(var(--u)*3.9);transform:scale(var(--cs));transform-origin:30% 50%}
+.rg .combo{--cs:1;position:relative;width:calc(var(--u)*9.4);height:calc(var(--u)*9.4);display:none;align-items:center;justify-content:center;font-size:calc(var(--u)*3.9);transform:scale(var(--cs));transform-origin:30% 0}
 .rg .combo.on{display:flex}
 .rg .combo svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .rg .combo::before{content:'';position:absolute;inset:15%;border-radius:50%;background:radial-gradient(circle at 40% 30%,#46519e,#0d1130 75%);border:calc(var(--u)*.35) solid #000}
