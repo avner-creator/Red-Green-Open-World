@@ -16,6 +16,23 @@ export interface CameraInternal {
   update(dt: number): void;
   /** Snap behind the player looking along `yaw` (after teleport/respawn). */
   snap(yaw: number): void;
+  /** Chase-camera mode for a vehicle (null = normal on-foot orbit). Blends smoothly both ways. */
+  setChase(source: ChaseSource | null): void;
+}
+
+/** What the chase camera needs from a vehicle. */
+export interface ChaseSource {
+  /** Heading of the vehicle's nose (yaw, radians). */
+  heading(): number;
+  /** Signed forward speed (m/s). */
+  speed(): number;
+  /** Speed at which the camera reaches its widest FOV / furthest distance. */
+  readonly topSpeed: number;
+  /** Turn rate (rad/s, + = left): the camera leans into turns. */
+  yawRate(): number;
+  /** Base follow distance and FOV for this vehicle. */
+  readonly distance: number;
+  readonly height: number;
 }
 
 const BASE_PITCH = Math.atan2(CAMERA.height, CAMERA.distance);
@@ -31,6 +48,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   let extraHeight = 0;
   let fov: number = CAMERA.fov;
   let lookAhead = 0;
+  let chase: ChaseSource | null = null;
+  /** 0 = on foot, 1 = full chase framing (blended). */
+  let chaseK = 0;
   let trauma = 0;
   let shakeTime = 0;
   let sinceLook = 99;
@@ -63,6 +83,11 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     },
   };
 
+  function setChase(source: ChaseSource | null): void {
+    chase = source;
+    sinceLook = 99; // swing in behind the vehicle right away
+  }
+
   function snap(newYaw: number): void {
     yaw = newYaw;
     pitch = BASE_PITCH;
@@ -75,10 +100,16 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     const phase = ctx.session.state.phase;
     const input = ctx.input.state;
     const k = damp(4, dt);
-    wantDistance += ((override?.distance ?? CAMERA.distance) - wantDistance) * k;
-    extraHeight += ((override?.height ?? CAMERA.height) - CAMERA.height - extraHeight) * k;
-    lookAhead += ((override?.lookAhead ?? 0) - lookAhead) * k;
-    const fovTarget = override?.fov ?? CAMERA.fov;
+    chaseK += ((chase ? 1 : 0) - chaseK) * damp(3, dt);
+    // Chase framing: further back and a wider FOV as speed builds (sense of speed).
+    const sp = chase ? Math.min(1, Math.abs(chase.speed()) / Math.max(1, chase.topSpeed)) : 0;
+    const baseDist = chase ? chase.distance + sp * 1.3 : CAMERA.distance;
+    const baseHeight = chase ? chase.height : CAMERA.height;
+    const baseFov = chase ? CAMERA.fov + 4 + sp * 9 : CAMERA.fov;
+    wantDistance += ((override?.distance ?? baseDist) - wantDistance) * k;
+    extraHeight += ((override?.height ?? baseHeight) - CAMERA.height - extraHeight) * k;
+    lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : 0)) - lookAhead) * k;
+    const fovTarget = override?.fov ?? baseFov;
     if (Math.abs(fovTarget - fov) > 0.01) {
       fov += (fovTarget - fov) * damp(3, dt);
       camera.fov = fov;
@@ -104,7 +135,15 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       yaw = steerOverrideYaw(yaw, ctx.player.yaw, override, sinceLook, CAM.autoAlignDelay, 2, dt);
       // Gently swing behind a player who runs forward-ish and isn't steering the camera.
       const hs = Math.hypot(ctx.player.velocity.x, ctx.player.velocity.z);
-      if (sinceLook > CAM.autoAlignDelay && hs > 1 && input.moveY > 0.3 && ctx.player.mode === 'walk') {
+      if (chase) {
+        // Chase: swing in behind the nose (look ahead into turns) unless the player is looking around.
+        const v = chase.speed();
+        if (sinceLook > 0.6 && v > -2) {
+          const want = chase.heading() + Math.max(-0.35, Math.min(0.35, chase.yawRate() * 0.22));
+          yaw += angleDelta(yaw, want) * damp(1.2 + 3 * Math.min(1, Math.abs(v) / 8), dt);
+          pitch += (0.24 - pitch) * damp(1.5, dt);
+        }
+      } else if (sinceLook > CAM.autoAlignDelay && hs > 1 && input.moveY > 0.3 && ctx.player.mode === 'walk') {
         yaw += angleDelta(yaw, ctx.player.yaw) * damp(CAM.autoAlignRate * Math.min(1, hs / 6), dt);
       }
       // Smooth follow (tighter horizontally than vertically), with bounded lag.
@@ -125,7 +164,12 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     camera.position.copy(pivot).addScaledVector(dir, distance);
 
     lookAt.copy(pivot);
-    if (lookAhead !== 0) lookAt.addScaledVector(ctx.player.velocity, lookAhead * 0.1);
+    if (lookAhead !== 0) {
+      tmp.copy(ctx.player.velocity).setY(ctx.player.velocity.y * 0.2);
+      if (tmp.length() > 20) tmp.setLength(20);
+      lookAt.addScaledVector(tmp, lookAhead * 0.1);
+    }
+    if (chaseK > 0.001) lookAt.y -= 0.35 * chaseK; // frame the whole vehicle, not just the driver
     camera.lookAt(lookAt);
 
     if (trauma > 0) {
@@ -138,5 +182,5 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     }
   }
 
-  return { api, update, snap };
+  return { api, update, snap, setChase };
 }

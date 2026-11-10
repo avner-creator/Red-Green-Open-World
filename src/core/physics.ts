@@ -9,11 +9,13 @@ import type { GameContext, PhysicsApi } from '../types';
  * this group are skipped by `PhysicsApi.raycast` so camera and gameplay rays never hit the avatar.
  */
 export const GROUP_AVATAR = 0x0002;
+/** Vehicle chassis: solid for the walking player and props, but skipped by `PhysicsApi.raycast`. */
+export const GROUP_VEHICLE = 0x0004;
 const ALL = 0xffff;
 /** membership << 16 | filter */
 export const groups = (membership: number, filter: number): number => ((membership & ALL) << 16) | (filter & ALL);
-/** Query groups for rays that ignore the avatar. */
-export const RAY_GROUPS = groups(ALL, ALL & ~GROUP_AVATAR);
+/** Query groups for rays that ignore the avatar and vehicle bodies (camera, gameplay probes). */
+export const RAY_GROUPS = groups(ALL, ALL & ~GROUP_AVATAR & ~GROUP_VEHICLE);
 
 /** Rapier wants column-major (x outer, z inner); the API takes row-major [z][x]. */
 export function rowMajorToRapier(nx: number, nz: number, heights: Float32Array): Float32Array {

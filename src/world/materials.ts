@@ -10,6 +10,8 @@ export const U = {
   time: { value: 0 },
   /** 0 by day → 1 at sunset: windows and lamps light up. */
   glow: { value: 0 },
+  /** Grass and flowers shrink away between 70% and 100% of this distance from the camera. */
+  grassFar: { value: 42 },
 };
 
 export const GLSL_NOISE = /* glsl */ `
@@ -29,8 +31,9 @@ export function patch(
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = U.time;
     shader.uniforms.uGlow = U.glow;
+    shader.uniforms.uGrassFar = U.grassFar;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nuniform float uTime;\nvarying vec3 vWorldPos;\n${edit.vertexPre ?? ''}`)
+      .replace('#include <common>', `#include <common>\nuniform float uTime;\nuniform float uGrassFar;\nvarying vec3 vWorldPos;\n${edit.vertexPre ?? ''}`)
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>\n${edit.vertex ?? ''}\n{ vec4 rgWp = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\nrgWp = instanceMatrix * rgWp;\n#endif\nvWorldPos = (modelMatrix * rgWp).xyz; }`,
@@ -127,9 +130,13 @@ export function createMaterials(): Materials {
       #ifdef USE_INSTANCING
       ip = instanceMatrix[3].xyz;
       #endif
+      float fade = 1.0 - smoothstep(uGrassFar * 0.7, uGrassFar, distance(cameraPosition.xz, ip.xz));
+      transformed *= fade;
       float sw = transformed.y * transformed.y * 0.35;
       transformed.x += sin(uTime * 2.1 + ip.x * 0.37 + ip.z * 0.23) * sw;
       transformed.z += cos(uTime * 1.7 + ip.z * 0.31) * sw * 0.6; }`,
+    // Blades are double-sided but keep their up-facing normals on the back side too (no dark backs).
+    afterNormal: 'normal = normalize(vNormal);',
   });
   const rock = std({ roughness: 0.82 });
   patch(rock, 'rg-rock', {

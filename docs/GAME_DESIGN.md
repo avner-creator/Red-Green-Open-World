@@ -74,3 +74,51 @@ calibration · strong-eye contrast · session length · audio volumes · graphic
 ## Out of scope for the demo
 Touch/mobile controls, Levels, accounts, saving progress between sessions, multiplayer, story/dialogue, shops,
 any combat.
+
+## Fun and motivation pass (owner playtest feedback, 2026-11-10) — overrides earlier sections where they differ
+
+**Why**: the first playable was pretty but tame. Gems had no purpose, attractions were far apart
+and unexplained, walking was slow, the robot had no personality, the music was dull. The weak-eye
+gems must be the thing every kid *wants*, because wanting them is what makes the weak eye work.
+
+1. **Gems are money.** The HUD shows a wallet. Gems buy things and are the only currency, and
+   gems are only visible to the weak eye.
+   - Values: normal gem 1; **mega gems** (bigger, different shape, weak-eye-only) worth 5 at thrill
+     spots (trampoline peak, skydive trail, mid-air after launch pads, on the road for the car).
+   - Streak: gems collected within 3 s of each other build a combo (×2, ×3 up to ×5) with rising chime.
+   - Gems **respawn** about 45 s after pickup, so there is always something for the weak eye to hunt.
+   - The wallet and everything unlocked are **kept between sessions** (localStorage profile; a
+     grown-up can reset it). This replaces "no saving between sessions".
+2. **Things to buy (Gear Shack kiosk on the plaza + wardrobe in the pause menu).**
+   Characters, outfits (hats, capes, glasses, backpacks), buggy paints, trails (sparkle, rainbow,
+   bubbles behind the player), emotes. Prices 5–100 gems; chests still give exclusive items for free.
+   Buying is instant, wearable right away, with a big celebratory unlock moment.
+3. **Tickets.** The balloon ride costs 5 gems (the first ride each session is free). Rocket pads
+   cost 3. Trampoline, bounce pads and the buggy are free. Nothing can soft-lock: free fun is
+   always next to gems.
+4. **Missions.** Three wordless mission cards per session (icon + number: "collect 10 gems",
+   "bounce 30 m", "land in the rings", "open a chest", "drive through 5 gems"), each paying a gem
+   bonus, and a jackpot for all three. Shown small on the HUD and on the end screen.
+5. **Characters with personality.** Onboarding = pick your character (big carousel, each with a
+   name, a one-line backstory, a signature emote and one **skill**). Two are free, the rest are
+   bought with gems. Skills: double jump, glide, dash, super bounce, ground-pound. Characters are
+   CC0 animated models if they can be sourced quickly (Quaternius), otherwise bold re-skins of the
+   robot with different silhouettes (add-on parts), colours and animations.
+6. **Bigger, sillier thrills (still non-violent).** Trampoline: the first bounce is already ~12 m,
+   then ×1.5 up to ~45 m (150 ft); flips and spins in the air with the move keys score trick stars;
+   landing off the mat is a comic flop. Bounce pads 8/15/25 m. Rocket pads fling you ~60 m across
+   the park into a bouncy landing net. The buggy gets ramps and a loop of mega gems. Everything
+   wobbles, boings and confetti-pops.
+7. **Finding your way.** Every attraction is a landmark: a tall both-eye beacon (bobbing balloon
+   marker with the attraction's icon) visible across the island, a big icon signpost at the plaza
+   with arrows to each attraction, an icon compass strip on the HUD, and at each attraction a
+   picture sign showing what to do in 2–3 pictograms. Attractions are pulled closer to the plaza
+   where the terrain allows.
+8. **Faster on foot.** Walk 6.5 m/s, sprint 11 m/s.
+9. **Controls help.** A "?" button on the HUD (and H / gamepad Back) shows the controls card at
+   any time; it is also in the pause menu.
+10. **Music.** Upbeat, catchy, and it changes with what you do (plaza, driving, sky, last 30 s).
+    Use CC0 tracks (OpenGameArt, with ASSETS.md rows) if good ones are found; otherwise a much
+    livelier generative score.
+11. **Touch/mobile controls**: planned for v2 unless a parallel workstream delivers them (see
+    docs/PARALLEL_WORK.md).

@@ -38,11 +38,12 @@ export const ANCHORS: Record<AnchorName, AnchorDef> = {
   bouncePads: { x: 84, z: -12, radius: 10, yaw: -Math.PI / 2, onLand: true },
   balloon: { x: 84, z: 64, radius: 12, yaw: Math.PI * 0.75, onLand: true },
   landingRings: { x: 124, z: 22, radius: 18, yaw: -Math.PI / 2, onLand: true },
-  bungee: { x: -1.5, z: CANYON.z, radius: 3, yaw: -Math.PI / 2, y: DECK_Y, onLand: false },
+  // yaw faces back along the deck (the approach); the jump itself goes west (−X) off the platform.
+  bungee: { x: -1.5, z: CANYON.z, radius: 3, yaw: 0, y: DECK_Y, onLand: false },
   bungeeLanding: { x: -18, z: CANYON.z, radius: 5, yaw: Math.PI / 2, onLand: true },
   lakePlatform: { x: -118, z: -50, radius: 4, yaw: Math.PI / 4, y: 0.75, onLand: false },
   lighthouse: { x: -62, z: -134, radius: 8, yaw: -Math.PI / 4, onLand: true },
-  ranch: { x: -74, z: 44, radius: 16, yaw: Math.PI / 2, onLand: true },
+  ranch: { x: -74, z: 44, radius: 16, yaw: Math.PI / 2 + 0.6, onLand: true },
   sillyZone: { x: 8, z: 98, radius: 16, yaw: Math.PI, onLand: true },
   launchPads: { x: -30, z: 102, radius: 10, yaw: Math.PI / 2, onLand: true },
 };
@@ -52,6 +53,8 @@ export interface RoadDef {
   id: string;
   kind: RoadKind;
   width: number;
+  /** Village lane: asphalt with stone kerbs, centre dashes, lamps and verge planting. */
+  kerb?: boolean;
   /** [x, z] or [x, z, fixedHeight]. */
   points: readonly (readonly [number, number] | readonly [number, number, number])[];
 }
@@ -63,8 +66,8 @@ export const ROADS: readonly RoadDef[] = [
     points: [[0, -58, VILLAGE_Y], [22, -64], [46, -70], [62, -76], [60, -82], [40, -82, DECK_Y - 0.6], [16, -80, DECK_Y], [4, -80, DECK_Y], [0, -84, DECK_Y]],
   },
   { id: 'north', kind: 'path', width: 5, points: [[0, -128, DECK_Y], [0, -136, DECK_Y - 0.6], [-20, -140], [-42, -138], [-56, -134]] },
-  { id: 'park', kind: 'road', width: 7, points: [[14, -8], [28, -14], [42, -18]] },
-  { id: 'east', kind: 'road', width: 7, points: [[12, 8], [26, 11], [46, 12], [60, 24], [67, 40], [72, 50], [96, 44], [106, 36]] },
+  { id: 'park', kind: 'road', width: 7, kerb: true, points: [[14, -8], [28, -14], [42, -18]] },
+  { id: 'east', kind: 'road', width: 7, kerb: true, points: [[12, 8], [26, 11], [46, 12], [60, 24], [67, 40], [72, 50], [96, 44], [106, 36]] },
   { id: 'south', kind: 'road', width: 7, points: [[0, 16], [2, 40], [5, 60], [7, 74]] },
   { id: 'loop', kind: 'road', width: 7, points: [[7, 74], [28, 80], [46, 82], [60, 78], [66, 70], [68, 58], [72, 50]] },
   { id: 'west', kind: 'road', width: 7, points: [[-14, 6], [-34, 16], [-52, 30], [-60, 40]] },
