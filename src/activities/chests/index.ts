@@ -11,7 +11,7 @@
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../types';
-import type { GameContext, Interactable, OutfitSlot, VehicleApi } from '../../types';
+import type { GameContext, Interactable } from '../../types';
 import { segmentSphereHit } from '../gemLogic';
 import { Confetti } from './confetti';
 import { buildChest, CHEST } from './chestModel';
@@ -19,9 +19,7 @@ import type { ChestModel } from './chestModel';
 import { buildKey, buildLock } from './lockModel';
 import type { KeyModel, LockModel } from './lockModel';
 import { CHEST_RULES, ChestLock, Loadout, keyCandidates, keyholeSide, onKeyholeSide, pickKeySpot, rightSymbol, sideDirection } from './logic';
-import { CAR_FALLBACK_COLOR, OUTFITS, PAINT_COLORS, outfitForChest } from './outfits';
-import { buildWearable } from './wearables';
-import type { Wearable } from './wearables';
+import { OUTFITS, outfitForChest } from './outfits';
 
 export { OUTFITS } from './outfits';
 
@@ -95,9 +93,6 @@ export function createChests(ctx: GameContext): Chests {
   const confetti = new Confetti();
   ctx.scene.add(confetti.group);
   const loadout = new Loadout();
-  const worn = new Map<OutfitSlot, { wearable: Wearable; remove: () => void; pop: number }>();
-  const carApplied = new Map<VehicleApi, number>();
-  let carColor: number | null = null;
   let time = 0;
   let placedAll = false;
   const prev = new THREE.Vector3();
@@ -241,54 +236,24 @@ export function createChests(ctx: GameContext): Chests {
     confetti.burst(tmp);
   }
 
+  /**
+   * Give the outfit to the player for good: it goes into the saved profile and is worn through the
+   * gear applier (`item:equipped`), so there is one way to put things on. `loadout` only tells this
+   * session whether the outfit is new to it (for the `outfit:unlocked` event and the counter).
+   */
   function equip(outfitId: string): void {
     const def = OUTFITS.find((o) => o.id === outfitId);
     if (!def) return;
     const res = loadout.equip(def);
-    if (def.slot === 'head' || def.slot === 'back' || def.slot === 'face') {
-      const old = worn.get(def.slot);
-      if (old) {
-        old.remove();
-        old.wearable.dispose();
-        worn.delete(def.slot);
-      }
-      const wearable = buildWearable(def.id);
-      if (wearable) {
-        const remove = ctx.player.attach(def.slot, wearable.object);
-        wearable.object.scale.setScalar(0.001);
-        worn.set(def.slot, { wearable, remove, pop: 0 });
-      }
-    } else if (def.slot === 'carColor') {
-      carColor = PAINT_COLORS[def.id] ?? null;
-      syncCars();
-    }
+    ctx.profile.unlock(def.id, 'chest');
+    ctx.profile.equip(def.slot, def.id);
     if (res.unlocked) ctx.events.emit('outfit:unlocked', { outfitId: def.id });
     ctx.events.emit('outfit:equipped', { outfitId: def.id, slot: def.slot });
   }
 
-  /** Cars may be created later or be replaced: keep every car in the chosen paint. */
-  function syncCars(): void {
-    if (carColor === null) return;
-    for (const v of ctx.vehicles.all) {
-      if (v.kind !== 'car' || carApplied.get(v) === carColor) continue;
-      v.setColor(carColor);
-      carApplied.set(v, carColor);
-    }
-  }
-
   function resetAll(): void {
+    // Worn outfits and paints are saved in the profile and stay between sessions (see ../gear).
     loadout.reset();
-    for (const w of worn.values()) {
-      w.remove();
-      w.wearable.dispose();
-    }
-    worn.clear();
-    carColor = null;
-    for (const v of carApplied.keys()) {
-      const def = v.object.userData.defaultColor as THREE.ColorRepresentation | undefined;
-      v.setColor(def ?? CAR_FALLBACK_COLOR);
-    }
-    carApplied.clear();
     confetti.clear();
     for (const e of entries) {
       e.lock.reset();
@@ -394,16 +359,6 @@ export function createChests(ctx: GameContext): Chests {
     havePrev = true;
     confetti.update(dt);
 
-    // Wearables.
-    const speed = Math.hypot(ctx.player.velocity.x, ctx.player.velocity.z);
-    for (const w of worn.values()) {
-      if (w.pop < 1) {
-        w.pop = Math.min(1, w.pop + dt / 0.5);
-        w.wearable.object.scale.setScalar(Math.max(0.001, easeOutBack(w.pop)));
-      }
-      w.wearable.update?.(dt, speed);
-    }
-    syncCars();
   }
 
   // ───────────── test hooks ─────────────
