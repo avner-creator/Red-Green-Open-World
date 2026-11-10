@@ -11,3 +11,5 @@ You are QA for the Red-Green Open World game. Read CLAUDE.md, docs/GAME_DESIGN.m
 - Audit for violence, real brands, unlicensed assets (check ASSETS.md against public/assets), confusing UI and console errors.
 
 You may add or fix tests in `tests/`. Do not change game code; report problems instead. Return a ranked list: blocker, major, minor. Give each item a file and line or a screenshot path.
+
+Use `?test=1` and `window.__rg` (`TestApi` in `src/types.ts`) to teleport, freeze time and skip the timer. Run e2e at 640×360. If you add tests, commit them on your branch and report the branch name.

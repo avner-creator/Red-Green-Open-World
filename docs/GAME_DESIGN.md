@@ -28,11 +28,28 @@ red-green glasses. Find as many as you can before the sun sets.
 3. **Bouncy Park**: giant trampoline (each bounce goes higher, up to about 40 m), bounce pads,
    ramps.
 4. **Canyon Bridge**: bungee platform. Jump, stretch, boing back up, then release into the lake.
-5. **Balloon Field**: a hot-air balloon rises to about 300 m. Jump out → freefall → open the
+5. **Balloon Field**: a hot-air balloon rises to about 180 m in about 10 seconds (a 5-minute
+   session can't afford a slow ride). Jump out → freefall → open the
    parachute (Space) → glide and land on target rings for bonus gems.
 6. **Lake and beach**: a splashy landing zone, a floating platform and a little lighthouse.
 7. **Silly Zone** (sandbox silliness): a giant bouncy ball, launch pads, a "flop" button
    (ragdoll on demand), and wobbly inflatable characters. Everything is comic and nothing is hurt.
+
+## The player and the feel of the big moments
+- **Player character**: a friendly explorer robot (CC0 "RobotExpressive" by Quaternius: idle,
+  walk, run, jump, dance, wave, thumbs-up). Outfits attach to its head and back.
+- **Flop** (F or a big fall): a comic tumble (spin + squash + boing sound), then the robot pops
+  back up. It is an animation, not a physics ragdoll: cheaper, safer, and always funny.
+- **Cars and horse** are arcade: they can't flip for long, can't get stuck (R respawns next to
+  the vehicle), and can't leave the island (a soft invisible boundary + shallow water turns you
+  around).
+- **Skydive feel**: wide FOV in freefall, wind streaks and rising wind sound, a big clear ground
+  target, steer with WASD, Space opens the parachute (auto-opens at 40 m, so nobody "crashes"),
+  then a slow, easy glide. Gems form a trail down to the rings.
+- **Trampoline feel**: each bounce is higher (up to 40 m), camera pulls back, squash and stretch
+  on the mat, gems at 10/20/30/40 m.
+- **Bungee**: E on the platform → jump → elastic stretch (visible cord) → two or three boings →
+  lowered gently to the lake shore. Gems under the bridge are grabbed on the way.
 
 ## Collectibles and rewards (the therapy hook)
 - **Glow Gems (weak-eye-only)**, about 60 across the island: on rooftops, on trampoline peaks,
@@ -55,5 +72,5 @@ calibration · strong-eye contrast · session length · audio volumes · graphic
 (Low/Medium/High) · reset.
 
 ## Out of scope for the demo
-Levels, accounts, saving progress between sessions, multiplayer, story/dialogue, shops,
+Touch/mobile controls, Levels, accounts, saving progress between sessions, multiplayer, story/dialogue, shops,
 any combat.

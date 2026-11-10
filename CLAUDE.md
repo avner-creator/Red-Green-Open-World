@@ -31,12 +31,17 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
 - **Three.js + TypeScript + Vite**, static site deployed to **Netlify** (`netlify.toml`).
 - Physics: **Rapier** (`@dimforge/rapier3d-compat`). Post-processing: pmndrs `postprocessing`
   (or three's EffectComposer). The dichoptic compositor must stay the **last** pass.
-- Assets: glTF/GLB, compressed with `@gltf-transform/cli` (meshopt + KTX2/WebP textures).
+- Assets: **procedural first** (geometry and materials built in code: terrain, buildings, trees,
+  cars, props), plus a small set of CC0 glTF/GLB models and a Poly Haven HDRI. Downloaded models
+  are compressed with `@gltf-transform/cli` (meshopt + WebP textures).
+- Audio: **procedural WebAudio** SFX and a simple generative music loop (no audio files needed).
 - Tests: **Vitest** (unit) + **Playwright** (e2e, screenshots). Chromium is pre-installed in the
   cloud container; launch it with `--use-angle=swiftshader --enable-unsafe-swiftshader` for
   WebGL 2. Never run `playwright install`.
-- `npm run verify` = typecheck + lint + unit tests + build + Playwright smoke test (page loads,
-  no console errors, a frame renders, screenshot saved to `test-results/`). It must stay green.
+- `npm run verify` = typecheck + lint + unit tests + build + Playwright e2e (`tests/e2e`: page
+  loads, no console errors, a frame renders, channel separation, screenshot saved to
+  `test-results/`). It must stay green. E2e runs at 640×360 against `vite preview` because the
+  software renderer is slow; keep the whole e2e suite under ~3 minutes.
 - No backend, no accounts, no multiplayer, no analytics, no ads, no external network calls at
   runtime except loading our own static files.
 
@@ -52,12 +57,27 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
   3. Final pass: `out = C`; `out[weakChannel] = mix(C[weakChannel], f(L, C[weakChannel]), M * strength)`.
      **Never** change `strongChannel` or blue for masked pixels. Pick `f` so the object stays
      clearly visible: brighten where the background is dark, darken where it's bright.
-  4. Weak-eye objects don't cast shadows, don't occlude, and don't show in reflections.
+     The pass works on **display-referred (sRGB-encoded) values**, after tone mapping, bloom, AO
+     and anti-aliasing, and writes straight to the canvas. Nothing may run after it.
+  4. Weak-eye objects don't cast shadows, don't occlude, and don't show in reflections. They
+     **are hidden by the world** (the layer pass depth-tests against the main scene's depth), so a
+     gem behind a wall is hidden for both eyes.
+  5. **Strong-eye-only objects** (chest locks) use the same pipeline mirrored: they change only
+     `strongChannel`. One `VisionLayer` enum: `Both | WeakOnly | StrongOnly`.
+  6. No bloom, glow sprite, particle, shadow, HUD marker or sound-independent visual may reveal
+     a weak-eye object to the strong eye. Effects for weak-eye objects are drawn *on the layer*.
+     (Audio cues such as the proximity chime are fine and encouraged.)
+  7. Test hooks: `?test=1` enables `window.__rg` (see `src/types.ts` `TestApi`): freeze time,
+     teleport, set eye settings, toggle layers, skip the timer. The Playwright channel-separation
+     test renders the same frozen frame with and without layer objects and compares pixels.
 - **Both-eye objects**: the world, the player, the HUD, menus. They must read clearly in **both**
   the R and G channels alone. Never use hue as the only cue. Test by viewing the R-only and
   G-only channel screenshots (`npm run shots:channels`).
 - **Calibration screen** (reached from settings): test patterns plus sliders for weak-channel
   strength and crosstalk, so the strong eye sees nothing with real glasses on a real monitor.
+  "Crosstalk" = how much of the weak channel leaks through the strong eye's lens. We can't
+  cancel it by touching the strong channel, so the slider **limits the weak-channel delta**
+  (max |f − C|) until the leak is below what the strong eye notices.
 - **Strong-eye contrast** slider (optional dichoptic rebalancing): scales strong-channel contrast
   down, 100% → 40%.
 - **Both-eye locks**: some rewards need both eyes, e.g. a chest's key is weak-eye-only and its
@@ -90,8 +110,21 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
   opengameart.org (check each item's license), cdn.jsdelivr.net (npm and `/gh/` GitHub files),
   raw.githubusercontent.com, and the npm registry. kenney.nl and poly.pizza block automated
   downloads, so don't use them.
-- Budget: initial download ≤ 40 MB compressed, more streamed in as needed. 60 fps on a mid-range
+- Vite emits hashed files to `dist/build/` (immutable cache). `public/assets/` files are not
+  hashed, so they get a short cache (see `netlify.toml`).
+- Budget: initial download ≤ 15 MB compressed (hard limit 40 MB), more streamed in as needed. 60 fps on a mid-range
   laptop at "High", playable at 30 fps on integrated graphics at "Low".
+
+## Working in a worktree (every subagent)
+
+- Run `npm ci --prefer-offline --no-audit --no-fund` first. Work only in your own folders.
+- **Never edit** `src/types.ts`, `src/main.ts`, `src/config.ts`, `package.json` or another
+  agent's folder. If you need a change there, say so in your final report (exact diff wanted).
+  Code against the interfaces in `src/types.ts`; get other systems through `GameContext`.
+- **Commit your work on your worktree branch** before you finish (small clear commits), and put
+  the branch name in your report. Uncommitted work is lost.
+- Run `npm run verify` before finishing. If it fails because of code outside your folders, say so.
+- Look at your own screenshots (Read the PNG) before you report. Keep the report under 300 words.
 
 ## Code conventions
 

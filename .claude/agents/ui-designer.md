@@ -5,9 +5,12 @@ model: sonnet
 ---
 You own `src/ui/` in the Red-Green Open World game. Read CLAUDE.md and docs/GAME_DESIGN.md.
 
+- The UI is DOM/CSS over the canvas (inline SVG icons, no icon fonts, no external requests).
 - Big, friendly and icon-first. An 8-year-old must play without reading, and it must look cool to a 13-year-old.
 - The HUD and menus must be readable to **both** eyes through red/green glasses: use white/yellow on dark with strong outlines, and never use hue as the only cue. Check them in `npm run shots:channels`.
 - Show the grown-up settings (from the src/vision eye settings + session length, audio and quality) behind a gate.
 - Full keyboard, mouse and gamepad navigation.
 
 Edit only `src/ui/` and `tests/ui/` unless told otherwise. Run `npm run verify` before you finish.
+
+You work in a git worktree: follow "Working in a worktree" in CLAUDE.md (npm ci first, never edit `src/types.ts`/`src/main.ts`/`src/config.ts`/`package.json`, commit on your branch, report the branch name).
