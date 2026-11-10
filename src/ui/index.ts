@@ -1,24 +1,153 @@
 /**
- * STUB (orchestrator scaffold). The ui-designer replaces this whole folder.
- * Keep the exported name and signature: `createUi`.
+ * UI system: title, HUD, tutorial, pause, end screen, grown-up gate + settings, credits.
+ * All DOM inside `ctx.uiRoot`. See docs/GAME_DESIGN.md.
  */
-import type { GameContext, UiApi } from '../types';
+import type { GameContext, SessionPhase, UiApi } from '../types';
+import { injectCss } from './css';
+import { createGate } from './gateScreen';
+import type { GateScreen } from './gateScreen';
+import { createHud } from './hud';
+import { createNav } from './nav';
+import { createCredits, createEnd, createPause, createTitle } from './screens';
+import type { Actions, Screen } from './screens';
+import { createSettings } from './settingsScreen';
+import { createTutorial } from './tutorial';
 
 export function createUi(ctx: GameContext): UiApi {
-  const play = document.createElement('button');
-  play.textContent = '▶';
-  play.setAttribute('aria-label', 'Play');
-  play.dataset.testid = 'play';
-  play.style.cssText =
-    'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:64px;padding:16px 40px;' +
-    'border-radius:24px;border:4px solid #000;background:#ffe24a;cursor:pointer;pointer-events:auto;';
-  play.onclick = () => {
+  injectCss();
+  const root = ctx.uiRoot;
+  root.classList.add('rg');
+
+  let calibrating = false;
+  const stack: Screen[] = [];
+  let shown: Screen | null = null;
+  let wasMenu = false;
+
+  const play = (): void => {
     ctx.audio.unlock();
+    if (ctx.session.state.phase !== 'title') ctx.session.toTitle();
     ctx.session.start();
+    capture();
   };
-  ctx.uiRoot.appendChild(play);
-  ctx.events.on('session:phase', (e) => {
-    play.style.display = e.phase === 'title' ? 'block' : 'none';
+  const capture = (): void => {
+    try {
+      (ctx.input.capturePointer() as unknown as Promise<void> | undefined)?.catch?.(() => {});
+    } catch {
+      /* pointer lock can be refused (headless, no gesture): ignore */
+    }
+  };
+  const resume = (): void => {
+    ctx.session.resume();
+    capture();
+  };
+  const pop = (): void => {
+    stack.pop();
+    render();
+  };
+  const actions: Actions = {
+    play,
+    resume,
+    restart: play,
+    toTitle: () => ctx.session.toTitle(),
+    openGate: () => {
+      gate.reset();
+      stack.push(gate);
+      render();
+    },
+    openCredits: () => {
+      stack.push(credits);
+      render();
+    },
+  };
+
+  const title = createTitle(actions);
+  const pause = createPause(actions);
+  const end = createEnd(ctx, actions);
+  const credits = createCredits({ back: pop });
+  const settings = createSettings(ctx, {
+    onClose: pop,
+    onCalibrate: () => {
+      calibrating = true;
+      render();
+      ctx.vision.openCalibration(() => {
+        calibrating = false;
+        render();
+      });
+    },
   });
-  return { update() {}, menuOpen: false };
+  const gate: GateScreen = createGate(() => {
+    stack.pop();
+    stack.push(settings);
+    render();
+  }, pop);
+  const all: Screen[] = [title, pause, end, credits, settings, gate];
+  for (const s of all) root.append(s.el);
+  const hud = createHud(ctx);
+  const tutorial = createTutorial(ctx);
+
+  const phase = (): SessionPhase => ctx.session.state.phase;
+  const base = (): Screen | null => {
+    const p = phase();
+    return p === 'title' ? title : p === 'paused' ? pause : p === 'ended' ? end : null;
+  };
+  const top = (): Screen | null => {
+    if (calibrating) return null;
+    return stack.length ? (stack[stack.length - 1] as Screen) : base();
+  };
+  const menuOpen = (): boolean => phase() !== 'playing' || calibrating;
+
+  function render(): void {
+    const t = top();
+    for (const s of all) s.el.classList.toggle('on', s === t);
+    hud.setVisible(phase() === 'playing' || phase() === 'paused');
+    root.dataset.phase = phase();
+    const open = menuOpen();
+    if (open && !wasMenu) {
+      try {
+        ctx.input.releasePointer();
+      } catch {
+        /* ignore */
+      }
+    }
+    wasMenu = open;
+    if (t && t !== shown) t.onShow()?.focus({ preventScroll: true });
+    shown = t;
+  }
+
+  const nav = createNav({
+    root,
+    layer: () => top()?.el ?? null,
+    back: () => {
+      if (stack.length) pop();
+      else if (phase() === 'paused') resume();
+    },
+    start: () => {
+      if (stack.length) pop();
+      else if (phase() === 'paused') resume();
+    },
+  });
+
+  ctx.events.on('session:phase', (e) => {
+    stack.length = 0;
+    shown = null;
+    nav.notePhaseChange();
+    if (e.phase === 'ended') end.fill();
+    if (e.phase === 'playing' && e.previous !== 'paused') tutorial.start();
+    if (e.phase === 'title' || e.phase === 'ended') tutorial.stop();
+    hud.update(0);
+    render();
+  });
+  render();
+
+  return {
+    update(dt: number): void {
+      const pad = nav.poll(dt);
+      if (shown === gate) gate.update(dt, pad.aHeld);
+      hud.update(dt);
+      tutorial.update(dt, phase() === 'playing');
+    },
+    get menuOpen(): boolean {
+      return menuOpen();
+    },
+  };
 }
