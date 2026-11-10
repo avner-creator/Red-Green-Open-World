@@ -82,6 +82,8 @@ export class Flight {
   private lines: HTMLDivElement | null = null;
   private style: HTMLStyleElement | null = null;
   private lineOpacity = 0;
+  private readonly last = new THREE.Vector3();
+  private hasLast = false;
 
   constructor(private readonly ctx: GameContext) {
     this.visual = new PlayerVisual(ctx.player);
@@ -135,6 +137,8 @@ export class Flight {
     this.dip = arc.dip ?? 0;
     this.baseY = p.y;
     this.peakY = p.y;
+    this.last.copy(p);
+    this.hasLast = true;
     this.tricks.reset();
   }
 
@@ -143,6 +147,11 @@ export class Flight {
     if (!this.active || !hooks) return false;
     const player = this.ctx.player;
     const p = player.position;
+    // Someone moved the player under us (teleport, test hook): give control back.
+    if (this.hasLast && p.distanceToSquared(this.last) > 4) {
+      this.hasLast = false;
+      return false;
+    }
 
     if (this.dwellLeft > 0) {
       this.dwellLeft = Math.max(0, this.dwellLeft - dt);
@@ -150,6 +159,8 @@ export class Flight {
       hooks.onDwell?.(t, dt, this);
       p.y = this.baseY - this.dip * Math.sin(Math.PI * Math.min(1, t));
       player.setAnimation('idle');
+      this.last.copy(p);
+      this.hasLast = true;
       if (this.dwellLeft > 0) return true;
       p.y = this.baseY;
       this.peakY = p.y;
@@ -176,6 +187,8 @@ export class Flight {
       this.ctx.events.emit('stunt', { kind: 'bigAir', value: e.count, stars: trickStars(e.total) });
     }
     player.setAnimation(this.vy > 0 ? 'jump' : 'fall');
+    this.last.copy(p);
+    this.hasLast = true;
 
     if (!s.arrived) return true;
 

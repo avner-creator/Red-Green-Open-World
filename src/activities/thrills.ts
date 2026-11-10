@@ -3,13 +3,33 @@
  * Flight runner (air tricks, exact arcs) and one confetti pool.
  */
 import type { GameContext } from '../types';
+import type * as THREE from 'three';
 import { Confetti } from './chests/confetti';
 import { getFlight } from './flight';
 import { createBouncePads } from './pads';
-import { createRocketPads } from './rocket';
-import type { RocketPads } from './rocket';
+import { createRocketPads, setLaunchGate } from './rocket';
+import type { RocketInfo, RocketPads } from './rocket';
 import { thrillSpots } from './thrillSpots';
 import { createTrampoline } from './trampoline';
+
+/** Test hook (`window.__rgThrills`, only with `?test=1`). */
+export interface ThrillsTestApi {
+  /** Net and pad coordinates (null until the first playing frame builds them). */
+  rocket(): RocketInfo | null;
+  /** Launch rocket pad `i` as if stepped on. */
+  launchRocket(i: number): void;
+  /** Trampoline mat centre (world, mat surface height). */
+  trampoline(): THREE.Vector3;
+  /** Open (true) or close (false) the rocket launch gate. */
+  setGate(open: boolean): void;
+  spots(): { tag: string; x: number; y: number; z: number }[];
+}
+
+declare global {
+  interface Window {
+    __rgThrills?: ThrillsTestApi;
+  }
+}
 
 export interface Thrills {
   update(dt: number): void;
@@ -26,6 +46,15 @@ export function createThrills(ctx: GameContext): Thrills {
   // The rocket site search raycasts against props, which only exist in the physics world after the
   // first step, so the rocket pads are built on the first update.
   let rocket: RocketPads | null = null;
+  if (ctx.testMode && typeof window !== 'undefined') {
+    window.__rgThrills = {
+      rocket: () => rocket?.info ?? null,
+      launchRocket: (i) => rocket?.launchFrom(i),
+      setGate: (open) => setLaunchGate(open ? null : () => false),
+      trampoline: () => trampoline.centre.clone(),
+      spots: () => thrillSpots.map((s) => ({ tag: s.tag, x: s.position.x, y: s.position.y, z: s.position.z })),
+    };
+  }
   return {
     update(dt) {
       rocket ??= createRocketPads(ctx, flight, confetti);

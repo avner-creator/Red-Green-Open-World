@@ -125,7 +125,6 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Con
   let launched = false;
   let cooldown = 0;
   let prevPad = -1;
-  let prevGrounded = true;
   let launchFrom0 = { x: 0, z: 0 };
   let netSquash = 0;
   let bounceNo = 0;
@@ -234,10 +233,10 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Con
     clock += dt;
     cooldown = Math.max(0, cooldown - dt);
     const idx = padUnderPlayer();
-    const grounded = ctx.player.grounded;
-    if (grounded && idx >= 0 && (!prevGrounded || idx !== prevPad)) launchFrom(idx);
-    prevGrounded = grounded;
-    prevPad = grounded ? idx : -1;
+    // Stepping on (standing, not flopping, not already flying) triggers the pad once.
+    const here = ctx.player.grounded && ctx.player.mode === 'walk' && !flight.active ? idx : -1;
+    if (here >= 0 && here !== prevPad) launchFrom(here);
+    prevPad = here;
 
     // Pad animation: squash in the wind-up, pop on launch, wobble when locked, bobbing arrow.
     flameT = Math.max(0, flameT - dt * 1.5);

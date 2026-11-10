@@ -320,7 +320,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Con
     if (!flight.active && player.mode === 'walk') {
       if (onMat()) {
         if (rest) {
-          if (input.jumpPressed) begin(nextBounceApex(0, true), player.velocity.x, player.velocity.z, flight);
+          if (input.jumpPressed || input.jump) begin(nextBounceApex(0, true), player.velocity.x, player.velocity.z, flight);
         } else if (player.grounded) {
           begin(nextBounceApex(0, true, player.airPeak), player.velocity.x, player.velocity.z, flight);
         }

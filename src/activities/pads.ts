@@ -97,7 +97,6 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
   const chain = new PadChain();
   let clock = 0;
   let cooldown = 0;
-  let prevGrounded = true;
   let prevPad = -1;
 
   /** Arc from pad `index` to the next pad, or to the middle of the trampoline for the last one. */
@@ -174,11 +173,10 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
   function update(dt: number): void {
     clock += dt;
     cooldown = Math.max(0, cooldown - dt);
-    const grounded = ctx.player.grounded;
     const idx = padUnderPlayer();
-    if (grounded && idx >= 0 && cooldown <= 0 && (!prevGrounded || idx !== prevPad)) launchFrom(idx);
-    prevGrounded = grounded;
-    prevPad = grounded ? idx : -1;
+    const here = ctx.player.grounded && ctx.player.mode === 'walk' && !flight.active ? idx : -1;
+    if (here >= 0 && cooldown <= 0 && here !== prevPad) launchFrom(here);
+    prevPad = here;
     for (const p of pads) {
       if (p.squash > 0.001) {
         p.squash *= Math.exp(-9 * dt);
