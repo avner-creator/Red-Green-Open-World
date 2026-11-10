@@ -51,7 +51,7 @@ function trace(name: string, n: number): number[] {
     else if (name === 'jitter20-40') out.push(1 / (20 + rnd() * 20));
     else if (name === '60jit') out.push(1 / 60 + (rnd() - 0.5) * 0.0012); // a real 60 Hz rAF: ±0.6 ms
     else if (name === 'alt16-33') out.push(i % 2 ? 1 / 30 : 1 / 60);
-    else if (name === 'hitch') out.push(i === Math.floor(n / 2) ? 0.15 : 1 / 60); // one 150 ms stall
+    else if (name === 'hitch') out.push(i === Math.min(Math.floor(n / 2), 60) ? 0.15 : 1 / 60); // one 150 ms stall
     else out.push(1 / Number(name));
   }
   // The live loop clamps every frame to MAX_FRAME_DT (1/20 s).
@@ -198,6 +198,57 @@ test('the buggy moves smoothly against the chase camera at every display rate', 
     expect.soft(results[rate].minUp, rate).toBeGreaterThan(0.95);
     expect.soft(results[rate].jerk, `camera-space jerk @${rate}`).toBeLessThan(JERK_MAX);
     expect.soft(results[rate].angJerk, `pitch/roll rate change @${rate}`).toBeLessThan(ANG_JERK_MAX);
+  }
+});
+
+test('the buggy feels the same at every display rate (launch, hop, real-time)', async () => {
+  test.setTimeout(240_000);
+  if ((await page.evaluate(() => window.__rg!.state().playerMode)) !== 'driving') await getIn(page);
+  const results: Record<string, { to14: number; hop: number; dist2s: number }> = {};
+  for (const rate of RATES) {
+    await resetDrive(page);
+    const dts = trace(rate, 600);
+    results[rate] = await page.evaluate((dts) => {
+      const rg = window.__rg!;
+      const car = rg.ctx.vehicles.all[0];
+      const z0 = car.position.z;
+      let t = 0;
+      let to14 = -1;
+      let i = 0;
+      rg.inject({ moveY: 1 });
+      while (t < 2 && i < dts.length) {
+        rg.step(dts[i], 1, false);
+        t += dts[i++];
+        if (to14 < 0 && car.speed >= 14) to14 = t;
+      }
+      const dist2s = car.position.z - z0;
+      // Hop at speed: one press, peak height above the start over the next second.
+      const y0 = car.position.y;
+      rg.inject({ moveY: 1, jumpPressed: true });
+      rg.step(dts[i], 1, false);
+      t = dts[i++];
+      rg.inject({ moveY: 1 });
+      let hop = 0;
+      while (t < 1 && i < dts.length) {
+        rg.step(dts[i], 1, false);
+        t += dts[i++];
+        hop = Math.max(hop, car.position.y - y0);
+      }
+      rg.inject(null);
+      return { to14, hop, dist2s };
+    }, dts);
+  }
+  console.log('[smooth] feel', JSON.stringify(results, (_, v: unknown) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)));
+  const ref = results['60'];
+  for (const rate of RATES) {
+    const r = results[rate];
+    expect.soft(r.to14, `0→14 m/s @${rate}`).toBeGreaterThan(0.9);
+    expect.soft(r.to14, `0→14 m/s @${rate}`).toBeLessThan(2);
+    expect.soft(Math.abs(r.to14 - ref.to14), `0→14 vs 60 Hz @${rate}`).toBeLessThan(0.08);
+    // Same distance in the same game time: no slow motion, no time warp (hitch frame clamped).
+    expect.soft(Math.abs(r.dist2s - ref.dist2s), `2 s distance vs 60 Hz @${rate}`).toBeLessThan(rate === 'hitch' ? 2 : 0.6);
+    expect.soft(r.hop, `hop height @${rate}`).toBeGreaterThan(0.6);
+    expect.soft(Math.abs(r.hop - ref.hop), `hop vs 60 Hz @${rate}`).toBeLessThan(0.15);
   }
 });
 
