@@ -193,7 +193,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       pauseFromLockLoss = false;
 
       Object.assign(state, NEUTRAL);
-      state.device = device;
+      // The touch HUD is up while touch is the active device (a key, mouse or pad turns it off).
+      state.device = touch.controls.active ? 'touch' : device;
       state.pausePressed = pausePressed;
       if (gameplay) {
         const kb = keyboardMove(key('KeyA', 'ArrowLeft'), key('KeyD', 'ArrowRight'), key('KeyS', 'ArrowDown'), key('KeyW', 'ArrowUp'));
