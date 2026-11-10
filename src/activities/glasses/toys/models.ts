@@ -30,9 +30,9 @@ function paint(parts: Part[]): THREE.BufferGeometry {
 
 /** Where the found toys rest, in the basket's frame (toy centres). */
 export const BASKET_SLOTS: readonly (readonly [number, number, number])[] = [
-  [-0.17, 0.62, 0.04],
-  [0.19, 0.64, -0.03],
-  [0.0, 0.7, -0.2],
+  [-0.2, 0.68, 0.06],
+  [0.22, 0.7, -0.02],
+  [0.0, 0.78, -0.22],
 ];
 
 /** Toy basket (origin at its foot centre) with the dog bowl beside it, one mesh. */
@@ -108,7 +108,7 @@ export interface ToyMesh {
 }
 
 /** All toys in one instanced mesh: vertices of the other kinds collapse to a point. */
-export function buildToys(capacity: number, scale = 1.3): ToyMesh {
+export function buildToys(capacity: number, scale = 1.55): ToyMesh {
   const geo = paint(toyParts(scale));
   const kinds = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
   kinds.setUsage(THREE.DynamicDrawUsage);

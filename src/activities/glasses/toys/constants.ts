@@ -22,7 +22,7 @@ export const TRAIL = {
   /** Path sampling step for the validity checks. */
   sampleStep: 0.5,
   /** Ground rules for every sample. */
-  roadClear: 1.2,
+  roadClear: 2,
   anchorMargin: 0.8,
   minAboveWater: 0.4,
   /** Max rise per metre between samples (walkable). */

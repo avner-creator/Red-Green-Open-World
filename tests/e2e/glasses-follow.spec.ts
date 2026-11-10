@@ -193,17 +193,19 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
   let d = await dbg(id);
   expect(d.state).toBe('found');
   expect(d.toysShown).toBe(1);
-  // Look back at the spot while the toy hops out.
-  await page.evaluate((p) => {
-    const rg = window.__rg!;
-    const pl = rg.ctx.player.position;
-    const yaw = Math.atan2(p.x - pl.x, p.z - pl.z);
-    const fx = p.x - Math.sin(yaw) * 2.6 + Math.cos(yaw) * 1.6;
-    const fz = p.z - Math.cos(yaw) * 2.6 - Math.sin(yaw) * 1.6;
-    rg.teleport(fx, rg.ctx.world.heightAt(fx, fz) + 0.05, fz, Math.atan2(p.x - fx, p.z - fz));
-    rg.step(1 / 60, 32, false);
-    rg.step(1 / 60, 1);
-  }, d.end);
+  // Watch the toy hop out, from a little way back along the trail.
+  await page.evaluate(
+    ([e, b]) => {
+      const rg = window.__rg!;
+      const len = Math.hypot(e.x - b.x, e.z - b.z);
+      const fx = b.x + ((e.z - b.z) / len) * 0.8;
+      const fz = b.z - ((e.x - b.x) / len) * 0.8;
+      rg.teleport(fx, rg.ctx.world.heightAt(fx, fz) + 0.05, fz, Math.atan2(e.x - fx, e.z - fz));
+      rg.step(1 / 60, 32, false);
+      rg.step(1 / 60, 1);
+    },
+    [d.end, prints[prints.length - 3]],
+  );
   await shots('found', 'test-results/glasses/toys');
   await expectDrawBudget(page, id, 6);
 
