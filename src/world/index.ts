@@ -22,6 +22,7 @@ import { createPictogramAtlas } from './pictograms';
 import { createDecalMesh, pictoMaterial } from './decals';
 import { createBeacons } from './beacons';
 import { LAUNCH_NET } from './layout';
+import { installLife } from './life';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -107,6 +108,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       beacons.update(U.time.value, ctx.camera);
     },
   };
+  installLife(api, ctx, root);
   api.setQuality(ctx.settings.get().quality);
   api.setTimeOfDay(0);
   if (ctx.testMode) {
