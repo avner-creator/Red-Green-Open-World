@@ -40,7 +40,7 @@ export const ATTRACTIONS: readonly Attraction[] = [
   },
   {
     anchor: 'garage', icon: 'iCar', arm: 0x20437a, balloon: 0x2f72d8, panels: ['car1', 'car2', 'car3'],
-    beacon: { x: 50, z: 40, h: 9 }, board: { x: 22.5, z: 18, faceX: 22.5, faceZ: 4 },
+    beacon: { x: 50, z: 40, h: 13 }, board: { x: 22.5, z: 18, faceX: 22.5, faceZ: 4 },
   },
   {
     anchor: 'launchPads', icon: 'iRocket', arm: 0x86285a, balloon: 0xe04a86, panels: ['rocket1', 'rocket2', 'rocket3'],
@@ -62,9 +62,32 @@ const byAnchor = (a: AnchorName): Attraction => {
   return r;
 };
 
-/** Fingerposts: plaza (big, every attraction) and smaller ones at road junctions. */
-export const FINGERPOSTS: readonly { x: number; z: number; scale: number; targets: AnchorName[] }[] = [
-  { x: 6.5, z: 5.5, scale: 1, targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon'] },
+export interface FingerpostDef {
+  x: number;
+  z: number;
+  scale: number;
+  targets: AnchorName[];
+  /**
+   * Plaza post only: arms grouped into rows (bottom → top) so six arms fit in 1.3 m, and the arms
+   * that point (nearly) straight away from the spawn camera, which get an icon disc hanging from
+   * their tip that faces back along the arm.
+   */
+  rows?: AnchorName[][];
+  hang?: AnchorName[];
+}
+
+/**
+ * Fingerposts: plaza (big, every attraction) and smaller ones at road junctions. The plaza post
+ * stands ~9 m ahead of the spawn point, 2.5 m left of the line of sight, so the spawn camera sees
+ * its arms broadside (big icon discs on both faces) between 2.2 and 3.5 m up, below the HUD, and
+ * the player's path east stays clear.
+ */
+export const FINGERPOSTS: readonly FingerpostDef[] = [
+  {
+    x: 8.4, z: 4.9, scale: 1, targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon'],
+    rows: [['balloon', 'bouncePads', 'trampoline'], ['garage'], ['launchPads'], ['landingRings']],
+    hang: ['bouncePads', 'trampoline'],
+  },
   { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon'] },
   { x: 57.5, z: 32, scale: 0.85, targets: ['launchPads', 'balloon', 'landingRings', 'garage'] },
   { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads'] },
@@ -145,7 +168,11 @@ function distLabel(d: number): number {
   return d < 45 ? 1 : d < 80 ? 2 : d < 115 ? 3 : 4;
 }
 
-function fingerpost(k: Kit, d: Decals, x: number, z: number, targets: readonly AnchorName[], s: number, arms: ArmInfo[]): void {
+/** Height of the lowest arm's centre above the ground (well above the player's head). */
+const ARM_LOW = 2.2;
+
+function fingerpost(k: Kit, d: Decals, def: FingerpostDef, arms: ArmInfo[]): void {
+  const { x, z, scale: s, targets } = def;
   const y = k.h(x, z);
   const list = targets
     .map((t) => {
@@ -153,39 +180,55 @@ function fingerpost(k: Kit, d: Decals, x: number, z: number, targets: readonly A
       return { t, yaw: Math.atan2(a.x - x, a.z - z), dist: Math.hypot(a.x - x, a.z - z) };
     })
     .sort((p, q) => p.yaw - q.yaw);
-  const L = 2.5 * s;
-  const H = 0.5 * s;
-  const gap = 0.58 * s;
-  // Lowest arm just above head height; the top arm stays inside the on-foot camera's view.
-  const lowest = 1.55;
-  const top = lowest + (list.length - 1) * gap + H / 2 + 0.3 * s;
+  // Row of each arm: explicit rows, else one arm per row with the smallest yaw on top.
+  const rowOf = (t: AnchorName, i: number): number => (def.rows ? def.rows.findIndex((r) => r.includes(t)) : list.length - 1 - i);
+  const rows = def.rows ? def.rows.length : list.length;
+  const plaza = !!def.rows;
+  const L = (plaza ? 2.9 : 2.5) * s;
+  const H = (plaza ? 0.4 : 0.5) * s;
+  const gap = (plaza ? 0.42 : 0.58) * s;
+  const top = ARM_LOW + (rows - 1) * gap + H / 2 + 0.3 * s;
+  const pw = (plaza ? 0.32 : 0.4) * s;
   // Stone plinth, timber post, gold finial.
   k.b.add('matte', rbox(1.0 * s, 0.45, 1.0 * s, 0.06), C.stone, T(x, y - 0.05, z), { aoY: y, aoH: 0.3, ao: 0.35 });
-  k.b.add('paint', rbox(0.4 * s, top, 0.4 * s, 0.05), C.woodDark, T(x, y + 0.35, z), { aoY: y + 0.35, aoH: 0.6, ao: 0.3 });
-  k.b.add('paint', coneG(4), C.woodDark, T(x, y + 0.35 + top, z, Math.PI / 4, 0.26 * s, 0.22 * s, 0.26 * s));
-  k.b.add('gloss', sphereG(2), 0xf2c14e, T(x, y + 0.35 + top + 0.32 * s, z, 0, 0.2 * s, 0.2 * s, 0.2 * s));
+  k.b.add('paint', rbox(pw, top, pw, 0.05), C.woodDark, T(x, y, z), { aoY: y, aoH: 0.6, ao: 0.3 });
+  k.b.add('paint', coneG(4), C.woodDark, T(x, y + top, z, Math.PI / 4, 0.22 * s, 0.22 * s, 0.22 * s));
+  k.b.add('gloss', sphereG(2), 0xf2c14e, T(x, y + top + 0.3 * s, z, 0, 0.18 * s, 0.18 * s, 0.18 * s));
   k.col.cyl(x, y, z, (top + 0.4) / 2, 0.5 * s);
   list.forEach((a, i) => {
-    const ay = y + 0.35 + lowest + (list.length - 1 - i) * gap;
+    const row = rowOf(a.t, i);
+    const ay = y + ARM_LOW + row * gap;
     const att = byAnchor(a.t);
     // Local frame: +X along the arm, ±Z are the two faces.
     const am = T(x, ay, z, a.yaw - Math.PI / 2);
-    const x0 = 0.12 * s;
+    const x0 = pw * 0.3;
     const len = L - 0.5 * s;
     k.b.add('paint', rbox(len, H, 0.1 * s, 0.03), CREAM, M(am, T(x0 + len / 2, -H / 2, 0)));
     k.b.add('paint', rbox(len - 0.1 * s, H - 0.12 * s, 0.17 * s, 0.03), att.arm, M(am, T(x0 + len / 2 - 0.05 * s, -H / 2 + 0.06 * s, 0)));
     k.b.add('paint', tipG(), CREAM, M(am, T(x0 + len - 0.02, 0, 0, 0, 0.62 * s, H * 1.45, 0.1 * s)));
     k.b.add('paint', tipG(), att.arm, M(am, T(x0 + len - 0.1 * s, 0, 0, 0, 0.56 * s, H * 1.18, 0.17 * s)));
-    // Side icons (both faces) and distance bars.
-    const iconX = x0 + 1.05 * s;
-    d.add(att.icon, M(am, T(iconX, 0, 0.087 * s)), H * 0.9, H * 0.9, true, 0.174 * s);
     const n = distLabel(a.dist);
     for (let j = 0; j < n; j++) k.b.add('paint', boxG2(), CREAM, M(am, T(x0 + 0.26 * s + j * 0.15 * s, 0, 0, 0, 0.08 * s, H * 0.52, 0.2 * s)));
-    // Roundel across the arm (faces along it): legible when the arm points towards or away from you.
-    const rx = x0 + (i % 2 ? 1.5 : 2.02) * s;
-    const R = 0.4 * s;
-    k.b.add('paint', cylG(28), CREAM, M(am, T(rx - 0.05 * s, 0, 0, 0, R, 0.1 * s, R, 0, -Math.PI / 2)));
-    d.add(att.icon, M(am, T(rx + 0.056 * s, 0, 0, Math.PI / 2)), R * 1.86, R * 1.86, true, 0.112 * s);
+    if (plaza) {
+      // Big icon discs on both faces (wider than the arm), staggered along the arm row by row.
+      const R = 0.34 * s;
+      const dx = x0 + (row % 2 ? 1.85 : 1.15) * s;
+      k.b.add('paint', cylG(28), CREAM, M(am, T(dx, 0, -0.13 * s, 0, R, 0.26 * s, R, Math.PI / 2)));
+      d.add(att.icon, M(am, T(dx, 0, 0.132 * s)), R * 1.8, R * 1.8, true, 0.264 * s);
+    } else {
+      d.add(att.icon, M(am, T(x0 + 1.05 * s, 0, 0.087 * s)), H * 0.9, H * 0.9, true, 0.174 * s);
+    }
+    // Disc across the arm (faces along it): legible when the arm points towards or away from you.
+    // Junction posts carry it on the arm; on the plaza post it hangs below the tip, clear of the arm.
+    const hang = def.hang?.includes(a.t) ?? false;
+    if (!plaza || hang) {
+      const R = (hang ? 0.48 : 0.4) * s;
+      const rx = x0 + (hang ? len - 0.25 * s : (i % 2 ? 1.5 : 2.02) * s);
+      const ry = hang ? -H / 2 - 0.07 * s - R : 0;
+      if (hang) k.b.add('metal', boxG2(), C.iron, M(am, T(rx, -H / 2 - 0.05 * s, 0, 0, 0.05 * s, 0.12 * s, 0.05 * s)));
+      k.b.add('paint', cylG(28), CREAM, M(am, T(rx - 0.05 * s, ry, 0, 0, R, 0.1 * s, R, 0, -Math.PI / 2)));
+      d.add(att.icon, M(am, T(rx + 0.056 * s, ry, 0, Math.PI / 2)), R * 1.86, R * 1.86, true, 0.112 * s);
+    }
     arms.push({ x, z, yaw: a.yaw, target: a.t });
   });
 }
@@ -361,7 +404,7 @@ export function buildWayfinding(k: Kit, roads: readonly ProcessedRoad[], blocked
   const beacons: BeaconDef[] = [];
   const keepouts: Keepout[] = [];
   for (const p of FINGERPOSTS) {
-    fingerpost(k, decals, p.x, p.z, p.targets, p.scale, arms);
+    fingerpost(k, decals, p, arms);
     placed.push({ kind: 'post', name: `post ${p.x},${p.z}`, x: p.x, z: p.z, r: 0.6 * p.scale });
     keepouts.push({ x: p.x, z: p.z, r: 1.6 });
   }

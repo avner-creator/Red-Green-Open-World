@@ -32,6 +32,56 @@ export interface TerrainMesh {
   colorAt(x: number, z: number, out: THREE.Color): THREE.Color;
 }
 
+/**
+ * 0..1 per vertex: where farm plots may be painted. Open, gently sloped grass at least ~8 m from any
+ * road and ~10 m from any pad (village, park, attractions), in a few broad noise-shaped regions.
+ */
+function fieldMask(t: TerrainData): Float32Array {
+  const n = t.n;
+  const N = n + 1;
+  const dilate = (src: Float32Array, r: number): Float32Array => {
+    const tmp = new Float32Array(src.length);
+    const out = new Float32Array(src.length);
+    for (let iz = 0; iz <= n; iz++) {
+      for (let ix = 0; ix <= n; ix++) {
+        let m = 0;
+        for (let k = Math.max(0, ix - r); k <= Math.min(n, ix + r); k++) m = Math.max(m, src[iz * N + k]);
+        tmp[iz * N + ix] = m;
+      }
+    }
+    for (let iz = 0; iz <= n; iz++) {
+      for (let ix = 0; ix <= n; ix++) {
+        let m = 0;
+        for (let k = Math.max(0, iz - r); k <= Math.min(n, iz + r); k++) m = Math.max(m, tmp[k * N + ix]);
+        out[iz * N + ix] = m;
+      }
+    }
+    return out;
+  };
+  const road = dilate(t.roadMask, 4);
+  const pad = dilate(t.padMask, 4);
+  const out = new Float32Array(N * N);
+  const half = t.size / 2;
+  const H = t.heights;
+  for (let iz = 0; iz <= n; iz++) {
+    for (let ix = 0; ix <= n; ix++) {
+      const i = iz * N + ix;
+      const x = -half + ix * t.cell;
+      const z = -half + iz * t.cell;
+      const hl = H[iz * N + Math.max(0, ix - 1)];
+      const hr = H[iz * N + Math.min(n, ix + 1)];
+      const hd = H[Math.max(0, iz - 1) * N + ix];
+      const hu = H[Math.min(n, iz + 1) * N + ix];
+      const slope = Math.hypot(hr - hl, hu - hd) / (2 * t.cell);
+      const region = smoothstep(-0.3, -0.1, fbm(x / 70, z / 70, 2, SEED + 41));
+      const flat = 1 - smoothstep(0.4, 0.75, slope);
+      const dry = smoothstep(3.5, 6, H[i]);
+      out[i] = region * flat * dry * (1 - road[i]) * (1 - pad[i]);
+    }
+  }
+  return out;
+}
+
 export function createTerrainMesh(t: TerrainData): TerrainMesh {
   const n = t.n;
   const N = n + 1;
@@ -89,9 +139,13 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
   const posA = new THREE.BufferAttribute(pos, 3);
   const norA = new THREE.BufferAttribute(nor, 3);
   const colA = new THREE.BufferAttribute(col, 3);
+  const fieldA = new THREE.BufferAttribute(fieldMask(t), 1);
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
   patch(mat, 'rg-terrain', {
+    vertexPre: 'attribute float aField; varying float vField;',
+    vertex: 'vField = aField;',
     fragmentPre: /* glsl */ `
+      varying float vField;
       // Triplanar value noise: no stretching on steep faces.
       float rgTri(vec3 p, vec3 w, float f) {
         return rgNoise(p.zy * f) * w.x + rgNoise(p.xz * f) * w.y + rgNoise(p.xy * f) * w.z;
@@ -121,6 +175,35 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
         float strata = 0.5 + 0.5 * sin(p.y * 2.1 + 3.0 * rgTri(p, bw, 0.12));
         float grain = rgTri(p, bw, 3.1);
         diffuseColor.rgb *= mix(1.0, 0.76 + 0.22 * strata + 0.12 * (grain - 0.5), rk);
+        // Patchwork farmland on open flat ground away from roads and attractions: rotated plots of
+        // meadow, hay, mown stripes and crop rows with darker hedge lines. Differs in brightness,
+        // not just hue, so the diorama seen from the balloon reads in both colour channels.
+        if (vField > 0.01) {
+          vec2 q = mat2(0.94, -0.34, 0.34, 0.94) * p.xz;
+          vec2 cs = vec2(34.0, 24.0);
+          vec2 id = floor(q / cs);
+          vec2 f = fract(q / cs) * cs;
+          float hsh = rgHash(id + 3.7);
+          float edge = min(min(f.x, cs.x - f.x), min(f.y, cs.y - f.y));
+          float fwq = length(fwidth(q));
+          vec3 c = diffuseColor.rgb;
+          vec3 plot = c;
+          if (hsh < 0.3) {
+            plot = c * vec3(1.32, 1.18, 0.72);                                      // hay / dry pasture
+          } else if (hsh < 0.55) {
+            float st = step(0.5, fract(f.x / 3.2));                                 // mown stripes
+            plot = c * mix(0.86, 1.12, mix(st, 0.5, smoothstep(0.3, 1.2, fwq)));
+          } else if (hsh < 0.75) {
+            float rw = smoothstep(0.3, 0.5, abs(fract(f.y / 1.4) - 0.5));          // crop rows
+            plot = c * vec3(0.72, 0.84, 0.7) * mix(0.8, 1.06, mix(rw, 0.5, smoothstep(0.2, 0.8, fwq)));
+          } else {
+            plot = c * vec3(1.06, 1.04, 0.92);                                      // plain meadow
+          }
+          // Hedge rows along the plot edges.
+          float hedge = 1.0 - smoothstep(0.6, 1.4 + fwq, edge);
+          plot = mix(plot, c * vec3(0.55, 0.72, 0.5), hedge);
+          diffuseColor.rgb = mix(c, plot, vField * green);
+        }
       }`,
   });
   // 4×4 tiles that share one set of vertex buffers, so the camera frustum culls what is behind.
@@ -151,6 +234,7 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
       tg.setAttribute('position', posA);
       tg.setAttribute('normal', norA);
       tg.setAttribute('color', colA);
+      tg.setAttribute('aField', fieldA);
       tg.setIndex(new THREE.BufferAttribute(idx, 1));
       const cx = -half + (tx + 0.5) * per * t.cell;
       const cz = -half + (tz + 0.5) * per * t.cell;
