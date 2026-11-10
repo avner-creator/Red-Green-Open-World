@@ -196,3 +196,34 @@ friend and spend gems on rides, games, treats and ever sillier gear. The repo an
    balloons and bouncing.
 9. **No dead props.** Anything that looks usable does something small (benches to sit on, the
    fountain to splash in, stalls that hand you a balloon, doors that knock back).
+
+## Red-green depth pass (owner request, 2026-11-11)
+
+Goal: many different things, all through the session, that make the player *want* to use the
+weaker eye — not only "find the gem". No health or medical wording anywhere; in the game these
+are simply "magic glasses" powers. Every mechanic keeps the hard rule: weak-eye content changes
+only the weak channel, strong-eye content only the strong channel.
+
+Kinds of glasses play (each attraction should use at least two):
+1. **Find** (exists): gems, keys, secret stones, arrows only the weak eye sees.
+2. **Follow**: moving weak-eye targets — glow-flies to catch with a net, a weak-eye paw-print
+   trail to Pip's lost toys, a weak-eye "ghost racer" line to drive or fly along.
+3. **Read**: information only the weak eye gets — today's secret code, which of three doors,
+   the lucky number at a booth, the right ice-cream topping.
+4. **Tell apart**: pick the odd one out among weak-eye shapes (the real gem among fakes, the
+   pointing-the-other-way arrow); detail gets finer as the player succeeds and coarser after
+   misses (a gentle staircase per session).
+5. **Time it**: weak-eye-only timing rings — the perfect-bounce ring on the trampoline, the
+   parachute-open ring, the buggy boost pad countdown, the strength-bell sweet spot.
+6. **Line it up (both eyes together)**: one half in each eye — a weak-eye aiming reticle onto a
+   strong-eye target; a weak-eye gem that only counts when collected through a strong-eye hoop;
+   two half-symbols that make the answer when both eyes are used; chest symbol locks.
+7. **Pop-out pictures**: red-green dot pictures on signs and tents whose hidden shape appears
+   only when both eyes work together (a different dot pattern in each channel), used as bonus
+   clues and prize codes.
+8. **On the hero**: world-space helpers drawn for the weak eye only — the skill-ready ring, the
+   combo number floating over the hero, the trick-landing "now!" flash.
+Supporting systems: fainter/smaller/faster weak-eye objects are worth more (tiers); an optional
+grown-up setting slowly makes weak-eye objects fainter and the other eye's picture dimmer as the
+player does well, within calibrated limits, and backs off after misses; a grown-up-only summary
+at the end of a session (how many of each kind were found/hit, by tier) in neutral words.
