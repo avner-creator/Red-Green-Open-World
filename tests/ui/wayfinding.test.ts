@@ -39,6 +39,7 @@ describe('compass maths', () => {
   });
   it('mode hints: driving and external only', () => {
     expect(hintKind('driving')).toBe('driving');
+    expect(hintKind('riding')).toBe('riding');
     expect(hintKind('external')).toBe('skydive');
     expect(hintKind('walk')).toBeNull();
   });

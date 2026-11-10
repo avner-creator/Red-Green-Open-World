@@ -113,8 +113,19 @@ try {
     });
     // Measure before the slow screenshot: toasts leave after ~3 s of real time.
     await page.waitForTimeout(500);
-    report('hud', problems(await rects(page, HUD), s.width, s.height));
+    report('hud', problems(await rects(page, HUD), s.width, s.height, ['combo+stars']));
     await save('hud');
+
+    // The "?" button opens the controls card with a real click / tap.
+    const help = page.getByTestId('help');
+    if (s.touch) await help.tap({ timeout: 10000 });
+    else await help.click({ timeout: 10000 });
+    const open = await page.getByTestId('controls-card').evaluate((el) => el.classList.contains('on'));
+    if (!open) report('help', ['"?" did not open the controls card']);
+    report('card', problems(await rects(page, { card: '[data-testid="controls-card"] .wf-panel' }), s.width, s.height));
+    await save('controls');
+    await page.keyboard.press('KeyH');
+    if (s.touch) await page.evaluate(() => document.querySelector('[data-testid="controls-close"]')?.click());
 
     await page.evaluate(() => {
       window.__rg.ctx.session.pause();
