@@ -36,9 +36,13 @@ export const STATIC_MAX_DIST: Record<Quality, readonly number[]> = {
   medium: [Infinity, 220, 125, 75, 50],
   high: [Infinity, 320, 180, 110, 75],
 };
-/** Shadow proxy: only parts at least this big (radius, m) and this tall (m) cast a shadow. */
-const PROXY_MIN_R = 0.6;
-const PROXY_MIN_H = 0.25;
+/**
+ * Shadow proxy: only parts at least this big (radius, m) and this tall (m) cast a shadow, and the
+ * smaller ones only close to the camera (props like benches keep their contact shadow up close).
+ */
+const PROXY_MIN_R = 0.3;
+const PROXY_MIN_H = 0.12;
+const PROXY_MAX_DIST: readonly number[] = [Infinity, 120, 45, 22, 0];
 
 const tmpColor = new THREE.Color();
 const tmpBox = new THREE.Box3();
@@ -266,7 +270,7 @@ export class Batcher {
     this.lastShadow.copy(sc.position);
     _pv.multiplyMatrices(sc.projectionMatrix, sc.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_pv);
-    selectLayer(P, _frustum, _cam, maxD, 0);
+    selectLayer(P, _frustum, _cam, PROXY_MAX_DIST, 0);
   }
 }
 
