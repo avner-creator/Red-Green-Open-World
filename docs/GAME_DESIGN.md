@@ -188,6 +188,10 @@ friend and spend gems on rides, games, treats and ever sillier gear. The repo an
    - **Buggy workshop and race**: silly upgrades (monster wheels, spring bumper, bubble exhaust,
      rocket boost, musical horns, a rubber-duck roof) and a race against a friend on a track
      where boost pads and the best racing line glow for the weak eye.
+   - **Sky rides**: a toy stunt biplane with a 90-second sky contest against friends (hoops,
+     cloud-balloons, water-balloon drops on floating targets; no shooting) and a goofy friendly
+     dragon to befriend and ride that breathes bubbles; bonus hoops, golden balloons and the
+     treasure trail are weak-eye-only.
    All non-violent: nothing is a weapon, nobody is hurt, everything is foam, bubbles, water
    balloons and bouncing.
 9. **No dead props.** Anything that looks usable does something small (benches to sit on, the

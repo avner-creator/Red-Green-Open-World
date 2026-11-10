@@ -358,3 +358,34 @@ is hurt. Unit tests for scoring/AI maths; one Playwright e2e per attraction (`?t
 > podium celebration. **Glasses twist**: boost pads and a glowing best racing line are
 > weak-eye-only; hitting three boosts in a row gives a rocket surge. Bumping rivals is bouncy and
 > comic. Works with every hero in the seat.
+
+## Stream O — sky rides: stunt plane and friendly dragon (branch `agent/sky-rides`, folder `src/activities/skyrides/`)
+
+> Follow the common rules for J–N above. Owner idea: "a plane air battle, or riding dragons".
+> The game is strictly non-violent (no weapons, nobody shot at or hurt), so the air "battle" is a
+> **stunt-and-splash sky contest**, not combat. Build ONE shared arcade flight controller (an
+> `ExternalController`; read `src/activities/skydive/` and `src/activities/flight.ts` for how
+> rides take and release the player, camera overrides, wind audio, and how rides must never take
+> the player from one another) and two rides on top of it:
+> **Stunt plane** at anchor `airstrip` (a short grass runway near the balloon field): a chunky
+> toy biplane (original design, procedural, propeller blur, wobbling wings, hero visible in the
+> open cockpit with scarf physics, the buddy puppy in the back seat if `src/buddy/` exists).
+> E to board, auto take-off, forgiving controls (pitch/roll/yaw blended into "steer where you
+> look" with auto-level, a boost on Shift, loops and barrel rolls on the skill key that score
+> trick stars), can't crash: the ground and sea bounce you back up with a comic boing, the island
+> edge turns you around. A 90-second sky contest against two friends in their own planes:
+> fly through hoops, pop cloud-balloons by flying through them, drop water balloons (Space) on
+> big floating bullseye rafts and on a giant inflatable duck, write a smoke trail; friends
+> splash you with harmless confetti puffs when they overtake. Auto landing at the end with a
+> podium. **Friendly dragon** at anchor `dragonRoost` (a rocky perch by the lighthouse or the
+> highest hill): a round, goofy, smiling dragon (procedural, big eyes, stubby wings with
+> secondary motion, wagging tail) that you feed a treat to befriend, then ride: wing-flap
+> rhythm on Space for height, glide and swoop, a happy roar, and it breathes **bubbles and
+> sparkles** (never fire at anything) that pop cloud-balloons; a relaxed free-flight tour of the
+> whole island with a treasure trail, ending with a gentle landing back at the roost.
+> **Glasses twist** (WeakOnly layer only): the bonus hoops, the golden cloud-balloons, the best
+> flight line through the contest and the dragon's treasure trail are visible only to the weak
+> eye; ordinary hoops and balloons are both-eye. Skies must stay readable in R-only and G-only
+> (bright objects need dark outlines against the sky). Both rides keep gem pickup working at
+> speed (segment tests), cost a ticket after the first free flight per session, and hand the
+> player back on the ground in walk mode. Batch each vehicle to ≤ 8 draws with a shadow proxy.
