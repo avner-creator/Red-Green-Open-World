@@ -17,8 +17,16 @@ export const TIER_LABEL = ['Easy', 'Medium', 'Tricky'] as const;
 export const EMPTY_TEXT = 'Nothing to show yet — play a session first.';
 
 const KNOWN_NAMES: Record<string, string> = {
+  gems: 'Glow gems',
+  chestkeys: 'Chest keys',
+  chests: 'Chests',
   glowflies: 'Glow-flies',
+  toys: "Pip's lost toys",
+  oddone: 'Odd one out',
   oddoneout: 'Odd one out',
+  lineup: 'Line-up bubbles',
+  gates: 'Half-symbol gates',
+  dotsigns: 'Dot pictures',
 };
 
 /** `glowflies` -> "Glow-flies", `oddOneOut` -> "Odd one out", unknown `some_thing` -> "Some Thing". */

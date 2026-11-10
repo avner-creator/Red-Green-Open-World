@@ -121,7 +121,7 @@ test.describe('glasses ui', () => {
         rows: [
           { mechanic: 'glowflies', kind: 'find', tier: 1, hits: 3, misses: 1 },
           { mechanic: 'glowflies', kind: 'find', tier: 3, hits: 0, misses: 2 },
-          { mechanic: 'oddOneOut', kind: 'tellApart', tier: 2, hits: 2, misses: 1 },
+          { mechanic: 'oddone', kind: 'tellApart', tier: 2, hits: 2, misses: 1 },
           { mechanic: 'hatTrick', kind: 'onHero', tier: 1, hits: 1, misses: 0 },
         ],
         seconds: 305,
@@ -138,8 +138,8 @@ test.describe('glasses ui', () => {
     await expect(fly.locator('td').nth(1)).toHaveText('3 / 475%');
     await expect(fly.locator('td').nth(2)).toHaveText('0 / 0–');
     await expect(fly.locator('td').nth(3)).toHaveText('0 / 20%');
-    await expect(sum.locator('tr[data-mechanic="oddOneOut"] td').nth(0)).toHaveText('Odd one out');
-    await expect(sum.locator('tr[data-mechanic="oddOneOut"] td').nth(2)).toHaveText('2 / 367%');
+    await expect(sum.locator('tr[data-mechanic="oddone"] td').nth(0)).toHaveText('Odd one out');
+    await expect(sum.locator('tr[data-mechanic="oddone"] td').nth(2)).toHaveText('2 / 367%');
     await expect(sum.locator('tr[data-mechanic="hatTrick"] td').nth(0)).toHaveText('Hat Trick');
     await expect(page.getByTestId('summary-total').locator('td').nth(4)).toHaveText('6 / 1060%');
     const kinds = await sum.locator('tr.kind').allInnerTexts();
@@ -165,7 +165,7 @@ test.describe('glasses ui', () => {
       window.__rg!.ctx.vision.sessionSummary = () => ({
         rows: [
           { mechanic: 'glowflies', kind: 'find', tier: 1, hits: 3, misses: 1 },
-          { mechanic: 'oddOneOut', kind: 'tellApart', tier: 2, hits: 2, misses: 1 },
+          { mechanic: 'oddone', kind: 'tellApart', tier: 2, hits: 2, misses: 1 },
         ],
         seconds: 305,
         challenge: { enabled: true, level: 2, maxLevel: 6, stepsUp: 3, stepsDown: 1 },
