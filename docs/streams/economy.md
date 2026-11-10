@@ -20,7 +20,7 @@ music, touch controls.
 | Respawn | `src/activities/gemLogic.ts` | 45 s after pickup, pop-in drawn on the weak-eye layer. |
 | Missions (3 per session + jackpot) | `src/activities/economy/missions.ts` | Pool: collect 10 gems (5), 2 mega gems (8), ×3 combo (5), bounce 30 m (8), open a chest (10), 5 gems while driving (8), 3 stars (6), land in 3 rings (10). Jackpot 15. Fixed draw in test mode. |
 | Tickets | `rules.ts`, one line in `src/activities/skydive/index.ts`, `setLaunchGate` from `src/activities/rocket.ts` | Balloon 5 gems, first ride per session free. Rocket pads 3. A denied ticket never starts the ride and shows a friendly toast. |
-| Gear: 9 outfits, 4 buggy paints, 3 trails, 3 emotes, 6 chest-only items | `src/activities/gear/` | One applier dresses the player and the buggy from the profile; items persist between sessions. Emotes play on G (keyboard), a gamepad button and a touch button. Each item has a lazily rendered preview picture. |
+| Gear: 9 outfits, 4 buggy paints, 3 trails, 3 emotes, 6 chest-only items | `src/activities/gear/` | One applier dresses the player and the buggy from the profile; items persist between sessions. Emotes use main's one emote input (C/G, D-pad Up, touch emote button → `player.emote()`): with a shop emote equipped it plays (via `PlayerApi.setEmoteHandler`), otherwise the hero's signature emote; a hero with no good clip for it (rex cheer) does its signature emote. `emote:play` still plays on request. Per-hero fit corrections in `gear/fit.ts`. Each item has a lazily rendered preview picture. |
 | Chests | `src/activities/chests/index.ts` | Opening a chest unlocks its outfit in the profile and equips it through the same applier. Old events still fire. |
 | Gear Shack kiosk | `src/world/gear-shack.ts`, anchor `gearShack` in `src/world/layout.ts` | East edge of the plaza (x 14, z 2), about 6.2k triangles, a test keeps it 2.5 m clear of the walking lines from spawn. E at the counter emits `shop:open`. |
 | UI | `src/ui/shop.ts`, `hudEcon.ts`, `wallet.ts`, `econ.ts`, `cssEcon.ts`, `itemArt.ts` | Wallet (replaces the old "n/total" counter), "+N" pops at the wallet, combo badge, mission cards, ticket toasts, shop, wardrobe (pause menu), unlock celebration, end-screen additions, wallet chip on the title, profile reset in grown-up settings (hold 3 s), touch layout. |
@@ -226,19 +226,18 @@ export interface EconomyApi {
 - **Merge**: `agent/economy` already contains `origin/main` as of its last merge (see §6). Merge
   with `git merge origin/agent/economy`. Expect at most a small conflict in
   `src/activities/index.ts` or `src/ui/index.ts` if main changed them since (keep both sides).
-- **Characters in the shop** (main's character wiring): register the characters once at boot and
-  the shop shows a "character" tab by itself:
-  ```ts
-  ctx.economy.registerItems(CHARACTERS.map((c) => ({
-    id: c.id, category: 'character', slot: 'character', name: c.name, icon: 'character',
-    price: c.price, // 0 = free starter: owned at once
-    preview: () => c.portraitUrl ?? null, // optional
-  })));
-  // Which character is worn: ctx.profile.equipped('character'); changes arrive as
-  // 'item:equipped' with slot 'character' (also fired by the shop and the wardrobe).
-  ```
-  The character select screen can use `ctx.economy.buy(id)` / `ctx.economy.equip('character', id)`
-  and `ctx.profile.owns(id)`.
+- **Characters in the shop: wired** (`src/activities/economy/characters.ts`, called from
+  `createEconomy`). The six heroes are registered as `ShopItem`s (`category`/`slot: 'character'`,
+  price from `src/core/characters/catalog.ts`, 0 = starter, icon `character` with the card colour
+  as swatch, no rendered portrait). The same module plugs the real wallet into main's
+  `setCharacterAccess({ owns, canAfford, buy, wallet })` (buy = `ctx.economy.buy(id)`), so the
+  select screen and the shop spend from one wallet and unlock into one profile. Main's remembered
+  pick (`savePick`/`loadPick`) + `player.setCharacter` stay the source of truth;
+  `profile.equipped('character')` mirrors it: equipping a hero (shop, wardrobe, buying one in the
+  select) switches to it and saves the pick; a Go in the select is copied into the profile when
+  play starts or resumes (select previews are not mirrored); at boot a remembered hero that is not
+  owned is replaced by the default; after `profile.reset()` paid heroes are locked again and a
+  hero no longer owned is swapped for the default (robot). A hero cannot be "taken off".
 - **Tickets for a new paid ride**: put `if (!ctx.economy.payTicket(kind)) return;` at the point
   where the ride really starts (after "busy" checks). A new ride kind needs a new `TicketKind`
   member and a price in `ECONOMY`.
