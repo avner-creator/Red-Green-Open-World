@@ -109,10 +109,8 @@ plaza and the lake (bay). The entrance is from the lane between the town hall an
 The strip is not quite flat, and scatter stands in or next to the footprint: an oak at
 (−29.6, −13.9) behind the finish deck, a rock at (−30.2, −29.4) in the foam by a blower, and a
 pine at (−30.2, −64.4) just north of tower B. The terrain on the west edge also rises up to
-+0.6 m, just under the foam. Adding the anchor plus a clear, flat pad fixes all of this. With
-the anchor, the course is not mirrored, which gives the same layout as the default site's
-mirrored one with yaw 0 at the north end. The simplest choice is to keep the default site's
-geometry:
++0.6 m, just under the foam. Adding the anchor plus a clear, flat pad fixes all of this. The
+simplest choice is to keep the default site's position:
 
 ```diff
 // src/types.ts
