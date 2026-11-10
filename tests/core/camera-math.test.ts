@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAMERA_HARD_MIN, clamp, orbitOffset, resolveCameraDistance } from '../../src/core/camera-math';
+import { CAMERA_HARD_MIN, clamp, orbitOffset, resolveCameraDistance, steerOverrideYaw } from '../../src/core/camera-math';
 
 describe('resolveCameraDistance', () => {
   it('uses the desired distance when nothing is hit', () => {
@@ -35,5 +35,24 @@ describe('orbitOffset', () => {
   it('clamp', () => {
     expect(clamp(5, 0, 1)).toBe(1);
     expect(clamp(-5, 0, 1)).toBe(0);
+  });
+});
+
+describe('steerOverrideYaw', () => {
+  it('leaves yaw alone without an override', () => {
+    expect(steerOverrideYaw(1, 0, null, 99, 1, 2, 0.1)).toBe(1);
+    expect(steerOverrideYaw(1, 0, {}, 99, 1, 2, 0.1)).toBe(1);
+  });
+  it('orbits at orbitRate even while the player looks', () => {
+    expect(steerOverrideYaw(1, 0, { orbitRate: 0.5 }, 0, 1, 2, 2)).toBeCloseTo(2);
+  });
+  it('eases towards playerYaw + yawOffset along the short way, once idle', () => {
+    expect(steerOverrideYaw(0, 0, { yawOffset: 1 }, 0, 1, 2, 0.1)).toBe(0); // player is looking
+    const y = steerOverrideYaw(0, 0, { yawOffset: 1 }, 5, 1, 2, 0.1);
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(1);
+    let a = 3;
+    for (let i = 0; i < 200; i++) a = steerOverrideYaw(a, 3, { yawOffset: 0.4 }, 5, 1, 2, 0.05);
+    expect(a).toBeCloseTo(3.4, 3);
   });
 });

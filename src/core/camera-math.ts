@@ -39,3 +39,26 @@ export function orbitOffset(yaw: number, pitch: number, distance: number): { x: 
 export function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
+
+/**
+ * Override yaw steering for one frame (pure). `orbitRate` (rad/s) spins the camera; otherwise
+ * `yawOffset` eases the camera towards `playerYaw + yawOffset`, but only after the player has left
+ * the camera alone for `idleDelay` seconds. Returns the new yaw.
+ */
+export function steerOverrideYaw(
+  yaw: number,
+  playerYaw: number,
+  o: { yawOffset?: number; orbitRate?: number } | null,
+  sinceLook: number,
+  idleDelay: number,
+  rate: number,
+  dt: number,
+): number {
+  if (!o) return yaw;
+  if (o.orbitRate !== undefined) return yaw + o.orbitRate * dt;
+  if (o.yawOffset === undefined || sinceLook < idleDelay) return yaw;
+  let d = (playerYaw + o.yawOffset - yaw) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return yaw + d * (1 - Math.exp(-rate * dt));
+}
