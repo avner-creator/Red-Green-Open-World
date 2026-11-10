@@ -63,9 +63,9 @@ export function createMushrooms(spots: readonly THREE.Vector3[]): MushroomModel 
   const b = SILLY.bumper;
   const k = new Kit();
   for (const p of spots) {
-    k.cyl('matte', COL.navy, p.x, p.y + 0.06, p.z, 1.5, 0.12, 28);
+    k.cyl('gloss', COL.navy, p.x, p.y + 0.06, p.z, 1.5, 0.12, 28);
     k.add('gloss', new THREE.CylinderGeometry(0.38, 0.55, b.top - 0.55, 18), COL.cream, k.t(p.x, p.y + (b.top - 0.55) / 2, p.z));
-    k.add('matte', new THREE.TorusGeometry(0.47, 0.07, 8, 20), COL.navy, k.t(p.x, p.y + 0.55, p.z, Math.PI / 2));
+    k.add('gloss', new THREE.TorusGeometry(0.47, 0.07, 8, 20), COL.navy, k.t(p.x, p.y + 0.55, p.z, Math.PI / 2));
   }
   const stems = k.build('silly-mushroom-stems');
   const caps = spots.map((p, i) => {
@@ -75,7 +75,7 @@ export function createMushrooms(spots: readonly THREE.Vector3[]): MushroomModel 
     const spotCol = dark ? COL.cream : COL.navy;
     kc.add('gloss', new THREE.SphereGeometry(1, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), capCol, kc.t(0, 0, 0, 0, 0, 0, b.capRadius, 0.78, b.capRadius));
     kc.add('gloss', new THREE.TorusGeometry(b.capRadius, 0.16, 10, 36), dark ? COL.yellow : COL.ink, kc.t(0, 0.02, 0, Math.PI / 2));
-    kc.add('matte', new THREE.CircleGeometry(b.capRadius, 32), COL.cream, kc.t(0, -0.01, 0, Math.PI / 2));
+    kc.add('gloss', new THREE.CircleGeometry(b.capRadius, 32), COL.cream, kc.t(0, -0.01, 0, Math.PI / 2));
     // Spots on the cap surface (they show the spin).
     for (let s = 0; s < 7; s++) {
       const a = (s / 7) * Math.PI * 2 + i;
