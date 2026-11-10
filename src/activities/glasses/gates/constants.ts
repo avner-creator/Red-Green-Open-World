@@ -16,15 +16,17 @@ export const GATES = {
   passHeight: 2.2,
   /** Symbol plaque on top of each arch (edge, centre height). */
   plaque: 1.2,
-  plaqueY: 3.48,
-  /** The half-symbol sign: a lectern between the plate and the arches, facing the plate. */
+  plaqueY: 3.75,
+  /** The half-symbol sign: a lectern between the plate and the arches, facing the plate; its
+   *  panel sits above the hero's head in the default camera view from the plate, and below the
+   *  arch plaques behind it. */
   signZ: 0.1,
-  signY: 1.78,
+  signY: 2.2,
   signTilt: 0.15,
-  signPanel: 1.6,
-  signFrame: 1.84,
+  signPanel: 1.56,
+  signFrame: 1.8,
   /** Half-symbol height on the sign at tier 1 (× the tier size). */
-  halfSize: 1.32,
+  halfSize: 1.3,
   /** Start plate (centre z, radius). */
   plateZ: 2.0,
   plateR: 0.95,

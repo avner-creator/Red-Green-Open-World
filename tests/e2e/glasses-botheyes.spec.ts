@@ -70,12 +70,25 @@ async function standAt(p: P3, yaw: number, settle = 40): Promise<void> {
 const step = (n: number): Promise<void> => page.evaluate((k) => window.__rg!.step(1 / 60, k, false), n);
 const teleport = (p: P3, yaw: number): Promise<void> => page.evaluate(({ p, yaw }) => window.__rg!.teleport(p.x, p.y + 0.05, p.z, yaw), { p, yaw });
 
-async function shots(dir: string, name: string): Promise<PNG> {
+/** Full / R-only / G-only screenshots with the game's default camera; `big` adds 1280×720. */
+async function shots(dir: string, name: string, big = false): Promise<PNG> {
   mkdirSync(`${OUT}/${dir}`, { recursive: true });
+  const save = (img: PNG, tag: string): void => {
+    writeFileSync(`${OUT}/${dir}/${tag}-R.png`, PNG.sync.write(channelOnly(img, 0)));
+    writeFileSync(`${OUT}/${dir}/${tag}-G.png`, PNG.sync.write(channelOnly(img, 1)));
+  };
   await page.evaluate(() => window.__rg!.render());
   const img = await canvasShot(page, `${OUT}/${dir}/${name}-full.png`);
-  writeFileSync(`${OUT}/${dir}/${name}-R.png`, PNG.sync.write(channelOnly(img, 0)));
-  writeFileSync(`${OUT}/${dir}/${name}-G.png`, PNG.sync.write(channelOnly(img, 1)));
+  save(img, name);
+  if (big) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.evaluate(() => window.__rg!.render());
+    save(await canvasShot(page, `${OUT}/${dir}/${name}-720p-full.png`), `${name}-720p`);
+    await page.setViewportSize({ width: 640, height: 360 });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.evaluate(() => window.__rg!.render());
+  }
   return img;
 }
 
@@ -125,9 +138,6 @@ test.beforeAll(async ({ browser }) => {
     rg.start();
     rg.step(1 / 60, 5, false);
     rg.setRemaining(9999);
-    // Framing for the proofs and screenshots: close behind the hero, so a decor tree or the
-    // pictogram board next to the default camera spot cannot cover the play area.
-    rg.ctx.cameraRig.setOverride({ distance: 3.4, height: 1.5 });
     const w = window as unknown as { __bothEyes: { results: unknown[]; toasts: number } };
     w.__bothEyes = { results: [], toasts: 0 };
     rg.ctx.events.on('glasses:result', (e) => w.__bothEyes.results.push(e));
@@ -156,7 +166,7 @@ test('gates: on the plate, the halves fuse on the sign; each layer only touches 
   await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left', tier: 1 });
   await standAt(d.plate, d.yaw + Math.PI);
   expect(await page.evaluate(() => window.__rgGlasses!.active('gates'))).toBe(true);
-  await shots('gates', 'plate');
+  await shots('gates', 'plate', true);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'gates' });
   await expectDrawBudget(page, 'gates', 6);
 });
@@ -239,7 +249,7 @@ test('dot signs: the picture and the buttons; each layer only touches its channe
   const d = await debug<DotsDebug>('dotsigns');
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 1 });
   await standAt(d.view, d.yaw + Math.PI);
-  await shots('dotsigns', 'pedestal');
+  await shots('dotsigns', 'pedestal', true);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'dotsigns' });
   await expectDrawBudget(page, 'dotsigns', 6);
 });
@@ -313,7 +323,7 @@ test('dot signs: press the hidden shape → hit, a wrong one → miss, a new pic
   // A finer picture in view for the record.
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 3 });
   await standAt(d.view, facing);
-  await shots('dotsigns', 'tier3');
+  await shots('dotsigns', 'tier3', true);
 });
 
 test('both are idle when the player is far', async () => {
