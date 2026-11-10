@@ -57,7 +57,7 @@ export const CHARACTER_CSS = `
 .rg .cs-pill .ic{font-size:1.5em;color:var(--y)}
 .rg .cs-mid{flex:1;display:flex;align-items:flex-end;gap:calc(var(--u)*2);min-height:0;padding:calc(var(--u)*1) 0}
 .rg .cs-stage{flex:1;align-self:stretch;display:flex;align-items:center;justify-content:space-between;touch-action:pan-y}
-.rg .cs-arrow{width:calc(var(--u)*9);height:calc(var(--u)*9);min-width:44px;min-height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;
+.rg .cs-arrow{align-self:center;flex:none;width:calc(var(--u)*8);height:calc(var(--u)*8);min-width:44px;min-height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;
   background:linear-gradient(180deg,#2a3258,#171c38);border:calc(var(--u)*.6) solid #fff;box-shadow:0 0 0 calc(var(--u)*.45) #000;color:#fff;font-size:calc(var(--u)*5);
   transition:transform .12s,filter .12s;touch-action:manipulation}
 .rg .cs-arrow:hover{transform:scale(1.1);filter:brightness(1.2)}
@@ -85,7 +85,7 @@ export const CHARACTER_CSS = `
 .rg .cs-go{width:100%;min-height:calc(var(--u)*10);font-size:calc(var(--u)*5);letter-spacing:.06em;border-radius:calc(var(--u)*3.4);isolation:isolate}
 .rg .cs-go .ic{animation:rg-bob 1.8s ease-in-out infinite}
 .rg .cs-go.buy{animation:cs-buy 1s ease-in-out infinite alternate}
-@keyframes cs-buy{to{transform:scale(1.06);filter:brightness(1.12)}}
+@keyframes cs-buy{to{filter:brightness(1.25);box-shadow:0 0 0 calc(var(--u)*.45) #fff,0 0 calc(var(--u)*3) calc(var(--u)*1) rgba(255,217,59,.9)}}
 .rg .cs-need{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1);width:100%;padding:calc(var(--u)*1.2);border:calc(var(--u)*.5) dashed #fff;border-radius:calc(var(--u)*2.4);background:#0b0f22}
 .rg .cs-need .pr{display:flex;align-items:center;gap:calc(var(--u)*1);font-size:calc(var(--u)*4.4)}
 .rg .cs-need .ic{font-size:1.2em}
@@ -111,13 +111,13 @@ export const CHARACTER_CSS = `
 .rg.nav-kb .cs-chip:focus{outline:calc(var(--u)*.9) solid #fff;outline-offset:calc(var(--u)*.6);transform:translateY(calc(var(--u)*-1.6)) scale(1.14)}
 
 /* unlock celebration */
-.rg .cs-cele{position:absolute;inset:0;display:none;flex-direction:column;justify-content:space-between;align-items:center;padding:calc(var(--u)*6) 0 calc(var(--u)*8);pointer-events:none!important;overflow:hidden;
+.rg .cs-cele{position:absolute;inset:0;display:none;flex-direction:column;justify-content:flex-start;gap:calc(var(--u)*1);align-items:center;padding:calc(var(--u)*5) 0 0;pointer-events:none!important;overflow:hidden;
   background:radial-gradient(ellipse at 50% 50%,rgba(255,217,59,0) 25%,rgba(255,217,59,.35) 100%)}
 .rg .cs-cele.on{display:flex;animation:cs-flash .5s ease-out}
 @keyframes cs-flash{from{background-color:rgba(255,255,255,.85)}}
 .rg .cs-cele .big{display:flex;align-items:center;gap:calc(var(--u)*2);font-size:calc(var(--u)*14);font-weight:1000;color:var(--y);
   -webkit-text-stroke:calc(var(--u)*1.4) #000;paint-order:stroke fill;text-shadow:0 calc(var(--u)*1.2) 0 #000;animation:cs-slam .7s cubic-bezier(.2,1.8,.4,1) both}
-.rg .cs-cele .big .ic{font-size:.8em;animation:rg-spin 1.4s ease-in-out infinite alternate}
+.rg .cs-cele .big .ic{color:var(--y);font-size:.8em;animation:rg-spin 1.4s ease-in-out infinite alternate}
 .rg .cs-cele .nm{font-size:calc(var(--u)*16);font-weight:1000;color:#fff;-webkit-text-stroke:calc(var(--u)*1.6) #000;paint-order:stroke fill;text-shadow:0 calc(var(--u)*1.4) 0 #000;animation:cs-slam .8s .15s cubic-bezier(.2,1.8,.4,1) both}
 .rg .cs-cele .confetti{z-index:-1}
 @keyframes cs-slam{from{transform:scale(3.2) rotate(-8deg);opacity:0}}

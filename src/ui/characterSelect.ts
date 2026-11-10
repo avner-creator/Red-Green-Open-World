@@ -63,7 +63,7 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     el.addEventListener('click', () => select(stepIndex(sel, dir, CHARACTERS.length), true));
     return el;
   };
-  const stage = h('div', 'cs-stage', { 'data-testid': 'csel-stage' }, arrow(-1), arrow(1));
+  const stage = h('div', 'cs-stage', { 'data-testid': 'csel-stage' });
   // Swipe on the hero to browse.
   let swipeX: number | null = null;
   stage.addEventListener('pointerdown', (e) => {
@@ -102,7 +102,7 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     });
     return chip;
   });
-  const dock = h('div', 'cs-dock', { 'data-testid': 'csel-dock' }, ...chips);
+  const dock = h('div', 'cs-dock', { 'data-testid': 'csel-dock' }, arrow(-1), ...chips, arrow(1));
 
   const cele = h('div', 'cs-cele', { 'data-testid': 'csel-unlock' });
   const el = h('div', 'screen csel', { 'data-screen': 'characters' }, top, mid, dock, cele);
@@ -268,7 +268,7 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     active = true;
     if (ctx.session.state.phase === 'title') {
       // Close and low: the hero fills the middle of the screen.
-      ctx.cameraRig.setOverride({ distance: 3.6, height: 1.5, fov: 48 });
+      ctx.cameraRig.setOverride({ distance: 5.4, height: 1.6, fov: 46 });
     }
     refresh(true);
     showInWorld(cur().id, true);

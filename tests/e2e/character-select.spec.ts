@@ -47,6 +47,10 @@ async function settle(page: Page, id: string): Promise<void> {
     .toBe(id);
 }
 
+// RG_VIEW=1920x1080 (or 667x375) renders the screenshots at another size.
+const view = /^(\d+)x(\d+)$/.exec(process.env.RG_VIEW ?? '');
+if (view) test.use({ viewport: { width: Number(view[1]), height: Number(view[2]) } });
+
 test.describe('character select', () => {
   test.describe.configure({ mode: 'serial' });
   let page: Page;
