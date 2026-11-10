@@ -11,6 +11,7 @@ import { BOUNCE, MAT } from './constants';
 import { ThresholdAwards, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
 import type { ThrillConfetti } from './thrillConfetti';
+import { getStuntGate } from './stuntGate';
 import { thrillSpots } from './thrillSpots';
 
 const RINGS = 24;
@@ -20,6 +21,34 @@ const SEGS = 48;
 function bandColor(f: number): THREE.Color {
   const white = f < 0.14 || (f > 0.5 && f < 0.62) || f > 0.95;
   return white ? new THREE.Color(0xf4f4f4) : new THREE.Color(0x24407f);
+}
+
+/** Plate for the height gauge: big dark number on white, one yellow star per tier. */
+function heightPlate(h: number, stars: number): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 128;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#f6f6f6';
+  g.fillRect(0, 0, 256, 128);
+  g.strokeStyle = '#0e1226';
+  g.lineWidth = 10;
+  g.strokeRect(5, 5, 246, 118);
+  g.fillStyle = '#0e1226';
+  g.font = 'bold 64px sans-serif';
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.fillText(`${h} m`, 18, 50);
+  g.font = 'bold 44px sans-serif';
+  g.lineWidth = 5;
+  for (let i = 0; i < stars; i++) {
+    g.fillStyle = '#ffd21f';
+    g.strokeText('\u2605', 18 + i * 50, 100);
+    g.fillText('\u2605', 18 + i * 50, 100);
+  }
+  return new THREE.CanvasTexture(c);
 }
 
 export interface Trampoline {
@@ -142,16 +171,61 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   // Shockwave rings on the mat (both-eye, bright white on the dark mat).
   const ringGeo = new THREE.RingGeometry(0.92, 1, 64).rotateX(-Math.PI / 2);
   disposables.push(ringGeo);
-  const rings: { mesh: THREE.Mesh; t: number; power: number }[] = [];
+  // A near-black twin just inside each white ring, so it also reads over the white mat bands.
+  const ringDarkGeo = new THREE.RingGeometry(0.8, 0.92, 64).rotateX(-Math.PI / 2);
+  disposables.push(ringDarkGeo);
+  const rings: { mesh: THREE.Mesh; dark: THREE.Mesh; t: number; power: number }[] = [];
   for (let i = 0; i < 4; i++) {
     const m = mat(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    const md = mat(new THREE.MeshBasicMaterial({ color: 0x0a0d1c, transparent: true, opacity: 0, depthWrite: false, fog: false }));
     const mesh = new THREE.Mesh(ringGeo, m);
-    mesh.visible = false;
-    mesh.position.y = MAT.top + 0.08;
-    mesh.renderOrder = 5;
-    root.add(mesh);
-    rings.push({ mesh, t: 9, power: 1 });
+    const dark = new THREE.Mesh(ringDarkGeo, md);
+    for (const o of [dark, mesh]) {
+      o.visible = false;
+      o.position.y = MAT.top + 0.08;
+      o.renderOrder = 5;
+      root.add(o);
+    }
+    rings.push({ mesh, dark, t: 9, power: 1 });
   }
+
+  // Ground-shadow / landing marker on the mat: dark blob with a bright rim, grows with height.
+  const blobGeo = new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2);
+  const blobRimGeo = new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2);
+  disposables.push(blobGeo, blobRimGeo);
+  const blob = new THREE.Mesh(blobGeo, mat(new THREE.MeshBasicMaterial({ color: 0x080a16, transparent: true, opacity: 0.5, depthWrite: false, fog: false })));
+  const blobRim = new THREE.Mesh(blobRimGeo, mat(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, fog: false })));
+  for (const o of [blob, blobRim]) {
+    o.visible = false;
+    o.renderOrder = 4;
+    root.add(o);
+  }
+
+  // Height gauge beside the mat: a striped mast with numbered star plates at 15 / 30 / 45 m.
+  const gaugeX = -(R + 4.5);
+  const stripeA = mat(new THREE.MeshBasicMaterial({ color: 0xf4f4f4, fog: false }));
+  const stripeB = mat(new THREE.MeshBasicMaterial({ color: 0x0e1226, fog: false }));
+  const segGeo = new THREE.CylinderGeometry(0.13, 0.13, 5, 8);
+  disposables.push(segGeo);
+  for (let i = 0; i < 10; i++) {
+    const seg = new THREE.Mesh(segGeo, i % 2 ? stripeB : stripeA);
+    seg.position.set(gaugeX, MAT.top + 2.5 + i * 5, 0);
+    root.add(seg);
+  }
+  const armGeo = new THREE.BoxGeometry(3, 0.14, 0.14);
+  disposables.push(armGeo);
+  [15, 30, 45].forEach((h, i) => {
+    const arm = new THREE.Mesh(armGeo, stripeB);
+    arm.position.set(gaugeX + 1.5, MAT.top + h, 0);
+    root.add(arm);
+    const tex = heightPlate(h, i + 1);
+    if (!tex) return;
+    disposables.push(tex);
+    const sprite = new THREE.Sprite(mat(new THREE.SpriteMaterial({ map: tex, fog: false })));
+    sprite.scale.set(5, 2.5, 1);
+    sprite.position.set(gaugeX + 3, MAT.top + h, 0);
+    root.add(sprite);
+  });
   let nextRing = 0;
   function spawnRings(power: number): void {
     for (let k = 0; k < 2; k++) {
@@ -242,8 +316,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     flight.visual.kick(8 + 22 * (apex / BOUNCE.maxHeight));
     const p = ctx.player.position;
     for (const t of awards.reached(apex)) {
-      ctx.events.emit('stunt', { kind: 'bigBounce', value: apex, stars: t.stars });
-      ctx.events.emit('ui:toast', { icon: 'trampoline', text: `${t.height} m` });
+      getStuntGate(ctx).stunt({ kind: 'bigBounce', value: apex, stars: t.stars });
       if (t.stars >= 2) confetti.burst(new THREE.Vector3(p.x, p.y + 1, p.z), t.stars >= 3 ? 120 : 70);
     }
   }
@@ -294,7 +367,9 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     camera() {
       const f = Math.min(1, Math.max(0, (ctx.player.position.y - matTopY) / BOUNCE.maxHeight));
       const e = f * (2 - f); // ease-out: the pull-back is already obvious at 15 m
-      return { distance: CAMERA.distance + e * 15, height: CAMERA.height + e * 9, fov: CAMERA.fov + e * 24 };
+      // Capped pull-back: the hero stays >= ~6% of the screen at 45 m, with a high, downward-looking
+      // camera so the island panorama is in view.
+      return { distance: CAMERA.distance + e * 5.5, height: CAMERA.height + e * 9.5, fov: CAMERA.fov + e * 6 };
     },
     onEnd() {
       chainApex = 0;
@@ -334,10 +409,36 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
       if (r.t > 1) continue;
       r.t += dt / 0.75;
       const k = Math.max(0, r.t);
-      r.mesh.visible = r.t >= 0 && r.t <= 1;
       const s = 0.6 + k * R * 1.25 * Math.min(1.4, r.power);
-      r.mesh.scale.set(s, 1, s);
-      (r.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.95 * (1 - k) ** 1.5);
+      const op = Math.max(0, 0.95 * (1 - k) ** 1.5);
+      for (const o of [r.mesh, r.dark]) {
+        o.visible = r.t >= 0 && r.t <= 1;
+        o.scale.set(s, 1, s);
+        (o.material as THREE.MeshBasicMaterial).opacity = op;
+      }
+    }
+
+    // Landing marker under the player while bouncing.
+    const marking = flight.active && flight.owner === 'trampoline';
+    blob.visible = blobRim.visible = marking;
+    if (marking) {
+      const h = Math.max(0, flight.height);
+      const p = player.position;
+      let lx = p.x - cx;
+      let lz = p.z - cz;
+      const d = Math.hypot(lx, lz);
+      if (d > R - 0.5) {
+        lx *= (R - 0.5) / d;
+        lz *= (R - 0.5) / d;
+      }
+      const c = Math.cos(-anchor.yaw);
+      const sn = Math.sin(-anchor.yaw);
+      const s = 0.9 + h * 0.055;
+      for (const o of [blob, blobRim]) {
+        o.position.set(lx * c + lz * sn, MAT.top + 0.06, -lx * sn + lz * c);
+        o.scale.set(s, 1, s);
+      }
+      (blob.material as THREE.MeshBasicMaterial).opacity = 0.55 - 0.2 * Math.min(1, h / BOUNCE.maxHeight);
     }
 
     // Mat squash.

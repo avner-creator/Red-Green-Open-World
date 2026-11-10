@@ -9,6 +9,7 @@ import { solveLaunch } from './ballistics';
 import { PadChain, padLocalPositions } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
 import type { Trampoline } from './trampoline';
+import { getStuntGate } from './stuntGate';
 import { thrillSpots } from './thrillSpots';
 
 interface Pad {
@@ -143,8 +144,7 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
     flight.visual.stretch = -0.4;
     flight.visual.kick(8 + index * 4);
     if (chain.hit(clock)) {
-      ctx.events.emit('stunt', { kind: 'bigAir', value: chain.count, stars: 2 });
-      ctx.events.emit('ui:toast', { icon: 'rocket' });
+      getStuntGate(ctx).stunt({ kind: 'bigAir', value: chain.count, stars: 2 });
     }
   }
 
