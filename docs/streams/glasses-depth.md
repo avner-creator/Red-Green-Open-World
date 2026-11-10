@@ -138,6 +138,14 @@ Everything else in Phase 1 is new files.
 The UI hook lines were placed away from the lines the economy branch changes in the same files.
 `src/config.ts`, `src/main.ts` and `package.json` are untouched.
 
+**Pending (note from the main session, 2026-11-10):** `main` is changing
+`src/activities/index.ts` so that each attraction registers from a `register.ts` in its own
+folder and is discovered automatically. At the next merge of `origin/main` the 4 lines above
+will conflict: they move into `src/activities/glasses/register.ts`, following the convention
+documented at the top of the new `index.ts`. The glasses system must still be created **after**
+every other attraction (its site probe looks at their colliders); if the convention has no
+ordering, the probe is deferred to the first update (it already runs there).
+
 ## Decisions
 
 - "Rebase on `origin/main` hourly" is done as a **merge of `origin/main` into the branch**
