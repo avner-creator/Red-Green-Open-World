@@ -1,8 +1,9 @@
 /** Pure helpers for the character select (index maths, start rules, remembered pick). */
 import { CHARACTERS, DEFAULT_CHARACTER } from '../core/characters/catalog';
+import { CHARACTER_KEY } from '../config';
 import type { CharacterAccess } from './characterAccess';
 
-export const CHARACTER_KEY = 'rgow.character.v1';
+export { CHARACTER_KEY };
 
 /** Wrap an index into 0..n-1 (n <= 0 gives 0). */
 export function wrapIndex(i: number, n: number): number {

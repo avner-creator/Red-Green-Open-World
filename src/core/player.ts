@@ -5,7 +5,7 @@
  * skill each (skills.ts) and a signature emote.
  */
 import * as THREE from 'three';
-import { PLAYER } from '../config';
+import { CHARACTER_KEY, PLAYER } from '../config';
 import type { ExternalController, GameContext, PlayerAnim, PlayerApi, PlayerMode, PlayerSkillView, VehicleApi } from '../types';
 import { CHARACTER_IDS, DEFAULT_CHARACTER, getCharacter } from './characters/catalog';
 import type { CharacterId } from './characters/catalog';
@@ -28,6 +28,16 @@ const HALF = (PLAYER.height - 2 * PLAYER.radius) / 2;
 const CENTRE = HALF + PLAYER.radius;
 const MOVE_GROUPS = groups(GROUP_AVATAR, 0xffff & ~GROUP_AVATAR);
 
+/** The character picked last time (character select saves it), or null. Storage may be blocked. */
+function storedCharacterId(): CharacterId | null {
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(CHARACTER_KEY) : null;
+    return v && (CHARACTER_IDS as readonly string[]).includes(v) ? (v as CharacterId) : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PlayerInternal {
   api: PlayerApi;
   update(dt: number): void;
@@ -48,7 +58,10 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   const object = model.root;
   ctx.scene.add(object);
   const sfx = createSkillFx(ctx.scene, model.anchors.back);
-  const skills = new SkillMachine(getCharacter(DEFAULT_CHARACTER).skill, PLAYER.gravity);
+  // Boot straight into the remembered pick, so only ONE character GLB loads before Play.
+  const bootId = storedCharacterId() ?? DEFAULT_CHARACTER;
+  const skills = new SkillMachine(getCharacter(bootId).skill, PLAYER.gravity);
+  skills.floaty = bootId === 'flamingo';
 
   // ── Characters: loaded lazily, one instance each (cached), swapped inside the stable rig.
   const loaded = new Map<CharacterId, Promise<LoadedCharacter>>();
@@ -61,12 +74,19 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     }
     return p;
   };
-  let characterId: CharacterId = DEFAULT_CHARACTER;
+  let characterId: CharacterId = bootId;
   let swapToken = 0;
   try {
-    model.setCharacter(await loadById(DEFAULT_CHARACTER));
+    model.setCharacter(await loadById(bootId));
   } catch (err) {
-    console.warn('default character failed to load, using the fallback robot', err);
+    console.warn(`character "${bootId}" failed to load`, err);
+    characterId = DEFAULT_CHARACTER;
+    skills.setSkill(getCharacter(DEFAULT_CHARACTER).skill);
+    try {
+      if (bootId !== DEFAULT_CHARACTER) model.setCharacter(await loadById(DEFAULT_CHARACTER));
+    } catch (err2) {
+      console.warn('default character failed to load, using the fallback robot', err2);
+    }
   }
 
   const spawn = ctx.world.anchors.spawn;

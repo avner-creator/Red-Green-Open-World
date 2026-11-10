@@ -174,3 +174,88 @@ folder and registers itself with one line, so merges stay trivial.
 > `tests/e2e/vision.spec.ts`: stones and arrows change only the weak channel, door buttons only
 > the strong channel, zero difference elsewhere, for all 4 lens/eye combinations. Screenshots
 > full/R/G in `test-results/secrets/`. Notes in `docs/streams/activities-secrets.md`.
+
+## Streams G–I (added later; each is one Opus 5.5 session)
+
+## Stream G — outer island art pass (branch `agent/world-outer`)
+
+> Bring the outer areas of the Red-Green Open World island up to the standard of the plaza, Bouncy
+> Park and garage (look at those first: `npm run build && npm run shots:channels -- spawn
+> trampoline garage balloon`). You own `src/world/` for this stream. Read how the core areas are
+> built (`src/world/core-areas.ts`, `wayfinding.ts`, `pictograms.ts`, `beacons.ts`, the scatter
+> and chunk batching code, `lighting.ts`) and reuse those systems. Dress, in this order:
+> **ranch** (`anchors.ranch`: barn with open doors, paddock with a gate that a horse can jump,
+> hay, troughs, a riding track loop marked with flags, a how-to board and beacon for the horse),
+> **canyon bridge** (`anchors.bungee`, `bungeeLanding`: bridge detailing, a proper jump platform
+> with railings and flags, rock strata, a waterfall or river below, the landing shore, board +
+> beacon), **Silly Zone** (`anchors.sillyZone`: only the surroundings — fences, wacky signposts,
+> bright brightness-contrast ground patterns up to but not inside the anchor radius; board +
+> beacon), **lake and beach** (`anchors.lakePlatform`: pier, floating platform, buoys, reeds,
+> beach umbrellas and towels without text, sandcastles, rowing boats moored), **lighthouse**
+> (`anchors.lighthouse`: stairs or a ramp so the top gallery is reachable on foot, rotating
+> lamp glow, rocks, path), and the **roads** to all of them (same kerb/lamp/verge treatment as the
+> core roads, chevrons, junction fingerposts). Add these five to the plaza fingerpost and their
+> anchors' beacons. Do not move any existing anchor or gem/chest spot; do not edit other folders
+> (three other streams are building a horse at the ranch, a bungee jump on the bridge and the
+> Silly Zone props inside its radius — keep every anchor's clear radius empty). Everything must
+> read in R-only and G-only (brightness, not hue). Colliders for anything solid. Performance:
+> measure with `scripts/perf-report.mjs` if present, otherwise `renderer.info`; each newly
+> dressed view must stay ≤ ~230 draw calls and ≤ ~500k triangles for the whole frame on Medium
+> (batch by material in the existing chunks; small parts cast no shadow). Unit tests for
+> placements (outside anchor radii, off roads, on land; spots-colliders test still passes).
+> Screenshots full/R/G of every dressed area at start and sunset in `test-results/world-outer/`;
+> judge them against a AAA-stylized bar and do up to two polish passes. Notes in
+> `docs/streams/world-outer.md`.
+
+## Stream H — a living island: friendly critters and townsfolk (branch `agent/world-life`)
+
+> Make Red-Green Open World feel alive, in a new folder `src/world/life/` registered with one
+> line where the world is assembled (read `src/world/index.ts`, the chunk batching code and
+> `src/core/characters/load.ts` for how animated GLBs are loaded with the meshopt decoder).
+> Add ambient, friendly, non-interactive-by-default life, all cheap and batched: seagulls
+> circling the lighthouse and coast, small birds that scatter from the ground when the player
+> runs near and resettle, butterflies over flower patches, fish that jump in the lake, a few
+> sheep or chickens near the ranch that waddle out of the way of the player and the buggy (they
+> are never hit: they hop aside with a comic squeak), ducks on the water, fireflies as the
+> session approaches sunset (`setTimeOfDay`), drifting clouds and their shadows, flags and
+> bunting reacting to a gentle wind. And 4–6 townsfolk standing at their stalls or benches in
+> the plaza and at attractions (use CC0 animated characters from quaternius.com packs or the
+> existing character GLBs in `public/assets/characters/` re-coloured; ≤ 400 KB each compressed
+> with `@gltf-transform/cli`, an `ASSETS.md` row for each) who turn to look at the player, wave
+> or cheer when the player does a stunt (`stunt` event) or an emote (`player:emote`), and point
+> toward the nearest attraction when the player stands idle near them. No dialogue text.
+> Everything is both-eye and must read in R-only and G-only; nothing here may be weak-eye-only
+> or reveal weak-eye objects (townsfolk must not point at gems or keys). Critters use instancing
+> or a single merged animated mesh per species with vertex-shader animation; whole stream budget
+> ≤ 25 draw calls and ≤ 60k triangles on Medium, less on Low (`setQuality`), nothing at all
+> costs more than 0.5 ms of CPU per frame. Deterministic in `ctx.testMode`. Unit tests for the
+> flocking/avoidance maths; a Playwright e2e that boots (`?test=1&quality=low`), steps frames and
+> asserts no errors, that birds scatter when the player approaches, and that the draw-call
+> budget holds. Screenshots full/R/G in `test-results/life/`. Notes in `docs/streams/world-life.md`.
+
+## Stream I — loading, boot size and first impression (branch `agent/boot-loading`)
+
+> Make the first ten seconds of Red-Green Open World feel premium, and make it load fast. You
+> own `index.html`, `vite.config.ts`, `src/main.ts` boot sequence and a new folder `src/boot/`
+> for this stream (read `docs/HANDOFF.md` and `CLAUDE.md` first; `src/main.ts` normally belongs
+> to the integrator, so keep changes to the boot/loader parts and list them in your notes).
+> Current state: `npm run boot:requests` reports about 2.2 MB gzip before the title screen (one
+> 2 MB JS bundle plus one character GLB) and 2.4 MB of music after Play. Deliver: (1) a real
+> loading screen that appears instantly from inline HTML/CSS (animated wordmark, a progress bar
+> driven by actual boot stages, playful icon tips with no text, readable in R-only and G-only,
+> no flash of unstyled content, works at 360×640 landscape and 4K) and a smooth reveal into the
+> title screen; (2) code-splitting so first paint needs far less: Rapier's WASM, the
+> post-processing stack, attractions and UI screens loaded as separate chunks in a sensible
+> order with `modulepreload`, tree-shaking of three.js imports, no duplicated dependencies,
+> Brotli-friendly output; target ≤ 900 KB gzip to show the loading screen with progress and
+> ≤ 2.0 MB gzip to the playable title screen, and report before/after from `npm run
+> boot:requests`; (3) graceful failure screens, wordless with an icon and a retry button, for no
+> WebGL 2, lost WebGL context (restore without reloading if possible), a failed chunk or asset
+> load, and a tab that was in the background; (4) pause the game and music when the tab is
+> hidden; (5) a `netlify.toml` check: long cache for hashed `build/*`, short for `assets/*`,
+> correct MIME types for `.wasm`/`.glb`/`.ogg`, and a security-headers block that does not break
+> WASM or audio; (6) a tiny service-worker-free offline hint only if trivial — otherwise skip.
+> Do not change gameplay. Tests: e2e for the loading screen appearing before the title, the
+> WebGL-missing screen (launch Chromium without GPU flags), context-loss recovery
+> (`WEBGL_lose_context`), and tab-hidden pause; keep the suite's total time flat. Notes with the
+> before/after table in `docs/streams/boot-loading.md`.

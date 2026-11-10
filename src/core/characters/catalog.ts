@@ -36,6 +36,17 @@ export interface AttachPoint {
   readonly scale?: number;
 }
 
+/**
+ * Optional seated adjustments (buggy, riding): extra bone rotations layered on the `sit` clip and
+ * a model offset, so long bodies (the dinosaur's tail) stay out of the roll cage and the camera view.
+ */
+export interface SeatPose {
+  /** Extra local rotation per bone, radians (XYZ Euler), multiplied onto the clip's pose. */
+  readonly bones?: Readonly<Record<string, readonly [number, number, number]>>;
+  /** Model offset while seated, metres in character space (+Y up, +Z forward). */
+  readonly offset?: readonly [number, number, number];
+}
+
 export interface CharacterDef {
   readonly id: CharacterId;
   /** Short display name (2–8 letters, shown big on the select carousel). */
@@ -60,6 +71,8 @@ export interface CharacterDef {
   readonly skill: CharacterSkill;
   /** Two colours for UI cards (light, dark): picked to differ in brightness in R and G alone. */
   readonly cardColors: readonly [string, string];
+  /** Seated pose tweaks (only characters that need them). */
+  readonly seat?: SeatPose;
 }
 
 /** The four space-suit characters share a skeleton; one scale keeps their proportions. */
@@ -212,6 +225,11 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 100,
     skill: 'groundPound',
     cardColors: ['#eef5c8', '#1d2a12'],
+    // Seated, the tail would curl up through the roll cage and hide his head from the chase
+    // camera: lay it down along the rear deck instead.
+    seat: {
+      bones: { Tail1: [-0.5, 0, 0], Tail2: [-0.15, 0, 0], Tail3: [-0.1, 0, 0], Neck: [0.45, 0, 0] },
+    },
   },
 ];
 

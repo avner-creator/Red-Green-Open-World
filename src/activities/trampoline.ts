@@ -5,10 +5,11 @@
  * always come back to the mat and the move keys are free for air tricks.
  */
 import * as THREE from 'three';
+import { finish, finishMaterial, mergeFinished } from '../core/vertex-finish';
 import { CAMERA } from '../config';
 import type { GameContext } from '../types';
 import { BOUNCE, MAT } from './constants';
-import { ThresholdAwards, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
+import { ThresholdAwards, boostedApex, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
 import type { ThrillConfetti } from './thrillConfetti';
 import { getStuntGate } from './stuntGate';
@@ -77,6 +78,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   };
 
   const root = new THREE.Group();
+  root.name = 'trampoline';
   root.position.set(cx, groundY, cz);
   root.rotation.y = anchor.yaw;
   ctx.scene.add(root);
@@ -124,33 +126,25 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   // Padded rim: bright yellow (bright in both R and G).
   const rimGeo = new THREE.TorusGeometry(R + MAT.rimTube * 0.2, MAT.rimTube, 14, 64).rotateX(Math.PI / 2);
   disposables.push(rimGeo);
-  const rim = new THREE.Mesh(rimGeo, mat(new THREE.MeshStandardMaterial({ color: 0xffd23a, roughness: 0.6 })));
-  rim.position.y = MAT.top;
-  rim.castShadow = true;
-  root.add(rim);
+  // Frame (rim, skirt, legs, steps) is one static mesh with per-vertex finishes: 1 draw.
+  const frameMat = mat(finishMaterial('rg-trampoline-frame'));
+  const frameParts: THREE.BufferGeometry[] = [finish(rimGeo.clone().translate(0, MAT.top, 0), { color: 0xffd23a, rough: 0.6, metal: 0 })];
 
   // Dark skirt under the mat and legs.
   const skirtGeo = new THREE.CylinderGeometry(R + 0.2, R + 0.2, MAT.top - 0.05, 48, 1, true);
   disposables.push(skirtGeo);
-  const skirt = new THREE.Mesh(skirtGeo, mat(new THREE.MeshStandardMaterial({ color: 0x2a2f3a, side: THREE.DoubleSide })));
-  skirt.position.y = (MAT.top - 0.05) / 2;
-  root.add(skirt);
+  frameParts.push(finish(skirtGeo.clone().translate(0, (MAT.top - 0.05) / 2, 0), { color: 0x2a2f3a, rough: 1, metal: 0 }));
   const legGeo = new THREE.CylinderGeometry(0.22, 0.28, MAT.top, 10);
   disposables.push(legGeo);
-  const legMat = mat(new THREE.MeshStandardMaterial({ color: 0x4a505c, roughness: 0.7 }));
   for (let i = 0; i < MAT.legs; i++) {
     const a = (i / MAT.legs) * Math.PI * 2;
-    const leg = new THREE.Mesh(legGeo, legMat);
-    leg.position.set(Math.cos(a) * (R + 0.45), MAT.top / 2, Math.sin(a) * (R + 0.45));
-    leg.castShadow = true;
-    root.add(leg);
+    frameParts.push(finish(legGeo.clone().translate(Math.cos(a) * (R + 0.45), MAT.top / 2, Math.sin(a) * (R + 0.45)), { color: 0x4a505c, rough: 0.7, metal: 0 }));
   }
 
   // Frame collider (covers mat + rim) and two steps at the front (+Z of the anchor).
   const colliders = [
     ctx.physics.addStaticCylinder(new THREE.Vector3(cx, groundY + MAT.top / 2, cz), MAT.top / 2, R + MAT.rimTube * 2),
   ];
-  const stepMat = mat(new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.8 }));
   const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), anchor.yaw);
   const front = new THREE.Vector3(Math.sin(anchor.yaw), 0, Math.cos(anchor.yaw));
   for (let k = 0; k < 2; k++) {
@@ -159,13 +153,15 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     const half = new THREE.Vector3(1.8, h / 2, 0.5);
     const geo = new THREE.BoxGeometry(half.x * 2, h, half.z * 2);
     disposables.push(geo);
-    const step = new THREE.Mesh(geo, stepMat);
-    step.position.set(0, h / 2, dist);
-    step.castShadow = true;
-    root.add(step);
+    frameParts.push(finish(geo.clone().translate(0, h / 2, dist), { color: 0xe8e8e8, rough: 0.8, metal: 0 }));
     const center = new THREE.Vector3(cx, groundY + h / 2, cz).addScaledVector(front, dist);
     colliders.push(ctx.physics.addStaticBox(center, half, yawQ));
   }
+  const frame = new THREE.Mesh(mergeFinished(frameParts), frameMat);
+  frame.castShadow = true;
+  frame.receiveShadow = true;
+  root.add(frame);
+  disposables.push(frame.geometry);
 
 
   // Shockwave rings on the mat (both-eye, bright white on the dark mat).
@@ -203,21 +199,23 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
 
   // Height gauge beside the mat: a striped mast with numbered star plates at 15 / 30 / 45 m.
   const gaugeX = -(R + 4.5);
-  const stripeA = mat(new THREE.MeshBasicMaterial({ color: 0xf4f4f4, fog: false }));
-  const stripeB = mat(new THREE.MeshBasicMaterial({ color: 0x0e1226, fog: false }));
-  const segGeo = new THREE.CylinderGeometry(0.13, 0.13, 5, 8);
-  disposables.push(segGeo);
-  for (let i = 0; i < 10; i++) {
-    const seg = new THREE.Mesh(segGeo, i % 2 ? stripeB : stripeA);
-    seg.position.set(gaugeX, MAT.top + 2.5 + i * 5, 0);
-    root.add(seg);
-  }
-  const armGeo = new THREE.BoxGeometry(3, 0.14, 0.14);
-  disposables.push(armGeo);
+  // Mast segments and arms are one unlit vertex-coloured mesh (1 draw).
+  const stripeA = new THREE.Color(0xf4f4f4);
+  const stripeB = new THREE.Color(0x0e1226);
+  const mastParts: THREE.BufferGeometry[] = [];
+  const painted = (g: THREE.BufferGeometry, c: THREE.Color): THREE.BufferGeometry => {
+    const n = g.index ? g.toNonIndexed() : g;
+    const col = new Float32Array(n.attributes.position.count * 3);
+    for (let k = 0; k < col.length; k += 3) col.set([c.r, c.g, c.b], k);
+    n.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return n;
+  };
+  for (let i = 0; i < 10; i++) mastParts.push(painted(new THREE.CylinderGeometry(0.13, 0.13, 5, 8).translate(gaugeX, MAT.top + 2.5 + i * 5, 0), i % 2 ? stripeB : stripeA));
+  for (const h of [15, 30, 45]) mastParts.push(painted(new THREE.BoxGeometry(3, 0.14, 0.14).translate(gaugeX + 1.5, MAT.top + h, 0), stripeB));
+  const mast = new THREE.Mesh(mergeFinished(mastParts), mat(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })));
+  root.add(mast);
+  disposables.push(mast.geometry);
   [15, 30, 45].forEach((h, i) => {
-    const arm = new THREE.Mesh(armGeo, stripeB);
-    arm.position.set(gaugeX + 1.5, MAT.top + h, 0);
-    root.add(arm);
     const tex = heightPlate(h, i + 1);
     if (!tex) return;
     disposables.push(tex);
@@ -376,7 +374,21 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     },
   };
 
-  function begin(apex: number, vx: number, vz: number, from: Flight): void {
+  /** Extra fanfare for a skill-boosted first bounce (a ground-pound goes straight to the top). */
+  function boostFx(boost: number, apex: number): void {
+    const p = ctx.player.position;
+    spawnRings(1.4);
+    ctx.cameraRig.shake(boost === Infinity ? 0.7 : 0.45);
+    ctx.audio.play('fanfare', { volume: boost === Infinity ? 0.9 : 0.6 });
+    ctx.audio.play('whoosh', { volume: Math.min(1, apex / 45), pitch: 0.85 });
+    confetti.burst(new THREE.Vector3(p.x, p.y + 1, p.z), boost === Infinity ? 140 : 60);
+  }
+
+  function begin(rawApex: number, vx: number, vz: number, from: Flight): void {
+    // Character skill boost (super-bounce +25%, ground-pound = maximum): read it before the flight
+    // takes over, because taking over clears it.
+    const boost = ctx.player.skill.bounceBoost;
+    const apex = boostedApex(rawApex, boost);
     ctx.player.position.y = matTopY;
     chainApex = apex;
     rest = false;
@@ -387,6 +399,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
       return;
     }
     boingFx(apex);
+    if (boost > 1) boostFx(boost, apex);
   }
 
   function update(dt: number): void {
