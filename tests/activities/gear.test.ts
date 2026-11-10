@@ -4,6 +4,7 @@ import { CHEST_GEAR, GEAR_CATALOG, GEAR_PAINTS, SHOP_GEAR, emoteKind, paintColor
 import { EMOTES, canStartEmote, emoteCancelled } from '../../src/activities/gear/emoteLogic';
 import { emptyLook, isLookSlot, lookChanges, readLook } from '../../src/activities/gear/look';
 import { MAX_TRAIL_PARTICLES, RAINBOW_LANES, RIBBON, RibbonHistory, TRAIL_SPECS, TrailEmitter, channel, ribbonFade } from '../../src/activities/gear/trailLogic';
+import { withPreviews } from '../../src/activities/gear/previews';
 import { createEconomyRules } from '../../src/activities/economy/rules';
 import { createProfile } from '../../src/profile';
 import type { EventBus, GameEvents } from '../../src/types';
@@ -249,5 +250,16 @@ describe('emotes', () => {
     expect(EMOTES.wave.anim).toBe('wave');
     expect(EMOTES.dance.anim).toBe('dance');
     expect(EMOTES.cheer.anim).toBe('cheer');
+  });
+});
+
+describe('shop previews', () => {
+  it('every non-emote gear item gets a preview function, emotes keep the UI icon', () => {
+    const items = withPreviews(GEAR_CATALOG);
+    expect(items).toHaveLength(GEAR_CATALOG.length);
+    for (const it of items) {
+      if (it.slot === 'emote') expect(it.preview).toBeUndefined();
+      else expect(typeof it.preview, it.id).toBe('function');
+    }
   });
 });

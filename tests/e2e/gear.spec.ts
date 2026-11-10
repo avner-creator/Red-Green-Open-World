@@ -219,6 +219,51 @@ test('screenshots: gear on the robot and every trail (full / R / G)', async () =
   });
 });
 
+test('shop previews: hats give distinct PNG pictures; contact sheet of all of them (full / R / G)', async () => {
+  const r = await page.evaluate(async () => {
+    const eco = window.__rg!.ctx.economy;
+    const t0 = performance.now();
+    const a = eco.item('hat-propeller')!.preview!();
+    const first = performance.now() - t0;
+    const b = eco.item('hat-crown')!.preview!();
+    const again = eco.item('hat-propeller')!.preview!();
+    const items = eco.catalog.filter((i) => i.preview);
+    const t1 = performance.now();
+    const urls: Array<string | null> = items.map((i) => i.preview!());
+    const rest = (performance.now() - t1) / items.length;
+    const cols = 7;
+    const cell = 200;
+    const rows = Math.ceil(items.length / cols);
+    const c = document.createElement('canvas');
+    c.width = cols * cell;
+    c.height = rows * cell;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#1b2030';
+    g.fillRect(0, 0, c.width, c.height);
+    for (let i = 0; i < urls.length; i++) {
+      const u = urls[i];
+      if (!u) continue;
+      const img = new Image();
+      img.src = u;
+      await img.decode();
+      g.drawImage(img, (i % cols) * cell + 4, Math.floor(i / cols) * cell + 4);
+    }
+    return { a, b, same: a === again, first, rest, n: items.length, nulls: urls.filter((u) => !u).length, sheet: c.toDataURL('image/png') };
+  });
+  expect(r.a).toMatch(/^data:image\/png/);
+  expect(r.b).toMatch(/^data:image\/png/);
+  expect(r.a).not.toBe(r.b);
+  expect(r.same).toBe(true);
+  expect(r.nulls).toBe(0);
+  expect(r.n).toBeGreaterThanOrEqual(22);
+  console.log(`preview: first ${r.first.toFixed(0)} ms, then ${r.rest.toFixed(0)} ms each (${r.n} items)`);
+  const buf = Buffer.from(r.sheet.slice(r.sheet.indexOf(',') + 1), 'base64');
+  const png = PNG.sync.read(buf);
+  writeFileSync(`${OUT}/previews.png`, buf);
+  writeFileSync(`${OUT}/previews-R.png`, splitChannel(png, 0));
+  writeFileSync(`${OUT}/previews-G.png`, splitChannel(png, 1));
+});
+
 test('no errors', async () => {
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);

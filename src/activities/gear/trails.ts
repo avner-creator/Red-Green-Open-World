@@ -49,7 +49,7 @@ function canvasTexture(draw: (g: CanvasRenderingContext2D, s: number) => void, s
 }
 
 /** Soft warm glow, a bright core and a four-point cross flare. */
-function sparkleTexture(): THREE.CanvasTexture {
+export function sparkleTexture(): THREE.CanvasTexture {
   return canvasTexture((g, s) => {
     const m = s / 2;
     const glow = g.createRadialGradient(m, m, 0, m, m, m);
@@ -96,7 +96,7 @@ function sparkleTexture(): THREE.CanvasTexture {
 }
 
 /** Bright rim over a dark-blue edge line, clear centre, crisp specular dot and a small second glint. */
-function bubbleTexture(): THREE.CanvasTexture {
+export function bubbleTexture(): THREE.CanvasTexture {
   return canvasTexture((g, s) => {
     const m = s / 2;
     const r = m * 0.92;
