@@ -1,6 +1,8 @@
 # Stream I: loading, boot size and first impression (branch `agent/boot-loading`)
 
-Status: **in progress: full `npm run verify` running.**
+Status: **done, ready to merge.** Latest `main` (0bd44a5) is merged in (no new commits since the
+branch point). `npm run verify` is green: 340 unit tests and 80 e2e tests (5 new) in 5.0 min; the
+same machine runs `main`'s 75 e2e tests in 4.9 min, so the suite time is flat.
 
 ## Before / after (`npm run boot:requests`, cold cache, 960×540)
 
@@ -77,7 +79,7 @@ playable title (**1.69–1.74 MB**). Time to `__rg.ready` in the e2e browser (Sw
   → wordless screen → `restoreContext()` → screen gone, a real frame renders, no errors; a
   `world-*.js` chunk aborted → failure screen, retry reloads into the loading screen; Chromium with
   `--disable-gpu --disable-3d-apis` (no SwiftShader flags) → no-WebGL screen with retry, no page error.
-- Suite time stays flat: in test mode the loading screen's decorative animation is off and the reveal
+- Suite time stays flat (main 75 e2e in 4.9 min, branch 80 in 5.0 min): in test mode the loading screen's decorative animation is off and the reveal
   is 150 ms (every e2e boot waits for it). Under SwiftShader the animation competes with the first
   frame's shader compile.
 
