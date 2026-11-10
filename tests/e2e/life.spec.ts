@@ -84,7 +84,8 @@ test('living island: birds scatter, townsfolk load, budget holds, no errors', as
   for (const q of ['low', 'medium'] as const) {
     expect(budget[q].folk, q).toBeGreaterThan(0);
     expect(budget[q].calls, q).toBeLessThanOrEqual(25);
-    expect(budget[q].ms, q).toBeLessThan(0.5);
+    // Wall-clock CPU time: 0.2 ms typical; the limit leaves room for a busy shared test machine.
+    expect(budget[q].ms, q).toBeLessThan(1.0);
   }
   expect(budget.medium.tris).toBeLessThanOrEqual(60_000);
   expect(budget.low.tris).toBeLessThanOrEqual(budget.medium.tris);

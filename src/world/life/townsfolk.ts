@@ -17,6 +17,10 @@ import { ATTRACTIONS, FOLK, pointTarget, type FolkDef, type FolkModel } from './
 import { damp, turnToward, wrapAngle, yawTo } from './math';
 import { hatGeo, critterMaterial } from './geo';
 import { Pool } from './pool';
+import { asShadowProxy } from '../../core/shadow-proxy';
+
+/** Shared capsule the townsfolk cast their shadow with (skinned models skip the shadow pass). */
+const FOLK_SHADOW_GEO = new THREE.CapsuleGeometry(0.3, 0.8, 2, 8);
 
 export type FolkState = 'idle' | 'wave' | 'cheer' | 'point';
 
@@ -164,7 +168,7 @@ export function createTownsfolk(opts: {
           model.traverse((o) => {
             const mesh = o as THREE.Mesh;
             if (!mesh.isMesh) return;
-            mesh.castShadow = true;
+            mesh.castShadow = false;
             mesh.receiveShadow = false;
             mesh.frustumCulled = false;
             const src = mesh.material as THREE.MeshStandardMaterial;
@@ -174,7 +178,7 @@ export function createTownsfolk(opts: {
           });
           const root = new THREE.Group();
           root.name = `folk-${d.id}`;
-          root.add(model);
+          root.add(model, asShadowProxy(new THREE.Mesh(FOLK_SHADOW_GEO)).translateY(0.75));
           const y = opts.heightAt(d.x, d.z);
           root.position.set(d.x, y, d.z);
           root.rotation.y = d.yaw;
