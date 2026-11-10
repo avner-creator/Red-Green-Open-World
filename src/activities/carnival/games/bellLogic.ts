@@ -38,9 +38,9 @@ export const TOWER_Z = -2.2;
 export const PUCK_REST = 0.45;
 export const BAND_Y0 = 0.8;
 export const BAND_H = 1.0;
-export const BELL_Y = 6.6;
+export const BELL_Y = 6.75;
 /** Puck centre when it strikes the bell. */
-export const BELL_HIT_Y = 5.93;
+export const BELL_HIT_Y = 5.86;
 
 /** Needle position (−1..1) at time `t`: a steady triangle sweep that starts in the middle. */
 export function needleAt(t: number, period = NEEDLE_PERIOD): number {

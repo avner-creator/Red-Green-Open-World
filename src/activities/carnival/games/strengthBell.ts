@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import type { InputState } from '../../../types';
 import { createLayerMaterial } from '../../../vision';
 import { G, Kit, T, kitMaterial } from '../kit';
-import { STAND_Z } from '../layout';
+import { FRIEND_SPOTS, STAND_Z } from '../layout';
 import type { PictoId } from '../picto';
 import { RIVAL_SKILLS, RivalBrain } from '../rivals';
 import { makeRng } from '../rng';
@@ -46,8 +46,8 @@ const DECK_TOP = 0.14;
 const PAD_Z = 0.3;
 const PAD_TOP = 0.25;
 /** Gauge dial pivot (booth frame). */
-const DIAL = new THREE.Vector3(0, 2.35, -1.2);
-const DIAL_R = 0.6;
+const DIAL = new THREE.Vector3(0, 2.5, -1.2);
+const DIAL_R = 0.52;
 /** Puck rail sits just in front of each board; the player's rail is off-centre (pictograms beside it). */
 const RAIL_X: readonly number[] = [-0.2, 0, 0];
 const BOARD_W: readonly number[] = [1.1, 0.62, 0.62];
@@ -57,6 +57,9 @@ const HOP_H = 0.5;
 const POUND_T = 0.62;
 const POUND_H = 1.05;
 const SQUASH_T = 0.3;
+const ENTER_T = 0.45;
+/** Radius of the stomps-left tokens on the dial face. */
+const TOKEN_R = 0.17;
 const HANG = 0.32;
 const BELL_HANG = 0.55;
 const PUCK_COLORS = [0xfff27a, 0xffffff, 0xffffff];
@@ -113,10 +116,12 @@ function puckGeometry(): THREE.BufferGeometry {
 
 function needleGeometry(): THREE.BufferGeometry {
   const k = new Kit();
-  k.add(G.boxC, 0x111111, T(0, 0.27, -0.012, 0, 0.09, 0.58, 0.02));
-  k.add(G.boxC, 0xffffff, T(0, 0.28, 0, 0, 0.045, 0.54, 0.02), 1);
-  k.add(G.cone, 0xffffff, T(0, 0.52, 0, 0, 0.08, 0.1, 0.02), 1);
-  k.add(G.sphere, GOLD, T(0, 0, 0.01, 0, 0.13, 0.13, 0.06), 0.4);
+  // Black needle with a thin white edge: reads on the light dial face and against the dark tower.
+  const len = DIAL_R * 0.9;
+  k.add(G.boxC, 0xffffff, T(0, len / 2, -0.012, 0, 0.12, len + 0.04, 0.02), 0.8);
+  k.add(G.boxC, 0x111111, T(0, len / 2, 0, 0, 0.075, len - 0.06, 0.02));
+  k.add(G.cone, 0x111111, T(0, len - 0.1, 0, 0, 0.11, 0.12, 0.02));
+  k.add(G.sphere, GOLD, T(0, 0, 0.01, 0, 0.12, 0.12, 0.06), 0.4);
   return k.build();
 }
 
@@ -125,10 +130,10 @@ function sweetGeometry(): THREE.BufferGeometry {
   const k = new Kit();
   const good = GOOD * DIAL_ANGLE;
   const core = PERFECT * DIAL_ANGLE;
-  const ringGood = new THREE.RingGeometry(DIAL_R * 0.5, DIAL_R * 0.92, 16, 1, Math.PI / 2 - good, good * 2);
+  const ringGood = new THREE.RingGeometry(DIAL_R * 0.55, DIAL_R * 0.92, 16, 1, Math.PI / 2 - good, good * 2);
   k.add(ringGood, 0xb4b4b4, T(0, 0, 0));
   ringGood.dispose();
-  const ringCore = new THREE.RingGeometry(DIAL_R * 0.42, DIAL_R * 1.0, 8, 1, Math.PI / 2 - core, core * 2);
+  const ringCore = new THREE.RingGeometry(DIAL_R * 0.5, DIAL_R * 1.0, 8, 1, Math.PI / 2 - core, core * 2);
   k.add(ringCore, 0xffffff, T(0, 0, 0.004));
   ringCore.dispose();
   const star = new THREE.CircleGeometry(0.09, 5);
@@ -159,9 +164,9 @@ export function createStrengthBell(env: GameEnv): BoothGame {
     env.addStatic(G.cylLo, 0xb8b8c8, T(rx, DECK_TOP, PUCK_Z - 0.09, 0, 0.05, 6.0 - DECK_TOP, 0.05));
     env.addStatic(G.box, 0x666a80, T(rx, DECK_TOP, PUCK_Z - 0.05, 0, 0.3, 0.14, 0.2));
     // Bell bracket: a gold post up the back and an arm out over the rail.
-    env.addStatic(G.box, GOLD, T(rx, 5.95, TOWER_Z - 0.1, 0, 0.1, 0.8, 0.1));
+    env.addStatic(G.box, GOLD, T(rx, 5.95, TOWER_Z - 0.1, 0, 0.1, BELL_Y - 5.9, 0.1));
     env.addStatic(G.box, GOLD, T(rx, BELL_Y - 0.02, TOWER_Z - 0.1, 0, 0.1, 0.1, 0.36));
-    env.addStatic(G.sphereLo, 0xfff0c0, T(rx, 6.8, TOWER_Z - 0.1, 0, 0.16, 0.16, 0.16), 1);
+    env.addStatic(G.sphereLo, 0xfff0c0, T(rx, BELL_Y + 0.16, TOWER_Z - 0.1, 0, 0.16, 0.16, 0.16), 1);
     // Springy pad and the lever to the tower.
     env.addStatic(G.cyl, 0x2a2f55, T(x, DECK_TOP, PAD_Z, 0, 0.98, 0.06, 0.98));
     env.addStatic(G.cyl, i === 0 ? 0xfff27a : WHITE, T(x, DECK_TOP + 0.06, PAD_Z, 0, 0.86, 0.05, 0.86), 0.25);
@@ -169,22 +174,23 @@ export function createStrengthBell(env: GameEnv): BoothGame {
     env.addStatic(G.box, 0x8890a8, T(x + RAIL_X[i] * 0.5, DECK_TOP, (PAD_Z + PUCK_Z) / 2 - 0.25, 0, 0.12, 0.05, PAD_Z - PUCK_Z - 0.5));
   }
   const tiers: PictoId[] = ['tier1', 'tier2', 'tier3', 'tier4', 'tier5'];
-  tiers.forEach((id, b) => env.addSign(id, T(TOWER_X[0] + 0.25, bandBottom(b + 1) + BAND_H / 2, TOWER_Z + 0.01), 0.56));
-  // Gauge dial: dark half-disc with a white rim, 11 even ticks (no centre mark), a post.
+  tiers.forEach((id, b) => env.addSign(id, T(TOWER_X[0] + 0.25, bandBottom(b + 1) + BAND_H * 0.68, TOWER_Z + 0.01), 0.5));
+  // Gauge dial: light half-disc (so the weak-eye arc shows as a dark wedge) with a gold rim and
+  // 11 even dark ticks (no centre mark: the dial says nothing about where the sweet spot is).
   const face = new THREE.CircleGeometry(DIAL_R + 0.08, 24, 0, Math.PI);
-  env.addStatic(face, NIGHT, T(DIAL.x, DIAL.y, DIAL.z));
+  env.addStatic(face, 0xece6d2, T(DIAL.x, DIAL.y, DIAL.z), 0.35);
   face.dispose();
-  const rim = new THREE.TorusGeometry(DIAL_R + 0.08, 0.035, 6, 24, Math.PI);
-  env.addStatic(rim, WHITE, T(DIAL.x, DIAL.y, DIAL.z + 0.01), 0.8);
+  const rim = new THREE.TorusGeometry(DIAL_R + 0.08, 0.04, 6, 24, Math.PI);
+  env.addStatic(rim, GOLD, T(DIAL.x, DIAL.y, DIAL.z + 0.01), 0.5);
   rim.dispose();
-  env.addStatic(G.box, NIGHT, T(DIAL.x, DIAL.y - 0.24, DIAL.z - 0.01, 0, 1.52, 0.28, 0.05));
-  env.addStatic(G.box, WHITE, T(DIAL.x, DIAL.y - 0.27, DIAL.z - 0.02, 0, 1.6, 0.03, 0.05), 0.6);
+  env.addStatic(G.box, NIGHT, T(DIAL.x, DIAL.y - 0.12, DIAL.z - 0.01, 0, DIAL_R * 2 + 0.36, 0.16, 0.05));
+  env.addStatic(G.box, WHITE, T(DIAL.x, DIAL.y - 0.14, DIAL.z - 0.02, 0, DIAL_R * 2 + 0.44, 0.03, 0.05), 0.6);
   for (let i = 0; i <= 10; i++) {
     const a = -DIAL_ANGLE + (i / 10) * DIAL_ANGLE * 2;
     const m = T(DIAL.x + Math.sin(a) * (DIAL_R - 0.02), DIAL.y + Math.cos(a) * (DIAL_R - 0.02), DIAL.z + 0.012, 0, 0.035, 0.11, 0.01, 0, -a);
-    env.addStatic(G.boxC, WHITE, m, 0.8);
+    env.addStatic(G.boxC, 0x1a1d33, m);
   }
-  env.addStatic(G.cylLo, 0x666a80, T(DIAL.x, DECK_TOP, DIAL.z - 0.06, 0, 0.07, DIAL.y - 0.3 - DECK_TOP, 0.07));
+  env.addStatic(G.cylLo, 0x666a80, T(DIAL.x, DECK_TOP, DIAL.z - 0.06, 0, 0.07, DIAL.y - 0.12 - DECK_TOP, 0.07));
 
   // ── Dynamic both-eye parts: pucks + stomp tokens (one instanced draw), bells (one), needle (one).
   const mat = kitMaterial({ roughness: 0.35 });
@@ -194,7 +200,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
   pucks.castShadow = false;
   pucks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   const tint = new THREE.Color();
-  for (let i = 0; i < 3 + STOMPS; i++) pucks.setColorAt(i, tint.set(i < 3 ? PUCK_COLORS[i] : 0xfff27a));
+  for (let i = 0; i < 3 + STOMPS; i++) pucks.setColorAt(i, tint.set(i < 3 ? PUCK_COLORS[i] : 0x2a2f55));
   booth.add(pucks);
 
   const bells = new THREE.InstancedMesh(bellGeometry(), mat, 3);
@@ -234,6 +240,8 @@ export function createStrengthBell(env: GameEnv): BoothGame {
   let squash = 0;
   let doneWait = 0;
   let idleT = 0;
+  /** 0..1: everyone hops from their spot onto their pad at GO. */
+  let enter = 1;
 
   const o = new THREE.Object3D();
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -254,8 +262,10 @@ export function createStrengthBell(env: GameEnv): BoothGame {
         pucks.setMatrixAt(3 + k, zero);
         continue;
       }
-      o.position.set(DIAL.x + (k - (STOMPS - 1) / 2) * 0.3, DIAL.y - 0.1, DIAL.z + 0.06);
-      o.scale.setScalar(0.42);
+      // Stomps left: little pucks on an inner arc of the dial face (the needle sweeps over them).
+      const a = (k - (STOMPS - 1) / 2) * 0.95;
+      o.position.set(DIAL.x + Math.sin(a) * TOKEN_R, DIAL.y + Math.cos(a) * TOKEN_R, DIAL.z + 0.02);
+      o.scale.setScalar(0.3);
       o.updateMatrix();
       pucks.setMatrixAt(3 + k, o.matrix);
     }
@@ -269,7 +279,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       o.position.set(TOWER_X[i] + RAIL_X[i], BELL_Y - 0.06, PUCK_Z);
       o.rotation.set(0, 0, wob);
       const pulse = r >= 0 ? 1 + 0.12 * Math.exp(-r * 5) : 1;
-      o.scale.setScalar(pulse);
+      o.scale.setScalar(1.3 * pulse);
       o.updateMatrix();
       bells.setMatrixAt(i, o.matrix);
     }
@@ -367,6 +377,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
 
   /** Advance hops (contestants stand on their pads); on landing the puck goes up. */
   const stepHops = (dt: number, r: RoundApi): void => {
+    enter = Math.min(1, enter + dt / ENTER_T);
     for (let i = 0; i < 3; i++) {
       const h = hops[i];
       let y = 0;
@@ -390,7 +401,15 @@ export function createStrengthBell(env: GameEnv): BoothGame {
           }
         }
       }
-      if (i === 0) r.playerOffset.set(0, PAD_TOP + y, PAD_Z - STAND_Z);
+      if (enter < 1) {
+        // Hop from the stand spot onto the pad.
+        const [fx0, fz0] = i === 0 ? [0, STAND_Z] : FRIEND_SPOTS[i - 1];
+        const lx = THREE.MathUtils.lerp(fx0, TOWER_X[i], enter);
+        const lz = THREE.MathUtils.lerp(fz0, PAD_Z, enter);
+        const ly = PAD_TOP * enter + 4 * HOP_H * enter * (1 - enter);
+        if (i === 0) r.playerOffset.set(lx, ly, lz - STAND_Z);
+        else r.friendPos(i - 1).set(lx, ly, lz);
+      } else if (i === 0) r.playerOffset.set(0, PAD_TOP + y, PAD_Z - STAND_Z);
       else r.friendPos(i - 1).set(TOWER_X[i], PAD_TOP + y, PAD_Z);
     }
     // Player squash/stretch: stretch on the way up, squash on landing.
@@ -422,7 +441,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
     id: 'strengthBell',
     duration: 0,
     thresholds: [9, 14],
-    camera: { distance: 3.6, height: 0.2, fov: 70, lookAhead: 0 },
+    camera: { distance: 5.2, height: -0.5, fov: 72, lookAhead: 0 },
     aimLimits: null,
     how: ['stomp'],
     idle(dt) {
@@ -442,6 +461,10 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       setNeedle(0);
       squash = 0;
       doneWait = 0;
+      enter = 0;
+      r.playerAct('jump', ENTER_T);
+      r.friendAct(0, 'jump', ENTER_T);
+      r.friendAct(1, 'jump', ENTER_T);
       sweet = 0;
       nextAim(r);
       stepHops(0, r);
@@ -454,7 +477,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
         aimFor += dt;
         setNeedle(needleAt(needleT));
         const pound = input.skillPressed && ctx.player.skill.id === 'groundPound';
-        if (aimFor > 0.25 && (input.jumpPressed || input.usePressed || pound)) stomp(r, pound);
+        if (aimFor > 0.25 && enter >= 1 && (input.jumpPressed || input.usePressed || pound)) stomp(r, pound);
       } else if (state === 'watch' && towers[0].phase === 'rest') {
         if (stomps[0] >= STOMPS) {
           state = 'done';
@@ -465,7 +488,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       brains.forEach((b, i) => {
         if (b.tick(dt)) wants[i] = true;
         const who = i + 1;
-        if (!wants[i] || stomps[who] >= STOMPS || hops[who] || towers[who].phase !== 'rest' || towers[who].settle > 0) return;
+        if (!wants[i] || enter < 1 || stomps[who] >= STOMPS || hops[who] || towers[who].phase !== 'rest' || towers[who].settle > 0) return;
         wants[i] = false;
         startHop(who, rivalPower(() => b.random(), b.roll()), false);
         r.friendAct(i, 'jump', HOP_T + 0.1);
@@ -493,6 +516,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       sweetMesh.visible = false;
       state = 'aim';
       squash = 0;
+      enter = 1;
       r.playerStretch(0);
       drawPucks();
       drawBells();
