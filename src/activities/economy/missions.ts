@@ -6,10 +6,11 @@ import { ECONOMY } from '../../config';
 import type { IconName, Mission, MissionKind, MissionState } from '../../types';
 
 /**
- * The balloon and its landing rings are not on this branch yet, so the "land on rings" mission
- * stays out of the draw. Flip this to true once the rings exist.
+ * The balloon and its landing rings exist. The first balloon ride of a session is free, so this
+ * mission can always be done with 0 gems (it counts the skydive's `bullseye` stunts: hoops and
+ * the landing).
  */
-export const MISSION_LAND_RINGS_ENABLED = false;
+export const MISSION_LAND_RINGS_ENABLED = true;
 
 export interface MissionDef {
   kind: MissionKind;

@@ -480,6 +480,7 @@ export function createSkydive(ctx: GameContext): Skydive {
     enabled: () => ride === 'idle' && balloon === 'parked',
     onUse() {
       if (ride !== 'idle' || balloon !== 'parked') return;
+      if (!ctx.economy.payTicket('balloon')) return;
       boardFrom.copy(player.position);
       removeBasketCollider();
       rings.reset();

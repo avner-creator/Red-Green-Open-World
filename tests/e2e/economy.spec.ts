@@ -91,7 +91,7 @@ test('the combo falls back to x1 after the window', async () => {
 test('a mega gem is worth 5 and is counted in the total', async () => {
   const hook = await page.evaluate(() => window.__rgEconomy!);
   expect(hook.megaSpots.length).toBeGreaterThanOrEqual(8);
-  expect(hook.megaSpots.length).toBeLessThanOrEqual(12);
+  expect(hook.megaSpots.length).toBeLessThanOrEqual(14);
   const total = await page.evaluate(() => window.__rg!.state().gemsTotal);
   expect(total).toBe(hook.gemSpotCount + hook.megaSpots.length);
 
@@ -154,7 +154,8 @@ test('mega gems touch only the weak channel, all 4 lens/eye combinations', async
   const view = await page.evaluate(() => {
     const rg = window.__rg!;
     const spots = window.__rgEconomy!.megaSpots;
-    const s = spots[spots.length - 2];
+    const road = spots.filter((q) => q.tag === 'road');
+    const s = road[1];
     const picksBefore = window.__picks!.length;
     const px = s.x + 8;
     const yaw = Math.atan2(s.x - px, 0);
@@ -202,6 +203,64 @@ test('mega gems touch only the weak channel, all 4 lens/eye combinations', async
     }
   }
   await page.evaluate(({ W }) => window.__rg!.setLayerVisible(W, true), { W: VisionLayer.WeakOnly });
+});
+
+test('balloon: first ride free, then a ticket (denied with 0 gems, paid with 5)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const log: string[] = [];
+    ctx.events.on('ticket:paid', (e) => log.push(`paid:${e.price}:${e.free}`));
+    ctx.events.on('ticket:denied', (e) => log.push(`denied:${e.price}`));
+    const spent: number[] = [];
+    ctx.events.on('wallet:changed', (e) => {
+      if (e.reason === 'ticket') spent.push(e.delta);
+    });
+    const a = ctx.world.anchors.balloon.position;
+    const tryRide = (): string => {
+      rg.teleport(a.x + 1.7, ctx.world.heightAt(a.x, a.z) + 0.4, a.z, -Math.PI / 2);
+      rg.step(1 / 60, 10, false);
+      rg.inject({ usePressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      return ctx.player.mode;
+    };
+    const finishRide = (): boolean => {
+      for (let i = 0; i < 4000; i++) {
+        rg.step(1 / 20, 1, false);
+        if (ctx.player.mode === 'walk' && ctx.player.grounded) return true;
+      }
+      return false;
+    };
+    const out: Record<string, unknown> = {};
+    // A new session: the first balloon ride is free (even with an empty wallet).
+    rg.start();
+    rg.step(1 / 60, 3, false);
+    ctx.profile.spend(ctx.profile.wallet, 'test');
+    out.free = ctx.economy.ticketPrice('balloon');
+    out.mode1 = tryRide();
+    out.wallet1 = ctx.profile.wallet;
+    out.finished = finishRide();
+    rg.step(1 / 20, 200, false);
+    // Second ride with 0 gems: denied, no ride starts.
+    out.price = ctx.economy.ticketPrice('balloon');
+    out.mode2 = tryRide();
+    // With 5 gems: pays 5 and the ride starts.
+    ctx.profile.earn(5, 'test');
+    out.mode3 = tryRide();
+    out.spent = spent;
+    out.log = log;
+    return out;
+  });
+  expect(r.free).toBe(0);
+  expect(r.mode1).not.toBe('walk');
+  expect(r.wallet1).toBe(0);
+  expect(r.finished).toBe(true);
+  expect(r.price).toBe(5);
+  expect(r.mode2).toBe('walk');
+  expect(r.mode3).not.toBe('walk');
+  expect(r.spent).toEqual([-5]);
+  expect(r.log).toEqual(['paid:0:true', 'denied:5', 'paid:5:false']);
 });
 
 test('no console errors', async () => {

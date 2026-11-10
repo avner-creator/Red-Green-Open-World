@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ComboTracker } from '../../src/activities/economy/combo';
 import { createEventBus } from '../../src/events';
 import { createProfile } from '../../src/profile';
+import { mulberry32 } from '../../src/activities/economy/missions';
 import { createEconomyRules } from '../../src/activities/economy/rules';
 import { ECONOMY } from '../../src/config';
 import type { GameEvents } from '../../src/types';
@@ -37,20 +38,25 @@ describe('ComboTracker', () => {
 function setup() {
   const events = createEventBus();
   const profile = createProfile(events, { storage: null });
-  const eco = createEconomyRules(events, profile);
+  const eco = createEconomyRules(events, profile, { rand: mulberry32(3) });
+  // Missions (drawn at random) can pay a bonus for a x3 combo: count only the gem money here.
+  let gemMoney = 0;
+  events.on('wallet:changed', (e) => {
+    if (e.reason === 'gem') gemMoney += e.delta;
+  });
   const combos: GameEvents['combo:changed'][] = [];
   events.on('combo:changed', (e) => combos.push(e));
   events.emit('session:phase', { phase: 'playing', previous: 'title' });
-  return { events, profile, eco, combos };
+  return { events, profile, eco, combos, money: () => gemMoney };
 }
 
 describe('economy pickups', () => {
   it('pays value x combo into the wallet and emits combo:changed each step', () => {
-    const { eco, profile, combos } = setup();
+    const { eco, profile, combos, money } = setup();
     expect(eco.recordPickup(1, false)).toEqual({ combo: 1, gain: 1 });
     expect(eco.recordPickup(1, false)).toEqual({ combo: 2, gain: 2 });
     expect(eco.recordPickup(ECONOMY.megaGemValue, true)).toEqual({ combo: 3, gain: 15 });
-    expect(profile.wallet).toBe(18);
+    expect(money()).toBe(18);
     expect(combos.map((c) => c.multiplier)).toEqual([1, 2, 3]);
     expect(profile.data.bestCombo).toBe(3);
     expect(eco.combo.multiplier).toBe(3);

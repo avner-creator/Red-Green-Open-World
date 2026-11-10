@@ -65,7 +65,7 @@ function haloTexture(): THREE.Texture {
 
 /** Test hook (only with `?test=1`): what the economy e2e needs. Small on purpose. */
 export interface EconomyTestHook {
-  megaSpots: { x: number; y: number; z: number }[];
+  megaSpots: { x: number; y: number; z: number; tag: string }[];
   gemSpotCount: number;
   /** Bring every collected gem back right now (emits `gem:respawned`). */
   forceRespawn(): void;
@@ -93,7 +93,9 @@ export interface Gems {
 
 export function createGems(ctx: GameContext): Gems {
   const normalSpots = ctx.world.gemSpots.map((s) => s.position);
-  const megaSpots = computeMegaSpots(ctx.world.anchors, (x, z) => ctx.world.heightAt(x, z)).map((s) => new THREE.Vector3(s.x, s.y, s.z));
+  const megaDefs = computeMegaSpots(ctx.world.anchors, (x, z) => ctx.world.heightAt(x, z));
+  const megaTags = megaDefs.map((d) => d.tag);
+  const megaSpots = megaDefs.map((s) => new THREE.Vector3(s.x, s.y, s.z));
   const n = normalSpots.length;
   const m = megaSpots.length;
   const total = n + m;
@@ -231,7 +233,6 @@ export function createGems(ctx: GameContext): Gems {
         ctx.events.emit('gem:collected', {
           id: idOf(i), count: field.count, total: field.total, position, value, mega, combo: paid.combo, gain: paid.gain,
         });
-        if (mega) ctx.audio.play('star', { volume: 0.8 });
         ctx.session.setTotals({ gems: total });
       }
       respawned(field.tickRespawn(dt));
@@ -276,7 +277,7 @@ export function createGems(ctx: GameContext): Gems {
 
   if (ctx.testMode) {
     window.__rgEconomy = {
-      megaSpots: megaSpots.map((v) => ({ x: v.x, y: v.y, z: v.z })),
+      megaSpots: megaSpots.map((v, i) => ({ x: v.x, y: v.y, z: v.z, tag: megaTags[i] })),
       gemSpotCount: n,
       forceRespawn: () => respawned(field.respawnAll()),
     };

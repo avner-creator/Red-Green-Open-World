@@ -70,6 +70,9 @@ export const MEGA = {
   roadFront: 9,
   roadOffsets: [-16, 0, 16] as readonly number[],
   roadHeight: 1.6,
+  /** Skydive megas: positions along the balloon-to-rings descent (0..1) and sideways offset, metres. */
+  skyT: [0.3, 0.55, 0.8] as readonly number[],
+  skySide: 3,
   /** Pop-in animation after a respawn, seconds. */
   popSeconds: 0.6,
   /** Burst size multiplier (on the weak layer) compared with a normal gem. */

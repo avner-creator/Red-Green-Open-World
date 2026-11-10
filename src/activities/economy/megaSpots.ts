@@ -5,7 +5,7 @@
  */
 import { PADS, MAT, MEGA } from '../constants';
 import { padLocalPositions } from '../bounceLogic';
-import { TRAMPOLINE } from '../../config';
+import { BALLOON, TRAMPOLINE } from '../../config';
 import type { Anchor, AnchorName } from '../../types';
 
 export interface MegaSpot {
@@ -86,6 +86,21 @@ export function computeMegaSpots(anchors: Anchors, heightAt: HeightFn): MegaSpot
     const x = g.position.x + fx * MEGA.roadFront + rx * side;
     const z = g.position.z + fz * MEGA.roadFront + rz * side;
     add(x, heightAt(x, z) + MEGA.roadHeight, z, 'road');
+  }
+
+  // 5. Skydive: three on the descent from the balloon towards the landing rings, a few metres
+  // beside the normal trail gems (same curve as the world's skydive trail).
+  const b = anchors.balloon.position;
+  const r = anchors.landingRings.position;
+  const top = heightAt(b.x, b.z) + BALLOON.topHeight - 10;
+  const bottom = heightAt(r.x, r.z) + 24;
+  const dirX = r.x - b.x;
+  const dirZ = r.z - b.z;
+  const dlen = Math.hypot(dirX, dirZ) || 1;
+  for (const t of MEGA.skyT) {
+    const x = b.x + dirX * t + Math.sin(t * 5) * 6 * (1 - t) - (dirZ / dlen) * MEGA.skySide;
+    const z = b.z + dirZ * t + Math.cos(t * 4) * 5 * (1 - t) + (dirX / dlen) * MEGA.skySide;
+    add(x, top + (bottom - top) * Math.pow(t, 0.85), z, 'skydive');
   }
   return spots;
 }

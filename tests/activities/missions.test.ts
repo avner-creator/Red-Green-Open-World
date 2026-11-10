@@ -12,10 +12,10 @@ import type * as THREE from 'three';
 const NOWHERE = undefined as unknown as THREE.Vector3;
 
 describe('mission pool and picker', () => {
-  it('keeps land-on-rings out until the flag is flipped', () => {
-    expect(MISSION_LAND_RINGS_ENABLED).toBe(false);
-    expect(availablePool().some((m) => m.kind === 'landRings')).toBe(false);
-    expect(availablePool(true).some((m) => m.kind === 'landRings')).toBe(true);
+  it('draws land-on-rings only while the flag is on', () => {
+    expect(MISSION_LAND_RINGS_ENABLED).toBe(true);
+    expect(availablePool().some((m) => m.kind === 'landRings')).toBe(true);
+    expect(availablePool(false).some((m) => m.kind === 'landRings')).toBe(false);
   });
 
   it('always gives three different kinds, for many seeds', () => {
@@ -102,6 +102,7 @@ describe('missions in the economy', () => {
     }
     events.emit('combo:changed', { multiplier: 3, streak: 3 });
     events.emit('stunt', { kind: 'bigBounce', value: 35, stars: 3 });
+    for (let i = 0; i < 3; i++) events.emit('stunt', { kind: 'bullseye', value: 0, stars: 1 });
     events.emit('chest:opened', { chestId: 'c', outfitId: 'o' });
     expect(eco.missions.every((x) => x.done)).toBe(true);
     expect(done).toHaveLength(3);

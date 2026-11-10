@@ -42,10 +42,10 @@ for (const [name, a] of Object.entries(ANCHORS) as [AnchorName, (typeof ANCHORS)
 describe('mega gem spots', () => {
   const spots = computeMegaSpots(anchors, heightAt);
 
-  it('there are 8 to 12, in every themed group', () => {
+  it('there are 8 to 14, in every themed group', () => {
     expect(spots.length).toBeGreaterThanOrEqual(8);
-    expect(spots.length).toBeLessThanOrEqual(12);
-    for (const tag of ['trampoline', 'pads', 'launch', 'road']) {
+    expect(spots.length).toBeLessThanOrEqual(14);
+    for (const tag of ['trampoline', 'pads', 'launch', 'road', 'skydive']) {
       expect(spots.some((s) => s.tag === tag), tag).toBe(true);
     }
   });
