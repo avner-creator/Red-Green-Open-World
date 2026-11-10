@@ -48,7 +48,7 @@ If a WIP branch is unfinished, start the same agent type on it (not from scratch
 task on branch `agent/...`; run verify; report". If a branch is empty or missing, re-brief from the
 table.
 
-Parallel streams another account can run right now: see `docs/PARALLEL_WORK.md`.
+Parallel streams on a second account: see `docs/PARALLEL_WORK.md`. **Stream C (economy, shop, missions; branch `agent/economy`) is taken by the second account** — the main session must not build items 1–4 of the fun pass, only merge that branch when it is ready. Main session keeps: thrills, wayfinding, speed, controls card, music, character wiring, QA, performance.
 
 ## Next steps (in order)
 

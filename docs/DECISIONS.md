@@ -51,3 +51,4 @@
 - Touch/mobile is v2 unless the parallel stream in docs/PARALLEL_WORK.md delivers it. Reason: time.
 - World scatter is drawn per species and level of detail, re-picked when the camera moves; grass is generated lazily per cell. Reason: world-artist's performance pass.
 - The UI polish agent was stopped after it finished: it kept re-sending its final report.
+- Economy, shop and missions (fun pass items 1–4) are built by a second account on branch `agent/economy`; the main session builds the rest and merges it. Reason: owner offered extra capacity; additive-only interface rule keeps the two orchestrators from colliding.
