@@ -108,7 +108,7 @@ describe('tier mix and rewards', () => {
   });
 
   it('fainter, faster flies are worth more and live shorter', () => {
-    expect([FLIES.gems[1], FLIES.gems[2], FLIES.gems[3]]).toEqual([1, 2, 4]);
+    expect([FLIES.gems[1], FLIES.gems[2], FLIES.gems[3]]).toEqual([1, 2, 3]);
     expect(FLIES.life[1]).toBeGreaterThan(FLIES.life[2]);
     expect(FLIES.life[2]).toBeGreaterThan(FLIES.life[3]);
   });
@@ -124,14 +124,26 @@ describe('tier mix and rewards', () => {
 });
 
 describe('life, fly-off and respawn', () => {
-  it('a timed-out fly flies off as a miss only while the player is inside', () => {
+  it('a timed-out fly flies off as a miss only while the player is inside and came near it', () => {
     const s = swarm(21, 5);
     for (const f of s.flies) f.age = f.life - 0.01;
     const outside = s.update(0.05, false);
     expect(outside).toEqual([]);
     expect(s.flies.every((f) => f.state === 'alive' && f.age < 1)).toBe(true);
 
+    // Inside the patch but never near: they fly off quietly (no miss).
     for (const f of s.flies) f.age = f.life - 0.01;
+    expect(s.update(0.05, true, { x: 1e4, y: 0, z: 1e4 })).toEqual([]);
+    expect(s.flies.every((f) => f.state === 'leaving')).toBe(true);
+    s.reset();
+    while (s.flies.length !== 5) s.reset();
+    // The hero came near each one: when they fly off, each is a miss ("it got away").
+    for (const f of s.flies) {
+      const p = s.position(f);
+      s.update(0, true, p);
+      expect(f.near).toBe(true);
+      f.age = f.life - 0.01;
+    }
     const inside = s.update(0.05, true);
     expect(inside.filter((e) => e.type === 'miss').map((e) => e.tier)).toEqual(s.flies.map((f) => f.tier));
     expect(s.flies.every((f) => f.state === 'leaving')).toBe(true);

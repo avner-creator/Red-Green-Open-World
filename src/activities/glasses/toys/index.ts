@@ -4,8 +4,9 @@
  * print the toy pops out of the ground (both eyes: it is found now), hops and flies into the
  * basket → gems. Three toys per session; later trails are a higher tier.
  *
- * Draw calls: prints (1, weak layer) + basket/bowl (1) + toys (1, only once one is found) +
- * sparkle (1, only while it plays) + the board (1) ≤ 5.
+ * Draw calls: prints (1, weak layer) + upright paw markers (1, weak layer, while a trail is
+ * followed) + basket/bowl (1) + toys (1, only once one is found) + sparkle (1, only while it
+ * plays) + the board (1) ≤ 6.
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../../types';
@@ -64,10 +65,16 @@ export function create(env: MechanicEnv): Mechanic {
   env.add(sparkle.mesh, VisionLayer.Both);
 
   // ── weak eye: the paw prints ──
-  const prints = createGlowInstances(TRAIL.maxPrints * 2, 'paw', 'toys-prints');
+  const prints = createGlowInstances(TRAIL.maxPrints, 'paw', 'toys-prints');
   env.add(prints.mesh, VisionLayer.WeakOnly);
+  // Upright paw glyphs over the prints that are next: the trail reads at grazing angles too.
+  const markers = createGlowInstances(TRAIL.glow.length, 'paw', 'toys-markers', { billboard: true });
+  env.add(markers.mesh, VisionLayer.WeakOnly);
+  /** Test hook: hide the weak-eye trail (coverage baseline). */
+  let hideTrail = false;
 
   const tmp = new THREE.Vector3();
+  const sky = new THREE.Vector3();
   const world: TrailWorld = {
     heightAt: (x, z) => ctx.world.heightAt(x, z),
     isLand: (x, z) => ctx.world.isLand(x, z),
@@ -85,6 +92,17 @@ export function create(env: MechanicEnv): Mechanic {
       if (hit && hit.point.y > gy + 0.3) return null;
       return hit ? Math.max(gy, hit.point.y) : gy;
     },
+    openSky(x, z) {
+      const gy = ctx.world.heightAt(x, z);
+      if (ctx.physics.raycast(tmp.set(x, gy + 0.6, z), UP, 30)) return false;
+      // Canopies have no colliders: keep clear of every trunk (or wall) we can detect.
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const hit = ctx.physics.raycast(tmp.set(x, gy + 1.2, z), sky.set(Math.sin(a), 0, Math.cos(a)), TRAIL.skyClear);
+        if (hit && hit.normal.y < 0.7) return false;
+      }
+      return true;
+    },
     blockedBetween(ax, az, bx, bz) {
       const dx = bx - ax;
       const dz = bz - az;
@@ -99,7 +117,9 @@ export function create(env: MechanicEnv): Mechanic {
       return false;
     },
   };
-  const rounds = new ToyRounds((seed, tier) => makeTrail(world, spot, seed, tier));
+  // The child at the basket looks along site −Z (they come from the approach, +Z).
+  const forward = site.yaw + Math.PI;
+  const rounds = new ToyRounds((seed, tier) => makeTrail(world, spot, seed, tier, { forward }));
 
   let active = false;
   let time = 0;
@@ -212,14 +232,17 @@ export function create(env: MechanicEnv): Mechanic {
 
   function drawPrints(): void {
     prints.setTime(time);
-    if (rounds.state !== 'trail' && rounds.state !== 'found') {
+    markers.setTime(time);
+    if (hideTrail || (rounds.state !== 'trail' && rounds.state !== 'found')) {
       prints.commit(0);
+      markers.commit(0);
       return;
     }
     const trail = rounds.trail();
     const preset = withChallenge(rounds.tier, env.challenge());
     const size = TRAIL.printSize * preset.size;
     let count = 0;
+    let mk = 0;
     trail.prints.forEach((pr, i) => {
       let glow = rounds.state === 'trail' ? printGlow(i, rounds.next) : 0;
       if (passT[i] >= 0) glow = Math.max(0, 1 - passT[i] / TRAIL.passFade) * TRAIL.glow[0];
@@ -232,15 +255,16 @@ export function create(env: MechanicEnv): Mechanic {
       p.set(x, pr.y + 0.07, z);
       m.compose(p, q, s.set(size * 0.85, 1, size));
       prints.set(count++, m, preset.level, glow * preset.opacity, i * 0.9);
-      // A soft glow hovering over each print that is next (same draw call).
+      // An upright paw floating over each print that is next (nearest brightest), gently bobbing.
       const ahead = rounds.state === 'trail' ? printGlow(i, rounds.next) : 0;
-      if (ahead > 0) {
-        p.set(pr.x, pr.y + TRAIL.puffHeight * preset.size, pr.z);
-        m.compose(p, qy.identity(), s.setScalar(TRAIL.puffSize * preset.size));
-        prints.set(count++, m, preset.level, ahead * preset.opacity * TRAIL.puffAlpha, i * 0.9, true);
+      if (ahead > 0 && mk < TRAIL.glow.length) {
+        p.set(pr.x, pr.y + (TRAIL.markerHeight + Math.sin(time * 2.2 + i * 0.9) * TRAIL.markerBob) * (0.7 + 0.3 * preset.size), pr.z);
+        m.compose(p, qy.identity(), s.setScalar(TRAIL.markerSize * preset.size));
+        markers.set(mk++, m, preset.level, ahead * preset.opacity, i * 0.9);
       }
     });
     prints.commit(count);
+    markers.commit(mk);
   }
 
   function draw(): void {
@@ -323,12 +347,14 @@ export function create(env: MechanicEnv): Mechanic {
       env.remove(toys.mesh);
       env.remove(sparkle.mesh);
       env.remove(prints.mesh);
+      env.remove(markers.mesh);
       for (const c of colliders) ctx.physics.removeCollider(c);
       (basket.geometry as THREE.BufferGeometry).dispose();
       (basket.material as THREE.Material).dispose();
       toys.dispose();
       sparkle.dispose();
       prints.dispose();
+      markers.dispose();
     },
     debug() {
       const trail = rounds.trail();
@@ -354,6 +380,8 @@ export function create(env: MechanicEnv): Mechanic {
         toyVisible: rounds.state === 'found',
         celebrating: celebrate >= 0,
         basket: { x: spot.x, y: spotY, z: spot.z },
+        // Where a child stands at the basket, coming from the approach (looking along `yaw`).
+        view: { ...env.local(spotL.x, spotL.z + 2.6), yaw: forward },
         gems: TOYS.gems[rounds.tier],
       };
     },
@@ -363,6 +391,7 @@ export function create(env: MechanicEnv): Mechanic {
         rounds.setSeed(rounds.seed);
       }
       if (typeof params.seed === 'number') rounds.setSeed(params.seed);
+      if (typeof params.hideTrail === 'boolean') hideTrail = params.hideTrail;
       if (typeof params.timeLeft === 'number' && rounds.state === 'trail') {
         rounds.started = true;
         rounds.clock = TOYS.timeout - params.timeLeft;

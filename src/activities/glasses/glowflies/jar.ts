@@ -15,6 +15,8 @@ export interface JarOptions {
   jar: { x: number; z: number };
   /** Spots (site-local) the flowers keep clear of. */
   avoid: readonly { x: number; z: number; r: number }[];
+  /** Meadow centre (site-local). */
+  centre?: { x: number; z: number };
   patchRadius: number;
   notches: number;
   /** Ground height relative to the centre's ground, at site-local (x, z). */
@@ -91,8 +93,8 @@ export function buildJar(o: JarOptions): JarMesh {
   for (let tries = 0; tries < 400 && placed < 34; tries++) {
     const a = rng() * Math.PI * 2;
     const r = Math.sqrt(rng()) * (o.patchRadius + 0.6);
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
+    const x = (o.centre?.x ?? 0) + Math.cos(a) * r;
+    const z = (o.centre?.z ?? 0) + Math.sin(a) * r;
     if (o.avoid.some((v) => Math.hypot(x - v.x, z - v.z) < v.r * 0.75)) continue;
     const y = o.heightAt(x, z);
     placed++;

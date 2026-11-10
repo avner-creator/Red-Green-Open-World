@@ -58,8 +58,13 @@ export function flyLocal(p: FlyPath, t: number): { x: number; z: number; h: numb
 }
 
 export interface PatchShape {
-  /** Patch radius around the site centre (local). */
+  /** Centre of the roaming area (site-local; default the site centre). */
+  cx?: number;
+  cz?: number;
+  /** Roaming radius around that centre. */
   radius: number;
+  /** Extra rule for the ground under a path (land, off roads, nothing solid). Site-local. */
+  allowed?(x: number, z: number): boolean;
   /** Site-local spots the paths keep clear of, with their clearances. */
   avoid: readonly { x: number; z: number; r: number }[];
 }
@@ -78,9 +83,10 @@ export function makePath(rng: () => number, tier: GlassesTier, patch: PatchShape
     if (room <= 0.05) continue;
     const a = rng() * Math.PI * 2;
     const r = Math.sqrt(rng()) * room;
-    const cx = Math.cos(a) * r;
-    const cz = Math.sin(a) * r;
+    const cx = (patch.cx ?? 0) + Math.cos(a) * r;
+    const cz = (patch.cz ?? 0) + Math.sin(a) * r;
     if (patch.avoid.some((o) => Math.hypot(cx - o.x, cz - o.z) < ext + o.r)) continue;
+    if (patch.allowed && !groundAllowed(patch, cx, cz, ext)) continue;
     return finishPath(rng, speed, { cx, cz, ax, az, wander });
   }
   // Crowded patch: a tiny loop at the free point farthest from everything it must avoid.
@@ -88,14 +94,25 @@ export function makePath(rng: () => number, tier: GlassesTier, patch: PatchShape
   for (let i = 0; i < 64; i++) {
     const a = (i / 64) * Math.PI * 2;
     for (const rr of [0, 0.4, 0.7]) {
-      const x = Math.cos(a) * patch.radius * rr;
-      const z = Math.sin(a) * patch.radius * rr;
-      const d = Math.min(patch.radius - Math.hypot(x, z), ...patch.avoid.map((o) => Math.hypot(x - o.x, z - o.z) - o.r));
+      const x = (patch.cx ?? 0) + Math.cos(a) * patch.radius * rr;
+      const z = (patch.cz ?? 0) + Math.sin(a) * patch.radius * rr;
+      if (patch.allowed && !patch.allowed(x, z)) continue;
+      const d = Math.min(patch.radius - Math.hypot(x - (patch.cx ?? 0), z - (patch.cz ?? 0)), ...patch.avoid.map((o) => Math.hypot(x - o.x, z - o.z) - o.r));
       if (d > best.d) best = { x, z, d };
     }
   }
   const k = Math.max(0.05, best.d) / pathExtent({ ax: 1, az: 0.6, wander: 0.2 });
   return finishPath(rng, speed, { cx: best.x, cz: best.z, ax: Math.min(1, k), az: 0.6 * Math.min(1, k), wander: 0.2 * Math.min(1, k) });
+}
+
+/** The ground under a whole path (its centre and a ring at its extent) passes `allowed`. */
+function groundAllowed(patch: PatchShape, cx: number, cz: number, ext: number): boolean {
+  if (!patch.allowed!(cx, cz)) return false;
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    if (!patch.allowed!(cx + Math.cos(a) * ext, cz + Math.sin(a) * ext)) return false;
+  }
+  return true;
 }
 
 function finishPath(rng: () => number, speed: number, base: Pick<FlyPath, 'cx' | 'cz' | 'ax' | 'az' | 'wander'>): FlyPath {
@@ -151,6 +168,8 @@ export interface Fly {
   life: number;
   /** Seconds in 'leaving' / until respawn in 'gone'. */
   timer: number;
+  /** The hero came within `FLIES.noticeRadius` while it was alive (only then is a fly-off a miss). */
+  near: boolean;
 }
 
 export type SwarmEvent = { type: 'miss'; slot: number; tier: GlassesTier } | { type: 'respawn'; slot: number; tier: GlassesTier };
@@ -188,7 +207,7 @@ export class Swarm {
   }
 
   private spawn(slot: number, tier: GlassesTier): Fly {
-    return { slot, tier, path: makePath(this.o.rng, tier, this.o.patch), state: 'alive', age: 0, life: FLIES.life[tier], timer: 0 };
+    return { slot, tier, path: makePath(this.o.rng, tier, this.o.patch), state: 'alive', age: 0, life: FLIES.life[tier], timer: 0, near: false };
   }
 
   /** The tier the swarm is shortest of (keeps the mix in the air); ties are seeded. */
@@ -212,19 +231,25 @@ export class Swarm {
   }
 
   /**
-   * Advance time. A fly past its life flies off (a miss) only while the player is inside the
-   * patch; outside it is quietly renewed. Gone flies respawn after their delay.
+   * Advance time. A fly past its life flies off while the player is inside the patch: a miss only
+   * if the hero came near it ("it got away"); outside the patch it is quietly renewed. Gone
+   * flies respawn after their delay. `chest` (the hero's chest) marks flies the hero came near.
    */
-  update(dt: number, playerInside: boolean): SwarmEvent[] {
+  update(dt: number, playerInside: boolean, chest?: V3): SwarmEvent[] {
     const events: SwarmEvent[] = [];
+    const q: V3 = { x: 0, y: 0, z: 0 };
     for (const f of this.flies) {
       if (f.state === 'alive') {
         f.age += dt;
+        if (chest && !f.near) {
+          this.position(f, q);
+          if (Math.hypot(q.x - chest.x, q.z - chest.z) <= FLIES.noticeRadius) f.near = true;
+        }
         if (f.age >= f.life) {
           if (playerInside) {
             f.state = 'leaving';
             f.timer = 0;
-            events.push({ type: 'miss', slot: f.slot, tier: f.tier });
+            if (f.near) events.push({ type: 'miss', slot: f.slot, tier: f.tier });
           } else {
             Object.assign(f, this.spawn(f.slot, f.tier));
           }

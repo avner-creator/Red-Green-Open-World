@@ -25,6 +25,8 @@ export interface TrailWorld {
   surfaceAt?(x: number, z: number): number | null;
   /** True when a wall, fence or trunk blocks walking straight from a to b. */
   blockedBetween?(ax: number, az: number, bx: number, bz: number): boolean;
+  /** True when the sky above (x, z) is open (no canopy or roof over the hidden spot). */
+  openSky?(x: number, z: number): boolean;
   /** Extra circles to keep clear of (the board, the basket). */
   obstacles?: readonly { x: number; z: number; r: number }[];
 }
@@ -124,6 +126,7 @@ function walk(w: TrailWorld, start: XZ, angle: number, bend: number, freq: numbe
     const ex = last.x + Math.cos(last.yaw) * side * TRAIL.endBeside;
     const ez = last.z - Math.sin(last.yaw) * side * TRAIL.endBeside;
     if (pointReject(w, ex, ez)) continue;
+    if (w.openSky && !w.openSky(ex, ez)) continue;
     const ey = surface(w, ex, ez);
     if (Math.abs(ey - last.y) > TRAIL.maxGrade * TRAIL.endBeside + 0.02) continue;
     if (w.blockedBetween?.(last.x, last.z, ex, ez)) continue;
@@ -136,15 +139,32 @@ function walk(w: TrailWorld, start: XZ, angle: number, bend: number, freq: numbe
  * A trail from `start` (the basket) for `tier`, deterministic per `seed`. Tries the candidate
  * directions in a seeded order (each with a few bends) until every sample passes the rules.
  */
-export function makeTrail(w: TrailWorld, start: XZ, seed: number, tier: GlassesTier): Trail {
+export interface TrailOptions {
+  /**
+   * The direction the child looks when standing at the basket (world yaw, atan2(dx, dz)). The
+   * trail starts off to the side of it (`TRAIL.startOff` band either side), so its first prints
+   * are on screen and not under the hero. Directions outside the band are a last resort.
+   */
+  forward?: number;
+}
+
+const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
+export function makeTrail(w: TrailWorld, start: XZ, seed: number, tier: GlassesTier, opts: TrailOptions = {}): Trail {
   const rng = seededRng(seed);
   const K = TRAIL.directions;
   const rot = rng() * ((Math.PI * 2) / K);
-  const order = Array.from({ length: K }, (_, i) => i);
+  const shuffled = Array.from({ length: K }, (_, i) => i);
   for (let i = K - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
+  const inBand = (c: number): boolean => {
+    if (opts.forward === undefined) return true;
+    const off = Math.abs(wrap(rot + (c / K) * Math.PI * 2 - opts.forward));
+    return off >= TRAIL.startOff[0] && off <= TRAIL.startOff[1];
+  };
+  const order = [...shuffled.filter(inBand), ...shuffled.filter((c) => !inBand(c))];
   const shape = trailShape(tier, rng());
   let best: (Attempt & { candidate: number; angle: number }) | null = null;
   for (const c of order) {
