@@ -270,7 +270,8 @@ export function buildScatter(t: TerrainData, mats: Materials, col: Colliders, ma
     const pad = sampleMask(t, t.padMask, x, z) > 0.05;
     if (sl > 0.55 || rng.chance(0.3)) {
       if (pad && sl < 0.55) continue;
-      const big = rng.chance(sl > 0.55 ? 0.5 : 0.15);
+      const core = Math.hypot(x - 30, z + 5) < 95;
+      const big = rng.chance(sl > 0.55 ? 0.5 : core ? 0 : 0.15);
       const s = big ? rng.range(1.4, 2.8) : rng.range(0.35, 0.9);
       const list = rng.chance(0.5) ? species.rockA.list : species.rockB.list;
       if (list.length > 160) continue;

@@ -1,7 +1,7 @@
 /** Starter Village: fountain plaza (spawn), main street with houses, sidewalks and street furniture. */
 import * as THREE from 'three';
 import { M, T } from './batch';
-import { C, bench, lamp, planter, signpost, type Kit } from './props';
+import { C, bench, bunting, lamp, planter, signpost, type Kit } from './props';
 import { cylG, coneG, discG, sphereG, torusG, rbox, blobG, flagG } from './shapes';
 import { house, type HouseOpts } from './house';
 import { LOTS } from './village-data';
@@ -25,11 +25,11 @@ function fountain(k: Kit): void {
   const y = VILLAGE_Y;
   const b = k.b;
   // Basin: outer wall + rim + water.
-  b.add('matte', cylG(40), 0xd6ccb8, T(x, y, z, 0, 4.3, 0.7, 4.3), { aoY: y, aoH: 0.5, ao: 0.3 });
-  b.add('paint', torusG(0.24, 64, Math.PI * 2, 4.25), 0xe9e1cf, T(x, y + 0.72, z));
-  b.add('gloss', discG(40), 0x4f9fae, T(x, y + 0.5, z, 0, 4.05, 0.08, 4.05));
+  b.add('matte', cylG(40), 0xd6ccb8, T(x, y, z, 0, 4.3, 0.5, 4.3), { aoY: y, aoH: 0.5, ao: 0.3 });
+  b.add('paint', torusG(0.26, 64, Math.PI * 2, 4.2), 0xe9e1cf, T(x, y + 0.62, z));
+  b.add('gloss', discG(40), 0x4f9fae, T(x, y + 0.5, z, 0, 4.05, 0.07, 4.05));
   // Ripple rings (bright) on the water.
-  for (const r of [1.6, 2.6, 3.4]) b.add('gloss', torusG(0.035, 48, Math.PI * 2, r), 0xcfeff2, T(x, y + 0.56, z, 0, 1, 0.3, 1));
+  for (const r of [2.7, 3.3]) b.add('gloss', torusG(0.04, 48, Math.PI * 2, r), 0xcfeff2, T(x, y + 0.57, z, 0, 1, 0.3, 1));
   // Pedestal, lower bowl, column, upper bowl, finial.
   b.add('matte', cylG(16, 0.8), 0xd6ccb8, T(x, y + 0.5, z, 0, 0.75, 1.3, 0.75));
   b.add('paint', cylG(32, 1), 0xe9e1cf, T(x, y + 1.8, z, 0, 2.0, 0.22, 2.0));
@@ -39,10 +39,8 @@ function fountain(k: Kit): void {
   b.add('paint', cylG(24), 0xe9e1cf, T(x, y + 3.05, z, 0, 0.85, 0.16, 0.85));
   b.add('gloss', sphereG(2), 0xe0b84a, T(x, y + 3.45, z, 0, 0.32, 0.32, 0.32));
   // Falling water streams from the lower bowl.
-  for (let i = 0; i < 24; i++) {
-    const a = (i / 24) * Math.PI * 2;
-    b.add('gloss', cylG(6), 0xe4f7f8, T(x + Math.cos(a) * 1.95, y + 0.55, z + Math.sin(a) * 1.95, 0, 0.028, 1.3, 0.028));
-  }
+  // A thin curtain of water falling from the lower bowl.
+  b.add('gloss', cylG(40, 1.95 / 2.25, true), 0xc4ebf0, T(x, y + 0.57, z, 0, 2.25, 1.23, 2.25));
   k.col.cyl(x, y, z, 0.42, 4.4);
   k.col.cyl(x, y, z, 1.6, 0.9);
   k.col.cyl(x, y + 1.8, z, 0.14, 2.0);
@@ -55,9 +53,9 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
 
   // ── Plaza paving ──
   ringBand(k, px, pz, y + 0.07, 0, 5.2, 0xc9bfae);
-  ringBand(k, px, pz, y + 0.07, 5.2, 6.0, 0x8e8577);
+  ringBand(k, px, pz, y + 0.07, 5.2, 6.0, 0xa39a8b);
   ringBand(k, px, pz, y + 0.07, 6.0, 12.5, 0xd9cfbd);
-  ringBand(k, px, pz, y + 0.07, 12.5, 13.3, 0x9a9183);
+  ringBand(k, px, pz, y + 0.07, 12.5, 13.3, 0xaba293);
   ringBand(k, px, pz, y + 0.07, 13.3, pr, 0xd2c8b5);
   // Curb ring.
   k.b.add('matte', torusG(0.18, 128, Math.PI * 2, pr), 0x9d9485, T(px, y + 0.02, pz));
@@ -65,7 +63,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     const g = new THREE.PlaneGeometry(0.5, 6.4).rotateX(-Math.PI / 2);
-    k.b.add('paving', g, 0x8e8577, T(px + Math.cos(a) * 9.25, y + 0.075, pz + Math.sin(a) * 9.25, -a + Math.PI / 2));
+    k.b.add('paving', g, 0xaba293, T(px + Math.cos(a) * 9.25, y + 0.075, pz + Math.sin(a) * 9.25, -a + Math.PI / 2));
     g.dispose();
   }
   fountain(k);
@@ -165,8 +163,21 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
     k.b.add('metal', cylG(6), C.iron, M(m, T(0, 0, 0, 0, 0.04, 0.04, 1.4, Math.PI / 2)));
     k.b.add('cloth', flagG(), s > 0 ? 0x2f5d7c : 0xb8433a, M(m, T(0, 0, 1.2, -Math.PI / 2, 1.2, 0.9, 1, 0, 0)));
   }
+  // Festive bunting strung across the main street between the facades.
+  const flags = [0xc8433a, 0xf4efe6, 0x2f5d7c, 0xf2c14e, 0x3b6b45, 0xf4efe6];
+  for (const [zl, zr] of [[-23, -27], [-36, -33], [-47, -51]]) {
+    bunting(k.b, new THREE.Vector3(-8.7, y + 5.4, zl), new THREE.Vector3(8.7, y + 5.4, zr), flags, 0.9);
+  }
   // Planters at the street corners.
   planter(k, -9, -15.5, 3, 1.1, 0, 7);
   planter(k, 9, -15.5, 3, 1.1, 0, 8);
+  // Trees on the ridge slope that closes the view at the end of the street.
+  trees.push(
+    { x: -14, z: -70, kind: 'oak', scale: 1.1 },
+    { x: 2, z: -69, kind: 'oak', scale: 0.95 },
+    { x: -5, z: -75, kind: 'pine', scale: 1.05 },
+    { x: 10, z: -73, kind: 'pine', scale: 1.1 },
+    { x: -24, z: -76, kind: 'pine' },
+  );
   return trees;
 }
