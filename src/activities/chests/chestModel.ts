@@ -1,7 +1,6 @@
 /**
  * The treasure chest (both-eye, main scene): planked body, barrel lid on a hinge, brass straps,
- * corner guards and studs, a blank boss plate on every side (the keyhole is NOT here: it only exists
- * on the strong-eye layer), a hidden heap of treasure and a light beam that appear when it opens.
+ * corner guards and studs, a brass plate on every side with an empty key-shaped slot (fills with a bright key when the key is carried), a hidden heap of treasure and a light beam that appear when it opens.
  *
  * Wood is mid-dark and brass is bright with a dark gap between them, so it reads in the red-only
  * and green-only channels by brightness (the wood differs from grass in R, the brass in both).
@@ -84,6 +83,8 @@ export interface ChestModel {
   readonly treasure: THREE.Group;
   readonly star: THREE.Object3D;
   readonly beam: THREE.Mesh;
+  /** Bright keys in the four front-plate slots: visible while the key is carried. */
+  readonly keyFill: THREE.Mesh;
   setLid(open: number): void;
   dispose(): void;
 }
@@ -142,6 +143,35 @@ function lidGeometry(): { wood: THREE.BufferGeometry; metal: THREE.BufferGeometr
   return { wood: merge(wood), metal: merge(metal) };
 }
 
+/**
+ * An upright key (bow on top, shaft, two teeth) as flat slabs facing +Z, centred on the origin, `k`
+ * times the base size (about 0.2 m tall), `depth` thick, front face at `z`.
+ */
+function keyParts(k: number, depth: number, z: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [
+    new THREE.CylinderGeometry(0.052 * k, 0.052 * k, depth, 14).rotateX(Math.PI / 2).translate(0, 0.075 * k, z - depth / 2),
+    new THREE.BoxGeometry(0.03 * k, 0.15 * k, depth).translate(0, -0.03 * k, z - depth / 2),
+    new THREE.BoxGeometry(0.06 * k, 0.03 * k, depth).translate(0.03 * k, -0.075 * k, z - depth / 2),
+    new THREE.BoxGeometry(0.05 * k, 0.03 * k, depth).translate(0.025 * k, -0.035 * k, z - depth / 2),
+  ];
+  return merge(parts);
+}
+
+/** Bright key shapes in the four slots (one mesh); shown while the player carries the key. */
+function keyFillGeometry(): THREE.BufferGeometry {
+  const { width: W, depth: D } = CHEST;
+  const parts: THREE.BufferGeometry[] = [];
+  for (let s = 0; s < 4; s++) {
+    const a = (s * Math.PI) / 2;
+    const half = s % 2 === 0 ? D / 2 : W / 2;
+    const g = paint(keyParts(0.82, 0.008, 0.0145), new THREE.Color(0xfffbe8));
+    g.rotateY(a);
+    g.translate(Math.sin(a) * (half + 0.006), 0.27, Math.cos(a) * (half + 0.006));
+    parts.push(g);
+  }
+  return merge(parts);
+}
+
 function bodyGeometry(): { wood: THREE.BufferGeometry; metal: THREE.BufferGeometry } {
   const { width: W, depth: D, bodyH: H } = CHEST;
   const wood: THREE.BufferGeometry[] = [];
@@ -178,16 +208,16 @@ function bodyGeometry(): { wood: THREE.BufferGeometry; metal: THREE.BufferGeomet
       }
     }
   }
-  // A blank boss plate on all four sides: the lock is drawn on top of one of them, strong eye only.
+  // A brass plate on all four sides, each with an EMPTY key-shaped slot (dark). Both eyes see it; the
+  // bright key shape (`keyFillGeometry`) lights up in it once the player carries the key.
   for (let s = 0; s < 4; s++) {
     const a = (s * Math.PI) / 2;
     const half = s % 2 === 0 ? D / 2 : W / 2;
     const px = Math.sin(a) * (half + 0.006);
     const pz = Math.cos(a) * (half + 0.006);
     const g1 = paint(box(0.26, 0.3, 0.02, 0, 0, 0, 0.018), brass(false, 0.2));
-    const g2 = paint(new THREE.CylinderGeometry(0.07, 0.07, 0.012, 16).rotateX(Math.PI / 2).translate(0, 0, 0.012), brass(true));
-    const g3 = paint(sphere(0.02, 0, 0, 0.02), brass(false, 0.1));
-    for (const g of [g1, g2, g3]) {
+    const slot = paint(keyParts(1.0, 0.006, 0.0105), new THREE.Color(0x120804));
+    for (const g of [g1, slot]) {
       g.rotateY(a);
       g.translate(px, 0.27, pz);
       metal.push(g);
@@ -286,7 +316,8 @@ export function buildChest(): ChestModel {
   const treasureG = treasureGeometry();
   const starG = starGeometry();
   const beamG = beamGeometry();
-  geos.push(body.wood, body.metal, lidG.wood, lidG.metal, treasureG, starG, beamG);
+  const fillG = keyFillGeometry();
+  geos.push(body.wood, body.metal, lidG.wood, lidG.metal, treasureG, starG, beamG, fillG);
 
   const add = (parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material): THREE.Mesh => {
     const mesh = new THREE.Mesh(g, m);
@@ -304,6 +335,12 @@ export function buildChest(): ChestModel {
   const cushion = new THREE.Mesh(cushionG, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
   mats.push(cushion.material as THREE.Material);
   group.add(cushion);
+
+  const fillMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  mats.push(fillMat);
+  const keyFill = new THREE.Mesh(fillG, fillMat);
+  keyFill.visible = false;
+  group.add(keyFill);
 
   const lid = new THREE.Group();
   lid.position.set(0, H, -D / 2);
@@ -337,6 +374,7 @@ export function buildChest(): ChestModel {
     treasure,
     star,
     beam,
+    keyFill,
     setLid(open) {
       lid.rotation.x = -open * 1.95;
     },
