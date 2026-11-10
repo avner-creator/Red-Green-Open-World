@@ -8,10 +8,10 @@ import { driveTriggers } from '../input';
 import { fixedStepHooks } from '../physics';
 import { clamp, DRIVE, engineSound } from './car-math';
 import { createCarModel } from './car-model';
-import { CAR, NO_CONTROLS, createCarSim, headingOf, restHeight, type CarControls, type CarEnv } from './car-sim';
+import { CAR, NO_CONTROLS, createCarSim, headingOf, restHeight, type CarControls, type CarEnv, type SimMods } from './car-sim';
 import { createDust } from './dust';
 import { isPaved, nearestRoad } from './surface';
-import type { VehicleInternal } from './types';
+import { STOCK_TUNING, type BuggyHooks, type BuggyTuning, type VehicleInternal } from './types';
 
 /** Underdamped spring (body lean / heave): springy, a little wobble. */
 class Spring {
@@ -97,11 +97,49 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   const controls: CarControls = { ...NO_CONTROLS };
   const up = new THREE.Vector3();
   const tmp = new THREE.Vector3();
+  // Upgrade / boost hooks (workshop, race).
+  const tuning: BuggyTuning = { ...STOCK_TUNING };
+  const mods: SimMods = { extraTop: 0, kick: 0, hopScale: 1, bounceScale: 1, offroadAsRoad: false };
+  let boostLeft = 0;
+  let boostExtra = 0;
+  let pendingKick = 0;
+  let rawThrottle = 0;
+  const hooks: BuggyHooks = {
+    get tuning() {
+      return tuning;
+    },
+    setTuning(patch) {
+      Object.assign(tuning, patch);
+      model.setWheelScale(tuning.wheelScale);
+    },
+    boost(extra, seconds, kick = 0) {
+      boostExtra = boostLeft > 0 ? Math.max(boostExtra, extra) : extra;
+      boostLeft = Math.max(boostLeft, seconds);
+      pendingKick += kick;
+    },
+    get boostLeft() {
+      return boostLeft;
+    },
+    onHorn: null,
+    onSkill: null,
+    onHop: null,
+    onBump: null,
+    body: model.body,
+    seat: model.seat,
+    get driven() {
+      return driven;
+    },
+    get forwardSpeed() {
+      return sim.forwardSpeed;
+    },
+    heading: () => sim.yaw(),
+    hold: false,
+  };
 
-  const hooks = fixedStepHooks(ctx.physics);
+  const stepHooks = fixedStepHooks(ctx.physics);
   /** Render pose (interpolated between physics steps): the model, rider, camera and prompt use it. */
   const sync = (): void => {
-    sim.interpolate(hooks.alpha);
+    sim.interpolate(stepHooks.alpha);
     model.root.position.copy(sim.visualPosition);
     model.root.quaternion.copy(sim.visualQuaternion);
     position.copy(sim.visualPosition);
@@ -136,6 +174,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     teleport(p, yaw) {
       placeAt(p, yaw);
     },
+    buggy: hooks,
   };
 
   function readControls(input: Readonly<InputState>): void {
@@ -145,7 +184,18 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     controls.handbrake = input.jump;
     // Latched until a physics step uses it (a frame can run zero steps at high refresh rates).
     controls.hop = controls.hop || input.jumpPressed;
-    if (input.flopPressed) ctx.audio.play('horn');
+    rawThrottle = controls.throttle;
+    if (input.flopPressed) {
+      if (hooks.onHorn) hooks.onHorn();
+      else ctx.audio.play('horn');
+    }
+    if (input.skillPressed) hooks.onSkill?.();
+    if (hooks.hold) {
+      controls.throttle = 0;
+      controls.steer = 0;
+      controls.hop = false;
+      controls.handbrake = true;
+    }
   }
 
   /** Landing thud carried from the fixed steps to this frame's dust. */
@@ -153,13 +203,16 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
 
   /** One fixed physics step of handling + its game events (runs inside `physics.step`). */
   function fixedStep(dt: number): void {
-    const ev = sim.update(dt, controls, env);
+    const ev = sim.update(dt, controls, env, mods);
     controls.hop = false;
+    // The boost kick is one-shot: spent by the first step that sees it.
+    mods.kick = 0;
     landedThisFrame = Math.max(landedThisFrame, ev.landed);
     const cam = getCamera();
 
     if (ev.bump > 0) {
       ctx.events.emit('vehicle:bump', { speed: ev.bump });
+      hooks.onBump?.(ev.bump);
       if (driven) cam.shake(Math.min(0.55, 0.12 + ev.bump / 20));
       heave.v += Math.min(1.6, ev.bump * 0.12);
       roll.v += (Math.random() - 0.5) * Math.min(1.2, ev.bump * 0.1) * (ctx.testMode ? 0 : 1);
@@ -172,6 +225,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     if (ev.hopped) {
       heave.v += 0.9;
       ctx.audio.play('jump', { pitch: 0.75 });
+      hooks.onHop?.();
     }
     if (ev.righted) ctx.audio.play('boing');
 
@@ -193,13 +247,24 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       safe.yaw = sim.yaw();
     }
   }
-  const unhookBefore = hooks.onBeforeStep(fixedStep);
-  const unhookAfter = hooks.onAfterStep(() => sim.snapshot());
+  const unhookBefore = stepHooks.onBeforeStep(fixedStep);
+  const unhookAfter = stepHooks.onAfterStep(() => sim.snapshot());
 
   /** Once per rendered frame, after `physics.step`: controls for the next steps, then visuals. */
   function update(dt: number, input: Readonly<InputState> | null): void {
     if (input) readControls(input);
-    else Object.assign(controls, NO_CONTROLS);
+    else {
+      Object.assign(controls, NO_CONTROLS);
+      rawThrottle = 0;
+    }
+    // Upgrade / boost modifiers for the next fixed steps (workshop, race).
+    boostLeft = Math.max(0, boostLeft - dt);
+    mods.extraTop = boostLeft > 0 && !hooks.hold ? boostExtra : 0;
+    mods.kick = hooks.hold ? 0 : mods.kick + pendingKick;
+    pendingKick = 0;
+    mods.hopScale = tuning.hopScale;
+    mods.bounceScale = tuning.bounceScale;
+    mods.offroadAsRoad = tuning.offroadAsRoad;
 
     sync();
     const vp = sim.visualPosition;
@@ -221,7 +286,8 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     (model.blob.material as THREE.MeshBasicMaterial).opacity = 0.5 * clamp(1 - above / 3, 0, 1);
 
     if (driven) {
-      const s = engineSound(sim.forwardSpeed, controls.throttle, DRIVE.topSpeedRoad);
+      // On a held start grid the throttle still revs the engine.
+      const s = engineSound(sim.forwardSpeed, hooks.hold ? rawThrottle : controls.throttle, DRIVE.topSpeedRoad);
       ctx.audio.setLoop('engine', s.intensity, s.pitch);
       engineOn = true;
     } else if (engineOn) {
@@ -290,6 +356,9 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     exitSpot,
     rescue,
     park() {
+      hooks.hold = false;
+      boostLeft = 0;
+      pendingKick = 0;
       safe.pos.copy(anchor.position);
       safe.yaw = anchor.yaw;
       placeAt(anchor.position, anchor.yaw);
