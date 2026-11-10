@@ -35,7 +35,6 @@ export const SESSION = { minMinutes: 3, maxMinutes: 15, tickInterval: 0.25 } as 
 
 export const GEMS = { pickupRadius: 1.6, nearRadius: 12 } as const;
 
-export const TRAMPOLINE = { maxHeight: 40, firstBounce: 6, growth: 1.35 } as const;
 export const BALLOON = { topHeight: 180, ascentSeconds: 10, autoChuteHeight: 40 } as const;
 
 export const PROFILE_KEY = 'rgow.profile.v1';

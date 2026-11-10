@@ -126,8 +126,18 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     if (mode === 'external') setMode('walk');
     c.onRelease?.();
     api.setTilt(0, 0);
+    clearVisual();
   };
   const tiltPivot = new THREE.Vector3();
+  /** Activity pose layer (setVisualRotation / setVisualStretch); cleared on every hand-back. */
+  let visualRot: THREE.Quaternion | null = null;
+  let visualStretch = 0;
+  const clearVisual = (): void => {
+    if (visualRot === null && visualStretch === 0) return;
+    visualRot = null;
+    visualStretch = 0;
+    fx.setExtra(null, 0);
+  };
 
   const internal: PlayerInternal = {
     api: undefined as unknown as PlayerApi, // set below
@@ -136,6 +146,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     setVehicle(v, m = 'driving', s, anim = 'sit') {
       if (v) {
         releaseExternal();
+        clearVisual();
         if (mode === 'flop') fx.reset();
         vehicle = v;
         seat = s ?? null;
@@ -210,6 +221,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     flop() {
       if (mode !== 'walk') return;
       flopT = 0;
+      clearVisual();
       fx.startFlop();
       setMode('flop');
       ctx.events.emit('player:flop', {});
@@ -217,6 +229,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     respawn() {
       releaseExternal();
       if (vehicle) internal.setVehicle(null);
+      clearVisual();
       fx.reset();
       if (mode !== 'walk') setMode('walk');
       api.teleport(new THREE.Vector3(safeSpot.x, safeSpot.y + 0.05, safeSpot.z), safeYaw);
@@ -254,6 +267,17 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       s.rotation.set(pitch, 0, roll);
       tiltPivot.set(0, model.centre, 0).applyEuler(s.rotation);
       s.position.set(-tiltPivot.x, model.centre - tiltPivot.y, -tiltPivot.z);
+    },
+    setVisualRotation(q) {
+      if (mode === 'flop') return; // the flop tumble owns the pose
+      if (q) (visualRot ??= new THREE.Quaternion()).copy(q);
+      else visualRot = null;
+      fx.setExtra(visualRot, visualStretch);
+    },
+    setVisualStretch(st) {
+      if (mode === 'flop') return;
+      visualStretch = Number.isFinite(st) ? st : 0;
+      fx.setExtra(visualRot, visualStretch);
     },
   };
   internal.api = api;

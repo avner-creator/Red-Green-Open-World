@@ -2,6 +2,7 @@
  * Procedural cartoon motion layered on the avatar: squash & stretch spring, respawn pop and the
  * flop tumble (forward flip → pancake squash → jelly wobble → pop up). Never a physics ragdoll.
  */
+import * as THREE from 'three';
 import type { PlayerModel } from './player-model';
 import { MOVE } from './tuning';
 
@@ -43,6 +44,12 @@ export interface PlayerFx {
   readonly flopping: boolean;
   update(dt: number): void;
   reset(): void;
+  /**
+   * Extra activity pose layered on top (PlayerApi.setVisualRotation/setVisualStretch): `q` about
+   * the body centre (applied after the flop tumble), `stretch` + = tall and thin, - = flat and wide.
+   * Written immediately, so it shows on the frame it is set.
+   */
+  setExtra(q: THREE.Quaternion | null, stretch: number): void;
 }
 
 export function createPlayerFx(model: PlayerModel): PlayerFx {
@@ -50,6 +57,23 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
   let sqVel = 0;
   let popT = 1;
   let flopT = -1;
+  // Base pose from the springs/flop, kept so the extra layer can be re-applied at any time.
+  let baseSy = 1;
+  let baseSxz = 1;
+  let baseFlip = 0;
+  let baseTwist = 0;
+  let baseHop = 0;
+  const extraQ = new THREE.Quaternion();
+  let hasExtraQ = false;
+  let extraStretch = 0;
+
+  const write = (): void => {
+    const st = extraStretch;
+    model.squash.scale.set(baseSxz * (1 - st * 0.5), baseSy * (1 + st), baseSxz * (1 - st * 0.5));
+    model.spin.rotation.set(baseFlip, baseTwist, 0);
+    if (hasExtraQ) model.spin.quaternion.premultiply(extraQ);
+    model.spin.position.y = model.centre + baseHop;
+  };
 
   return {
     kick(amount) {
@@ -68,9 +92,17 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
       sq = sqVel = 0;
       flopT = -1;
       popT = 1;
-      model.spin.rotation.set(0, 0, 0);
-      model.spin.position.y = model.centre;
-      model.squash.scale.set(1, 1, 1);
+      baseSy = baseSxz = 1;
+      baseFlip = baseTwist = baseHop = 0;
+      hasExtraQ = false;
+      extraStretch = 0;
+      write();
+    },
+    setExtra(q, stretch) {
+      hasExtraQ = q !== null;
+      if (q) extraQ.copy(q);
+      extraStretch = Number.isFinite(stretch) ? Math.max(-0.9, Math.min(2, stretch)) : 0;
+      write();
     },
     update(dt) {
       // Damped spring for squash/stretch.
@@ -105,9 +137,12 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
         const t = popT;
         scale = 1 - Math.pow(2, -9 * t) * Math.cos(t * Math.PI * 3) * 0.8;
       }
-      model.squash.scale.set(sxz * scale, sy * scale, sxz * scale);
-      model.spin.rotation.set(flip % TAU, twist, 0);
-      model.spin.position.y = model.centre + hop;
+      baseSy = sy * scale;
+      baseSxz = sxz * scale;
+      baseFlip = flip % TAU;
+      baseTwist = twist;
+      baseHop = hop;
+      write();
     },
   };
 }

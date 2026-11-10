@@ -28,16 +28,19 @@ Rules that matter for a newcomer: the orchestrator writes no code (workers on Op
 interfaces are in `src/types.ts` (integrator only); tests use `?test=1` and `window.__rg`;
 parallel agents must each use their own `RG_PORT`.
 
-## State (updated 2026-11-10 ~20:00 UTC)
+## State (updated 2026-11-10 ~23:00 UTC)
 
-**On `main` (verified, 166 unit + 42 e2e; live on Netlify):** red-green compositor + calibration,
-robot player, island with dressed plaza / Bouncy Park / garage / balloon field / landing field,
-63 weak-eye gems, trampoline + bounce pads, both-eye chests + 6 outfits, drivable buggy, balloon
-skydive with parachute and landing rings, UI (title, HUD, pause, end screen, gate, settings,
-credits), adaptive CC0 music + procedural SFX.
+**On `main` (verified, 233 unit + 54 e2e; live on Netlify):** red-green compositor + calibration,
+robot player (walk 6.5 / sprint 11 m/s), island with dressed plaza / Bouncy Park / garage /
+balloon field / landing field, wayfinding (beacons, plaza fingerpost, road waymarks, how-to
+boards, HUD compass, "?" controls card), 63 weak-eye gems, giant trampoline (12 m → 45 m) with
+air tricks, 8/15/25 m bounce pads, rocket pads + landing net, both-eye chests + 6 outfits,
+drivable buggy, balloon skydive with assisted parachute and landing rings, adaptive CC0 music.
 
 Interface additions since M1 (other streams must keep them): `CameraApi.setOverride` accepts
-`yawOffset`/`orbitRate`; `PlayerApi.setTilt(pitch, roll)`; `TestApi.step(dt, n, render)`.
+`yawOffset`/`orbitRate`; `PlayerApi.setTilt`, `setVisualRotation`, `setVisualStretch`;
+`Anchor.target`/`targetRadius`; `TestApi.step(dt, n, render)`. Activities export
+`setLaunchGate(fn)` (ticket hook for rocket pads) and `thrillSpots` (mega-gem positions).
 
 ## In flight
 
@@ -45,10 +48,9 @@ Main session (worktree subagents, WIP pushed):
 
 | Branch | Owner agent | Task |
 |---|---|---|
-| `agent/world-wayfinding` | world-artist | Beacons over attractions, plaza fingerpost, road waymarks, pictogram how-to boards, fuller grass. |
-| `agent/ui-wayfinding` | ui-designer | HUD icon compass, "?"/H controls card, driving and skydive hint strips (new files only). |
-| `agent/activities-thrills` | activities-designer | Trampoline 12 m → 45 m, air tricks, bigger pads, rocket pads + landing net, `thrillSpots`, `setLaunchGate` hook. |
-| (next) | integrator | Walk 6.5 / sprint 11 m/s; stronger parachute auto-steer to the rings; freefall camera angle. |
+| `agent/world-fixes` | world-artist | Fingerpost arms readable from the spawn camera; less haze and more sea/island detail from altitude; draw calls back to ≤ ~230 on Medium. |
+| `agent/ui-fixes` | ui-designer | Compass icon de-overlap; one gamepad glyph table; new moves on the controls card. |
+| `agent/activities-thrills-fixes` | activities-designer | No accidental flip when running onto the mat with W held; confetti readable in G-only; avatar readable at the 45 m peak. |
 
 Second account (see `docs/PARALLEL_WORK.md`; merge each when the owner says it is pushed):
 `agent/economy` (Stream C, orchestrated), `agent/mobile-touch` (A), `agent/characters` (B);
