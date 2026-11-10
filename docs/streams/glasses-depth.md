@@ -3,7 +3,7 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 in progress** — foundation merged, the six mechanics are being built.
+**Status: Phase 1 in progress** — foundation and all six mechanics merged; polish and QA running.
 This file is updated at every merge into the branch.
 
 ## Phase 1 parts
@@ -15,9 +15,9 @@ This file is updated at every merge into the branch.
 | Per-layer fade, Auto challenge, session tally, debug view | `src/vision/challenge/`, `src/vision/debugView.ts` | `agent/glasses-challenge` | merged |
 | Mechanics framework | `src/activities/glasses/` | `agent/glasses-framework` | merged |
 | "Auto challenge" toggle + grown-up session summary | `src/ui/glasses/` | `agent/glasses-ui` | merged |
-| Glow-flies, Pip's lost toys | `src/activities/glasses/glowflies/`, `toys/` | `agent/glasses-follow` | building |
-| Odd one out pedestals, Line-up targets | `src/activities/glasses/oddone/`, `lineup/` | `agent/glasses-tellapart` | building |
-| Half-symbol gates, Dot-picture signs | `src/activities/glasses/gates/`, `dotsigns/` | `agent/glasses-botheyes` | building |
+| Glow-flies, Pip's lost toys | `src/activities/glasses/glowflies/`, `toys/` | `agent/glasses-follow` | merged |
+| Odd one out pedestals, Line-up targets | `src/activities/glasses/oddone/`, `lineup/` | `agent/glasses-tellapart` | merged |
+| Half-symbol gates, Dot-picture signs | `src/activities/glasses/gates/`, `dotsigns/` | `agent/glasses-botheyes` | merged |
 | QA pass and full `npm run verify` | — | — | waiting |
 
 ## What was built
@@ -86,6 +86,21 @@ alone identifies the answer.
 - Test API (`?test=1`): `window.__rgGlasses` (`sites`, `goto`, `debug`, `force`, `reset`,
   `draws`, `active`, `boardRect`). Proof helpers for specs: `tests/e2e/glasses-helpers.ts`
   (`expectLayerOnlyTouchesOwnChannel`, `expectAnswerBlindWithoutWeakEye`, `expectDrawBudget`).
+
+### The six mechanics (`src/activities/glasses/<name>/`)
+
+Each has a wordless pictogram board, pays gems through `pay()` (the economy's
+`ctx.profile.earn` when present), reports every hit and miss with `glasses:result`, uses at most
+6 draw calls including its board, and is idle when the player is far.
+
+| Mechanic (id, kind) | How it plays | Why the weak eye is needed | Gems by tier |
+|---|---|---|---|
+| Glow-flies (`glowflies`, follow) | Weak-eye fireflies drift over a meadow patch; run or jump through one to catch it. A both-eye lantern jar counts catches. A fly that times out while you are in the patch is a miss. | The flies exist only on the weak layer; nothing both-eye follows them. | 1 / 2 / 4 |
+| Pip's lost toys (`toys`, follow) | A weak-eye paw-print trail (only the next four prints glow) leads 25–40 m from Pip's basket to a hidden spot; the both-eye toy pops out only when the last print is reached. Three toys per session. | The trail is weak-eye-only and the toy is not in the scene until it is found. | 5 / 7 / 10 |
+| Odd one out (`oddone`, tellApart) | Three pedestals with identical buttons and identical dark panels; a weak-eye shape on each, one different. Press the button under the different one. A per-session staircase makes the difference finer after a hit and coarser after a miss (other shape → arrow direction → ring gap side → narrower gap, smaller shape). | The shapes are weak-eye-only; panels, buttons and prompts are identical for every answer. | 2 / 3 / 5 |
+| Line-up targets (`lineup`, lineUp) | Stand on the aim pad: strong-eye bubbles float ahead and a weak-eye reticle follows the camera aim with a slowly sweeping offset of 4°–7°. Hold the reticle on a bubble for 1 s to pop it. | The reticle is never at the screen centre, so a bubble cannot be popped without seeing it (unit-tested), and the bubbles are strong-eye-only. | 1 / 2 / 4 |
+| Half-symbol gates (`gates`, lineUp) | A sign shows one half of a symbol to each eye; run through the arch whose both-eye symbol is the two halves together. Each half alone fits two arches. | Neither half alone identifies the arch (proved in both directions). | 3 / 4 / 6 |
+| Dot-picture signs (`dotsigns`, popOut) | A sign shows a red-green dot picture; press the pedestal button with the hidden shape. | Each eye alone sees plain noise; the shape exists only between the two eyes. | 3 / 5 / 8 |
 
 ### Grown-up UI (`src/ui/glasses/`)
 
