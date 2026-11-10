@@ -75,7 +75,7 @@ void main() {
   float d = min(pad, min(min(t1, t2), min(t3, t4)));
   float w = max(fwidth(d), 1e-4);
   float ink = clamp((1.0 - d) / w, 0.0, 1.0);
-  float glow = exp(-max(d - 1.0, 0.0) * 3.5) * 0.35 * (0.85 + 0.15 * sin(time * 3.0 + vGlow.z));
+  float glow = exp(-max(d - 1.0, 0.0) * 5.0) * 0.22 * (0.85 + 0.15 * sin(time * 3.0 + vGlow.z));
   a = max(ink, glow * step(r, 1.0));
   g = ink > 0.5 ? 1.0 : 0.8;
   }
@@ -97,15 +97,16 @@ export interface GlowInstances {
   dispose(): void;
 }
 
-/** Instanced glow quads (`fly`/`spark` face the camera; `paw` lies in the instance's XZ plane). */
-export function createGlowInstances(capacity: number, kind: GlowKind, name: string): GlowInstances {
+/** Instanced glow quads (`fly`/`spark` face the camera; `paw` lies in the instance's XZ plane unless `billboard`). */
+export function createGlowInstances(capacity: number, kind: GlowKind, name: string, opts: { billboard?: boolean } = {}): GlowInstances {
+  const billboard = opts.billboard ?? kind !== 'paw';
   const geo = new THREE.PlaneGeometry(1, 1);
-  if (kind === 'paw') geo.rotateX(-Math.PI / 2).rotateY(Math.PI); // uv +Y → local -Z… then flipped to +Z
+  if (!billboard) geo.rotateX(-Math.PI / 2).rotateY(Math.PI); // uv +Y → local -Z… then flipped to +Z
   const glow = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
   glow.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute('aGlow', glow);
   const defines: Record<string, string> = { [`KIND_${kind.toUpperCase()}`]: '' };
-  if (kind !== 'paw') defines.BILLBOARD = '';
+  if (billboard) defines.BILLBOARD = '';
   const mat = new THREE.ShaderMaterial({
     name: `glasses-${kind}`,
     uniforms: { time: { value: 0 } },

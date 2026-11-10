@@ -10,11 +10,13 @@ export const TRAIL = {
   /** Print spacing per tier (wider = harder to follow). */
   spacing: { 1: 2.1, 2: 2.45, 3: 2.8 } as Record<GlassesTier, number>,
   /** Print size (metres) before the tier size. */
-  printSize: 0.9,
+  printSize: 1.0,
   /** Alternating left/right offset of the prints from the path. */
   sideOffset: 0.14,
-  /** Candidate directions around the basket (≥ 4). */
-  directions: 8,
+  /** Candidate directions around the basket (≥ 4 of them inside the start band). */
+  directions: 16,
+  /** The first print's direction, off the child's view line from the basket (radians, either side). */
+  startOff: [0.4, 1.75] as readonly [number, number],
   /** Path shape tries per direction. */
   variants: 3,
   /** The trail starts this far from the basket's centre. */
@@ -34,10 +36,12 @@ export const TRAIL = {
   /** Reaching a print (XZ distance); the last print needs `reachLast`. */
   reach: 2.0,
   reachLast: 1.5,
-  /** Soft glow over each print that is next: height, size, strength. */
-  puffHeight: 0.45,
-  puffSize: 1.5,
-  puffAlpha: 0.85,
+  /** Upright paw glyph floating over each print that is next (reads at grazing angles). */
+  markerHeight: 1.2,
+  markerBob: 0.1,
+  markerSize: 0.8,
+  /** Open sky over the hidden spot: no trunk or wall within this radius at trunk height. */
+  skyClear: 4,
   /** A passed print fades out over this long. */
   passFade: 0.7,
 } as const;

@@ -114,6 +114,45 @@ describe('paw-print trails', () => {
     }
   });
 
+  it('starts off to the side of the view line from the basket, with ≥ 4 directions to pick from', () => {
+    const w = fakeWorld();
+    const forward = Math.PI; // the child at the basket looks along −Z
+    const cands = new Set<number>();
+    for (let seed = 1; seed <= 60; seed++) {
+      const t = makeTrail(w, START, seed, 1, { forward });
+      cands.add(t.candidate);
+      const p0 = t.prints[0];
+      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(p0.x, p0.z) - forward), Math.cos(Math.atan2(p0.x, p0.z) - forward)));
+      expect(off).toBeGreaterThanOrEqual(TRAIL.startOff[0] - 1e-6);
+      expect(off).toBeLessThanOrEqual(TRAIL.startOff[1] + 1e-6);
+    }
+    expect(cands.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it('the next print is never more than 45° off the way you are walking', () => {
+    const w = fakeWorld();
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const tier of [1, 2, 3] as const) {
+        const ps = makeTrail(w, START, seed, tier, { forward: Math.PI }).prints;
+        for (let i = 2; i < ps.length; i++) {
+          const a = Math.atan2(ps[i - 1].x - ps[i - 2].x, ps[i - 1].z - ps[i - 2].z);
+          const b = Math.atan2(ps[i].x - ps[i - 1].x, ps[i].z - ps[i - 1].z);
+          expect(Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a)))).toBeLessThan(Math.PI / 4);
+        }
+      }
+    }
+  });
+
+  it('hides the toy only where the sky is open (and beside the last print)', () => {
+    const w = { ...fakeWorld(), openSky: (x: number, z: number) => !(z > 8 && x > -20) };
+    for (let seed = 1; seed <= 40; seed++) {
+      const t = makeTrail(w, START, seed, 1);
+      expect(w.openSky(t.end.x, t.end.z)).toBe(true);
+      const last = t.prints[t.prints.length - 1];
+      expect(Math.hypot(t.end.x - last.x, t.end.z - last.z)).toBeCloseTo(TRAIL.endBeside, 5);
+    }
+  });
+
   it('falls back to a short, flagged trail when nothing fits', () => {
     const w: TrailWorld = { ...fakeWorld(), isLand: (x, z) => Math.hypot(x, z) < 6 };
     const t = makeTrail(w, START, 5, 1);

@@ -8,6 +8,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { boot, canvasShot, SHOTS } from './helpers';
+import { VisionLayer } from '../../src/types';
 import { channelOnly, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
 import type { GlassesSiteInfo } from '../../src/activities/glasses';
 
@@ -19,6 +20,8 @@ type W = Window & { __follow?: Logged };
 let page: Page;
 let consoleErrors: string[] = [];
 let sites: GlassesSiteInfo[] = [];
+/** Weak-layer pixels the tier-1 trail must cover from the basket at 640×360. */
+const TRAIL_MIN_PIXELS = 400;
 
 async function shots(name: string, dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true });
@@ -152,6 +155,20 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
   expect(await page.evaluate((i) => window.__rgGlasses!.active(i), id)).toBe(true);
   await page.evaluate((i) => window.__rgGlasses!.force(i, { seed: 7 }), id);
   const d0 = await dbg(id);
+  // From the basket (default camera), the tier-1 trail must show clearly on the weak layer.
+  await stand(d0.view);
+  const withTrail = await weakCoverage();
+  await page.evaluate((i) => {
+    window.__rgGlasses!.force(i, { hideTrail: true });
+    window.__rg!.render();
+  }, id);
+  const without = await weakCoverage();
+  await page.evaluate((i) => {
+    window.__rgGlasses!.force(i, { hideTrail: false });
+    window.__rg!.render();
+  }, id);
+  console.log(`toys: weak coverage from the basket ${withTrail - without} px (${withTrail} with, ${without} without)`);
+  expect(withTrail - without, 'trail coverage from the basket').toBeGreaterThan(TRAIL_MIN_PIXELS);
   // Follow it: stand on the second print, looking along the trail (the next prints glow ahead).
   {
     const [p1, p5] = [d0.prints[1], d0.prints[5]];
@@ -220,20 +237,31 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
   expect(d2.seed).not.toBe(d.seed);
 });
 
-/** Default-camera screenshots: the patch with every tier, a catch, the trail, the toy at the top of its pop. */
+/** Stand at a spot facing `yaw` (default third-person camera behind the hero) and render. */
+async function stand(v: { x: number; z: number; yaw: number }): Promise<void> {
+  await page.evaluate((q) => {
+    const rg = window.__rg!;
+    rg.teleport(q.x, rg.ctx.world.heightAt(q.x, q.z) + 0.05, q.z, q.yaw);
+    rg.step(1 / 60, 3, false);
+    rg.step(1 / 60, 1);
+  }, v);
+}
+
+/** Weak-layer coverage (pixels) of the last render. */
+const weakCoverage = (): Promise<number> => page.evaluate((W) => window.__rgChallenge!.layerCoverage(W).pixels, VisionLayer.WeakOnly);
+
+/** Default-camera screenshots: the patch with every tier, a catch, the trail from the basket and mid-trail, the toy at the top of its pop. */
 async function capture(tag: string): Promise<void> {
   const F = 'test-results/glasses/glowflies';
   const T = 'test-results/glasses/toys';
-  const gf = sites.find((s) => s.id === 'glowflies')!;
   await page.evaluate(() => {
     window.__rgGlasses!.reset('glowflies');
     window.__rgGlasses!.force('glowflies', { seed: 33 });
   });
-  const from = local(gf, 6.5, 2);
-  await look(from.x, from.z, gf.x, gf.z);
+  await stand((await dbg('glowflies')).view);
   expect((await dbg('glowflies')).tiers.every((n: number) => n > 0), 'every tier in the air').toBe(true);
   await shots(`${tag}-patch`, F);
-  // A catch: run into the nearest tier-1 fly, then a few frames of the burst.
+  // A catch: run into a tier-1 fly, then a few frames of the burst.
   const flies = (await dbg('glowflies')).flies.filter((f: { state: string }) => f.state === 'alive');
   const fly = flies.find((f: { tier: number }) => f.tier === 1) ?? flies[0];
   await page.evaluate((f) => {
@@ -250,25 +278,32 @@ async function capture(tag: string): Promise<void> {
     window.__rgGlasses!.force('toys', { seed: 7 });
   });
   const d = await dbg('toys');
-  const [p1, p5] = [d.prints[1], d.prints[5]];
-  const len = Math.hypot(p5.x - p1.x, p5.z - p1.z);
-  const side = { x: ((p5.z - p1.z) / len) * 1.6, z: (-(p5.x - p1.x) / len) * 1.6 };
-  await look(p1.x + side.x, p1.z + side.z, p5.x + side.x * 0.5, p5.z + side.z * 0.5);
-  await shots(`${tag}-trail`, T);
+  await stand(d.view);
+  await shots(`${tag}-basket`, T);
+  // Mid-trail: follow prints 0–4, then stand on print 5 walking towards print 6.
+  await page.evaluate((prints: { x: number; y: number; z: number }[]) => {
+    const rg = window.__rg!;
+    for (let i = 0; i < 5; i++) {
+      rg.teleport(prints[i].x, prints[i].y + 0.05, prints[i].z);
+      rg.step(1 / 60, 2, false);
+    }
+  }, d.prints);
+  const [a, b] = [d.prints[5], d.prints[6]];
+  await stand({ x: a.x, z: a.z, yaw: Math.atan2(b.x - a.x, b.z - a.z) });
+  await shots(`${tag}-midtrail`, T);
   // Walk the prints; the last step faces along the trail, then wait for the top of the pop.
   await page.evaluate((prints: { x: number; y: number; z: number }[]) => {
     const rg = window.__rg!;
     for (let i = 0; i < prints.length; i++) {
-      const a = prints[Math.max(0, i - 1)];
-      const b = prints[i];
-      rg.teleport(b.x, b.y + 0.05, b.z, i > 0 ? Math.atan2(b.x - a.x, b.z - a.z) : undefined);
+      const p0 = prints[Math.max(0, i - 1)];
+      const p1 = prints[i];
+      rg.teleport(p1.x, p1.y + 0.05, p1.z, i > 0 ? Math.atan2(p1.x - p0.x, p1.z - p0.z) : undefined);
       rg.step(1 / 60, 2, false);
     }
     rg.step(1 / 60, 76, false);
     rg.step(1 / 60, 1);
   }, d.prints);
-  const top = await dbg('toys');
-  expect(top.state).toBe('found');
+  expect((await dbg('toys')).state).toBe('found');
   await shots(`${tag}-pop`, T);
   await page.evaluate(() => {
     window.__rgGlasses!.reset('glowflies');
