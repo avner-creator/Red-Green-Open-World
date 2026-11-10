@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { finish, finishMaterial, mergeFinished, placed, rodBetween } from '../../core/vertex-finish';
 import { asShadowProxy } from '../../core/shadow-proxy';
-import { createLayerMaterial } from '../../vision';
+import { createGlowMaterial, createLayerMaterial } from '../../vision';
 import { BOOTH, CANNON, CANNONS, CHUTE, FOAM_Y, PIT, ROPE, SOLIDS } from './layout';
 import type { SolidDef } from './layout';
 import { cannonState } from './sim';
@@ -48,6 +48,8 @@ export interface CourseVisuals {
   setCheckpoint(cp: number, running: boolean): void;
   /** Bubble machine overdrive (finish). */
   celebrate(): void;
+  /** Weak-eye gold-pace sparkle position (course frame), or null to hide it. */
+  setPace(p: { x: number; y: number; z: number } | null): void;
   dispose(): void;
 }
 
@@ -260,7 +262,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
   // ───────────── Static parts: one merged mesh ─────────────
   const parts: THREE.BufferGeometry[] = [];
   for (const id of ['start', 'finish', 'cp1', 'bridgeA', 'bridgeB', 'towerA', 'towerB', 'cp3', 'walk']) deckParts(solid(id), parts, !['start', 'finish', 'cp3'].includes(id));
-  for (const id of ['startStep', 'finishStep', 'gapStep']) deckParts(solid(id), parts, id === 'gapStep');
+  for (const id of ['startStep', 'gapStep']) deckParts(solid(id), parts, id === 'gapStep');
   for (const id of ['bin0', 'bin1', 'bin2', 'bin3']) binParts(solid(id), parts);
   // Balance-block posts (the wobbling caps are instanced).
   for (const id of ['block0', 'block1', 'block2', 'block3']) {
@@ -586,6 +588,19 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
   weakRoot.add(stones);
   tiles.computeBoundingSphere();
   stones.computeBoundingSphere();
+  // Weak-eye "Follow": a sparkle that runs the course at exactly the gold-medal pace.
+  const pace = new THREE.Group();
+  pace.name = 'foam-lava-pace';
+  pace.add(new THREE.Mesh(keep(new THREE.IcosahedronGeometry(0.2, 1)), keep(createLayerMaterial(1))));
+  const paceHalo = new THREE.Mesh(keep(new THREE.SphereGeometry(0.42, 16, 12)), keep(createGlowMaterial({ level: 1, coreOpacity: 0.2, pulse: 0.4 })));
+  pace.add(paceHalo);
+  pace.visible = false;
+  weakRoot.add(pace);
+  // Weak-eye "Time it": a ring on each blower's mouth that shrinks to nothing as the next puff comes.
+  const ringMesh = new THREE.InstancedMesh(keep(new THREE.RingGeometry(0.82, 1, 32).rotateY(Math.PI / 2)), keep(createLayerMaterial(1)), CANNONS.length);
+  ringMesh.name = 'foam-lava-blower-rings';
+  ringMesh.frustumCulled = false;
+  weakRoot.add(ringMesh);
 
   scene.add(root);
 
@@ -666,6 +681,13 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
         dummy.scale.set(1 / Math.sqrt(swell), swell, swell);
         dummy.updateMatrix();
         blowers.setMatrixAt(k, dummy.matrix);
+        // Countdown ring: big right after a puff, shrinking until the next one; gone while puffing.
+        const toPuff = cs.state === 'idle' ? 1 - cs.t * 0.75 : cs.state === 'warn' ? 0.25 * (1 - cs.t) : 0;
+        const rs = cs.state === 'blast' ? 0 : 0.32 + 0.9 * Math.max(0, toPuff);
+        dummy.position.set(c.x + 0.85, 1.35, c.z);
+        dummy.scale.setScalar(rs);
+        dummy.updateMatrix();
+        ringMesh.setMatrixAt(k, dummy.matrix);
         for (let j = 0; j < PUFFS; j++) {
           const idx = k * PUFFS + j;
           if (cs.state === 'blast' || (cs.state === 'idle' && cs.t < 0.12)) {
@@ -689,6 +711,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
       blowers.instanceMatrix.needsUpdate = true;
       puffs.instanceMatrix.needsUpdate = true;
       puffs.visible = puffing;
+      ringMesh.instanceMatrix.needsUpdate = true;
       // Rope.
       ropePivot.rotation.z = sim.rope.theta;
       // Spray particles (the mesh is only drawn while some are flying).
@@ -778,10 +801,14 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
     celebrate() {
       overdrive = 4;
     },
+    setPace(p) {
+      pace.visible = !!p;
+      if (p) pace.position.set(p.x, p.y + Math.sin(uniforms.time.value * 6) * 0.08, p.z);
+    },
     dispose() {
       scene.remove(root);
       for (const d of disposables) d.dispose();
-      for (const m of [floats, boxes, bubbles, blowers, puffs, sprayMesh, mbMesh, flags, tiles, stones]) m.dispose();
+      for (const m of [floats, boxes, bubbles, blowers, puffs, sprayMesh, mbMesh, flags, tiles, stones, ringMesh]) m.dispose();
     },
   };
 }

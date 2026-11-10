@@ -57,7 +57,6 @@ export const SOLIDS: readonly SolidDef[] = [
   box('start', 'deck', LANE_A, -0.5, 1.0, 2.1, 2.5, { cp: 0 }),
   box('startStep', 'step', LANE_A, -3.75, 0.5, 1.4, 0.75),
   box('finish', 'deck', -3.3, -0.5, 1.0, 2.1, 2.5),
-  box('finishStep', 'step', -3.3, -3.75, 0.5, 1.4, 0.75),
   // 1. Pool floats that tip when you stand off-centre.
   cyl('float0', 'float', 3.4, 3.9, 1.05, 1.2),
   cyl('float1', 'float', 4.2, 6.3, 1.05, 1.2),

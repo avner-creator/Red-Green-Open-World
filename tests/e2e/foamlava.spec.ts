@@ -74,6 +74,8 @@ test('E at the booth starts a run; a full round ends on the result card; R leave
   expect(start.mode).toBe('external');
   await expect(page.getByTestId('foamlava-count')).toHaveClass(/on/);
   await expect(page.getByTestId('foamlava-hud')).toHaveClass(/on/);
+  // The friend's model loads in the background while the countdown runs.
+  await page.waitForFunction(() => window.__rgFoam!.friendReady(), undefined, { timeout: 60_000 });
 
   // The bot plays the main route through the real controller.
   const run = await page.evaluate(() => {
@@ -127,7 +129,35 @@ test('a foam fall: splash, bubble beard, respawn at the checkpoint, the clock ke
     const f = window.__rgFoam!;
     f.start();
     rg.step(1 / 60, 200, false); // countdown
+    rg.step(1 / 60, 40, false);
     const running = f.phase();
+    // Mid-run frame (pace sparkle and blower rings up): the weak layer touches only the weak channel.
+    rg.setEye({ leftLens: 'red', weakEye: 'left' });
+    rg.step(1 / 60, 1);
+    const grab = (): Uint8ClampedArray => {
+      const c = document.getElementById('game') as HTMLCanvasElement;
+      const g = document.createElement('canvas');
+      g.width = c.width;
+      g.height = c.height;
+      const x = g.getContext('2d')!;
+      x.drawImage(c, 0, 0);
+      return x.getImageData(0, 0, g.width, g.height).data;
+    };
+    rg.setLayerVisible(1, true);
+    rg.render();
+    const on = grab();
+    rg.setLayerVisible(1, false);
+    rg.render();
+    const off = grab();
+    rg.setLayerVisible(1, true);
+    let weakPx = 0;
+    let strongMax = 0;
+    let blueMax = 0;
+    for (let i = 0; i < on.length; i += 4) {
+      if (Math.abs(on[i] - off[i]) > 2) weakPx++;
+      strongMax = Math.max(strongMax, Math.abs(on[i + 1] - off[i + 1]));
+      blueMax = Math.max(blueMax, Math.abs(on[i + 2] - off[i + 2]));
+    }
     // Drop the hero into the foam between the lanes.
     f.sim.p.x = 0;
     f.sim.p.y = 1.6;
@@ -140,15 +170,18 @@ test('a foam fall: splash, bubble beard, respawn at the checkpoint, the clock ke
       if (o.name === 'bubble-beard') beard = true;
     });
     rg.step(1 / 60, 80);
-    return { running, splashMode, beard, mode: f.sim.mode, falls: f.sim.falls, x: f.sim.p.x, z: f.sim.p.z, time: f.sim.time };
+    return { running, splashMode, beard, mode: f.sim.mode, falls: f.sim.falls, x: f.sim.p.x, z: f.sim.p.z, time: f.sim.time, weakPx, strongMax, blueMax };
   });
+  expect(r.weakPx).toBeGreaterThan(20);
+  expect(r.strongMax).toBe(0);
+  expect(r.blueMax).toBe(0);
   expect(r.running).toBe('run');
   expect(r.splashMode).toBe('splash');
   expect(r.beard).toBe(true);
   expect(r.mode).toBe('run');
   expect(r.falls).toBe(1);
   expect(r.z).toBeLessThan(1.5); // back on the start deck (checkpoint 0)
-  expect(r.time).toBeGreaterThan(1.2);
+  expect(r.time).toBeGreaterThan(1.8);
   await saveShots('beard');
   await page.evaluate(() => {
     const rg = window.__rg!;

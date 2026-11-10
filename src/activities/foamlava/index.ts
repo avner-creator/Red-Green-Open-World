@@ -22,12 +22,16 @@ import { createFriend } from './friend';
 import { BOOTH, CHUTE, COURSE_CENTRE, FOAM_Y, SOLIDS, START } from './layout';
 import { solidBottom, CourseSim } from './sim';
 import type { SimEvent, SimInput } from './sim';
-import { TICKET, ghostAt, ghostTime, ghostTimeline, medalFor, prizeFor, starsFor } from './scoring';
+import { MEDALS, TICKET, ghostAt, ghostTime, ghostTimeline, medalFor, prizeFor, starsFor } from './scoring';
 import type { Medal } from './scoring';
 import { createFoamUi } from './ui';
 
-/** Default site (world x, z) and yaw when the world has no `foamCourse` anchor. */
-export const DEFAULT_SITE = { x: -25.5, z: -16, yaw: Math.PI } as const;
+/**
+ * Default site when the world has no `foamCourse` anchor: course origin (world x, z), the
+ * direction the course runs, and `mirror` (course +x maps to world −x side) so the start camera
+ * stays clear of the village trees behind the entrance.
+ */
+export const DEFAULT_SITE = { x: -25.5, z: -18.5, yaw: Math.PI, mirror: true } as const;
 
 const COUNTDOWN = 3;
 /** Seconds the result card stays before leaving on its own. */
@@ -75,19 +79,26 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   const ox = anchor ? anchor.position.x : DEFAULT_SITE.x;
   const oz = anchor ? anchor.position.z : DEFAULT_SITE.z;
   const oy = anchor ? anchor.position.y : ctx.world.heightAt(ox, oz);
+  /** −1 when the course is mirrored sideways (default site), else 1. */
+  const m = !anchor && DEFAULT_SITE.mirror ? -1 : 1;
   const cosY = Math.cos(yaw);
   const sinY = Math.sin(yaw);
   const toWorld = (x: number, y: number, z: number, out = new THREE.Vector3()): THREE.Vector3 =>
-    out.set(ox + x * cosY + z * sinY, oy + y, oz - x * sinY + z * cosY);
-  const toLocalDir = (wx: number, wz: number): { x: number; z: number } => ({ x: wx * cosY - wz * sinY, z: wx * sinY + wz * cosY });
+    out.set(ox + m * x * cosY + z * sinY, oy + y, oz - m * x * sinY + z * cosY);
+  const toLocalDir = (wx: number, wz: number): { x: number; z: number } => ({ x: m * (wx * cosY - wz * sinY), z: wx * sinY + wz * cosY });
   const centre = toWorld(COURSE_CENTRE.x, 0, COURSE_CENTRE.z);
 
   // ───────────── Visuals ─────────────
   const vis = buildCourse(ctx.scene);
   vis.root.position.set(ox, oy, oz);
   vis.root.rotation.y = yaw;
+  vis.root.scale.x = m;
   vis.weakRoot.position.copy(vis.root.position);
   vis.weakRoot.rotation.y = yaw;
+  vis.weakRoot.scale.x = m;
+  // A mirrored course would show the sign's pictures back to front: mirror the sign once more.
+  const sign = vis.root.getObjectByName('foam-lava-sign');
+  if (sign) sign.scale.x = m;
   vis.root.updateMatrixWorld(true);
   vis.weakRoot.updateMatrixWorld(true);
   ctx.vision.add(vis.weakRoot, VisionLayer.WeakOnly);
@@ -118,6 +129,34 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   };
   vis.update(sim, 0, true); // place every instance once (correct culling bounds from the start)
   const ghostKeys = ghostTimeline();
+  // Gold-pace track for the weak-eye sparkle: the bot's clean main-route run, recorded once and
+  // played back slowed so it reaches the finish exactly at the gold time.
+  let paceTrack: { x: number; y: number; z: number }[] | null = null;
+  let paceScale = 1;
+  const recordPace = (): void => {
+    const bot = new CourseSim();
+    bot.reset(START.hero, START.yaw);
+    bot.running = true;
+    const pilot = new Autopilot(MAIN_PLAN);
+    const track: { x: number; y: number; z: number }[] = [];
+    for (let i = 0; i < 60 * 40 && bot.mode !== 'done'; i++) {
+      bot.step(FIXED, pilot.input(bot));
+      if (i % 3 === 0) track.push({ x: bot.p.x, y: bot.p.y + 1.1, z: bot.p.z });
+    }
+    track.push({ x: bot.p.x, y: bot.p.y + 1.1, z: bot.p.z });
+    paceTrack = track;
+    paceScale = bot.time / MEDALS.gold;
+  };
+  const paceAt = (t: number): { x: number; y: number; z: number } | null => {
+    if (!paceTrack) return null;
+    const f = (t * paceScale) / (FIXED * 3);
+    if (f >= paceTrack.length - 1) return null;
+    const i = Math.floor(f);
+    const k = f - i;
+    const a = paceTrack[i];
+    const b = paceTrack[i + 1];
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k };
+  };
   const friendTime = ghostTime(ghostKeys);
   const ui = createFoamUi(ctx.uiRoot);
   const friend = createFriend(vis.root);
@@ -183,7 +222,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
 
   function heroWorld(): void {
     toWorld(sim.p.x, sim.p.y, sim.p.z, ctx.player.position);
-    ctx.player.yaw = sim.yaw + yaw;
+    ctx.player.yaw = m * sim.yaw + yaw;
   }
 
   function begin(): void {
@@ -201,6 +240,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     lastCount = null;
     sim.reset(START.hero, START.yaw);
     sim.running = false;
+    if (!paceTrack) recordPace();
     vis.setCheckpoint(0, true);
     ui.result(null, ctx.input.state.device);
     ui.price(null);
@@ -404,7 +444,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       heroWorld();
       // Poses: belly slide, rope swing lean, squash and stretch.
       if (sim.mode === 'slide') ctx.player.setTilt(1.25, 0);
-      else if (sim.mode === 'swing') ctx.player.setTilt(0, -sim.rope.theta * 0.8);
+      else if (sim.mode === 'swing') ctx.player.setTilt(0, -m * sim.rope.theta * 0.8);
       else ctx.player.setTilt(0, 0);
       stretch += (0 - stretch) * Math.min(1, dt * 9);
       ctx.player.setVisualStretch(stretch);
@@ -483,6 +523,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       } else if (phase === 'run' || phase === 'result') {
         friend.pose(ghostAt(ghostKeys, sim.time + (phase === 'result' ? phaseT : 0)), dt);
       }
+      vis.setPace(phase === 'run' ? paceAt(sim.time) : phase === 'countdown' ? paceAt(0) : null);
       if (phase === 'run') {
         const fp = ghostAt(ghostKeys, sim.time);
         ui.hud(sim.time, sim.progress(), fp.done ? 1 : Math.min(0.99, sim.time / friendTime));
