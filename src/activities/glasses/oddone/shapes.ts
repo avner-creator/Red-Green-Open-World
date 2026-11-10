@@ -80,7 +80,7 @@ export interface ShapeBatch {
   dispose(): void;
 }
 
-export function createShapeBatch(): ShapeBatch {
+export function createShapeBatch(plane?: { right: THREE.Vector3; up: THREE.Vector3 }): ShapeBatch {
   const u = {
     ...baseUniforms(1, 1),
     halfSize: { value: 1 },
@@ -88,7 +88,7 @@ export function createShapeBatch(): ShapeBatch {
     gap: { value: 0.3 },
     stroke: { value: 0.17 },
   };
-  const b = createQuadBatch({ name: 'OddOneShapes', count: 3, floats: ['Kind', 'Dir', 'Win'], fragmentShader: fragment, uniforms: u });
+  const b = createQuadBatch({ name: 'OddOneShapes', count: 3, floats: ['Kind', 'Dir', 'Win'], fragmentShader: fragment, uniforms: u, plane });
   return {
     mesh: b.mesh,
     setCenter: (i, p) => b.setCenter(i, p.x, p.y, p.z),

@@ -21,7 +21,7 @@ import { GlassesConfetti } from './confetti';
 import { ODD } from './constants';
 import { gemsForTier, makeRound, nextLevel, shapesOf, withAnswer } from './logic';
 import type { Round } from './logic';
-import { createPedestals } from './pedestals';
+import { createPedestals, panelFrame, PANEL_FACE } from './pedestals';
 import { createShapeBatch } from './shapes';
 
 type Phase = 'ask' | 'feedback';
@@ -39,13 +39,25 @@ export function create(env: MechanicEnv): Mechanic {
   const set = createPedestals(base, facing);
   env.add(set.pedestals, VisionLayer.Both);
   env.add(set.buttons, VisionLayer.Both);
-  const colliders = base.map((b) => {
+  const frame = panelFrame(facing);
+  const panelQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-ODD.panelTilt, facing, 0, 'YXZ'));
+  const colliders = base.flatMap((b) => {
     const h = (ODD.capBottom + ODD.capHeight) / 2;
-    return ctx.physics.addStaticCylinder(new THREE.Vector3(b.x, b.y + h, b.z), h, ODD.capRadius);
+    const top = ODD.capBottom + ODD.capHeight;
+    const poleH = (ODD.shapeHeight - top) / 2;
+    return [
+      ctx.physics.addStaticCylinder(new THREE.Vector3(b.x, b.y + h, b.z), h, ODD.capRadius),
+      ctx.physics.addStaticCylinder(new THREE.Vector3(b.x, b.y + top + poleH, b.z), poleH, ODD.poleRadius * 1.3),
+      ctx.physics.addStaticBox(new THREE.Vector3(b.x, b.y + ODD.shapeHeight, b.z), new THREE.Vector3(ODD.rimRadius, ODD.rimRadius, ODD.panelDepth / 2 + 0.01), panelQ),
+    ];
   });
 
-  const shapes = createShapeBatch();
-  base.forEach((b, i) => shapes.setCenter(i, new THREE.Vector3(b.x, b.y + ODD.shapeHeight, b.z)));
+  // Each shape lies flat on its panel, a few centimetres in front of the dark face.
+  const shapes = createShapeBatch(frame);
+  const shapeAt = base.map((b) =>
+    new THREE.Vector3(b.x, b.y + ODD.shapeHeight, b.z).addScaledVector(frame.normal, PANEL_FACE + ODD.shapeLift),
+  );
+  shapeAt.forEach((p, i) => shapes.setCenter(i, p));
   env.add(shapes.mesh, VisionLayer.WeakOnly);
 
   const confetti = new GlassesConfetti(56, 11);
@@ -215,7 +227,7 @@ export function create(env: MechanicEnv): Mechanic {
       gems,
       fade,
       buttons: base.map((b) => [b.x, b.y + ODD.capBottom + ODD.capHeight, b.z]),
-      shapes: base.map((b) => [b.x, b.y + ODD.shapeHeight, b.z]),
+      shapes: shapeAt.map((p) => [p.x, p.y, p.z]),
       facing,
     }),
     force(params) {
