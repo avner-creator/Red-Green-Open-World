@@ -35,6 +35,15 @@ void main() {
 }
 `;
 
+/** Test/debug: a layer target's coverage (alpha) as grey, for an 8-bit readback. */
+export const maskCopyFragment = /* glsl */ `
+uniform sampler2D tLayer;
+varying vec2 vUv;
+void main() {
+  gl_FragColor = vec4(vec3(clamp(texture2D(tLayer, vUv).a, 0.0, 1.0)), 1.0);
+}
+`;
+
 const greys = CALIBRATION_GREYS.map(f);
 
 export const compositeFragment = /* glsl */ `
@@ -47,7 +56,9 @@ uniform float weakIsR;
 uniform float strength;
 uniform float limit;
 uniform float contrast;
-uniform float mode; // 0 = game frame, 1 = calibration pattern
+uniform float weakMul;   // per-layer fade × Auto challenge (1 = calibrated)
+uniform float strongMul; // per-layer fade (1 = calibrated)
+uniform float mode; // 0 = game frame, 1 = calibration pattern, 2/3 = weak/strong mask (test debug view)
 uniform vec2 resolution;
 varying vec2 vUv;
 
@@ -64,9 +75,9 @@ float layerTarget(float L, float bg, float pivotBg) {
   float a = ${f(COMPOSITE.popMin)} + ${f(COMPOSITE.popMax - COMPOSITE.popMin)} * clamp(L, 0.0, 1.0);
   return pivotBg < ${f(COMPOSITE.pivot)} ? bg + (1.0 - bg) * a : bg * (1.0 - a);
 }
-float compositeLayer(float bg, float L, float m, float pivotBg) {
+float compositeLayer(float bg, float L, float m, float pivotBg, float mul) {
   float delta = clamp(layerTarget(L, bg, pivotBg) - bg, -limit, limit);
-  return bg + delta * clamp(m, 0.0, 1.0) * clamp(strength, 0.0, 1.0);
+  return bg + delta * clamp(m, 0.0, 1.0) * (clamp(strength, 0.0, 1.0) * mul);
 }
 float polarityBg(float bg, float blurred) {
   return bg * ${f(COMPOSITE.polarityLocalWeight)} + blurred * ${f(1 - COMPOSITE.polarityLocalWeight)};
@@ -131,7 +142,7 @@ void main() {
   vec2 s;
   float blurW;
   float blurS;
-  if (mode > 0.5) {
+  if (mode > 0.5 && mode < 1.5) {
     float g = calibrationPattern(w, s);
     c = vec3(g);
     blurW = g;
@@ -143,11 +154,15 @@ void main() {
     blurW = w.y > 0.0 ? blurredChannel(weakIsR) : 0.0;
     blurS = s.y > 0.0 ? blurredChannel(1.0 - weakIsR) : 0.0;
   }
+  if (mode > 1.5) {
+    gl_FragColor = vec4(vec3(mode > 2.5 ? s.y : w.y), 1.0);
+    return;
+  }
   float bgW = pickChannel(c, weakIsR);
   float bgS = pickChannel(c, 1.0 - weakIsR);
   // Weak channel: only the weak layer. Strong channel: only the strong layer + contrast.
-  float outW = clamp(compositeLayer(bgW, w.x, w.y, polarityBg(bgW, blurW)), 0.0, 1.0);
-  float sMix = compositeLayer(bgS, s.x, s.y, polarityBg(bgS, blurS));
+  float outW = clamp(compositeLayer(bgW, w.x, w.y, polarityBg(bgW, blurW), weakMul), 0.0, 1.0);
+  float sMix = compositeLayer(bgS, s.x, s.y, polarityBg(bgS, blurS), strongMul);
   float outS = clamp(${f(COMPOSITE.contrastMid)} + (sMix - ${f(COMPOSITE.contrastMid)}) * contrast, 0.0, 1.0);
   vec3 o = vec3(weakIsR > 0.5 ? outW : outS, weakIsR > 0.5 ? outS : outW, c.b);
   gl_FragColor = vec4(o, 1.0);
