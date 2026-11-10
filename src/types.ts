@@ -450,7 +450,9 @@ export type AnchorName =
   | 'spawn' | 'garage' | 'ranch' | 'trampoline' | 'bouncePads' | 'bungee' | 'bungeeLanding'
   | 'balloon' | 'landingRings' | 'lakePlatform' | 'lighthouse' | 'sillyZone' | 'launchPads'
   /** Gear Shack kiosk on the plaza; +Z of its yaw is the counter side where the player stands. */
-  | 'gearShack';
+  | 'gearShack'
+  /** Carnival Island attractions (positions, yaws and clear radii: `src/world/layout.ts`). */
+  | 'carnivalRow' | 'iceCream' | 'bubbleArena' | 'dinoRing' | 'raceStart' | 'foamCourse' | 'airstrip' | 'dragonRoost';
 
 export interface WorldApi {
   /** Island is `size`×`size` metres centred on the origin; water level is y = `waterLevel`. */

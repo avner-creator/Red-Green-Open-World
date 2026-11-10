@@ -375,6 +375,8 @@ export interface Scatter {
   /** Re-pick visible instances for this camera (cheap; only when the camera moved or turned). */
   update(camera: THREE.Camera): void;
   stats(): { instances: number };
+  /** Every placed tree/bush/rock (not grass) as world x, z and species name (tests). */
+  placements(): { name: string; x: number; z: number; s: number }[];
 }
 
 /**
@@ -778,6 +780,19 @@ export function buildScatter(
       pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       frustum.setFromProjectionMatrix(pv);
       refresh();
+    },
+    placements: () => {
+      const out: { name: string; x: number; z: number; s: number }[] = [];
+      for (const sp of Object.values(species)) {
+        if (sp.name === 'grass' || sp.name === 'flower') continue;
+        for (const c of sp.cells.values()) {
+          for (let i = 0; i < c.n; i++) {
+            const e = c.mat.subarray(i * 16, i * 16 + 16);
+            out.push({ name: sp.name, x: e[12], z: e[14], s: Math.hypot(e[0], e[1], e[2]) });
+          }
+        }
+      }
+      return out;
     },
     stats: () => ({ instances: Object.values(species).reduce((a, s) => a + s.nearLod.mesh.count + (s.midLod?.mesh.count ?? 0) + (s.farLod?.mesh.count ?? 0), 0) }),
   };

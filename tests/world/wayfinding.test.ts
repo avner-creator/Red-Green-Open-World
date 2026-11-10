@@ -6,7 +6,7 @@ import { Colliders, type Kit } from '../../src/world/props';
 import { buildContent, type Content } from '../../src/world/content';
 import { ANCHORS, LAUNCH_NET } from '../../src/world/layout';
 import { ATTRACTIONS, FINGERPOSTS, roadEdgeDistance } from '../../src/world/wayfinding';
-import { PICTO_RECTS, ATLAS_SIZE, type PictoId } from '../../src/world/pictograms';
+import { PICTO_RECTS, ATLAS_SIZE, ATLAS_H, type PictoId } from '../../src/world/pictograms';
 
 let t: TerrainData;
 let content: Content;
@@ -33,9 +33,17 @@ describe('wayfinding', () => {
     }
   });
 
-  it('the plaza fingerpost has an arm for every attraction with a beacon', () => {
-    const plaza = FINGERPOSTS[0];
-    for (const att of ATTRACTIONS) expect(plaza.targets).toContain(att.anchor);
+  it('the two plaza fingerposts together have an arm for every attraction with a beacon', () => {
+    const targets = [...FINGERPOSTS[0].targets, ...FINGERPOSTS[1].targets];
+    for (const att of ATTRACTIONS) expect(targets).toContain(att.anchor);
+    // The Carnival Island post: arms in a row point at least 40° apart, so no two arms overlap.
+    for (const p of FINGERPOSTS.slice(1, 2)) {
+      for (const row of p.rows ?? []) {
+        const yaws = row.map((t) => Math.atan2(ANCHORS[t].x - p.x, ANCHORS[t].z - p.z));
+        for (let i = 0; i < yaws.length; i++) for (let j = i + 1; j < yaws.length; j++) expect(angleDiff(yaws[i], yaws[j]) * (180 / Math.PI), row.join()).toBeGreaterThan(40);
+      }
+      expect(p.rows?.flat().sort()).toEqual([...p.targets].sort());
+    }
   });
 
   it('boards, beacons and posts stand outside every anchor clear radius and off the roads', () => {
@@ -87,7 +95,7 @@ describe('wayfinding', () => {
   it('pictogram atlas cells are inside the atlas and do not overlap', () => {
     const rects = Object.entries(PICTO_RECTS) as [PictoId, readonly [number, number, number]][];
     for (const [id, [x, y, s]] of rects) {
-      expect(x >= 0 && y >= 0 && x + s <= ATLAS_SIZE && y + s <= ATLAS_SIZE, id).toBe(true);
+      expect(x >= 0 && y >= 0 && x + s <= ATLAS_SIZE && y + s <= ATLAS_H, id).toBe(true);
     }
     for (let i = 0; i < rects.length; i++) {
       for (let j = i + 1; j < rects.length; j++) {

@@ -1,11 +1,11 @@
 /**
  * Bouncy Park surroundings: rubber play surfaces, fence with an entrance arch, flags, bunting,
- * benches, an ice-cream kiosk. The trampoline and bounce-pad anchors are left clear for activities.
+ * benches. The trampoline and bounce-pad anchors are left clear for activities.
  */
 import * as THREE from 'three';
 import { M, T } from './batch';
-import { bench, box, bunting, fence, flagpole, icon, lamp, type Kit } from './props';
-import { coneG, cylG, rbox, sphereG, torusG } from './shapes';
+import { bench, bunting, fence, flagpole, icon, lamp, type Kit } from './props';
+import { cylG, rbox, sphereG, torusG } from './shapes';
 import { ANCHORS, VILLAGE_Y } from './layout';
 import type { Keepout, ManualTree } from './scatter';
 
@@ -42,24 +42,6 @@ function candyPillar(k: Kit, x: number, z: number, h: number): void {
   for (let i = 0; i < n; i++) k.b.add('paint', cylG(16), i % 2 ? 0xf4efe6 : 0xc8433a, T(x, y + i * (h / n), z, 0, 0.32, h / n, 0.32));
   k.b.add('gloss', sphereG(2), 0xf2c14e, T(x, y + h + 0.3, z, 0, 0.42, 0.42, 0.42));
   k.col.cyl(x, y, z, h / 2, 0.34);
-}
-
-function kiosk(k: Kit, x: number, z: number, yaw: number): void {
-  const y = k.h(x, z);
-  const m = T(x, y, z, yaw);
-  k.b.add('paint', rbox(3.2, 2.6, 2.6, 0.08), 0xf4e8d4, m, { aoY: y, aoH: 0.8, ao: 0.3 });
-  box(k.b, 'paint', m, 0, 0.95, 1.31, 2.4, 1.1, 0.02, 0x3a2a22);
-  box(k.b, 'paint', m, 0, 0.9, 1.4, 3.0, 0.12, 0.35, 0x7a5236);
-  for (let i = 0; i < 6; i++) k.b.add('paint',
-    // awning stripes
-    rbox(0.55, 0.06, 1.3, 0.02), i % 2 ? 0xf4efe6 : 0xd85a8c, M(m, T(-1.375 + i * 0.55, 2.45, 1.75, 0, 1, 1, 1, 0.35)));
-  box(k.b, 'paint', m, 0, 2.6, 0, 3.4, 0.2, 2.8, 0xd85a8c);
-  // Giant ice-cream cone on the roof.
-  k.b.add('paint', coneG(12), 0xd9a45a, M(m, T(0, 4.1, 0, 0, 0.55, -1.3, 0.55)));
-  k.b.add('paint', sphereG(2), 0xf8e8f0, M(m, T(0, 4.3, 0, 0, 0.62, 0.55, 0.62)));
-  k.b.add('paint', sphereG(2), 0x8a5236, M(m, T(0.05, 4.75, 0.02, 0, 0.45, 0.4, 0.45)));
-  k.b.add('gloss', sphereG(1), 0xc8433a, M(m, T(0.05, 5.15, 0.05, 0, 0.12, 0.12, 0.12)));
-  k.col.box(m, 0, 1.3, 0, 1.6, 1.3, 1.3);
 }
 
 export function buildPark(k: Kit): { trees: ManualTree[]; keepouts: Keepout[] } {
@@ -123,7 +105,7 @@ export function buildPark(k: Kit): { trees: ManualTree[]; keepouts: Keepout[] } 
   }
   for (let i = 0; i < ringPoles.length - 1; i++) bunting(k.b, ringPoles[i], ringPoles[i + 1], pennants, 0.5);
 
-  // Benches, lamps, bins, kiosk.
+  // Benches, lamps, bins (the ice-cream kiosk moved out: Scoops is the real shop, on the plaza).
   bench(k, 50, -38.5, 0);
   bench(k, 68, -38.5, 0);
   bench(k, 96.5, -22, -Math.PI / 2);
@@ -134,7 +116,6 @@ export function buildPark(k: Kit): { trees: ManualTree[]; keepouts: Keepout[] } 
     k.b.add('paint', cylG(12), 0x3b6b45, T(bx, by, bz, 0, 0.28, 0.85, 0.28), { aoY: by, aoH: 0.3 });
     k.col.cyl(bx, by, bz, 0.42, 0.28);
   }
-  kiosk(k, 94.5, -36, -Math.PI * 0.75);
 
   const trees: ManualTree[] = [];
   for (const tx of [48, 62, 76, 90]) trees.push({ x: tx, z: -45.5, kind: 'oak', scale: 0.9 });
