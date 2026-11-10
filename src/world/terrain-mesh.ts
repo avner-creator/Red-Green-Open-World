@@ -59,7 +59,7 @@ function fieldMask(t: TerrainData): Float32Array {
     return out;
   };
   const road = dilate(t.roadMask, 4);
-  const pad = dilate(t.padMask, 5);
+  const pad = dilate(t.padMask, 4);
   const out = new Float32Array(N * N);
   const half = t.size / 2;
   const H = t.heights;
@@ -73,8 +73,8 @@ function fieldMask(t: TerrainData): Float32Array {
       const hd = H[Math.max(0, iz - 1) * N + ix];
       const hu = H[Math.min(n, iz + 1) * N + ix];
       const slope = Math.hypot(hr - hl, hu - hd) / (2 * t.cell);
-      const region = smoothstep(-0.05, 0.12, fbm(x / 70, z / 70, 2, SEED + 41));
-      const flat = 1 - smoothstep(0.12, 0.3, slope);
+      const region = smoothstep(-0.3, -0.1, fbm(x / 70, z / 70, 2, SEED + 41));
+      const flat = 1 - smoothstep(0.4, 0.75, slope);
       const dry = smoothstep(3.5, 6, H[i]);
       out[i] = region * flat * dry * (1 - road[i]) * (1 - pad[i]);
     }
@@ -195,7 +195,7 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
             plot = c * mix(0.86, 1.12, mix(st, 0.5, smoothstep(0.3, 1.2, fwq)));
           } else if (hsh < 0.75) {
             float rw = smoothstep(0.3, 0.5, abs(fract(f.y / 1.4) - 0.5));          // crop rows
-            plot = c * vec3(0.8, 0.9, 0.76) * mix(0.82, 1.08, mix(rw, 0.5, smoothstep(0.2, 0.8, fwq)));
+            plot = c * vec3(0.72, 0.84, 0.7) * mix(0.8, 1.06, mix(rw, 0.5, smoothstep(0.2, 0.8, fwq)));
           } else {
             plot = c * vec3(1.06, 1.04, 0.92);                                      // plain meadow
           }
