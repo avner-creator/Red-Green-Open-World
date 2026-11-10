@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createEventBus } from '../../src/events';
-import { createProfile, sanitizeProfile, type ProfileStorage } from '../../src/profile';
+import { createProfile, PROFILE_MAX_COUNT, PROFILE_MAX_OWNED, sanitizeProfile, type ProfileStorage } from '../../src/profile';
 import { createSession } from '../../src/session';
 import { createSettings } from '../../src/settings';
-import { PROFILE_KEY } from '../../src/config';
+import { ECONOMY, PROFILE_KEY } from '../../src/config';
 import type { EventBus, GameEvents } from '../../src/types';
 
 function memStorage(init?: string): ProfileStorage & { mem: Map<string, string> } {
@@ -97,8 +97,47 @@ describe('profile', () => {
       version: 1, wallet: -3.5, lifetimeGems: 'x', owned: ['a', 'a', 4, ''], equipped: { head: 'a', nose: 'b', face: 7 },
       sessions: 2.9, bestCombo: Infinity, extra: true,
     });
-    expect(clean).toEqual({ version: 1, wallet: 0, lifetimeGems: 0, owned: ['a'], equipped: { head: 'a' }, sessions: 2, bestCombo: 0 });
+    expect(clean).toEqual({ version: 1, wallet: 0, lifetimeGems: 0, owned: ['a'], equipped: { head: 'a' }, sessions: 2, bestCombo: 1 });
     expect(sanitizeProfile({ version: 1, wallet: 12.7 }).wallet).toBe(12);
+  });
+
+  it('clamps huge and non-finite counts on load', () => {
+    const p = sanitizeProfile({ version: 1, wallet: 1e21, lifetimeGems: NaN, sessions: 1e30, bestCombo: 99 });
+    expect(p.wallet).toBe(PROFILE_MAX_COUNT);
+    expect(p.lifetimeGems).toBe(PROFILE_MAX_COUNT);
+    expect(p.sessions).toBe(PROFILE_MAX_COUNT);
+    expect(p.bestCombo).toBe(ECONOMY.comboMax);
+    expect(sanitizeProfile({ version: 1, bestCombo: -2 }).bestCombo).toBe(1);
+    expect(sanitizeProfile({ version: 1, wallet: '50' }).wallet).toBe(0);
+  });
+
+  it('drops equipped ids that are not owned, dedupes and caps owned', () => {
+    const many = Array.from({ length: PROFILE_MAX_OWNED + 50 }, (_, i) => `item-${i % (PROFILE_MAX_OWNED + 20)}`);
+    const p = sanitizeProfile({
+      version: 1, owned: ['hat', null, 3, 'hat', 'unknown-from-later', ...many], equipped: { head: 'hat', back: 'cape', trail: 'unknown-from-later' },
+    });
+    expect(p.owned.slice(0, 2)).toEqual(['hat', 'unknown-from-later']);
+    expect(p.owned).toHaveLength(PROFILE_MAX_OWNED);
+    expect(new Set(p.owned).size).toBe(p.owned.length);
+    expect(p.equipped).toEqual({ head: 'hat', trail: 'unknown-from-later' });
+  });
+
+  it('caps earn at the ceiling and rejects non-finite amounts', () => {
+    const events = createEventBus();
+    const changes = record(events, 'wallet:changed');
+    const p = createProfile(events, { storage: null });
+    p.earn(Infinity, 'gem');
+    p.earn(NaN, 'gem');
+    expect(changes).toHaveLength(0);
+    p.earn(PROFILE_MAX_COUNT - 1, 'gem');
+    p.earn(1e21, 'gem');
+    expect(p.wallet).toBe(PROFILE_MAX_COUNT);
+    expect(changes.at(-1)).toEqual({ wallet: PROFILE_MAX_COUNT, delta: 1, reason: 'gem' });
+    p.earn(5, 'gem');
+    expect(changes).toHaveLength(2);
+    expect(p.data.lifetimeGems).toBe(PROFILE_MAX_COUNT);
+    p.noteCombo(50);
+    expect(p.data.bestCombo).toBe(ECONOMY.comboMax);
   });
 
   it('keeps working in memory when storage throws', () => {

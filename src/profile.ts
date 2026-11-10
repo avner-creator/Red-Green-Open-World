@@ -3,7 +3,7 @@
  * Saved to localStorage under `PROFILE_KEY` on every change; every storage call is wrapped in
  * try/catch so a blocked or broken storage never breaks the game (the profile then lives in memory).
  */
-import { PROFILE_KEY } from './config';
+import { ECONOMY, PROFILE_KEY } from './config';
 import type { EquipSlot, EventBus, ProfileApi, ProfileData, UnlockSource, WalletReason } from './types';
 
 export interface ProfileStorage {
@@ -21,12 +21,20 @@ export const EQUIP_SLOTS: readonly EquipSlot[] = [
   'head', 'back', 'face', 'carColor', 'horseColor', 'trail', 'emote', 'character',
 ];
 
+/** Ceiling for wallet, lifetime gems and sessions (so the HUD never shows "1e+21"). */
+export const PROFILE_MAX_COUNT = 999_999;
+/** Most owned item ids kept from storage. */
+export const PROFILE_MAX_OWNED = 500;
+
+/** bestCombo is a multiplier: 1 = no combo yet. */
 export function freshProfile(): ProfileData {
-  return { version: 1, wallet: 0, lifetimeGems: 0, owned: [], equipped: {}, sessions: 0, bestCombo: 0 };
+  return { version: 1, wallet: 0, lifetimeGems: 0, owned: [], equipped: {}, sessions: 0, bestCombo: 1 };
 }
 
-const count = (v: unknown): number =>
-  typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
+/** Finite non-negative integer up to `max` (NaN, Infinity, strings → 0). */
+const count = (v: unknown, max = PROFILE_MAX_COUNT): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(0, Math.floor(v))) : 0;
+const comboOf = (v: unknown): number => Math.max(1, count(v, ECONOMY.comboMax));
 
 /** Turn anything loaded from storage into a valid profile (bad or missing data → fresh profile). */
 export function sanitizeProfile(input: unknown): ProfileData {
@@ -35,14 +43,17 @@ export function sanitizeProfile(input: unknown): ProfileData {
   if (o.version !== 1) return freshProfile();
   const owned: string[] = [];
   if (Array.isArray(o.owned)) {
-    for (const id of o.owned) if (typeof id === 'string' && id.length > 0 && !owned.includes(id)) owned.push(id);
+    for (const id of o.owned) {
+      if (owned.length >= PROFILE_MAX_OWNED) break;
+      if (typeof id === 'string' && id.length > 0 && !owned.includes(id)) owned.push(id);
+    }
   }
   const equipped: Partial<Record<EquipSlot, string>> = {};
   if (typeof o.equipped === 'object' && o.equipped !== null && !Array.isArray(o.equipped)) {
     const e = o.equipped as Record<string, unknown>;
     for (const slot of EQUIP_SLOTS) {
       const id = e[slot];
-      if (typeof id === 'string' && id.length > 0) equipped[slot] = id;
+      if (typeof id === 'string' && owned.includes(id)) equipped[slot] = id;
     }
   }
   const wallet = count(o.wallet);
@@ -53,7 +64,7 @@ export function sanitizeProfile(input: unknown): ProfileData {
     owned,
     equipped,
     sessions: count(o.sessions),
-    bestCombo: count(o.bestCombo),
+    bestCombo: comboOf(o.bestCombo),
   };
 }
 
@@ -97,10 +108,10 @@ export function createProfile(events: EventBus, opts: ProfileOptions = {}): Prof
       return data.wallet;
     },
     earn(amount, reason) {
-      const n = count(amount);
+      const n = Math.min(count(amount), PROFILE_MAX_COUNT - data.wallet);
       if (n <= 0) return;
       data.wallet += n;
-      data.lifetimeGems += n;
+      data.lifetimeGems = Math.min(PROFILE_MAX_COUNT, data.lifetimeGems + n);
       walletChanged(n, reason);
     },
     spend(amount, reason) {
@@ -131,13 +142,13 @@ export function createProfile(events: EventBus, opts: ProfileOptions = {}): Prof
       return data.equipped[slot] ?? null;
     },
     noteCombo(multiplier) {
-      const m = count(multiplier);
+      const m = comboOf(multiplier);
       if (m <= data.bestCombo) return;
       data.bestCombo = m;
       save();
     },
     noteSession() {
-      data.sessions += 1;
+      data.sessions = Math.min(PROFILE_MAX_COUNT, data.sessions + 1);
       save();
     },
     reset() {
