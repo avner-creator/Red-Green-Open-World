@@ -43,6 +43,61 @@ const dismiss = (page: Page): Promise<void> =>
   page.evaluate(() => (document.querySelector('[data-testid="unlock-moment"].on') as HTMLElement | null)?.click());
 const wallet = (page: Page): Promise<number> => page.evaluate(() => window.__rg!.ctx.profile.wallet);
 
+/** Fixture items with canvas-drawn pictures, in the 'character' tab (empty in the real catalog). */
+async function registerFixtures(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const calls: string[] = [];
+    (window as unknown as { __previewCalls: string[] }).__previewCalls = calls;
+    const draw = (kind: string): string => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d')!;
+      g.lineWidth = 6;
+      g.strokeStyle = '#1a1a2a';
+      g.lineJoin = 'round';
+      if (kind === 'hat') {
+        const grad = g.createLinearGradient(30, 10, 100, 110);
+        grad.addColorStop(0, '#ffe86a');
+        grad.addColorStop(1, '#e07a10');
+        g.fillStyle = grad;
+        g.beginPath();
+        g.moveTo(64, 8); g.lineTo(104, 96); g.lineTo(24, 96); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = '#d0244a';
+        g.fillRect(34, 72, 60, 14); g.strokeRect(34, 72, 60, 14);
+        g.fillStyle = '#ffffff';
+        g.beginPath(); g.ellipse(64, 104, 52, 14, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+      } else if (kind === 'cape') {
+        const grad = g.createLinearGradient(0, 0, 0, 128);
+        grad.addColorStop(0, '#5fb0ff');
+        grad.addColorStop(1, '#1d3fa8');
+        g.fillStyle = grad;
+        g.beginPath();
+        g.moveTo(40, 14); g.lineTo(88, 14); g.quadraticCurveTo(110, 70, 116, 118);
+        g.quadraticCurveTo(64, 100, 12, 118); g.quadraticCurveTo(18, 70, 40, 14); g.fill(); g.stroke();
+        g.fillStyle = '#ffd93b';
+        g.beginPath(); g.arc(64, 60, 14, 0, Math.PI * 2); g.fill(); g.stroke();
+      } else {
+        g.fillStyle = '#ff6fb5';
+        for (const x of [36, 92]) { g.beginPath(); g.arc(x, 64, 26, 0, Math.PI * 2); g.fill(); g.stroke(); }
+        g.fillStyle = '#20243c';
+        for (const x of [36, 92]) { g.beginPath(); g.arc(x, 64, 15, 0, Math.PI * 2); g.fill(); }
+        g.beginPath(); g.moveTo(58, 60); g.lineTo(70, 60); g.stroke();
+      }
+      return c.toDataURL('image/png');
+    };
+    const pic = (id: string, kind: string) => () => {
+      calls.push(id);
+      return draw(kind);
+    };
+    window.__rg!.ctx.economy.registerItems([
+      { id: 'fx-hat', category: 'character', slot: 'head', name: 'Party hat', icon: 'hat', price: 12, preview: pic('fx-hat', 'hat') },
+      { id: 'fx-cape', category: 'character', slot: 'back', name: 'Hero cape', icon: 'cape', price: 99, preview: pic('fx-cape', 'cape') },
+      { id: 'fx-specs', category: 'character', slot: 'face', name: 'Pink specs', icon: 'glasses', price: 0, chestOnly: true, preview: pic('fx-specs', 'specs') },
+      { id: 'fx-plain', category: 'character', slot: 'face', name: 'Plain specs', icon: 'glasses', price: 7, preview: () => null },
+    ]);
+  });
+}
+
 test.describe('economy ui', () => {
   test('wallet, combo, missions, kiosk shop, wardrobe, end screen, reset', async ({ page }) => {
     test.setTimeout(150_000);
@@ -60,57 +115,7 @@ test.describe('economy ui', () => {
     // Fixture items with rendered pictures, in their own tab (the real catalog leaves 'character'
     // empty) so they never queue behind slow real previews; one has no picture (keeps its icon).
     // preview() is only called once a card is shown, asynchronously.
-    await page.evaluate(() => {
-      const calls: string[] = [];
-      (window as unknown as { __previewCalls: string[] }).__previewCalls = calls;
-      const draw = (kind: string): string => {
-        const c = document.createElement('canvas');
-        c.width = c.height = 128;
-        const g = c.getContext('2d')!;
-        g.lineWidth = 6;
-        g.strokeStyle = '#1a1a2a';
-        g.lineJoin = 'round';
-        if (kind === 'hat') {
-          const grad = g.createLinearGradient(30, 10, 100, 110);
-          grad.addColorStop(0, '#ffe86a');
-          grad.addColorStop(1, '#e07a10');
-          g.fillStyle = grad;
-          g.beginPath();
-          g.moveTo(64, 8); g.lineTo(104, 96); g.lineTo(24, 96); g.closePath(); g.fill(); g.stroke();
-          g.fillStyle = '#d0244a';
-          g.fillRect(34, 72, 60, 14); g.strokeRect(34, 72, 60, 14);
-          g.fillStyle = '#ffffff';
-          g.beginPath(); g.ellipse(64, 104, 52, 14, 0, 0, Math.PI * 2); g.fill(); g.stroke();
-        } else if (kind === 'cape') {
-          const grad = g.createLinearGradient(0, 0, 0, 128);
-          grad.addColorStop(0, '#5fb0ff');
-          grad.addColorStop(1, '#1d3fa8');
-          g.fillStyle = grad;
-          g.beginPath();
-          g.moveTo(40, 14); g.lineTo(88, 14); g.quadraticCurveTo(110, 70, 116, 118);
-          g.quadraticCurveTo(64, 100, 12, 118); g.quadraticCurveTo(18, 70, 40, 14); g.fill(); g.stroke();
-          g.fillStyle = '#ffd93b';
-          g.beginPath(); g.arc(64, 60, 14, 0, Math.PI * 2); g.fill(); g.stroke();
-        } else {
-          g.fillStyle = '#ff6fb5';
-          for (const x of [36, 92]) { g.beginPath(); g.arc(x, 64, 26, 0, Math.PI * 2); g.fill(); g.stroke(); }
-          g.fillStyle = '#20243c';
-          for (const x of [36, 92]) { g.beginPath(); g.arc(x, 64, 15, 0, Math.PI * 2); g.fill(); }
-          g.beginPath(); g.moveTo(58, 60); g.lineTo(70, 60); g.stroke();
-        }
-        return c.toDataURL('image/png');
-      };
-      const pic = (id: string, kind: string) => () => {
-        calls.push(id);
-        return draw(kind);
-      };
-      window.__rg!.ctx.economy.registerItems([
-        { id: 'fx-hat', category: 'character', slot: 'head', name: 'Party hat', icon: 'hat', price: 12, preview: pic('fx-hat', 'hat') },
-        { id: 'fx-cape', category: 'character', slot: 'back', name: 'Hero cape', icon: 'cape', price: 99, preview: pic('fx-cape', 'cape') },
-        { id: 'fx-specs', category: 'character', slot: 'face', name: 'Pink specs', icon: 'glasses', price: 0, chestOnly: true, preview: pic('fx-specs', 'specs') },
-        { id: 'fx-plain', category: 'character', slot: 'face', name: 'Plain specs', icon: 'glasses', price: 7, preview: () => null },
-      ]);
-    });
+    await registerFixtures(page);
     expect(await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls.length)).toBe(0);
 
     // Real missions from the economy; drive the HUD cards with events.
@@ -154,10 +159,7 @@ test.describe('economy ui', () => {
           }
         return out;
       });
-    expect(await overlaps()).toEqual([]);
-    await page.setViewportSize({ width: 667, height: 375 });
-    expect(await overlaps()).toEqual([]);
-    await page.setViewportSize({ width: 640, height: 360 });
+    expect(await overlaps()).toEqual([]); // 667x375 and tablet: see the touch test below
 
     // Combo back to x1: the badge goes away. A denied ticket: a friendly toast with the price.
     await page.evaluate(() => {
@@ -238,8 +240,6 @@ test.describe('economy ui', () => {
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
     await dismiss(page);
     expect(await wallet(page)).toBe(w0 - 22);
-    await step(page, 30);
-    await save(page, 'shop-paint');
 
     // Esc closes the shop: playing again.
     await page.keyboard.press('Escape');
@@ -252,7 +252,6 @@ test.describe('economy ui', () => {
       window.__rg!.ctx.session.pause();
       window.__rg!.step(1 / 60, 2);
     });
-    await save(page, 'pause');
     await page.getByTestId('pause-wardrobe').click();
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     const wcard = (id: string) => page.locator(`[data-testid="wardrobe"] [data-testid="shop-card"][data-item="${id}"]`);
@@ -337,6 +336,95 @@ test.describe('economy ui', () => {
     expect(await wallet(page)).toBe(0);
     expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('fx-hat'))).toBe(false);
 
+    expect(consoleErrors).toEqual([]);
+  });
+});
+
+/** Rects of HUD parts that overlap each other (wallet, combo, missions, timer, compass, help, touch buttons). */
+const hudOverlaps = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    const sel = [
+      '[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]',
+      '.wf-compass', '[data-testid="help"]', '[data-testid="touch-jump"]', '[data-testid="touch-use"]', '[data-testid="touch-sprint"]',
+      '[data-testid="touch-flop"]', '[data-testid="touch-pause"]',
+    ];
+    const rs = sel
+      .map((s) => {
+        const e = document.querySelector(s);
+        return [s, e && getComputedStyle(e).visibility !== 'hidden' ? e.getBoundingClientRect() : null] as const;
+      })
+      .filter(([, r]) => r && r.width > 0);
+    const out: string[] = [];
+    for (let i = 0; i < rs.length; i++)
+      for (let j = i + 1; j < rs.length; j++) {
+        const a = rs[i]![1]!;
+        const b = rs[j]![1]!;
+        if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) out.push(`${rs[i]![0]} x ${rs[j]![0]}`);
+      }
+    return out;
+  });
+
+test.describe('economy ui by touch', () => {
+  test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+
+  test('touch HUD fits; kiosk by the use button; tap tab, tap-buy, tap close', async ({ page }) => {
+    const { consoleErrors } = await boot(page);
+    await page.getByTestId('play').tap();
+    await expect(page.getByTestId('touch-hud')).toBeVisible();
+    await registerFixtures(page);
+    await page.evaluate(() => {
+      const rg = window.__rg!;
+      rg.freeze(true);
+      rg.ctx.profile.earn(30, 'gem');
+      rg.ctx.events.emit('combo:changed', { multiplier: 4, streak: 6 });
+      const ms = rg.ctx.economy.missions;
+      if (ms[0]) rg.ctx.events.emit('mission:progress', { index: 0, mission: { ...ms[0], progress: Math.floor(ms[0].target / 2) } });
+      const a = rg.ctx.world.anchors.gearShack;
+      const x = a.position.x + Math.sin(a.yaw) * 2.4;
+      const z = a.position.z + Math.cos(a.yaw) * 2.4;
+      rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.2, z, a.yaw + Math.PI);
+      rg.step(1 / 60, 40);
+    });
+    await expect(page.getByTestId('missions')).toBeVisible();
+    // Next to the kiosk the use button shows the shop icon.
+    await expect(page.getByTestId('touch-use')).toHaveClass(/ready/);
+    await save(page, 'touch-hud', 300);
+    expect(await hudOverlaps(page)).toEqual([]);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await step(page, 2);
+    expect(await hudOverlaps(page)).toEqual([]);
+    await save(page, 'touch-hud-tablet', 300);
+    await page.setViewportSize({ width: 667, height: 375 });
+    await step(page, 2);
+
+    // Use button → shop; the touch gameplay controls hide while it is open.
+    await page.getByTestId('touch-use').tap({ force: true }); // it pulses: never "stable"
+    await step(page, 3);
+    await expect(page.getByTestId('shop')).toBeVisible();
+    expect(await phase(page)).toBe('paused');
+    await expect(page.getByTestId('touch-hud')).toBeHidden();
+    // Every target is thumb-sized.
+    const small = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid="shop"] button')]
+        // Layout size (offsetWidth): not shrunk by the panel's pop-in animation.
+        .map((b) => [(b as HTMLElement).dataset.testid ?? b.className, (b as HTMLElement).offsetWidth, (b as HTMLElement).offsetHeight] as const)
+        .filter(([, w, hgt]) => w > 0 && (w < 44 || hgt < 44))
+        .map(([n, w, hgt]) => `${n} ${w}x${hgt}`),
+    );
+    expect(small).toEqual([]);
+    await page.getByTestId('shop-tab-character').tap();
+    const w0 = await wallet(page);
+    await page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="fx-hat"]').tap();
+    await expect(page.getByTestId('unlock-moment')).toBeVisible();
+    expect(await wallet(page)).toBe(w0 - 12);
+    await page.getByTestId('unlock-moment').tap();
+    await expect(page.getByTestId('unlock-moment')).toBeHidden();
+    await expect(page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="fx-hat"]')).toHaveAttribute('data-state', 'equipped');
+    expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+    await page.getByTestId('shop-close').tap();
+    await step(page, 3);
+    expect(await phase(page)).toBe('playing');
+    await expect(page.getByTestId('touch-hud')).toBeVisible();
     expect(consoleErrors).toEqual([]);
   });
 });

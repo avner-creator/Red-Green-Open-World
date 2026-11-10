@@ -1,0 +1,104 @@
+/**
+ * Loads one catalog character and wires it up: scaled so the feet sit at the origin and it faces
+ * +Z, an AnimationMixer with the catalog's PlayerAnim → clip mapping, and attach anchors for
+ * outfits. The game's player controller can use this as-is (it does not touch physics or input).
+ *
+ * Character GLBs are meshopt-compressed, so the loader needs the meshopt decoder.
+ */
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import type { PlayerAnim } from '../../types';
+import type { AttachPart, CharacterDef, ClipRef } from './catalog';
+
+export interface LoadedCharacter {
+  readonly def: CharacterDef;
+  /** Feet at the origin, facing +Z, already scaled to `def.scale`. */
+  readonly object: THREE.Group;
+  /** Anchors that follow their bone; children are authored in metres, +Y up, +Z forward. */
+  readonly anchors: Readonly<Record<AttachPart, THREE.Object3D>>;
+  readonly mixer: THREE.AnimationMixer;
+  /** Play a PlayerAnim (or the signature emote), cross-fading from the current clip. */
+  play(anim: PlayerAnim | 'emote', rate?: number, fade?: number): void;
+  update(dt: number): void;
+}
+
+let sharedLoader: GLTFLoader | null = null;
+
+export function characterLoader(): GLTFLoader {
+  if (!sharedLoader) {
+    sharedLoader = new GLTFLoader();
+    sharedLoader.setMeshoptDecoder(MeshoptDecoder);
+  }
+  return sharedLoader;
+}
+
+export async function loadCharacter(def: CharacterDef, loader = characterLoader()): Promise<LoadedCharacter> {
+  const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}${def.modelUrl}`);
+  const object = new THREE.Group();
+  object.name = `character-${def.id}`;
+  const model = gltf.scene;
+  model.scale.setScalar(def.scale);
+  object.add(model);
+  model.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = false;
+      o.frustumCulled = false; // skinned bounds don't follow animations
+    }
+  });
+
+  // Anchors: positioned at the rest pose in character space (metres), then re-parented onto
+  // their bone keeping the world transform, so they follow the animation.
+  object.updateMatrixWorld(true);
+  const anchors = {} as Record<AttachPart, THREE.Object3D>;
+  for (const part of Object.keys(def.attach) as AttachPart[]) {
+    const spot = def.attach[part];
+    const anchor = new THREE.Object3D();
+    anchor.name = `attach-${part}`;
+    anchor.position.fromArray(spot.offset);
+    if (spot.rotation) anchor.rotation.set(spot.rotation[0], spot.rotation[1], spot.rotation[2]);
+    if (spot.scale !== undefined) anchor.scale.setScalar(spot.scale);
+    object.add(anchor);
+    anchor.updateMatrixWorld(true);
+    const bone = model.getObjectByName(spot.bone);
+    if (bone) bone.attach(anchor);
+    anchors[part] = anchor;
+  }
+
+  const mixer = new THREE.AnimationMixer(model);
+  const actions = new Map<string, THREE.AnimationAction>();
+  for (const clip of gltf.animations) actions.set(clip.name, mixer.clipAction(clip));
+  let current: THREE.AnimationAction | null = null;
+  let currentRef: ClipRef | null = null;
+
+  return {
+    def,
+    object,
+    anchors,
+    mixer,
+    play(anim, rate = 1, fade = 0.18) {
+      const ref = anim === 'emote' ? def.emote : def.anims[anim];
+      const next = actions.get(ref.clip);
+      if (!next) return;
+      next.timeScale = rate * (ref.rate ?? 1);
+      if (next === current && ref === currentRef && next.isRunning()) return;
+      next.reset();
+      next.setLoop(ref.loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+      next.clampWhenFinished = !ref.loop;
+      next.enabled = true;
+      next.setEffectiveWeight(1);
+      if (ref.startAt) next.time = ref.startAt * next.getClip().duration;
+      next.play();
+      if (current && current !== next) {
+        if (fade > 0) current.crossFadeTo(next, fade, false);
+        else current.stop();
+      }
+      current = next;
+      currentRef = ref;
+    },
+    update(dt) {
+      mixer.update(dt);
+    },
+  };
+}

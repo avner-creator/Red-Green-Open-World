@@ -1,0 +1,15 @@
+{
+  "name": "rg-character-pipeline",
+  "private": true,
+  "type": "module",
+  "description": "Offline pipeline that prepares public/assets/characters/*.glb. Not part of the game build.",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": {
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/extensions": "4.2.1",
+    "@gltf-transform/functions": "4.2.1",
+    "draco3dgltf": "1.5.7",
+    "meshoptimizer": "0.22.0",
+    "sharp": "0.34.3"
+  }
+}

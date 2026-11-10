@@ -265,4 +265,18 @@ export const ECON_CSS = `
 .rg .pic.pic-in{animation:rg-picin .35s cubic-bezier(.2,1.6,.4,1) both}
 @keyframes rg-picin{from{opacity:0;transform:scale(.5)}}
 .rg .stk .pic{width:2.1em;height:2.1em;filter:drop-shadow(0 calc(var(--u)*.3) calc(var(--u)*.4) rgba(0,0,0,.5))}
+
+/* ---------- touch mode: keep clear of the thumb buttons and the pause button ---------- */
+/* missions: a column left of the "?" button, above the right-thumb buttons */
+.rg.touch-on .missions{top:calc(var(--u)*13 + env(safe-area-inset-top,0px));right:calc(var(--u)*10.4 + env(safe-area-inset-right,0px));gap:calc(var(--u)*.8)}
+.rg.touch-on .mcard{min-width:calc(var(--u)*16);font-size:calc(var(--u)*2.5);padding-top:calc(var(--u)*.35);padding-bottom:calc(var(--u)*.85)}
+.rg.touch-on .mcard .mi{width:calc(var(--u)*4.1);height:calc(var(--u)*4.1)}
+.rg.touch-on .mcard .mi .ic{font-size:calc(var(--u)*3.3)}
+/* the compass a little narrower, the touch pause button just right of it (not on top of it) */
+.rg.touch-on .wf-compass{width:min(calc(var(--u)*68),34vw)}
+.rg.touch-on .tbtn.pause{left:calc(50% + 17vw + 6px);transform:none}
+.rg.touch-on .tbtn.pause.down{transform:scale(.9)}
+/* the shop/wardrobe grid scrolls by finger drag inside the panel; the page never pans */
+.rg .sgrid{touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+@media (hover:none){.rg .card:hover .pv .ic,.rg .card:hover .pv .pic{transform:none}}
 `;
