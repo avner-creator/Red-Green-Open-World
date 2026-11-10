@@ -14,6 +14,7 @@ import { createEconomy } from './activities/economy';
 import { createProfile } from './profile';
 import { createUi } from './ui';
 import { VisionLayer } from './types';
+import { createBuddy } from './buddy';
 import type { GameContext, TestApi } from './types';
 
 const params = new URLSearchParams(location.search);
@@ -105,6 +106,7 @@ async function boot(): Promise<void> {
   ctx.economy = economy;
   const activities = await createActivities(ctx);
   ctx.ui = createUi(ctx);
+  const buddy = createBuddy(ctx);
 
   const resize = (): void => {
     const w = Math.max(1, window.innerWidth);
@@ -150,6 +152,7 @@ async function boot(): Promise<void> {
     }
     ctx.world.update(dt);
     ctx.ui.update(dt);
+    buddy.update(dt);
     audio.update(dt);
   };
   const render = (dt: number): void => {
