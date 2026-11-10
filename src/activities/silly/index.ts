@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { PLAYER } from '../../config';
 import type { GameContext } from '../../types';
 import type RAPIER from '@dimforge/rapier3d-compat';
+import { fixedStepHooks } from '../../core/physics';
 import { getStuntGate } from '../stuntGate';
 import { ThrillConfetti } from '../thrillConfetti';
 import { disposeTree } from '../bungee/kit';
@@ -110,6 +111,29 @@ export function createSilly(ctx: GameContext): Silly {
   let ballCooldown = 0;
   let ballAway = 0;
   const ballPos = new THREE.Vector3();
+  // Drawn between the last two fixed physics steps (smooth at any display rate).
+  const steps = fixedStepHooks(ctx.physics);
+  const prevP = new THREE.Vector3();
+  const curP = new THREE.Vector3();
+  const prevQ = new THREE.Quaternion();
+  const curQ = new THREE.Quaternion();
+  const snapPose = (): void => {
+    const t = ballBody.translation();
+    const q = ballBody.rotation();
+    curP.set(t.x, t.y, t.z);
+    curQ.set(q.x, q.y, q.z, q.w);
+    prevP.copy(curP);
+    prevQ.copy(curQ);
+  };
+  snapPose();
+  const offStep = steps.onAfterStep(() => {
+    prevP.copy(curP);
+    prevQ.copy(curQ);
+    const t = ballBody.translation();
+    const q = ballBody.rotation();
+    curP.set(t.x, t.y, t.z);
+    curQ.set(q.x, q.y, q.z, q.w);
+  });
 
   function resetBall(): void {
     ballBody.setTranslation({ x: ballHome.x, y: ballHome.y + r + 0.05, z: ballHome.z }, true);
@@ -117,6 +141,7 @@ export function createSilly(ctx: GameContext): Silly {
     ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
     ballBody.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
     ballAway = 0;
+    snapPose();
   }
 
   // ── Bumper mushrooms ──
@@ -227,9 +252,10 @@ export function createSilly(ctx: GameContext): Silly {
     }
     ballSquashV += (-120 * ballSquash - 9 * ballSquashV) * dt;
     ballSquash += ballSquashV * dt;
-    const q = ballBody.rotation();
-    ballMesh.position.set(t.x, t.y + ballSquash * r * 0.5, t.z);
-    ballMesh.quaternion.set(q.x, q.y, q.z, q.w);
+    const a = steps.alpha;
+    ballMesh.position.lerpVectors(prevP, curP, a);
+    ballMesh.position.y += ballSquash * r * 0.5;
+    ballMesh.quaternion.slerpQuaternions(prevQ, curQ, a);
     const sq = Math.max(-0.35, Math.min(0.35, ballSquash));
     // Squash in world Y (scale applied in the rotated frame is close enough for a quick boing).
     ballMesh.scale.set(1 - sq * 0.5, 1 + sq, 1 - sq * 0.5);
@@ -506,6 +532,7 @@ export function createSilly(ctx: GameContext): Silly {
     },
     dispose() {
       offPhase();
+      offStep();
       for (const c of colliders) ctx.physics.removeCollider(c);
       ctx.physics.world.removeCollider(ballCollider, false);
       ctx.physics.world.removeRigidBody(ballBody);
