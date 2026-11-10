@@ -5,7 +5,7 @@ glasses. Collectibles and secrets are visible only to the weaker eye.
 
 - **Play:** https://red-green-open-world.netlify.app (after the first deploy)
 - **Spec:** [CLAUDE.md](CLAUDE.md) · [Game design](docs/GAME_DESIGN.md) · [Build plan](docs/BUILD_PLAN.md)
-- **Status:** [docs/PROGRESS.md](docs/PROGRESS.md)
+- **Status:** [docs/PROGRESS.md](docs/PROGRESS.md) · **Continue the build in a new session:** [docs/HANDOFF.md](docs/HANDOFF.md)
 - **Asset credits:** [ASSETS.md](ASSETS.md)
 
 Stack: Three.js, TypeScript, Vite, Rapier physics, deployed as a static site on Netlify.
