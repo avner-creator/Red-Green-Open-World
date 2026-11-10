@@ -1,23 +1,26 @@
-/** Line-up targets ("magic-glasses bubble popping"): tuning (metres, seconds, degrees). */
+/** Line-up ("magic ring bubbles"): tuning (metres, seconds, degrees). */
 export const LINEUP = {
   /** Aim pad centre in site-local metres (x right, z towards the approach); bubbles float towards −Z. */
   pad: { x: 0, z: -1.2, radius: 1.1, inner: 0.82, lift: 0.04 },
   /** How far above the pad the player's feet may be and still count as "on the pad". */
   padHeight: 1.2,
   bubble: {
-    /** Radius at tier 1 (× the tier preset size). */
-    radius: 0.9,
-    count: 3,
-    /** Seconds on the pad before a bubble drifts away (a miss). */
+    /** Bubble slots (tier 3 shows two at once, tiers 1–2 one). */
+    slots: 2,
+    /** Seconds a live bubble waits on the pad before it floats away (a miss). */
     lifetime: 15,
-    bob: 0.22,
+    bob: 0.18,
     spawnIn: 0.6,
-    popSeconds: 0.45,
+    popSeconds: 0.55,
     driftSeconds: 1.2,
     respawnDelay: 0.7,
-    /** Spawn stagger when the player first steps on the pad. */
-    stagger: 0.35,
+    /** A bubble's radius is this fraction of the ring's (so a bubble inside the ring sits in it). */
+    ofRing: 0.78,
   },
+  /** After a press that misses, the ring recharges this long before the next press counts. */
+  missCooldown: 6,
+  /** Approximate extra distance from the camera to the pad (third-person camera behind the hero). */
+  cameraBack: 5.1,
   /** Candidate spots relative to the pad: angles off straight ahead, distances, heights above the pad. */
   spots: {
     angles: [-34, -17, 0, 17, 34],
@@ -30,9 +33,5 @@ export const LINEUP = {
     /** Ground must stay this far below a bubble. */
     clearance: 1.6,
   },
-  /** Reticle radius at 10 m (scales with the distance so it keeps its size on screen). */
-  reticleRadius: 0.36,
-  /** Progress arc radius at 10 m. */
-  arcRadius: 0.58,
   gems: { 1: 1, 2: 2, 3: 4 } as const,
 } as const;

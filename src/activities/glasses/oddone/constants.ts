@@ -39,6 +39,14 @@ export const ODD = {
   gap: { base: 0.3, floor: 0.11 },
   /** The challenge's size scale never shrinks the shapes below this factor (keeps them solvable). */
   minChallengeSize: 0.8,
+  /** Friendly nap after a miss (buttons sink, no prompt), from when the next round appears. */
+  nap: { first: 5, again: 8 },
+  /** The first this-many hits after a miss pay 1 gem (random pressing cannot farm gems). */
+  warmHits: 2,
+  /** Hero spot in front of the middle button (layout-local metres from the pedestal). */
+  standOff: 1.1,
+  /** Layout search: also try to keep the view clear from this much further back (the approach). */
+  approachBack: 4,
   /** Gems per tier. */
   gems: { 1: 2, 2: 3, 3: 5 } as const,
 } as const;
