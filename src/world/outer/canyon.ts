@@ -212,7 +212,7 @@ function strata(k: Kit): void {
       const g = wallBand(k, xs, y0, y1, side, 0.5, (x, y) => {
         const n = 0.9 + 0.12 * Math.sin(x * 0.37 + y * 1.3) + 0.06 * Math.sin(x * 1.9 - y * 0.7);
         return new THREE.Color(tone.r * n, tone.g * n, tone.b * n).getHex();
-      }, Math.max(2, Math.round((y1 - y0) / 0.7)));
+      }, Math.max(2, Math.round((y1 - y0) / 0.9)));
       if (g) {
         k.b.add('road', g, 0xffffff);
         g.dispose();

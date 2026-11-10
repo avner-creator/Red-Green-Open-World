@@ -95,16 +95,16 @@ export function buildSillySurroundings(k: Kit, roadEdge: (x: number, z: number) 
     const u = Math.floor(((ang + Math.PI) / (Math.PI * 2)) * 48);
     const v = Math.floor((r - inner - 0.6) / 1.05);
     return (u + v) % 2 ? PLUM : CREAM;
-  }, 12, 192);
+  }, 9, 192);
   groundDisc(k, a.x, a.z, outer - 0.8, outer, 0.06, (x, z) => {
     const ang = Math.atan2(z - a.z, x - a.x);
     const r = Math.hypot(x - a.x, z - a.z);
     const tri = Math.abs(((ang + Math.PI) / (Math.PI * 2)) * 96 % 2 - 1);
     return r - (outer - 0.8) < tri * 0.8 ? PINK : 0x6c8f3c;
-  }, 4, 384);
+  }, 3, 288);
 
   // ── Candy-striped picket fence with gaps; pinwheels on every fourth post ──
-  const posts = 72;
+  const posts = 52;
   let pw = 0;
   for (let i = 0; i < posts; i++) {
     const a0 = (i / posts) * Math.PI * 2;
@@ -126,14 +126,14 @@ export function buildSillySurroundings(k: Kit, roadEdge: (x: number, z: number) 
     const l = Math.hypot(x1 - x0, z1 - z0);
     const pitch = -Math.atan2(k.h(x1, z1) - y0, l);
     for (const [ry, cc] of [[0.35, YEL], [0.85, CREAM]] as const) b.add('paint', boxG(), cc, T(mx, my + ry, mz, yaw, 0.07, 0.12, l, pitch));
-    for (let j = 0; j < 3; j++) {
-      const t = (j + 0.5) / 3;
+    for (let j = 0; j < 4; j++) {
+      const t = (j + 0.5) / 4;
       const px = x0 + (x1 - x0) * t;
       const pz = z0 + (z1 - z0) * t;
       b.add('paint', boxG(), j % 2 ? PLUM : CREAM, T(px, k.h(px, pz) - 0.05, pz, yaw, 0.1, 0.95, 0.04));
     }
     k.col.box(T(mx, my, mz, yaw), 0, 0.6, 0, 0.08, 0.65, l / 2);
-    if (i % 4 === 0) pinwheel(k, x0 + Math.cos(a0) * 0.05, z0 + Math.sin(a0) * 0.05, y0 + 1.75, a0 + Math.PI / 2, pw++);
+    if (i % 3 === 0) pinwheel(k, x0 + Math.cos(a0) * 0.05, z0 + Math.sin(a0) * 0.05, y0 + 1.75, a0 + Math.PI / 2, pw++);
   }
 
   // ── Inflatable welcome arch over the end of the south road, with bunting ──
