@@ -74,6 +74,8 @@ test('balloon skydive: ride up, auto-jump, auto-chute, soft landing in walk mode
         break;
       }
     }
+    const rings = ctx.world.anchors.landingRings.position;
+    const ringDist = Math.hypot(ctx.player.position.x - rings.x, ctx.player.position.z - rings.z);
     // A few walking frames on the ground after the hand-back.
     rg.step(1 / 60, 20, false);
     const p = ctx.player.position;
@@ -86,6 +88,7 @@ test('balloon skydive: ride up, auto-jump, auto-chute, soft landing in walk mode
       chuteAgl,
       maxFall,
       landedAt,
+      ringDist,
       mode: rg.state().playerMode,
       onLand: ctx.world.isLand(p.x, p.z),
       groundGap: p.y - ctx.world.heightAt(p.x, p.z),
@@ -109,6 +112,10 @@ test('balloon skydive: ride up, auto-jump, auto-chute, soft landing in walk mode
   expect(r.maxFall).toBeGreaterThan(30);
   expect(r.maxFall).toBeLessThan(39);
   expect(r.landedAt).toBeGreaterThan(20);
+  // Hands-off: the freefall drifts along the trail and the canopy autopilot lands in the rings.
+  console.log(`hands-off landing ${r.ringDist.toFixed(2)} m from the ring centre`);
+  expect(r.ringDist).toBeLessThanOrEqual(12);
+  expect(r.stunts.some((s) => s.kind === 'bullseye' && s.stars >= 1)).toBe(true);
   expect(r.mode).toBe('walk');
   expect(r.onLand).toBe(true);
   expect(Math.abs(r.groundGap)).toBeLessThan(0.6);
