@@ -97,7 +97,7 @@ test('the combo falls back to x1 after the window', async () => {
 test('a mega gem is worth 5 and is counted in the total', async () => {
   const hook = await page.evaluate(() => window.__rgEconomy!);
   expect(hook.megaSpots.length).toBeGreaterThanOrEqual(8);
-  expect(hook.megaSpots.length).toBeLessThanOrEqual(14);
+  expect(hook.megaSpots.length).toBeLessThanOrEqual(24);
   const total = await page.evaluate(() => window.__rg!.state().gemsTotal);
   expect(total).toBe(hook.gemSpotCount + hook.megaSpots.length);
 

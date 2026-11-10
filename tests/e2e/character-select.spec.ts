@@ -63,6 +63,7 @@ test.describe('character select', () => {
       window.__rg!.freeze(true);
       try {
         localStorage.removeItem('rgow.character.v1');
+        window.__rg!.ctx.profile.equip('character', 'robot');
       } catch {
         /* ignore */
       }
@@ -110,7 +111,7 @@ test.describe('character select', () => {
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
     await settle(page, 'frog');
-    expect(await page.evaluate(() => localStorage.getItem('rgow.character.v1'))).toBe('frog');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('frog');
     await step(page, 5);
     await expect(page.getByTestId('skill-chip')).toBeVisible();
     await expect(page.getByTestId('skill-chip')).toHaveAttribute('data-skill', 'superBounce');
@@ -152,7 +153,7 @@ test.describe('character select', () => {
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
     await settle(page, 'panda');
-    expect(await page.evaluate(() => localStorage.getItem('rgow.character.v1'))).toBe('panda');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('panda');
     // Same wallet and profile as the shop: paid, owned, worn, and the shop card says so.
     expect(await page.evaluate(() => {
       const p = window.__rg!.ctx.profile;
@@ -171,7 +172,7 @@ test.describe('character select', () => {
     // A wipe locks the paid heroes again and swaps back to a free one.
     await page.evaluate(() => window.__rg!.ctx.profile.reset());
     await settle(page, 'robot');
-    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('panda'), localStorage.getItem('rgow.character.v1')])).toEqual([false, 'robot']);
+    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('panda'), window.__rg!.ctx.profile.equipped('character')])).toEqual([false, 'robot']);
     expect(consoleErrors).toEqual([]);
   });
 });

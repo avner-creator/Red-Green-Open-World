@@ -9,8 +9,11 @@ import { VisionLayer } from '../types';
 import type { GameContext } from '../types';
 import { GEM_FX, MEGA } from './constants';
 import { buildMegaGemGeometry } from './economy/megaGem';
-import { computeMegaSpots } from './economy/megaSpots';
+import { attractionMegas, computeMegaSpots } from './economy/megaSpots';
 import { thrillSpots } from './thrillSpots';
+import { bungeeSpots } from './bungee';
+import { sillySpots } from './silly';
+import { secretRewardSpots } from './secrets';
 import { hasPickupSink } from './economy/rules';
 import { GemField } from './gemLogic';
 
@@ -167,14 +170,21 @@ export function createGems(ctx: GameContext): Gems {
     ctx.session.setTotals({ gems: total });
   }
 
+  const flat = (t: { tag: string; position: THREE.Vector3 }): { tag: string; x: number; y: number; z: number } => ({
+    tag: t.tag, x: t.position.x, y: t.position.y, z: t.position.z,
+  });
+
   /** Place the mega gems (first update while playing: thrills are built by then). */
   function initMegas(): void {
     megasReady = true;
     const defs = computeMegaSpots(
       ctx.world.anchors,
       (x, z) => ctx.world.heightAt(x, z),
-      thrillSpots.map((t) => ({ tag: t.tag, x: t.position.x, y: t.position.y, z: t.position.z })),
-    ).slice(0, MEGA.capacity);
+      thrillSpots.map(flat),
+    )
+      // The newer attractions publish their gem-worthy spots too (filled at creation / first update).
+      .concat(attractionMegas([...bungeeSpots, ...sillySpots, ...secretRewardSpots].map(flat)))
+      .slice(0, MEGA.capacity);
     for (const d of defs) {
       const v = new THREE.Vector3(d.x, d.y, d.z);
       // Never sit on top of a normal gem (a world gem can hang in the same column): slide up.

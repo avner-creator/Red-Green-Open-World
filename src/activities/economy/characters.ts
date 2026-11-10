@@ -3,8 +3,9 @@
  * `slot: 'character'`, price from the character catalog; price 0 = starter). The character
  * select talks to the same wallet through `setCharacterAccess`.
  *
- * Which hero plays: main's remembered pick (`savePick`/`loadPick`) plus `player.setCharacter`
- * stay the source of truth for the game; `profile.equipped('character')` mirrors it:
+ * Which hero plays: the profile's `equipped.character` is the one source of truth. It is plugged
+ * into the select screen's `loadPick`/`savePick` (`setPickStore`), and the old standalone key
+ * `rgow.character.v1` is migrated into the profile once, then removed. Details:
  * - equipping a character (shop, wardrobe, or the buy in the select screen) switches to it and
  *   saves the pick;
  * - a Go on the select screen saves the pick; it is copied into the profile when play starts or
@@ -14,7 +15,7 @@
  */
 import { CHARACTERS, DEFAULT_CHARACTER } from '../../core/characters/catalog';
 import { setCharacterAccess } from '../../ui/characterAccess';
-import { loadPick, savePick } from '../../ui/characterLogic';
+import { clearLegacyPick, legacyPickStore, loadPick, savePick, setPickStore } from '../../ui/characterLogic';
 import type { EconomyApi, GameContext, ShopItem } from '../../types';
 
 export const CHARACTER_ITEMS: readonly ShopItem[] = CHARACTERS.map((c) => ({
@@ -51,9 +52,14 @@ export function wireCharacters(ctx: GameContext, economy: EconomyApi): () => voi
     if (profile.equipped('character') !== want) profile.equip('character', want);
   };
 
+  // One source of truth: migrate the old key into the profile once, then read/write the profile.
+  const legacy = legacyPickStore.load();
+  if (!isCharacter(profile.equipped('character')) && isCharacter(legacy) && profile.owns(legacy)) profile.equip('character', legacy);
+  clearLegacyPick();
+  setPickStore({ load: () => profile.equipped('character'), save: (id) => profile.equip('character', id) });
+
   // At boot (before the UI puts the remembered hero in the world): never start as a locked hero.
-  const pick = loadPick();
-  ensureOwned(pick ?? profile.equipped('character'));
+  ensureOwned(profile.equipped('character'));
 
   const offs = [
     events.on('item:equipped', (e) => {
@@ -80,5 +86,6 @@ export function wireCharacters(ctx: GameContext, economy: EconomyApi): () => voi
   ];
   return () => {
     for (const off of offs) off();
+    setPickStore(null);
   };
 }

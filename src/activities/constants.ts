@@ -146,7 +146,7 @@ export const MEGA = {
   /** Keep mega gems at least this far (m) from every normal gem. */
   minGemGap: 3.5,
   /** Most mega gems the layer can hold (instanced mesh capacity). */
-  capacity: 20,
+  capacity: 24,
   /** Pop-in animation after a respawn, seconds. */
   popSeconds: 0.6,
   /** Burst size multiplier (on the weak layer) compared with a normal gem. */

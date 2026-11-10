@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import type { Anchor, AnchorName, PhysicsApi } from '../../src/types';
 import { ECONOMY } from '../../src/config';
-import { computeMegaSpots } from '../../src/activities/economy/megaSpots';
+import { ATTRACTION_MEGA_TAGS, attractionMegas, computeMegaSpots } from '../../src/activities/economy/megaSpots';
+import { MEGA } from '../../src/activities/constants';
 import { kioskPromptPosition } from '../../src/activities/economy/kiosk';
 import { ANCHORS } from '../../src/world/layout';
 import { buildTerrain, sampleHeight } from '../../src/world/terrain';
@@ -123,6 +124,20 @@ describe('kiosk prompt', () => {
     expect(off.clone().sub(front.clone().multiplyScalar(off.dot(front))).length()).toBeLessThan(1e-6);
     expect(p.y - a.position.y).toBeGreaterThan(0.9);
     expect(p.y - a.position.y).toBeLessThan(1.5);
+  });
+});
+
+describe('attraction mega gems (bungee, Silly Zone, secret paths, vaults)', () => {
+  it('take the chosen tags, grouped, and skip missing ones', () => {
+    const live = ATTRACTION_MEGA_TAGS.map((t, i) => ({ tag: t.tag, x: i, y: 10 + i, z: -i }));
+    const out = attractionMegas([...live, { tag: 'sillyFlop', x: 0, y: 0, z: 0 }]);
+    expect(out.length).toBe(ATTRACTION_MEGA_TAGS.length);
+    expect(new Set(out.map((o) => o.tag))).toEqual(new Set(['bungee', 'silly', 'secret', 'vault']));
+    expect(attractionMegas(live.slice(2))).toHaveLength(ATTRACTION_MEGA_TAGS.length - 2);
+  });
+
+  it('fit in the mega gem layer together with the thrill ones', () => {
+    expect(computeMegaSpots(anchors, heightAt, []).length + 7 + ATTRACTION_MEGA_TAGS.length).toBeLessThanOrEqual(MEGA.capacity);
   });
 });
 

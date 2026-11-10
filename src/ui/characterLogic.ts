@@ -39,21 +39,53 @@ export function priceProgress(wallet: number, price: number): number {
   return price <= 0 ? 1 : Math.max(0, Math.min(1, wallet / price));
 }
 
-export function loadPick(): string | null {
+/** Where the remembered pick lives. The economy plugs in the saved profile (`equipped.character`). */
+export interface PickStore {
+  load(): string | null;
+  save(id: string): void;
+}
+
+/** The old standalone key (`rgow.character.v1`): used only until the profile store is plugged in, and for migration. */
+export const legacyPickStore: PickStore = {
+  load() {
+    try {
+      return localStorage.getItem(CHARACTER_KEY);
+    } catch {
+      return null;
+    }
+  },
+  save(id) {
+    try {
+      localStorage.setItem(CHARACTER_KEY, id);
+    } catch {
+      /* private mode or blocked storage: the pick just isn't remembered */
+    }
+  },
+};
+
+/** Forget the old standalone key (after migrating it into the profile). */
+export function clearLegacyPick(): void {
   try {
-    const v = localStorage.getItem(CHARACTER_KEY);
-    return v && CHARACTERS.some((c) => c.id === v) ? v : null;
+    localStorage.removeItem(CHARACTER_KEY);
   } catch {
-    return null;
+    /* ignore */
   }
 }
 
+let pickStore: PickStore = legacyPickStore;
+
+/** Plug in the source of truth for the remembered pick (null = back to the old key). */
+export function setPickStore(store: PickStore | null): void {
+  pickStore = store ?? legacyPickStore;
+}
+
+export function loadPick(): string | null {
+  const v = pickStore.load();
+  return v && CHARACTERS.some((c) => c.id === v) ? v : null;
+}
+
 export function savePick(id: string): void {
-  try {
-    localStorage.setItem(CHARACTER_KEY, id);
-  } catch {
-    /* private mode or blocked storage: the pick just isn't remembered */
-  }
+  pickStore.save(id);
 }
 
 /** The character to preselect: the remembered one while still owned, else the default. */

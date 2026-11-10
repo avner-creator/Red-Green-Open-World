@@ -81,3 +81,35 @@ export function computeMegaSpots(anchors: Anchors, heightAt: HeightFn, thrill: r
   }
   return spots;
 }
+
+/** The attraction tags that get a mega gem (from `bungeeSpots`, `sillySpots`, `secretRewardSpots`). */
+export const ATTRACTION_MEGA_TAGS: readonly { tag: string; group: string }[] = [
+  // Bungee: two on the hands-off fall line (deck -15 m and -22 m): every dive passes them.
+  { tag: 'bungeeFall2', group: 'bungee' },
+  { tag: 'bungeeFall3', group: 'bungee' },
+  // Silly Zone: the see-saw catapult apex and a mushroom-cap top bounce.
+  { tag: 'sillySeesaw', group: 'silly' },
+  { tag: 'sillyMushroom2', group: 'silly' },
+  // Secret paths: one on each reward pedestal, and one in each vault.
+  { tag: 'secret-rooftops-top', group: 'secret' },
+  { tag: 'secret-trampoline-top', group: 'secret' },
+  { tag: 'secret-lake-top', group: 'secret' },
+  { tag: 'secret-lighthouse-top', group: 'secret' },
+  { tag: 'vault-cliff', group: 'vault' },
+  { tag: 'vault-village', group: 'vault' },
+];
+
+/**
+ * Mega gems on the newer attractions (bungee fall line, Silly Zone, secret-path rewards, vaults).
+ * Takes the live spot arrays those modules publish; missing tags are skipped, so an attraction
+ * that is cut or renamed simply has no mega gem.
+ */
+export function attractionMegas(spots: readonly ThrillLike[]): MegaSpot[] {
+  const by = new Map(spots.map((t) => [t.tag, t]));
+  const out: MegaSpot[] = [];
+  for (const { tag, group } of ATTRACTION_MEGA_TAGS) {
+    const t = by.get(tag);
+    if (t) out.push({ x: t.x, y: t.y, z: t.z, tag: group });
+  }
+  return out;
+}
