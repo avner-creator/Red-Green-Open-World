@@ -34,7 +34,7 @@ export function createTitle(a: Actions): Screen {
     h('span', 'l1', {}, 'RED-GREEN'),
     h('span', 'l2', {}, icon('gem', 'y'), 'OPEN WORLD', icon('gem', 'y')),
   );
-  const play = btn('b play', 'Play', 'play', icon('play'), 'PLAY');
+  const play = btn('b play', 'Play', 'play', h('span', 'glow'), icon('play'), 'PLAY');
   play.addEventListener('click', a.play);
   const grown = btn('b d corner l', 'Grown-ups', 'grownups', icon('gear'), icon('grownup'));
   grown.addEventListener('click', a.openGate);
@@ -75,30 +75,64 @@ export function createPause(a: Actions): Screen {
 
 const STUNT_ORDER: StuntKind[] = ['bigBounce', 'longGlide', 'bullseye', 'bigAir', 'bungee', 'launch'];
 const CONFETTI = ['#ffd93b', '#ffffff', '#ffb02e', '#7fe3ff', '#ff8fc7', '#c8ff7f'];
+/** Outfit slots shown on the end screen (an outfit id maps to a slot by hat/cape/glass/paint). */
+const OUTFIT_SLOTS: UiIconName[] = ['hat', 'cape', 'glasses', 'paint'];
+const OUTFIT_ID = /hat|cape|glass|paint/i;
+
+/** How many of the three header stars are earned for a star total (0 earns none). */
+export function starSlots(stars: number): number {
+  if (stars <= 0) return 0;
+  if (stars < 3) return 1;
+  if (stars < 6) return 2;
+  return 3;
+}
+
+/** Which outfit slots (hat, cape, glasses, paint) a list of outfit ids fills; other ids are ignored. */
+export function outfitSlotsFilled(ids: Iterable<string>): Set<UiIconName> {
+  const out = new Set<UiIconName>();
+  for (const id of ids) if (OUTFIT_ID.test(id)) out.add(outfitIcon(id) as UiIconName);
+  return out;
+}
 
 export interface EndScreen extends Screen {
   fill(): void;
 }
 
 export function createEnd(ctx: GameContext, a: Actions): EndScreen {
+  const header = h('div', 'burst t', { 'data-testid': 'end-stars' });
   const stickers = h('div', 'stickers', { 'data-testid': 'stickers' });
+  const smalls = h('div', 'stickers small', { 'data-testid': 'stickers-extra' });
   const confetti = h('div', 'confetti');
-  const again = btn('b play', 'Play again', 'play-again', icon('restart'), 'PLAY');
+  const again = btn('b play', 'Play again', 'play-again', h('span', 'glow'), icon('restart'), 'PLAY');
   again.addEventListener('click', a.play);
   const home = btn('b d', 'Home', 'home', icon('home'));
   home.addEventListener('click', a.toTitle);
-  const panel = h(
-    'div',
-    'panel endp',
-    {},
-    h('div', 'burst t', {}, icon('sparkle'), icon('star'), icon('sparkle')),
-    stickers,
-    h('div', 'btnrow', {}, again, home),
-  );
+  const panel = h('div', 'panel endp', {}, header, stickers, smalls, h('div', 'btnrow', {}, again, home));
   const el = h('div', 'screen dim', { 'data-screen': 'end' }, confetti, panel);
 
-  const sticker = (ic: UiIconName, text: string, i: number, cls = ''): HTMLElement =>
-    h('div', `stk ${cls}`, { style: `--r:${(i % 2 ? 1 : -1) * (1 + (i % 3))}deg;--d:${i * 0.07}s` }, icon(ic), h('span', '', {}, text));
+  // Chests opened and outfits unlocked this run, from events (the session state may lag behind).
+  const chestsOpened = new Set<string>();
+  const outfitIds = new Set<string>();
+  ctx.events.on('session:phase', (e) => {
+    if (e.phase === 'playing' && e.previous !== 'paused') {
+      chestsOpened.clear();
+      outfitIds.clear();
+    }
+  });
+  ctx.events.on('chest:opened', (e) => {
+    chestsOpened.add(e.chestId);
+    outfitIds.add(e.outfitId);
+  });
+  ctx.events.on('outfit:unlocked', (e) => outfitIds.add(e.outfitId));
+
+  const sticker = (ic: UiIconName, text: string, i: number, earned: boolean, cls = ''): HTMLElement =>
+    h(
+      'div',
+      `stk ${earned ? 'earned' : 'empty'} ${cls}`.trim(),
+      { 'data-earned': String(earned), style: `--r:${(i % 2 ? 1 : -1) * (1 + (i % 3))}deg;--d:${Math.min(i, 7) * 0.05}s` },
+      icon(ic),
+      text ? h('span', '', {}, text) : null,
+    );
 
   return {
     el,
@@ -106,18 +140,28 @@ export function createEnd(ctx: GameContext, a: Actions): EndScreen {
     fill() {
       const s = ctx.session.state;
       stickers.replaceChildren();
+      smalls.replaceChildren();
+      header.replaceChildren();
+      const filled = starSlots(s.stars);
+      header.append(icon('sparkle'));
+      for (let n = 0; n < 3; n++) {
+        header.append(h('span', `hstar ${n < filled ? 'earned' : 'empty'}`, { style: `--d:${0.15 + n * 0.18}s` }, icon('star')));
+      }
+      header.append(icon('sparkle'));
+
+      const chests = Math.max(s.chests, chestsOpened.size);
       let i = 0;
       stickers.append(
-        sticker('gem', counterText(s.gems, s.gemsTotal), i++, 'big'),
-        sticker('chest', counterText(s.chests, s.chestsTotal), i++, 'big'),
-        sticker('star', String(s.stars), i++, 'big'),
+        sticker('gem', counterText(s.gems, s.gemsTotal), i++, s.gems > 0, 'big'),
+        sticker('chest', counterText(chests, Math.max(s.chestsTotal, chests)), i++, chests > 0, 'big'),
+        sticker('star', String(s.stars), i++, s.stars > 0, 'big'),
       );
       for (const k of STUNT_ORDER) {
         const v = s.bestStunts[k];
-        if (v && v > 0) stickers.append(sticker(STUNT_ICON[k], String(Math.round(v)), i++));
-        else stickers.append(sticker(STUNT_ICON[k], '·', i++, 'empty'));
+        smalls.append(sticker(STUNT_ICON[k], v && v > 0 ? String(Math.round(v)) : '', i++, !!v && v > 0));
       }
-      for (const id of s.outfits) stickers.append(sticker(outfitIcon(id), '', i++));
+      const have = outfitSlotsFilled([...s.outfits, ...outfitIds]);
+      for (const slot of OUTFIT_SLOTS) smalls.append(sticker(slot, '', i++, have.has(slot), 'outfit'));
       confetti.replaceChildren();
       for (let n = 0; n < 46; n++) {
         const c = h('i', '', { style: `--x:${(n * 37) % 100}%;--c:${CONFETTI[n % CONFETTI.length]};--t:${3.2 + (n % 5) * 0.5}s;--dl:${-((n * 0.37) % 4)}s` });

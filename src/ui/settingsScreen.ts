@@ -105,13 +105,15 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     reset.replaceChildren(icon('restart'), 'Reset');
   }
 
-  const rows: HTMLElement[] = [
+  const glassesRows: HTMLElement[] = [
     row('glasses', 'Lens on the left eye', null, h('div', 'choices', {}, lensBtn('red'), lensBtn('green'))),
-    row('eye', 'Weaker eye', null, h('div', 'choices', {}, eyeBtn('left'), eyeBtn('right'))),
-    slider({ ic: 'gem', label: 'Weak-eye strength', testid: 'weak-strength', ...pct(() => S().eye.weakStrength, (v) => ctx.settings.set({ eye: { weakStrength: v } }), 20) }),
-    slider({ ic: 'bolt', label: 'Crosstalk limit', testid: 'crosstalk', ...pct(() => S().eye.crosstalkLimit, (v) => ctx.settings.set({ eye: { crosstalkLimit: v } }), 5) }),
-    slider({ ic: 'sun', label: 'Strong-eye contrast', testid: 'strong-contrast', ...pct(() => S().eye.strongContrast, (v) => ctx.settings.set({ eye: { strongContrast: v } }), 40) }),
+    row('eye', 'Gem eye', null, h('div', 'choices', {}, eyeBtn('left'), eyeBtn('right'))),
+    slider({ ic: 'gem', label: 'Gem glow', testid: 'weak-strength', ...pct(() => S().eye.weakStrength, (v) => ctx.settings.set({ eye: { weakStrength: v } }), 20) }),
+    slider({ ic: 'bolt', label: 'Ghosting guard', testid: 'crosstalk', ...pct(() => S().eye.crosstalkLimit, (v) => ctx.settings.set({ eye: { crosstalkLimit: v } }), 5) }),
+    slider({ ic: 'sun', label: 'Other-eye dimmer', testid: 'strong-contrast', ...pct(() => S().eye.strongContrast, (v) => ctx.settings.set({ eye: { strongContrast: v } }), 40) }),
     row('eye', 'Calibration', null, calibrate),
+  ];
+  const gameRows: HTMLElement[] = [
     slider({
       ic: 'clock',
       label: 'Session length',
@@ -130,14 +132,34 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     row('restart', 'Reset all settings', null, reset),
   ];
 
+  // Two tabs so nothing scrolls on a small screen: Glasses / Game.
+  const panes = {
+    glasses: h('div', 'pane', { 'data-pane': 'glasses' }, ...glassesRows),
+    game: h('div', 'pane', { 'data-pane': 'game' }, ...gameRows),
+  };
+  const tabs = {
+    glasses: h('button', 'b d sm tab', { type: 'button', role: 'tab', 'aria-label': 'Glasses', 'data-testid': 'tab-glasses' }, icon('glasses'), 'Glasses'),
+    game: h('button', 'b d sm tab', { type: 'button', role: 'tab', 'aria-label': 'Game', 'data-testid': 'tab-game' }, icon('gear'), 'Game'),
+  };
+  const showTab = (k: 'glasses' | 'game'): void => {
+    for (const key of ['glasses', 'game'] as const) {
+      panes[key].classList.toggle('on', key === k);
+      tabs[key].setAttribute('aria-selected', String(key === k));
+      tabs[key].setAttribute('aria-pressed', String(key === k));
+    }
+  };
+  tabs.glasses.addEventListener('click', () => showTab('glasses'));
+  tabs.game.addEventListener('click', () => showTab('game'));
+  showTab('glasses');
+
   const done = h('button', 'b', { type: 'button', 'aria-label': 'Done', 'data-testid': 'settings-done' }, icon('check'), 'Done');
   done.addEventListener('click', o.onClose);
   const panel = h(
     'div',
     'panel settings',
     { 'data-testid': 'settings' },
-    h('div', 'bar', {}, h('div', 'head t', {}, icon('gear'), icon('grownup'), 'Grown-up settings'), done),
-    h('div', 'scroll', {}, ...rows),
+    h('div', 'bar', {}, h('div', 'head t', {}, icon('grownup')), h('div', 'tabs', { role: 'tablist' }, tabs.glasses, tabs.game), done),
+    h('div', 'panes', {}, panes.glasses, panes.game),
   );
   const el = h('div', 'screen dim', { 'data-screen': 'settings' }, panel);
 
@@ -150,7 +172,7 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     onShow() {
       refresh();
       disarm();
-      (el.querySelector('.scroll') as HTMLElement).scrollTop = 0;
+      showTab('glasses');
       return el.querySelector<HTMLElement>('[data-testid="lens-red"]');
     },
   };
