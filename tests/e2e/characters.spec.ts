@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, canvasShot } from './helpers';
+import { SHOTS, boot, canvasShot } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -36,6 +36,7 @@ function splitChannel(png: PNG, c: number): Buffer {
 
 /** Save the last rendered frame as full / R / G. */
 async function save(name: string): Promise<void> {
+  if (!SHOTS) return; // human-only screenshots are opt-in (RG_SHOTS=1)
   const png = await canvasShot(page, `${OUT}/${name}-full.png`);
   writeFileSync(`${OUT}/${name}-R.png`, splitChannel(png, 0));
   writeFileSync(`${OUT}/${name}-G.png`, splitChannel(png, 1));
@@ -105,14 +106,15 @@ test.afterAll(async () => {
 const skillsSeen = (): Promise<string[]> =>
   page.evaluate(() => (window as unknown as { __skills: string[] }).__skills.splice(0));
 
-test('the default character is the robot and unknown ids are ignored', async () => {
+test('the default character is the frog and unknown ids are ignored', async () => {
   const r = await page.evaluate(async () => {
     const p = window.__rg!.ctx.player;
     const first = p.characterId;
     await p.setCharacter('unicorn');
     return { first, after: p.characterId, skill: p.skill.id, ready: p.skill.ready, boost: p.skill.bounceBoost };
   });
-  expect(r).toEqual({ first: 'robot', after: 'robot', skill: 'doubleJump', ready: true, boost: 1 });
+  // (`ready`/`boost` are skill-specific: the frog's charge bounce is not "ready" until it lands.)
+  expect({ first: r.first, after: r.after, skill: r.skill }).toEqual({ first: 'frog', after: 'frog', skill: 'superBounce' });
 });
 
 for (const id of IDS) {

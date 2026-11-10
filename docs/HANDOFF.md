@@ -28,39 +28,29 @@ Rules that matter for a newcomer: the orchestrator writes no code (workers on Op
 interfaces are in `src/types.ts` (integrator only); tests use `?test=1` and `window.__rg`;
 parallel agents must each use their own `RG_PORT`.
 
-## State (updated 2026-11-11 ~03:00 UTC)
+## State (updated 2026-11-11 ~15:00 UTC)
 
-**On `main` (verified, 71 e2e; live on Netlify):** everything in the previous state plus: six
-playable CC0 characters with skills (Q) and emotes (C), character-select onboarding (Play → pick
-→ Go; last pick remembered), HUD skill chip, touch/mobile controls, compass de-overlap, correct
-gamepad glyphs, trick/confetti/apex fixes, fingerpost readable from spawn, skydive sea/fog detail.
+**On `main` (verified, 494 unit + 129 e2e; live on Netlify):** red-green compositor + calibration;
+six heroes with skills and a select screen (frog is the default); economy (persistent wallet and
+profile, mega gems, combos, respawning gems, Gear Shack shop, wardrobe, tickets, missions);
+trampoline with tricks, bounce pads, rocket pads; buggy (fixed-step handling drawn interpolated),
+horse; balloon skydive; bungee; Silly Zone; secret paths and two-eye vault doors; Scoops
+ice-cream shop; both-eye chests; wayfinding; touch controls; adaptive music.
+Attractions register through `src/activities/<folder>/register.ts` (see CLAUDE.md).
 
-Interface additions since M1 (other streams must keep them): `CameraApi.setOverride` accepts
-`yawOffset`/`orbitRate`; `PlayerApi.setTilt`, `setVisualRotation`, `setVisualStretch`,
-`setCharacter`, `characterId`, `skill`, `emote()`; `InputState.skillPressed`/`emotePressed`/`skill`;
-events `player:character`/`player:skill`/`player:emote`; `Anchor.target`/`targetRadius`;
-`TestApi.step(dt, n, render)`. Activities export `setLaunchGate(fn)` (rocket-pad ticket hook) and
-`thrillSpots` (mega-gem positions). **Economy plug-in point for character buying:**
-`setCharacterAccess({owns, canAfford, buy, wallet})` in `src/ui/characterAccess.ts`.
+## In flight (main session)
 
-## In flight
+| Branch | Owner agent | Task |
+|---|---|---|
+| `agent/integrate-m2` | integrator | Batch 2, merged one at a time on top of `main`: `agent/world-budget`, `agent/chest-symbols-clean` (NOT `agent/chest-symbols`), `agent/buddy-pip` (Pip the talking puppy), `agent/boot-loading` (I), `agent/world-life` (H), `agent/world-outer` (G), then attractions `agent/bumper-arena` (L), `agent/carnival-games` (J), `agent/foam-lava` (M), `agent/sky-rides` (O), `agent/buggy-race` (N); shared glue (stunt kinds, icons, sounds, `PlayerApi.addMoveModifier`, tickets via `payTicket`), ride-release e2e, vision-content coverage, e2e time. Checkpoint pushes after each merge. |
+| `agent/world-sites` | world-artist | Anchors, cleared ground, beacons, signposts and paths for the new attractions (carnivalRow, iceCream, bubbleArena, dinoRing, raceStart, foamCourse, airstrip, dragonRoost). Merge after batch 2. |
 
-Main session: nothing in flight except a QA audit of `main` (read-only). Glue (skill bounce
-boosts, `'touch'` device, phone defaults, saved character at boot) and the hero-object performance
-pass are on `main` (75 e2e). Still over budget: triangles (Medium 534k vs 500k, Low 338k vs 280k;
-the rest is terrain and grass).
+Second account: `agent/glasses-depth` (Stream P, orchestrated; Phase 1 in progress, Phase 2 may
+start now that `main` has the economy). All other streams (A–O) are pushed.
 
-Second account (see `docs/PARALLEL_WORK.md`; merge each when the owner says it is pushed):
-`agent/economy` (Stream C, orchestrated), `agent/mobile-touch` (A), `agent/characters` (B);
-`agent/activities-secrets` (F), `agent/core-horse` (D), `agent/activities-bungee-silly` (E), `agent/world-outer` (G), `agent/world-life` (H), `agent/boot-loading` (I). A and B are merged; C is nearly done; the rest were started on 2026-11-11.
-After `agent/characters` lands, the main session wires characters into the player controller,
-skills and a character-select onboarding screen.
-
-If a WIP branch is unfinished, start the same agent type on it (not from scratch): "continue the
-task on branch `agent/...`; run verify; report". If a branch is empty or missing, re-brief from the
-table.
-
-Parallel streams on a second account: see `docs/PARALLEL_WORK.md`. **Stream C (economy, shop, missions; branch `agent/economy`) is taken by the second account** — the main session must not build items 1–4 of the fun pass, only merge that branch when it is ready. Main session keeps: thrills, wayfinding, speed, controls card, music, character wiring, QA, performance.
+Known defects to assign after batch 2: frog's hat drifts in skydive freefall; secrets and Silly
+Zone need draw-call batching; e2e suite takes 10–19 min under load; start screen, Fun Pass stamp
+card, cuter hero idles, trampoline entrance, hero framing at the balloon top (Carnival Island pass).
 
 ## Next steps (in order)
 

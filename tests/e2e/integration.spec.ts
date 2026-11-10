@@ -18,9 +18,13 @@ test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   ({ consoleErrors } = await boot(page));
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const rg = window.__rg!;
     rg.freeze(true);
+    // These checks (outfit on the head bone in every ride pose) are tuned on the robot; a new
+    // profile now starts as the frog. The profile is the saved pick (Go in the select uses it).
+    rg.ctx.profile.equip('character', 'robot');
+    await rg.ctx.player.setCharacter('robot');
     const w = window as unknown as { __rgPauses: number };
     w.__rgPauses = 0;
     rg.ctx.events.on('session:phase', (e) => {

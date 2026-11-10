@@ -75,6 +75,8 @@ export const CAM = {
   fallFollowGain: 0.6,
   /** Max lag of the smoothed pivot behind the player (m). */
   maxLag: 2.5,
+  /** Smoothing (1/s) of the velocity the look-ahead aims along (filters per-frame wobble). */
+  lookVelRate: 8,
   collisionMargin: 0.3,
   minDistance: 0.9,
   /** How fast the camera eases back out after a collision pulled it in (1/s). */

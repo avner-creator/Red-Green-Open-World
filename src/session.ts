@@ -17,6 +17,11 @@ export function createSession(events: EventBus, settings: SettingsApi): SessionS
     stars: 0,
     bestStunts: {},
     outfits: [],
+    earned: 0,
+    bestCombo: 0,
+    megaGems: 0,
+    missionsDone: 0,
+    spent: 0,
   };
   let tickAcc = 0;
 
@@ -42,6 +47,22 @@ export function createSession(events: EventBus, settings: SettingsApi): SessionS
     state.bestStunts[e.kind] = Math.max(state.bestStunts[e.kind] ?? 0, e.value);
   });
 
+  // Economy counters (stream C). 'test' wallet changes (test hooks, profile reset) are not counted.
+  events.on('wallet:changed', (e) => {
+    if (e.reason === 'test') return;
+    if (e.delta > 0) state.earned = (state.earned ?? 0) + e.delta;
+    else if (e.delta < 0) state.spent = (state.spent ?? 0) - e.delta;
+  });
+  events.on('combo:changed', (e) => {
+    state.bestCombo = Math.max(state.bestCombo ?? 0, e.multiplier);
+  });
+  events.on('gem:collected', (e) => {
+    if (e.mega) state.megaGems = (state.megaGems ?? 0) + 1;
+  });
+  events.on('mission:completed', () => {
+    state.missionsDone = (state.missionsDone ?? 0) + 1;
+  });
+
   return {
     state,
     start() {
@@ -52,6 +73,11 @@ export function createSession(events: EventBus, settings: SettingsApi): SessionS
       state.stars = 0;
       state.bestStunts = {};
       state.outfits = [];
+      state.earned = 0;
+      state.bestCombo = 0;
+      state.megaGems = 0;
+      state.missionsDone = 0;
+      state.spent = 0;
       tickAcc = 0;
       setPhase('playing');
       events.emit('session:tick', { remaining: state.remaining, total: state.total });

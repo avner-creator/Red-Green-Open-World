@@ -30,7 +30,7 @@ export const WAYFINDING_CSS = `
 .rg .wf-m .dots i.f{background:var(--y);border-color:#000;box-shadow:0 0 0 calc(var(--u)*.2) #fff}
 
 /* help button + card */
-.rg .wf-help{position:absolute;right:calc(var(--u)*2.4);top:calc(var(--u)*11.6);width:calc(var(--u)*6.4);height:calc(var(--u)*6.4);padding:0;border-radius:50%;
+.rg .wf-help{position:absolute;z-index:5;right:calc(var(--u)*2.4);top:calc(var(--u)*13.8);width:calc(var(--u)*6.4);height:calc(var(--u)*6.4);padding:0;border-radius:50%;
   pointer-events:auto;cursor:pointer;font:inherit;font-size:calc(var(--u)*4.2);font-weight:1000;color:#fff;background:linear-gradient(180deg,#2b3360,#10142a);
   border:calc(var(--u)*.6) solid #fff;box-shadow:0 0 0 calc(var(--u)*.45) #000,0 calc(var(--u)*.8) calc(var(--u)*2) rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
 .rg .wf-help:hover{filter:brightness(1.2)}
@@ -45,7 +45,7 @@ export const WAYFINDING_CSS = `
 .rg .wf-card.on .wf-panel{animation:rg-in .22s ease-out}
 .rg .wf-title{display:flex;align-items:center;gap:calc(var(--u)*1.4);font-size:calc(var(--u)*4)}
 .rg .wf-title .ic{font-size:1.3em;color:var(--y)}
-.rg .wf-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(var(--u)*1.6)}
+.rg .wf-cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(var(--u)*1.6)}
 .rg .wf-col{display:flex;flex-direction:column;gap:calc(var(--u)*1.1);background:#ffffff14;border:calc(var(--u)*.3) solid #ffffff40;border-radius:calc(var(--u)*2);padding:calc(var(--u)*1.2)}
 .rg .wf-col .hd{display:flex;align-items:center;justify-content:center;font-size:calc(var(--u)*4);padding-bottom:calc(var(--u)*.6);border-bottom:calc(var(--u)*.35) solid #ffffff55}
 .rg .wf-col .hd .ic{font-size:1.7em;color:var(--y)}

@@ -10,6 +10,7 @@ import { buildVillage, PLAZA } from './village';
 import { buildPark } from './park';
 import { buildAreas } from './areas';
 import { buildCoreAreas } from './core-areas';
+import { buildGearShack } from './gear-shack';
 import { buildChestSpots, buildGemSpots, type ChestSpot, type Spot } from './spots';
 import { LOTS } from './village-data';
 import type { Keepout, ManualTree } from './scatter';
@@ -29,6 +30,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   const park = buildPark(kit);
   const areas = buildAreas(kit);
   const core = buildCoreAreas(kit);
+  const shack = buildGearShack(kit);
   const keepouts: Keepout[] = [
     { x: PLAZA.x, z: PLAZA.z, r: PLAZA.r + 1, paved: true },
     { x: 0, z: -37, hx: 8.5, hz: 22, paved: true },
@@ -36,6 +38,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
     ...park.keepouts,
     ...areas.keepouts,
     ...core.keepouts,
+    ...shack,
   ];
   const gemSpots = buildGemSpots(kit.h, terrain.roads);
   const chestSpots = buildChestSpots(kit.h);

@@ -64,3 +64,9 @@
 - Hero objects (buggy, balloon, player, thrills) are batched by material with per-vertex finishes, and cast shadows through low-poly shadow-only proxies on render layer 7 (core enables that layer on the sun's shadow camera). Reason: whole frame at spawn on Medium went from 442 draws / 811k triangles to 198 / 534k with no visible change.
 - The balloon burner's point light was replaced by an emissive glow inside the envelope. Reason: per-object lights are expensive; the basket no longer gets warm light during burns.
 - Boot loads only the saved character (`CHARACTER_KEY` in `src/config.ts`); music loads after Play. Reason: first-visit download to the title screen is ~2.2 MB gzip.
+- Attractions self-register through `src/activities/<folder>/register.ts`, discovered with `import.meta.glob`. Reason: every stream added a line to the same list and conflicted.
+- The buggy's handling runs inside each fixed physics step and is drawn interpolated; camera follow is exact at any frame time. Reason: owner saw the car shake on a real display; measured jerk at 90–144 Hz and uneven frame rates dropped from 17–161 to ~0.2.
+- The frog (Hopper) is the first-run default hero; the saved hero lives in the profile (`equipped.character`). Reason: owner found the robot unlikeable; one source of truth.
+- Chests open from any side with a symbol-ring lock (three both-eye symbols ring the chest; the right one floats above it for the strong eye only); a locked chest says "find the key". Reason: owner found the keyhole-side rule silly and unexplained.
+- "Carnival Island" is the in-game setting; Pip, a procedural talking puppy with a synthesized gibberish voice, is the guide. Mini-games use foam, bubbles and water balloons only; the plane ride is a stunt contest, the dragon breathes bubbles. Reason: owner playtest 2; non-violence rule.
+- Worktree agents get unique local branch names. Reason: two agents sharing `work` put a chest commit on the Pip branch.

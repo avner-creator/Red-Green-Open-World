@@ -1,6 +1,6 @@
 /**
- * The contract every vehicle kind implements (buggy now; the horse can plug in later with the
- * same manager: enter/exit via E, seat, chase camera, rescue on R, park on a new session).
+ * The contract every vehicle kind implements (the buggy and the horses share one manager:
+ * enter/exit via E, seat, chase camera, rescue on R, park on a new session).
  */
 import type * as THREE from 'three';
 import type { IconName, InputState, PlayerAnim, VehicleApi } from '../../types';
@@ -33,5 +33,11 @@ export interface VehicleInternal {
   rescue(): void;
   /** Back to its parking spot (new session). */
   park(): void;
+  /** R keeps the rider on board (the horse): `rescue` moves vehicle and rider together. */
+  readonly rescueKeepsRider?: boolean;
+  /** Called every frame before the player's animation update (undo procedural rider posing). */
+  beforePlayer?(): void;
+  /** Called every frame after the player's update; `riding` = the player is on this vehicle. */
+  lateUpdate?(dt: number, riding: boolean): void;
   dispose(): void;
 }

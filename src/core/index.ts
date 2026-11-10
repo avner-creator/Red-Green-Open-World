@@ -56,6 +56,7 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
         watchShadows(dt);
         vehicles.update(dt);
         player.update(dt);
+        vehicles.lateUpdate(dt);
         interactions.update(dt);
         camera.update(dt);
       },

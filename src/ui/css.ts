@@ -1,3 +1,5 @@
+import { ECON_CSS } from './cssEcon';
+
 /** All UI CSS, injected once. Sizes use --u (about 1vmin, clamped) so 640x360 up to 4K work. */
 export const UI_CSS = `
 .rg{--u:clamp(5px,1vmin,22px);--y:#ffd93b;--ink:#0a0d1a;--panel:#10142a;--panel2:#1c2240;--out:#000;
@@ -134,7 +136,8 @@ export const UI_CSS = `
 .rg .gp.tb{width:1.7em;height:1.7em;background:#1b2142;border-color:#fff;box-shadow:0 0 0 calc(var(--u)*.35) #000}.rg .gp.tb .ic{width:1.05em;height:1.05em}
 .rg .tut{--u:clamp(3.8px,.82vmin,18px);position:absolute;left:calc(var(--u)*3);bottom:calc(var(--u)*3);display:flex;gap:calc(var(--u)*2);align-items:flex-end;padding:calc(var(--u)*1.2) calc(var(--u)*2);
   background:linear-gradient(180deg,#1d2346e6,#0b0f22e6);border:calc(var(--u)*.6) solid #fff;border-radius:calc(var(--u)*2.8);box-shadow:0 0 0 calc(var(--u)*.45) #000,0 calc(var(--u)*.8) calc(var(--u)*2) rgba(0,0,0,.5);
-  font-size:calc(var(--u)*3);opacity:0;pointer-events:none;transition:opacity .6s;max-width:28vw}
+  font-size:min(calc(var(--u)*3),1.45vw);opacity:0;pointer-events:none;transition:opacity .6s;max-width:34vw}
+.rg .tut .sk{font-size:1.25em}
 .rg .tut.on{opacity:1}
 .rg .tut .cap.wide{min-width:2.6em}
 .rg .tgroup{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.8)}
@@ -225,6 +228,8 @@ export const UI_CSS = `
 .rg .crow .lic{background:#fff;color:#000;border-radius:calc(var(--u)*1);padding:0 calc(var(--u)*1);font-size:.85em}
 .rg .crow .by{opacity:.85;font-weight:700}
 
+/* Short screens (phones in landscape, 640x360): only the newest toast, so the stack never reaches the prompt. */
+@media (max-height:480px){.rg .toasts .toast:not(:last-child){display:none}}
 @media (prefers-reduced-motion:reduce){.rg *,.rg *::before,.rg *::after{animation:none!important;transition:none!important}.rg .confetti{display:none}}
 `;
 
@@ -233,6 +238,6 @@ export function injectCss(): void {
   if (injected) return;
   injected = true;
   const el = document.createElement('style');
-  el.textContent = UI_CSS;
+  el.textContent = UI_CSS + ECON_CSS;
   document.head.appendChild(el);
 }

@@ -38,3 +38,17 @@ export const SESSION = { minMinutes: 3, maxMinutes: 15, tickInterval: 0.25 } as 
 export const GEMS = { pickupRadius: 1.6, nearRadius: 12 } as const;
 
 export const BALLOON = { topHeight: 180, ascentSeconds: 10, autoChuteHeight: 40 } as const;
+
+export const PROFILE_KEY = 'rgow.profile.v1';
+export const ECONOMY = {
+  gemValue: 1,
+  megaGemValue: 5,
+  comboWindow: 3, // seconds between pickups that keep a streak alive
+  comboMax: 5, // ×5 cap
+  respawnSeconds: 45,
+  balloonTicket: 5,
+  rocketPadTicket: 3,
+  freeBalloonRides: 1, // per session
+  missionsPerSession: 3,
+  jackpot: 15, // bonus for finishing all three missions
+} as const;

@@ -136,5 +136,11 @@ Picking the project up in a new session? Start with `docs/HANDOFF.md`.
   compositor, calibration, eye settings · `src/world` map, terrain, lighting, sky, asset loading ·
   `src/activities` trampoline, skydive, bungee, launch pads, collectibles · `src/ui` menus, HUD,
   timer, end screen, settings, credits · `tests/` unit + e2e.
+- **Attractions register themselves**: every folder under `src/activities/` has a `register.ts`
+  (`export default (ctx) => GameSystem`, plus a numeric `order`: rides 10–99, pickups 100–199,
+  gear 200+). `src/activities/index.ts` discovers them with `import.meta.glob`; never add
+  registration lines to `index.ts`.
+- Worktree agents: use the unique local branch name given in your brief, never a shared name such
+  as `work`.
 - Strict TypeScript, no `any` without a comment. Small modules. Constants in `src/config.ts`.
 - Commit often with clear messages. One concern per commit.

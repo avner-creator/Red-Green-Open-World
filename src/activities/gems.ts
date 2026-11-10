@@ -4,10 +4,17 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GEMS, PLAYER } from '../config';
+import { ECONOMY, GEMS, PLAYER } from '../config';
 import { VisionLayer } from '../types';
 import type { GameContext } from '../types';
-import { GEM_FX } from './constants';
+import { GEM_FX, MEGA } from './constants';
+import { buildMegaGemGeometry } from './economy/megaGem';
+import { attractionMegas, computeMegaSpots } from './economy/megaSpots';
+import { thrillSpots } from './thrillSpots';
+import { bungeeSpots } from './bungee';
+import { sillySpots } from './silly';
+import { secretRewardSpots } from './secrets';
+import { hasPickupSink } from './economy/rules';
 import { GemField } from './gemLogic';
 
 /** Faceted gem (crown + pavilion). Grey level per facet is baked into vertex colours. */
@@ -60,6 +67,28 @@ function haloTexture(): THREE.Texture {
   return new THREE.CanvasTexture(canvas);
 }
 
+/** Test hook (only with `?test=1`): what the economy e2e needs. Small on purpose. */
+export interface EconomyTestHook {
+  megaSpots: { x: number; y: number; z: number; tag: string }[];
+  gemSpotCount: number;
+  /** Bring every collected gem back right now (emits `gem:respawned`). */
+  forceRespawn(): void;
+}
+
+declare global {
+  interface Window {
+    __rgEconomy?: EconomyTestHook;
+  }
+}
+
+/** Ease-out-back pop-in: 0 to 1 with a little overshoot. */
+export function popScale(k: number): number {
+  if (k >= 1) return 1;
+  if (k <= 0) return 0;
+  const c = 1.9;
+  return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2);
+}
+
 export interface Gems {
   update(dt: number): void;
   reset(): void;
@@ -67,16 +96,32 @@ export interface Gems {
 }
 
 export function createGems(ctx: GameContext): Gems {
-  const spots = ctx.world.gemSpots;
-  const field = new GemField(
-    spots.map((s) => s.position),
-    { pickupRadius: GEMS.pickupRadius, nearRadius: GEMS.nearRadius, nearInterval: GEM_FX.nearInterval },
-  );
-  const n = spots.length;
-  ctx.session.setTotals({ gems: n });
+  const normalSpots = ctx.world.gemSpots.map((s) => s.position);
+  // Mega gems are placed once the rides exist (the rocket arc is only known after the first
+  // update of the thrills), see `initMegas`.
+  const megaTags: string[] = [];
+  const megaSpots: THREE.Vector3[] = [];
+  let megasReady = false;
+  const n = normalSpots.length;
+  let m = 0;
+  let total = n;
+  const spots: THREE.Vector3[] = [...normalSpots];
+  const field = new GemField(spots, {
+    pickupRadius: GEMS.pickupRadius,
+    nearRadius: GEMS.nearRadius,
+    nearInterval: GEM_FX.nearInterval,
+    respawnSeconds: ECONOMY.respawnSeconds,
+    radiusOf: (i) => (i >= n ? MEGA.pickupRadius : GEMS.pickupRadius),
+  });
+  /** Seconds since a gem (re)appeared; used for the pop-in. Large = settled. */
+  const age = spots.map(() => 99);
+  const idOf = (i: number): string => (i >= n ? `mega${i - n}` : `gem${i}`);
+  ctx.session.setTotals({ gems: total });
 
   const gemGeo = buildGemGeometry();
   const gemMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const megaGeo = buildMegaGemGeometry();
+  const megaMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const haloTex = haloTexture();
   const haloGeo = new THREE.PlaneGeometry(1, 1);
   const haloMat = new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0.45, depthWrite: false });
@@ -84,20 +129,23 @@ export function createGems(ctx: GameContext): Gems {
   const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
   const gems = new THREE.InstancedMesh(gemGeo, gemMat, Math.max(1, n));
-  const halos = new THREE.InstancedMesh(haloGeo, haloMat, Math.max(1, n + GEM_FX.maxBursts));
+  const megas = new THREE.InstancedMesh(megaGeo, megaMat, MEGA.capacity);
+  megas.count = 0;
+  const halos = new THREE.InstancedMesh(haloGeo, haloMat, n + MEGA.capacity + GEM_FX.maxBursts);
   const sparks = new THREE.InstancedMesh(sparkGeo, sparkMat, GEM_FX.maxBursts * GEM_FX.particles);
-  for (const m of [gems, halos, sparks]) {
-    m.frustumCulled = false;
-    m.castShadow = false;
-    m.receiveShadow = false;
-    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  for (const mesh of [gems, megas, halos, sparks]) {
+    mesh.frustumCulled = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
   const group = new THREE.Group();
-  group.add(gems, halos, sparks);
+  group.name = 'glow-gems';
+  group.add(gems, megas, halos, sparks);
   // Weak-eye layer only: never added to ctx.scene.
   ctx.vision.add(group, VisionLayer.WeakOnly);
 
-  const bursts: { t: number; pos: THREE.Vector3 }[] = [];
+  const bursts: { t: number; pos: THREE.Vector3; size: number }[] = [];
   const dummy = new THREE.Object3D();
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   const prev = new THREE.Vector3();
@@ -119,13 +167,51 @@ export function createGems(ctx: GameContext): Gems {
     field.reset();
     bursts.length = 0;
     havePrev = false;
-    ctx.session.setTotals({ gems: n });
+    age.fill(99);
+    ctx.session.setTotals({ gems: total });
+  }
+
+  const flat = (t: { tag: string; position: THREE.Vector3 }): { tag: string; x: number; y: number; z: number } => ({
+    tag: t.tag, x: t.position.x, y: t.position.y, z: t.position.z,
+  });
+
+  /** Place the mega gems (first update while playing: thrills are built by then). */
+  function initMegas(): void {
+    megasReady = true;
+    const defs = computeMegaSpots(
+      ctx.world.anchors,
+      (x, z) => ctx.world.heightAt(x, z),
+      thrillSpots.map(flat),
+    )
+      // The newer attractions publish their gem-worthy spots too (filled at creation / first update).
+      .concat(attractionMegas([...bungeeSpots, ...sillySpots, ...secretRewardSpots].map(flat)))
+      .slice(0, MEGA.capacity);
+    for (const d of defs) {
+      const v = new THREE.Vector3(d.x, d.y, d.z);
+      // Never sit on top of a normal gem (a world gem can hang in the same column): slide up.
+      for (let tries = 0; tries < 4 && normalSpots.some((g) => g.distanceTo(v) < MEGA.minGemGap); tries++) v.y += MEGA.minGemGap;
+      megaSpots.push(v);
+      megaTags.push(d.tag);
+      field.addSpot(v);
+      age.push(99);
+    }
+    m = defs.length;
+    total = n + m;
+    megas.count = m;
+    ctx.session.setTotals({ gems: total });
+  }
+
+  function respawned(list: number[]): void {
+    for (const i of list) {
+      age[i] = 0;
+      ctx.events.emit('gem:respawned', { id: idOf(i) });
+    }
   }
 
   function drawBursts(): void {
     for (let b = 0; b < GEM_FX.maxBursts; b++) {
       const burst = bursts[b];
-      const flashIdx = n + b;
+      const flashIdx = n + MEGA.capacity + b;
       if (!burst) {
         halos.setMatrixAt(flashIdx, zero);
         for (let p = 0; p < GEM_FX.particles; p++) sparks.setMatrixAt(b * GEM_FX.particles + p, zero);
@@ -135,20 +221,21 @@ export function createGems(ctx: GameContext): Gems {
       const ease = 1 - (1 - k) * (1 - k);
       dummy.position.copy(burst.pos);
       dummy.quaternion.copy(ctx.camera.quaternion);
-      dummy.scale.setScalar(1.2 + ease * 3.5);
+      dummy.scale.setScalar((1.2 + ease * 3.5) * burst.size);
       dummy.updateMatrix();
       halos.setMatrixAt(flashIdx, dummy.matrix);
       for (let p = 0; p < GEM_FX.particles; p++) {
         const ang = (p / GEM_FX.particles) * Math.PI * 2;
+        const sz = burst.size;
         const up = p % 2 === 0 ? 0.9 : 0.2;
         dummy.position.set(
-          burst.pos.x + Math.cos(ang) * ease * 2.2,
-          burst.pos.y + up * ease * 2 - ease * ease * 0.6,
-          burst.pos.z + Math.sin(ang) * ease * 2.2,
+          burst.pos.x + Math.cos(ang) * ease * 2.2 * sz,
+          burst.pos.y + up * ease * 2 * sz - ease * ease * 0.6,
+          burst.pos.z + Math.sin(ang) * ease * 2.2 * sz,
         );
         dummy.quaternion.identity();
         dummy.rotation.set(ang, k * 6, 0);
-        dummy.scale.setScalar(0.28 * (1 - k));
+        dummy.scale.setScalar(0.28 * sz * (1 - k));
         dummy.updateMatrix();
         sparks.setMatrixAt(b * GEM_FX.particles + p, dummy.matrix);
       }
@@ -160,6 +247,7 @@ export function createGems(ctx: GameContext): Gems {
   function update(dt: number): void {
     time += dt;
     const playing = ctx.session.state.phase === 'playing';
+    if (playing && !megasReady) initMegas();
     if (playing !== wasPlaying) {
       havePrev = false;
       wasPlaying = playing;
@@ -173,13 +261,22 @@ export function createGems(ctx: GameContext): Gems {
       const from = prev.distanceTo(cur) > maxStep ? cur : prev;
       for (const i of field.collect(from, cur)) {
         if (bursts.length >= GEM_FX.maxBursts) bursts.shift();
-        const position = spots[i].position.clone();
-        bursts.push({ t: 0, pos: position.clone() });
-        ctx.events.emit('gem:collected', { id: `gem${i}`, count: field.count, total: field.total, position });
-        ctx.session.setTotals({ gems: n });
+        const mega = i >= n;
+        const value = mega ? ECONOMY.megaGemValue : ECONOMY.gemValue;
+        const position = spots[i].clone();
+        bursts.push({ t: 0, pos: position.clone(), size: mega ? MEGA.burstScale : 1 });
+        // The economy extends the combo and pays value x combo into the wallet.
+        let paid: { combo: number; gain: number } = { combo: 1, gain: value };
+        if (hasPickupSink(ctx.economy)) paid = ctx.economy.recordPickup(value, mega);
+        else ctx.profile.earn(value, 'gem');
+        ctx.events.emit('gem:collected', {
+          id: idOf(i), count: field.count, total: field.total, position, value, mega, combo: paid.combo, gain: paid.gain,
+        });
+        ctx.session.setTotals({ gems: total });
       }
+      respawned(field.tickRespawn(dt));
       const near = field.tickNear(dt, cur);
-      if (near) ctx.events.emit('gem:near', { id: `gem${near.index}`, distance: near.distance });
+      if (near) ctx.events.emit('gem:near', { id: idOf(near.index), distance: near.distance });
     }
     prev.copy(cur);
     havePrev = true;
@@ -187,28 +284,44 @@ export function createGems(ctx: GameContext): Gems {
     for (const burst of bursts) burst.t += dt;
     while (bursts.length && bursts[0].t >= GEM_FX.burstSeconds) bursts.shift();
 
-    // Spin + bob + halo.
-    for (let i = 0; i < n; i++) {
+    // Spin + bob + halo. Gems (re)appearing pop in on the layer.
+    for (let i = 0; i < total; i++) {
+      const isMega = i >= n;
+      const mesh = isMega ? megas : gems;
+      const slot = isMega ? i - n : i;
       if (field.collected[i]) {
-        gems.setMatrixAt(i, zero);
+        mesh.setMatrixAt(slot, zero);
         halos.setMatrixAt(i, zero);
         continue;
       }
-      const p = spots[i].position;
-      const y = p.y + Math.sin(time * 2 + i * 1.7) * 0.15;
+      age[i] += dt;
+      const pop = popScale(age[i] / MEGA.popSeconds);
+      const p = spots[i];
+      const y = p.y + Math.sin(time * 2 + i * 1.7) * (isMega ? 0.25 : 0.15);
       dummy.position.set(p.x, y, p.z);
-      dummy.rotation.set(0, time * 1.2 + i, 0);
-      dummy.scale.setScalar(1.15);
+      dummy.rotation.set(0, time * (isMega ? 0.8 : 1.2) + i, 0);
+      dummy.scale.setScalar((isMega ? MEGA.scale : 1.15) * pop);
       dummy.updateMatrix();
-      gems.setMatrixAt(i, dummy.matrix);
+      mesh.setMatrixAt(slot, dummy.matrix);
       dummy.position.set(p.x, y, p.z);
       dummy.quaternion.copy(ctx.camera.quaternion);
-      dummy.scale.setScalar(2.2 + Math.sin(time * 3 + i) * 0.25);
+      dummy.scale.setScalar((isMega ? 5 : 2.2) * pop + Math.sin(time * 3 + i) * (isMega ? 0.5 : 0.25) * pop);
       dummy.updateMatrix();
       halos.setMatrixAt(i, dummy.matrix);
     }
+    megas.instanceMatrix.needsUpdate = true;
     gems.instanceMatrix.needsUpdate = true;
     drawBursts();
+  }
+
+  if (ctx.testMode) {
+    window.__rgEconomy = {
+      get megaSpots() {
+        return megaSpots.map((v, i) => ({ x: v.x, y: v.y, z: v.z, tag: megaTags[i] }));
+      },
+      gemSpotCount: n,
+      forceRespawn: () => respawned(field.respawnAll()),
+    };
   }
 
   return {
@@ -216,6 +329,10 @@ export function createGems(ctx: GameContext): Gems {
     reset,
     dispose() {
       offReset();
+      if (ctx.testMode) delete window.__rgEconomy;
+      megaGeo.dispose();
+      megaMat.dispose();
+      megas.dispose();
       ctx.vision.remove(group);
       gemGeo.dispose();
       gemMat.dispose();

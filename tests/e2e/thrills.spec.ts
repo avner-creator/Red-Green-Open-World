@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot } from './helpers';
+import { SHOTS, boot } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -25,6 +25,7 @@ function splitChannel(png: PNG, c: number): Buffer {
 }
 
 async function save(name: string): Promise<void> {
+  if (!SHOTS) return; // human-only screenshots are opt-in (RG_SHOTS=1)
   const buf = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' });
   const png = PNG.sync.read(buf);
   writeFileSync(`${OUT}/${name}-full.png`, buf);

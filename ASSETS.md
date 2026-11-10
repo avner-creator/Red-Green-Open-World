@@ -4,6 +4,7 @@ Every file under `public/assets/` must have a row here. CC0 preferred; CC-BY req
 
 | File | Source URL | Author | License |
 |---|---|---|---|
+| public/assets/models/horse.glb | https://raw.githubusercontent.com/trebeljahr/quaternius-showcase/c06a6fa9a1b13576edf3bd62d7b52aba334f8fc0/public/glb/animals_pack/Horse.glb (Ultimate Animated Animal Pack, https://quaternius.com/packs/ultimateanimatedanimals.html); attack/death/hit clips removed, Trot clip derived from Walk, recoloured, meshopt-compressed (tools/horse) | Quaternius | CC0 1.0 |
 | public/assets/audio/music-explore.ogg | https://opengameart.org/content/sunny-city ("Sunny City", sunny_city_bpm120.ogg) | MintoDog | CC0 1.0 |
 | public/assets/audio/music-urgent.ogg | https://opengameart.org/content/sunny-city ("Sunny City" climax, sunny_city_climax_bpm135.ogg) | MintoDog | CC0 1.0 |
 | public/assets/audio/music-action.ogg | https://opengameart.org/content/sky-blue-street ("Sky Blue Street", sky_blue_street_bpm165.ogg) | MintoDog | CC0 1.0 |

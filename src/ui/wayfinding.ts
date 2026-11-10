@@ -33,8 +33,8 @@ export function createWayfinding(ctx: GameContext, hooks: WayfindingHooks): Wayf
   ctx.uiRoot.dataset.mode = 'walk';
 
   const screen = createControlsScreen(ctx, hooks.back);
-  const grid = hooks.pause.el.querySelector('.grid2');
-  const b = h('button', 'b d tile', { type: 'button', 'aria-label': 'Controls', 'data-testid': 'pause-controls', style: 'grid-column:1/3' }, h('span', 'pair', {}, icon('stick'), icon('hand')), '?');
+  const grid = hooks.pause.el.querySelector('.grid3, .grid2');
+  const b = h('button', 'b d tile', { type: 'button', 'aria-label': 'Controls', 'data-testid': 'pause-controls' }, h('span', 'pair', {}, icon('stick'), icon('hand')), '?');
   b.addEventListener('click', () => hooks.open(screen));
   grid?.append(b);
 

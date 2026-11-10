@@ -29,10 +29,19 @@ const CENTRE = HALF + PLAYER.radius;
 const MOVE_GROUPS = groups(GROUP_AVATAR, 0xffff & ~GROUP_AVATAR);
 
 /** The character picked last time (character select saves it), or null. Storage may be blocked. */
-function storedCharacterId(): CharacterId | null {
+/**
+ * The hero to boot as: the profile's saved `equipped.character` (the one source of truth), else the
+ * old standalone key (migrated by the economy), as long as it is free or owned; else the default.
+ * Matching what the economy settles on means only ONE character GLB loads before Play.
+ */
+function storedCharacterId(ctx: GameContext): CharacterId | null {
+  const usable = (v: string | null): v is CharacterId =>
+    !!v && (CHARACTER_IDS as readonly string[]).includes(v) && (getCharacter(v as CharacterId).price <= 0 || !!ctx.profile?.owns(v));
+  const fromProfile = ctx.profile?.equipped('character') ?? null;
+  if (usable(fromProfile)) return fromProfile;
   try {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(CHARACTER_KEY) : null;
-    return v && (CHARACTER_IDS as readonly string[]).includes(v) ? (v as CharacterId) : null;
+    return usable(v) ? v : null;
   } catch {
     return null;
   }
@@ -59,7 +68,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   ctx.scene.add(object);
   const sfx = createSkillFx(ctx.scene, model.anchors.back);
   // Boot straight into the remembered pick, so only ONE character GLB loads before Play.
-  const bootId = storedCharacterId() ?? DEFAULT_CHARACTER;
+  const bootId = storedCharacterId(ctx) ?? DEFAULT_CHARACTER;
   const skills = new SkillMachine(getCharacter(bootId).skill, PLAYER.gravity);
   skills.floaty = bootId === 'flamingo';
 
@@ -189,6 +198,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   /** Visual-only skill pose timers (spring flip after a super-bounce). */
   let springFlipT = -1;
   let emoting = false;
+  /** Stream C: the gear system's shop-emote handler (see `PlayerApi.setEmoteHandler`). */
+  let emoteHandler: (() => boolean) | null = null;
   let windOn = false;
   const tmpV = new THREE.Vector3();
   const skillView: PlayerSkillView = {
@@ -309,6 +320,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     },
     emote() {
       if (mode !== 'walk' || !grounded || skills.active || emoting) return;
+      if (emoteHandler?.()) return;
       emoting = true;
       const clip = getCharacter(characterId).emote.clip;
       ctx.audio.play('star', { volume: 0.6, pitch: 1.35 });
@@ -316,6 +328,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       sfx.sparkle(tmpV, 8, 1.6, 0.8);
       fx.kick(1.5);
       ctx.events.emit('player:emote', { id: clip.toLowerCase() });
+    },
+    setEmoteHandler(handler) {
+      emoteHandler = handler;
     },
     object,
     position,
