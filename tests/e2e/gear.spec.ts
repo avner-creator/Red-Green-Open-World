@@ -315,7 +315,7 @@ test('screenshots: gear fit on every character (RG_SHOTS=1)', async () => {
   const CW = 200;
   const CH = 300;
   for (const [look, items] of Object.entries(looks)) {
-    const grid = new PNG({ width: CW * heroes.length, height: CH * 2 });
+    const grid = new PNG({ width: CW * heroes.length, height: CH * 4 });
     for (let hi = 0; hi < heroes.length; hi++) {
       const hero = heroes[hi]!;
       const pose = await page.evaluate(
@@ -331,16 +331,24 @@ test('screenshots: gear fit on every character (RG_SHOTS=1)', async () => {
           rg.teleport(sp.position.x, sp.position.y, sp.position.z, sp.yaw);
           rg.step(1 / 60, 50, false);
           const pl = ctx.player;
-          return { p: pl.position.toArray() as [number, number, number], fx: Math.sin(pl.yaw), fz: Math.cos(pl.yaw) };
+          const head = pl.object.getObjectByName('attach-head');
+          const hp = head ? head.getWorldPosition(pl.position.clone()) : pl.position.clone().setY(pl.position.y + 1.6);
+          return {
+            p: pl.position.toArray() as [number, number, number], fx: Math.sin(pl.yaw), fz: Math.cos(pl.yaw),
+            hp: hp.toArray() as [number, number, number],
+          };
         },
         { hero, items },
       );
-      const { p, fx, fz } = pose;
+      const { p, fx, fz, hp } = pose;
       const len = hero === 'rex' ? 1.6 : 1;
       const views: Array<[[number, number, number], [number, number, number]]> = [
         // front-ish three-quarter, and from the side-back (shows the back item and glasses depth)
-        [[p[0] + (fx * 2.6 + fz * 1.0) * len, p[1] + 1.7, p[2] + (fz * 2.6 - fx * 1.0) * len], [p[0], p[1] + 1.1, p[2]]],
-        [[p[0] + (-fx * 1.6 + fz * 2.4) * len, p[1] + 1.8, p[2] + (-fz * 1.6 - fx * 2.4) * len], [p[0], p[1] + 1.1, p[2]]],
+        [[p[0] + (fx * 3.6 + fz * 1.3) * len, p[1] + 1.9, p[2] + (fz * 3.6 - fx * 1.3) * len], [p[0], p[1] + 1.05, p[2]]],
+        [[p[0] + (-fx * 2.2 + fz * 3.2) * len, p[1] + 2.0, p[2] + (-fz * 2.2 - fx * 3.2) * len], [p[0], p[1] + 1.05, p[2]]],
+        // head close-ups: front three-quarter and side
+        [[hp[0] + fx * 2.3 + fz * 0.8, hp[1] + 0.2, hp[2] + fz * 2.3 - fx * 0.8], [hp[0], hp[1] - 0.35, hp[2]]],
+        [[hp[0] + fz * 2.4, hp[1] + 0.2, hp[2] - fx * 2.4], [hp[0], hp[1] - 0.35, hp[2]]],
       ];
       for (let v = 0; v < views.length; v++) {
         await cam(views[v]![0], views[v]![1], 50);

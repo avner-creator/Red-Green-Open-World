@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import type { GameContext, VehicleApi } from '../../types';
 import { CAR_FALLBACK_COLOR } from '../chests/outfits';
 import { paintColor } from './catalog';
+import { gearFit } from './fit';
 import { emptyLook, lookChanges, readLook, WORN_SLOTS } from './look';
 import type { Look, WornSlot } from './look';
 import { buildGear } from './models';
@@ -21,6 +22,8 @@ const easeOutBack = (t: number): number => {
 interface Worn {
   id: string;
   wearable: Wearable;
+  /** Per-character fit correction between the attach point and the item. */
+  fit: THREE.Group;
   remove: () => void;
   /** 0..1 pop-in progress. */
   pop: number;
@@ -42,6 +45,17 @@ export function createApplier(ctx: GameContext): GearApplier {
   let applied: Look = emptyLook();
   const cars = new Map<VehicleApi, number>();
 
+  /** Place the item for the current hero (again after every character swap). */
+  const applyFit = (slot: WornSlot, w: Worn): void => {
+    const f = gearFit(ctx.player.characterId, slot, w.id);
+    w.fit.position.set(...(f?.pos ?? ([0, 0, 0] as const)));
+    w.fit.rotation.set(...(f?.rot ?? ([0, 0, 0] as const)));
+    w.fit.scale.setScalar(f?.scale ?? 1);
+  };
+  const offCharacter = ctx.events.on('player:character', () => {
+    for (const [slot, w] of worn) applyFit(slot, w);
+  });
+
   const take = (slot: WornSlot): void => {
     const w = worn.get(slot);
     if (!w) return;
@@ -53,8 +67,12 @@ export function createApplier(ctx: GameContext): GearApplier {
   const put = (slot: WornSlot, id: string, animate: boolean): void => {
     const wearable = buildGear(id);
     if (!wearable) return;
-    const remove = ctx.player.attach(slot, wearable.object);
-    const w: Worn = { id, wearable, remove, pop: animate ? 0 : 1 };
+    const fit = new THREE.Group();
+    fit.name = `gear-fit-${slot}`;
+    fit.add(wearable.object);
+    const remove = ctx.player.attach(slot, fit);
+    const w: Worn = { id, wearable, fit, remove, pop: animate ? 0 : 1 };
+    applyFit(slot, w);
     if (animate) wearable.object.scale.setScalar(0.001);
     worn.set(slot, w);
   };
@@ -106,6 +124,7 @@ export function createApplier(ctx: GameContext): GearApplier {
       return null;
     },
     dispose() {
+      offCharacter();
       for (const s of WORN_SLOTS) take(s);
       cars.clear();
     },
