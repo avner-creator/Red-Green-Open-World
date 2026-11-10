@@ -160,6 +160,40 @@ test.describe('glasses ui', () => {
     expect(await page.evaluate(() => window.__rg!.ctx.settings.get().autoChallenge)).toBeFalsy();
   });
 
+  test('settings row and summary fit at other sizes', async () => {
+    await page.evaluate(() => {
+      window.__rg!.ctx.vision.sessionSummary = () => ({
+        rows: [
+          { mechanic: 'glowflies', kind: 'find', tier: 1, hits: 3, misses: 1 },
+          { mechanic: 'oddOneOut', kind: 'tellApart', tier: 2, hits: 2, misses: 1 },
+        ],
+        seconds: 305,
+        challenge: { enabled: true, level: 2, maxLevel: 6, stepsUp: 3, stepsDown: 1 },
+      });
+    });
+    if (await page.getByTestId('settings-done').isVisible()) await page.getByTestId('settings-done').click();
+    for (const [w, h] of [[667, 375], [1920, 1080]] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await openSettings(page);
+      const gap = await page.evaluate(() => {
+        const sub = document.querySelector('[data-testid="auto-challenge"]')!.closest('.srow')!.querySelector('.sub')!.getBoundingClientRect();
+        const btn = document.querySelector('[data-testid="auto-challenge"]')!.getBoundingClientRect();
+        const p = document.querySelector('[data-testid="settings"]')!.getBoundingClientRect();
+        const last = document.querySelector('[data-testid="open-summary"]')!.getBoundingClientRect();
+        return { gap: btn.top - sub.bottom, fits: last.bottom <= p.bottom };
+      });
+      expect(gap.gap).toBeGreaterThan(2);
+      expect(gap.fits).toBe(true);
+      await save(page, `settings-${w}`);
+      await page.getByTestId('open-summary').click();
+      await expect(page.getByTestId('glasses-summary')).toBeVisible();
+      await save(page, `summary-${w}`);
+      await page.getByTestId('summary-back').click();
+      await page.getByTestId('settings-done').click();
+    }
+    await page.setViewportSize({ width: 640, height: 360 });
+  });
+
   test('toggle survives a reload', async () => {
     await page.evaluate(() => window.__rg!.ctx.settings.set({ autoChallenge: true }));
     await page.reload();

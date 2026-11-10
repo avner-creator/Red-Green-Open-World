@@ -93,7 +93,7 @@ export function createUi(ctx: GameContext): UiApi {
     },
   });
   const glassesSummary = createGlassesSummary(ctx, { back: pop });
-  const gate: GateScreen =createGate(() => {
+  const gate: GateScreen = createGate(() => {
     stack.pop();
     stack.push(settings);
     render();
@@ -180,6 +180,7 @@ export function createUi(ctx: GameContext): UiApi {
     update(dt: number): void {
       const pad = nav.poll(dt);
       if (shown === gate) gate.update(dt, pad.aHeld);
+      if (shown === glassesSummary) glassesSummary.update(dt);
       hud.update(dt);
       skillChip.update();
       if (shown === select) select.update();

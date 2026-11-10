@@ -19,11 +19,10 @@ export function createGlassesSettingsRows(ctx: GameContext, o: { openSummary?():
   const open = h('button', 'b d sm', { type: 'button', 'aria-label': 'Session summary', 'data-testid': 'open-summary' }, icon('clock'), 'Open');
   open.addEventListener('click', () => o.openSummary?.());
 
+  const autoRow = row('bolt', 'Auto challenge', 'Trickier after wins, easier after misses.', h('div', 'choices', {}, toggle));
+  autoRow.classList.add('gl');
   return {
-    rows: [
-      row('bolt', 'Auto challenge', 'Trickier after wins, easier after misses.', h('div', 'choices', {}, toggle)),
-      row('clock', 'Session summary', null, h('div', 'choices', {}, open)),
-    ],
+    rows: [autoRow, row('clock', 'Session summary', null, h('div', 'choices', {}, open))],
     refresh() {
       toggle.setAttribute('aria-pressed', String(isOn()));
       state.textContent = isOn() ? 'On' : 'Off';
