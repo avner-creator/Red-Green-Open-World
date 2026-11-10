@@ -64,3 +64,6 @@
 - Hero objects (buggy, balloon, player, thrills) are batched by material with per-vertex finishes, and cast shadows through low-poly shadow-only proxies on render layer 7 (core enables that layer on the sun's shadow camera). Reason: whole frame at spawn on Medium went from 442 draws / 811k triangles to 198 / 534k with no visible change.
 - The balloon burner's point light was replaced by an emissive glow inside the envelope. Reason: per-object lights are expensive; the basket no longer gets warm light during burns.
 - Boot loads only the saved character (`CHARACTER_KEY` in `src/config.ts`); music loads after Play. Reason: first-visit download to the title screen is ~2.2 MB gzip.
+- Pip the puppy buddy is procedural (2 skinned draws + shadow proxy), not a CC0 GLB. Reason: eye tracking, blinks, eyebrows and ear/tail springs need a custom rig, and the CC0 animal packs are realistic-proportioned, not "big head, big eyes".
+- Pip's intro is skipped by any NON-game key (Enter, Backspace, letters other than the controls) or a tap on the bubble, not WASD/Space/E. Reason: kids press the move keys at once, which must not skip the tour; the tour never blocks movement.
+- In `?test=1` Pip is visible but silent unless `&buddy=1` (talk) or `&buddyIntro=1` (talk + tour). Reason: other specs must not see bubbles or callouts.

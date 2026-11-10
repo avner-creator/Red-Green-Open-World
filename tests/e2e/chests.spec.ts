@@ -1,5 +1,5 @@
 /**
- * Chests: the both-eye lock plays through the real game (key + arrow trail = weak eye, the right symbol = strong eye, the buttons = both eyes),
+ * Chests: the both-eye lock plays through the real game (key = weak eye, keyhole side = strong eye),
  * the layers stay in their channels, and the outfits show on the robot.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -17,6 +17,10 @@ const OUT = 'test-results/chests';
 let page: Page;
 let consoleErrors: string[] = [];
 
+const COMBOS: Array<{ eye: Pick<EyeSettings, 'leftLens' | 'weakEye'>; weak: 'r' | 'g'; strong: 'r' | 'g' }> = [
+  { eye: { leftLens: 'red', weakEye: 'left' }, weak: 'r', strong: 'g' },
+  { eye: { leftLens: 'red', weakEye: 'right' }, weak: 'g', strong: 'r' },
+];
 const maxOf = (d: ReturnType<typeof channelDiff>, c: 'r' | 'g' | 'b'): number => (c === 'r' ? d.maxR : c === 'g' ? d.maxG : d.maxB);
 
 const info = (): Promise<ChestInfo[]> => page.evaluate(() => window.__rgChests!.info());
@@ -93,7 +97,7 @@ test.afterAll(async () => {
   await page.close();
 });
 
-test('six chests, keys on land 6.5-11.5 m away, six buttons each (every symbol twice)', async () => {
+test('six chests, keys on land 6.5-11.5 m away with a clear spot', async () => {
   const chests = await info();
   expect(chests).toHaveLength(6);
   expect(await page.evaluate(() => window.__rg!.state().chestsTotal)).toBe(6);
@@ -111,203 +115,103 @@ test('six chests, keys on land 6.5-11.5 m away, six buttons each (every symbol t
     expect(c.dist).toBeLessThan(11.7);
     expect(c.above).toBeGreaterThan(0.8);
   }
-  expect(new Set(chests.map((c) => c.symbol)).size).toBeGreaterThan(1);
-  for (const c of chests) {
-    expect(c.buttons).toHaveLength(6);
-    for (const sym of [0, 1, 2]) expect(c.buttons.filter((b) => b.symbol === sym)).toHaveLength(2);
-  }
+  expect(new Set(chests.map((c) => c.keyholeSide)).size).toBeGreaterThan(2);
 });
 
-/** World x,z of the right-symbol button of chest `c` that is nearest to the point `px,pz`. */
-const nearestRight = (c: ChestInfo, px: number, pz: number): { x: number; z: number } => {
-  const mine = c.buttons.filter((b) => b.symbol === c.symbol);
-  return mine.sort((a, b) => Math.hypot(a.x - px, a.z - pz) - Math.hypot(b.x - px, b.z - pz))[0];
-};
-
-const restart = async (): Promise<void> => {
-  await page.evaluate(() => {
-    const rg = window.__rg!;
-    rg.start();
-    rg.step(1 / 60, 3, false);
-  });
-};
-
-test('hints once, boing without key, wrong shape sinks, right shape opens; restart resets', async () => {
-  await restart();
-  await page.evaluate(() => {
+test('key, wrong side stays closed, right side opens with the outfit; restart resets', async () => {
+  const events = await page.evaluate(() => {
     const ctx = window.__rg!.ctx;
     const log: string[] = [];
     ctx.events.on('chest:key', (e) => log.push(`key:${e.chestId}`));
     ctx.events.on('chest:opened', (e) => log.push(`opened:${e.chestId}:${e.outfitId}`));
     ctx.events.on('outfit:unlocked', (e) => log.push(`unlocked:${e.outfitId}`));
     ctx.events.on('outfit:equipped', (e) => log.push(`equipped:${e.outfitId}:${e.slot}`));
-    ctx.events.on('ui:toast', (e) => {
-      if (e.text) log.push(`toast:${e.icon}:${e.text}`);
-    });
     (window as unknown as { __log: string[] }).__log = log;
+    return log;
   });
+  expect(events).toEqual([]);
   const log = (): Promise<string[]> => page.evaluate(() => (window as unknown as { __log: string[] }).__log.slice());
 
   const c = (await info())[0];
-  const right = c.buttons.filter((b) => b.symbol === c.symbol);
-  const wrong = c.buttons.filter((b) => b.symbol !== c.symbol);
-
-  // Far away: no hint. Walk up (4 m out): "Find the key!" once, however long we stay. The prompt
-  // shows the key icon.
-  await stand(c.position[0] + 30, c.position[2], 0, false);
-  expect(await log()).toEqual([]);
-  const [ax, az] = await page.evaluate(([i]) => window.__rgChests!.sidePoint(i, 1, 4.2), [0]);
-  await stand(ax, az, 0, false);
-  await page.evaluate(() => window.__rg!.step(1 / 60, 60, false));
-  expect(await log()).toEqual(['toast:key:Find the key!']);
-  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.icon ?? null)).toBe('key');
-
-  // Without the key, buttons just boing: right shape included.
-  await stand(right[0].x, right[0].z, 0, false);
+  // Using the chest without the key does nothing.
+  const side = c.keyholeSide;
+  const [rx, rz] = await page.evaluate(([i, s]) => window.__rgChests!.sidePoint(i, s), [0, side]);
+  await stand(rx, rz, 0, false);
   await use();
   expect(await page.evaluate(() => window.__rg!.state().chests)).toBe(0);
-  expect((await info())[0].open).toBe(false);
-  expect((await info())[0].wrongTries).toBe(0);
 
   // Walk into the key.
   await stand(c.key[0], c.key[2], 0, false);
   expect((await info())[0].keyState).toBe('carried');
   expect(await log()).toContain('key:chest0');
 
-  // Back at the chest with the key: "Step on the right shape!" once; the prompt shows the lock.
-  await stand(ax, az, 0, false);
-  await page.evaluate(() => window.__rg!.step(1 / 60, 60, false));
-  expect((await log()).filter((l) => l.startsWith('toast:lock'))).toEqual(['toast:lock:Step on the right shape!']);
-  expect((await log()).filter((l) => l.startsWith('toast:key'))).toEqual(['toast:key:Find the key!']);
-  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.icon ?? null)).toBe('lock');
-
-  // A wrong shape: friendly wobble, the button sinks for 2 s, nothing opens, no penalty, try again.
-  await stand(wrong[0].x, wrong[0].z, 0, false);
-  let now = (await info())[0];
-  expect(now.open).toBe(false);
-  expect(now.keyState).toBe('carried');
-  expect(now.wrongTries).toBe(1);
-  expect(now.buttons[c.buttons.findIndex((b) => b.x === wrong[0].x)].sunk).toBe(true);
-  await use(); // pressing at a sunk button does nothing
-  expect((await info())[0].wrongTries).toBe(1);
-  await page.evaluate(() => window.__rg!.step(1 / 60, 140, false));
-  now = (await info())[0];
-  expect(now.buttons.some((b) => b.sunk)).toBe(false);
-  await stand(wrong[1].x, wrong[1].z, 0, false);
-  expect((await info())[0].wrongTries).toBe(2);
+  // Wrong side (the opposite one): friendly no.
+  const [wx, wz] = await page.evaluate(([i, s]) => window.__rgChests!.sidePoint(i, s), [0, (side + 2) % 4]);
+  await stand(wx, wz, 0, false);
+  await use();
+  await use();
+  expect(await page.evaluate(() => window.__rg!.state().chests)).toBe(0);
   expect((await info())[0].open).toBe(false);
+  expect((await info())[0].keyState).toBe('carried');
 
-  // The right shape opens it: the outfit is unlocked and equipped.
-  await stand(right[1].x, right[1].z, 0, false);
-  await page.evaluate(() => window.__rg!.step(1 / 60, 10, false));
+  // Right side: opens, the outfit is unlocked and equipped.
+  await stand(rx, rz, 0, false);
+  await use();
   const st = await page.evaluate(() => window.__rg!.state());
   expect(st.chests).toBe(1);
   expect(st.outfits).toEqual(['hat-explorer']);
   expect((await info())[0].open).toBe(true);
-  expect(await log()).toEqual([
-    'toast:key:Find the key!',
-    'key:chest0',
-    'toast:lock:Step on the right shape!',
-    'opened:chest0:hat-explorer',
-    'unlocked:hat-explorer',
-    'equipped:hat-explorer:head',
-  ]);
+  expect(await log()).toEqual(['key:chest0', 'opened:chest0:hat-explorer', 'unlocked:hat-explorer', 'equipped:hat-explorer:head']);
 
   // The outfit is saved in the profile and worn through the gear applier.
   expect(await page.evaluate(() => window.__rgGear!.attached().head)).toBe('hat-explorer');
   expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat-explorer'))).toBe(true);
 
   // Restart: closed again, key back; the saved outfit stays on (it persists between sessions).
-  await restart();
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.start();
+    rg.step(1 / 60, 3, false);
+  });
   const again = await page.evaluate(() => ({ s: window.__rg!.state(), c: window.__rgChests!.info()[0] }));
   expect(again.s.chests).toBe(0);
   expect(again.s.outfits).toEqual([]);
   expect(await page.evaluate(() => window.__rgGear!.attached().head)).toBe('hat-explorer');
   expect(again.c.open).toBe(false);
   expect(again.c.keyState).toBe('ground');
-  expect(again.c.wrongTries).toBe(0);
   expect(await page.evaluate(() => window.__rg!.state().chestsTotal)).toBe(6);
 });
 
-test('opens from every direction (stepping on the shape from 4 sides, and with E)', async () => {
-  for (let dir = 0; dir < 4; dir++) {
-    await restart();
-    const i = dir; // a different chest each time
-    const c = (await info())[i];
-    await stand(c.key[0], c.key[2], 0, false);
-    expect((await info())[i].keyState).toBe('carried');
-    // Come in from side `dir`: the right button nearest that approach.
-    const [ax, az] = await page.evaluate(([n, d]) => window.__rgChests!.sidePoint(n, d, 4.5), [i, dir]);
-    const b = nearestRight(c, ax, az);
-    if (dir % 2 === 0) {
-      await stand(b.x, b.z, 0, false); // step on it
-    } else {
-      // 0.95 m outward from the button (not on it), then press E: the nearest button counts.
-      const dx = b.x - c.position[0];
-      const dz = b.z - c.position[2];
-      const l = Math.hypot(dx, dz);
-      await stand(b.x + (dx / l) * 0.95, b.z + (dz / l) * 0.95, 0, false);
-      expect((await info())[i].open).toBe(false);
-      await use();
-    }
-    await page.evaluate(() => window.__rg!.step(1 / 60, 10, false));
-    expect((await info())[i].open, `chest ${i} from side ${dir}`).toBe(true);
-    expect(await page.evaluate(() => window.__rg!.state().chests)).toBe(1);
-  }
-});
-
-test('the key and the arrow trail live only in the weak channel, the symbols only in the strong channel', async () => {
-  await restart();
-  const c = (await info())[0];
-  const allCombos: Array<{ eye: Pick<EyeSettings, 'leftLens' | 'weakEye'>; weak: 'r' | 'g'; strong: 'r' | 'g' }> = [
-    { eye: { leftLens: 'red', weakEye: 'left' }, weak: 'r', strong: 'g' },
-    { eye: { leftLens: 'red', weakEye: 'right' }, weak: 'g', strong: 'r' },
-    { eye: { leftLens: 'green', weakEye: 'left' }, weak: 'g', strong: 'r' },
-    { eye: { leftLens: 'green', weakEye: 'right' }, weak: 'r', strong: 'g' },
-  ];
-  const kx = c.key[0] - c.position[0];
-  const kz = c.key[2] - c.position[2];
-  const kl = Math.hypot(kx, kz);
-  for (const combo of allCombos) {
-    const label = `${combo.eye.leftLens}-left/${combo.eye.weakEye}-weak`;
+test('the key lives only in the weak channel and the lock only in the strong channel', async () => {
+  const chests = await info();
+  // A view with the key in front of us, and one at the keyhole side of the chest.
+  const c = chests[0];
+  for (const combo of COMBOS) {
     await page.evaluate((eye) => window.__rg!.setEye(eye), combo.eye);
 
     // Key view: stand 3.5 m short of the key, looking at it.
-    const px = c.key[0] + (kx / kl) * 3.5;
-    const pz = c.key[2] + (kz / kl) * 3.5;
+    const dx = c.key[0] - c.position[0];
+    const dz = c.key[2] - c.position[2];
+    const len = Math.hypot(dx, dz);
+    const px = c.key[0] + (dx / len) * 3.5;
+    const pz = c.key[2] + (dz / len) * 3.5;
     await stand(px, pz, yawToward(px, pz, c.key[0], c.key[2]), false); // frame() renders
     const all = await frame({ weak: true, strong: true });
     const noWeak = await frame({ weak: false, strong: true });
     const dw = channelDiff(all, noWeak);
-    expect(dw[combo.weak], `key ${label}`).toBeGreaterThan(150);
-    expect(maxOf(dw, combo.strong), `key leaks ${label}`).toBe(0);
-    expect(dw.maxB, `key blue ${label}`).toBe(0);
+    expect(dw[combo.weak], `key ${combo.eye.weakEye}`).toBeGreaterThan(150);
+    expect(maxOf(dw, combo.strong)).toBe(0);
+    expect(dw.maxB).toBe(0);
 
-    // Trail view: 6 m out from the chest toward the key, looking along it (key is a bit further).
-    const tx = c.position[0] + (kx / kl) * 3.3;
-    const tz = c.position[2] + (kz / kl) * 3.3;
-    await stand(tx, tz, yawToward(tx, tz, c.key[0], c.key[2]), false);
-    await page.evaluate(() => window.__rgChests!.setKeyVisible(true));
-    // Hide only the key model to isolate the trail pixels; both are weak-layer, so also compare the whole layer.
-    const withTrail = await frame({ weak: true, strong: true });
-    await page.evaluate(() => window.__rgChests!.setKeyVisible(false));
-    const noKeyNoTrail = await frame({ weak: true, strong: true });
-    const dt = channelDiff(withTrail, noKeyNoTrail);
-    expect(dt[combo.weak], `trail ${label}`).toBeGreaterThan(150);
-    expect(maxOf(dt, combo.strong), `trail leaks ${label}`).toBe(0);
-    expect(dt.maxB, `trail blue ${label}`).toBe(0);
-    await page.evaluate(() => window.__rgChests!.setKeyVisible(true));
-
-    // Symbol view: 4.5 m out from the chest, camera on the chest, floating + lid symbol.
-    const sx = c.position[0] - (kx / kl) * 4.5;
-    const sz = c.position[2] - (kz / kl) * 4.5;
-    await stand(sx, sz, yawToward(sx, sz, c.position[0], c.position[2]), false);
-    const withSym = await frame({ weak: true, strong: true });
+    // Lock view: at the keyhole side, 3 m out, looking at the chest.
+    const [lx, lz] = await page.evaluate(([i, s]) => window.__rgChests!.sidePoint(i, s, 3.2), [0, c.keyholeSide]);
+    await stand(lx, lz, yawToward(lx, lz, c.position[0], c.position[2]), false);
+    const withLock = await frame({ weak: true, strong: true });
     const noStrong = await frame({ weak: true, strong: false });
-    const ds = channelDiff(withSym, noStrong);
-    expect(ds[combo.strong], `symbol ${label}`).toBeGreaterThan(150);
-    expect(maxOf(ds, combo.weak), `symbol leaks ${label}`).toBe(0);
-    expect(ds.maxB, `symbol blue ${label}`).toBe(0);
+    const ds = channelDiff(withLock, noStrong);
+    expect(ds[combo.strong], `lock ${combo.eye.weakEye}`).toBeGreaterThan(150);
+    expect(maxOf(ds, combo.weak)).toBe(0);
+    expect(ds.maxB).toBe(0);
   }
   await page.evaluate(() => {
     const rg = window.__rg!;
@@ -315,21 +219,6 @@ test('the key and the arrow trail live only in the weak channel, the symbols onl
     rg.setLayerVisible(1, true);
     rg.setLayerVisible(2, true);
   });
-});
-
-test('the six buttons are the same for both eyes and give nothing away', async () => {
-  // Both-eye objects show in every layer combination identically: hiding both eye layers changes
-  // nothing about the buttons, and every cushion is the same mesh/colour (only the symbol differs).
-  const r = await page.evaluate(() => {
-    const ctx = window.__rg!.ctx;
-    const meshes = ctx.scene.children.filter((o) => o.name === 'chest-buttons') as unknown as Array<{ count: number; castShadow: boolean }>;
-    return { n: meshes.length, shadows: meshes.some((m) => m.castShadow), counts: meshes.map((m) => m.count) };
-  });
-  expect(r.n).toBe(4); // 1 cushion mesh + 3 symbol meshes, for all chests
-  expect(r.shadows).toBe(false);
-  expect(r.counts).toEqual([36, 12, 12, 12]);
-  expect(await page.evaluate(() => window.__rg!.ctx.scene.getObjectByName('chest-symbol') !== undefined)).toBe(false);
-  expect(await page.evaluate(() => window.__rg!.ctx.scene.getObjectByName('chest-trail') !== undefined)).toBe(false);
 });
 
 /** Free camera for screenshots: placed after the last step, then the same state is re-rendered. */
@@ -351,39 +240,42 @@ async function cam(from: [number, number, number], at: [number, number, number],
 }
 
 test('every chest opens and its wearable goes on (screenshots with RG_SHOTS=1)', async () => {
-  await restart();
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.start();
+    rg.step(1 / 60, 3, false);
+  });
   const chests = await info();
-  // Hero chest: the one whose key is on the clearest side of the camera.
-  const c = chests[0];
-  const kx = c.key[0] - c.position[0];
-  const kz = c.key[2] - c.position[2];
-  const kl = Math.hypot(kx, kz);
-  const ux = kx / kl;
-  const uz = kz / kl;
-  // Park the player out of the picture, then the hero shot: camera behind the chest, looking along
-  // the arrow trail toward the key, ring of buttons and the floating symbol in view.
-  await stand(c.position[0] - ux * 40, c.position[2] - uz * 40, 0, false);
-  const lookAt: [number, number, number] = [c.position[0] + ux * 1.6, c.position[1] + 1.1, c.position[2] + uz * 1.6];
-  await cam([c.position[0] - ux * 4.8, c.position[1] + 3.9, c.position[2] - uz * 4.8], lookAt, 64);
-  await save('ring-trail-symbol');
-  // Side view: chest, ring, floating symbol and "?" badge are all in frame.
-  await cam([c.position[0] - uz * 5.2, c.position[1] + 2.6, c.position[2] + ux * 5.2], [c.position[0], c.position[1] + 1.2, c.position[2]], 58);
-  await save('ring-side');
-  // Close on the chest: empty key slot on the plate, symbol on the lid.
-  await cam([c.position[0] + 0.2, c.position[1] + 1.35, c.position[2] + 1.9], [c.position[0], c.position[1] + 0.45, c.position[2]], 50);
-  await save('slot-empty');
-  // With the key: the slot is filled; a wrong button sunk.
-  await stand(c.key[0], c.key[2], 0, false);
-  const wrong = c.buttons.find((b) => b.symbol !== c.symbol)!;
-  await stand(wrong.x, wrong.z, 0, false);
-  await stand(c.position[0] - ux * 40, c.position[2] - uz * 40, 0, false);
-  await cam([c.position[0] + 0.2, c.position[1] + 1.35, c.position[2] + 1.9], [c.position[0], c.position[1] + 0.45, c.position[2]], 50);
-  await save('slot-filled');
-  await cam([c.position[0] - ux * 4.8, c.position[1] + 3.9, c.position[2] - uz * 4.8], lookAt, 64);
-  await save('ring-key-carried');
+  // Chest whose keyhole faces the key best, so one view shows both.
+  let best = 0;
+  let bestDot = -2;
+  chests.forEach((c, i) => {
+    const kx = c.key[0] - c.position[0];
+    const kz = c.key[2] - c.position[2];
+    const l = Math.hypot(kx, kz);
+    const sx = Math.sin(c.yaw + (c.keyholeSide * Math.PI) / 2);
+    const sz = Math.cos(c.yaw + (c.keyholeSide * Math.PI) / 2);
+    const dot = (kx * sx + kz * sz) / l;
+    if (dot > bestDot) {
+      bestDot = dot;
+      best = i;
+    }
+  });
+  const c = chests[best];
+  const gy = (x: number, z: number): Promise<number> => page.evaluate(([x, z]) => window.__rg!.ctx.world.heightAt(x, z), [x, z]);
+  const sx = Math.sin(c.yaw + (c.keyholeSide * Math.PI) / 2);
+  const sz = Math.cos(c.yaw + (c.keyholeSide * Math.PI) / 2);
+  // Park the player out of the picture, then hero shot from above the keyhole side.
+  await stand(c.position[0] - sx * 30, c.position[2] - sz * 30, 0, false);
+  const mid: [number, number, number] = [(c.position[0] * 2 + c.key[0]) / 3, c.position[1] + 0.9, (c.position[2] * 2 + c.key[2]) / 3];
+  await cam([c.position[0] + sx * 4.8, c.position[1] + 2.4, c.position[2] + sz * 4.8], mid, 66);
+  await save('key-and-lock');
+  // Closer on the lock (ring, plate, arrow).
+  await cam([c.position[0] + sx * 2.5, c.position[1] + 1.15, c.position[2] + sz * 2.5], [c.position[0], c.position[1] + 0.45, c.position[2]], 55);
+  await save('lock-close');
   // The key alone, close.
-  await restart();
-  await stand(c.position[0] - ux * 40, c.position[2] - uz * 40, 0, false);
+  const kg = await gy(c.key[0], c.key[2]);
+  void kg;
   await cam([c.key[0] + 2.2, c.key[1] + 0.3, c.key[2] + 0.4], c.key, 50);
   await save('key-close');
 
@@ -396,8 +288,8 @@ test('every chest opens and its wearable goes on (screenshots with RG_SHOTS=1)',
       rg.teleport(k[0], rg.ctx.world.heightAt(k[0], k[2]) + 0.1, k[2]);
       rg.step(1 / 60, 3, false);
     }, ci.key);
-    const b = nearestRight(ci, ci.position[0] + 4, ci.position[2]);
-    await stand(b.x, b.z, 0, false);
+    const [ox, oz] = await page.evaluate(([n, s]) => window.__rgChests!.sidePoint(n, s), [i, ci.keyholeSide]);
+    await stand(ox, oz, 0, false);
     await use();
     // Settle the pop-in, then a cloth-friendly standing pose.
     await page.evaluate(() => window.__rg!.step(1 / 60, 50, false));

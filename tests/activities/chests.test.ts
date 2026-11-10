@@ -1,29 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ApproachHints,
   ChestLock,
   Loadout,
-  RING,
-  buttonWorld,
   keyCandidates,
-  nearestButton,
+  keyholeSide,
+  onKeyholeSide,
   pickKeySpot,
-  ringButtons,
+  playerSide,
   rightSymbol,
   sideDirection,
 } from '../../src/activities/chests/logic';
 import { OUTFITS, outfitForChest } from '../../src/activities/chests/outfits';
 import { symbolShape } from '../../src/activities/chests/lockModel';
 
-describe('right symbol', () => {
-  it('is deterministic per chest and valid', () => {
-    const a = Array.from({ length: 6 }, (_, i) => rightSymbol(i));
-    expect(a).toEqual(Array.from({ length: 6 }, (_, i) => rightSymbol(i)));
-    for (const s of a) {
-      expect(s).toBeGreaterThanOrEqual(0);
-      expect(s).toBeLessThan(3);
-    }
-    expect(new Set(a).size).toBeGreaterThan(1);
+describe('keyhole side', () => {
+  it('is deterministic and shows all four sides across six chests', () => {
+    const sides = Array.from({ length: 6 }, (_, i) => keyholeSide(i, 6));
+    expect(sides).toEqual(Array.from({ length: 6 }, (_, i) => keyholeSide(i, 6)));
+    expect(new Set(sides).size).toBe(4);
+    for (let i = 0; i < 6; i++) expect(rightSymbol(i)).toBeGreaterThanOrEqual(0);
   });
 
   it('sideDirection points +Z, +X, -Z, -X', () => {
@@ -36,57 +31,47 @@ describe('right symbol', () => {
   });
 });
 
-describe('symbol ring', () => {
-  it('has six buttons, each of the three symbols twice, twins opposite each other', () => {
-    const r = ringButtons();
-    expect(r).toHaveLength(6);
-    for (const sym of [0, 1, 2]) {
-      const mine = r.filter((b) => b.symbol === sym);
-      expect(mine).toHaveLength(2);
-      expect(Math.abs(mine[0].angle - mine[1].angle)).toBeCloseTo(Math.PI, 5);
+describe('side test', () => {
+  it('finds the quadrant in the chest frame (yaw 0)', () => {
+    expect(playerSide(0, 0, 0, 0, 2).side).toBe(0);
+    expect(playerSide(0, 0, 0, 2, 0).side).toBe(1);
+    expect(playerSide(0, 0, 0, 0, -2).side).toBe(2);
+    expect(playerSide(0, 0, 0, -2, 0).side).toBe(3);
+  });
+
+  it('follows the chest yaw', () => {
+    // Chest turned 90 degrees: its front (+Z local) now faces world +X.
+    expect(playerSide(0, 0, Math.PI / 2, 2, 0).side).toBe(0);
+    expect(playerSide(0, 0, Math.PI / 2, 0, -2).side).toBe(1);
+    expect(onKeyholeSide(5, 5, 1.1, 2, 5 + Math.sin(1.1) * -2, 5 + Math.cos(1.1) * -2)).toBe(true);
+  });
+
+  it('accepts only the keyhole side, not the neighbours or the far side', () => {
+    for (let keyhole = 0; keyhole < 4; keyhole++) {
+      for (let s = 0; s < 4; s++) {
+        const d = sideDirection(s);
+        expect(onKeyholeSide(10, -4, 0.7, keyhole, 10 + (Math.cos(0.7) * d.x + Math.sin(0.7) * d.z) * 2, -4 + (-Math.sin(0.7) * d.x + Math.cos(0.7) * d.z) * 2)).toBe(s === keyhole);
+      }
     }
   });
 
-  it('is evenly spaced with room for 1.2 m buttons', () => {
-    const r = ringButtons();
-    const gap = 2 * RING.radius * Math.sin(Math.PI / r.length);
-    expect(gap).toBeGreaterThan(RING.size);
+  it('is forgiving near the edge of the quadrant but not on the diagonal', () => {
+    const near = Math.PI / 4 - 0.05;
+    expect(onKeyholeSide(0, 0, 0, 0, Math.sin(near) * 2, Math.cos(near) * 2)).toBe(true);
+    const diag = Math.PI / 4 + 0.3;
+    expect(onKeyholeSide(0, 0, 0, 0, Math.sin(diag) * 2, Math.cos(diag) * 2)).toBe(false);
   });
 
-  it('a right button is within 4.5 m of a player coming from any direction', () => {
-    const right = rightSymbol(0);
-    const mine = ringButtons().filter((b) => b.symbol === right);
-    for (let a = 0; a < Math.PI * 2; a += 0.1) {
-      const px = Math.sin(a) * (RING.radius + 1.5);
-      const pz = Math.cos(a) * (RING.radius + 1.5);
-      const best = Math.min(...mine.map((b) => Math.hypot(buttonWorld(0, 0, 0, b.angle).x - px, buttonWorld(0, 0, 0, b.angle).z - pz)));
-      expect(best).toBeLessThan(4.5);
-    }
-  });
-
-  it('buttonWorld follows the chest yaw and position', () => {
-    const p = buttonWorld(10, 5, 0, 0);
-    expect(p.x).toBeCloseTo(10);
-    expect(p.z).toBeCloseTo(5 + RING.radius);
-    const q = buttonWorld(10, 5, Math.PI / 2, 0); // chest front faces +X
-    expect(q.x).toBeCloseTo(10 + RING.radius);
-    expect(q.z).toBeCloseTo(5);
-  });
-
-  it('nearestButton picks the closest within reach, else -1', () => {
-    const pts = [{ x: 0, z: 0 }, { x: 3, z: 0 }];
-    expect(nearestButton(pts, 2.2, 0, 2.6)).toBe(1);
-    expect(nearestButton(pts, 1.4, 0.1, 2.6)).toBe(0);
-    expect(nearestButton(pts, 30, 0, 2.6)).toBe(-1);
+  it('stands exactly on the chest: no side', () => {
+    expect(onKeyholeSide(1, 1, 0, 0, 1, 1)).toBe(false);
   });
 });
 
 describe('ChestLock state machine', () => {
-  it('no key: any shape only boings and the chest stays locked', () => {
+  it('needs the key first', () => {
     const l = new ChestLock(2);
-    for (const s of [0, 1, 2]) expect(l.press(s)).toBe('no-key');
+    expect(l.use(true)).toBe('no-key');
     expect(l.opened).toBe(false);
-    expect(l.wrongTries).toBe(0);
   });
 
   it('picks the key up once', () => {
@@ -96,74 +81,25 @@ describe('ChestLock state machine', () => {
     expect(l.hasKey).toBe(true);
   });
 
-  it('key + wrong symbol wobbles and keeps the key (no penalty, unlimited tries); the right one opens', () => {
+  it('a wrong side wobbles and keeps the key (no penalty), the right side opens', () => {
     const l = new ChestLock(1);
     l.pickUp();
-    expect(l.press(0)).toBe('wrong-symbol');
-    expect(l.press(2)).toBe('wrong-symbol');
-    expect(l.press(0)).toBe('wrong-symbol');
-    expect(l.wrongTries).toBe(3);
+    expect(l.use(false)).toBe('wrong-side');
+    expect(l.use(false)).toBe('wrong-side');
     expect(l.hasKey).toBe(true);
-    expect(l.opened).toBe(false);
-    expect(l.press(1)).toBe('opened');
+    expect(l.use(true)).toBe('opened');
     expect(l.opened).toBe(true);
     expect(l.key).toBe('used');
-    expect(l.press(1)).toBe('already-open');
-  });
-
-  it('opens from every direction: any button of the right symbol works', () => {
-    const right = rightSymbol(3);
-    for (const b of ringButtons().filter((x) => x.symbol === right)) {
-      const l = new ChestLock(right);
-      l.pickUp();
-      expect(l.press(b.symbol)).toBe('opened');
-    }
+    expect(l.use(true)).toBe('already-open');
   });
 
   it('reset restores the start state', () => {
-    const l = new ChestLock(0);
+    const l = new ChestLock(3);
     l.pickUp();
-    l.press(1);
-    l.press(0);
+    l.use(true);
     l.reset();
     expect(l.key).toBe('ground');
     expect(l.opened).toBe(false);
-    expect(l.wrongTries).toBe(0);
-  });
-});
-
-describe('approach hints', () => {
-  it('says "find the key" once per approach, not every frame', () => {
-    const h = new ApproachHints();
-    expect(h.update(20, false, false)).toBeNull();
-    expect(h.update(4, false, false)).toBe('find-key');
-    for (let i = 0; i < 100; i++) expect(h.update(3, false, false)).toBeNull();
-    // Hovering around the edge does not re-arm it.
-    expect(h.update(6.5, false, false)).toBeNull();
-    expect(h.update(4, false, false)).toBeNull();
-    // Leaving and coming back does.
-    expect(h.update(9, false, false)).toBeNull();
-    expect(h.update(4, false, false)).toBe('find-key');
-  });
-
-  it('with the key, says "step on the right shape" once (also when the key is picked up nearby)', () => {
-    const h = new ApproachHints();
-    expect(h.update(4, true, false)).toBe('step-shape');
-    expect(h.update(3, true, false)).toBeNull();
-    const g = new ApproachHints();
-    expect(g.update(4, false, false)).toBe('find-key');
-    expect(g.update(4, true, false)).toBe('step-shape');
-    expect(g.update(4, true, false)).toBeNull();
-  });
-
-  it('says nothing once open, and isNear tells whether a guide may talk', () => {
-    const h = new ApproachHints();
-    h.update(4, false, false);
-    expect(h.isNear).toBe(true);
-    expect(h.update(4, true, true)).toBeNull();
-    expect(h.isNear).toBe(false);
-    h.reset();
-    expect(h.update(4, false, false)).toBe('find-key');
   });
 });
 

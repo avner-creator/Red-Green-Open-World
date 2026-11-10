@@ -1,7 +1,8 @@
 /**
  * Layer objects of a chest lock. Both are drawn through `ctx.vision` only, never in the main scene:
  *  - the KEY (weak eye): a glowing key whose bow holds the right symbol,
- *  - the SYMBOL HINT (strong eye): the right symbol, large and glowing above the chest, and small on the lid.
+ *  - the LOCK (strong eye): keyhole plate on one side, a slowly turning ring of three symbols (one,
+ *    the right one, is bigger and brighter) and a floating arrow that points at the keyhole side.
  * Layer materials only keep brightness, so shape is carried by baked grey shading.
  */
 import * as THREE from 'three';
@@ -44,7 +45,7 @@ export function symbolShape(kind: SymbolKind, r: number): THREE.Shape {
   return s;
 }
 
-export function extrudeShape(shape: THREE.Shape, depth: number, bevel = depth * 0.3): THREE.BufferGeometry {
+function extrudeShape(shape: THREE.Shape, depth: number, bevel = depth * 0.3): THREE.BufferGeometry {
   const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 1, curveSegments: 10 });
   return g.translate(0, 0, -depth / 2);
 }
@@ -97,65 +98,122 @@ export function buildKey(symbol: number): KeyModel {
   };
 }
 
-export interface SymbolHintModel {
-  /** Chest-local root: add to the StrongOnly layer; position it on the chest and copy its yaw. */
+export interface LockModel {
+  /** Chest-local root: add to the StrongOnly layer and copy the chest transform onto it. */
   root: THREE.Group;
-  /** Floating symbol that always faces the camera. */
-  float: THREE.Group;
-  /** Small symbol on top of the lid. */
-  lid: THREE.Group;
-  update(t: number, bill: number): void;
+  ring: THREE.Group;
+  arrow: THREE.Object3D;
+  update(t: number): void;
   dispose(): void;
 }
 
-/** Height of the floating symbol's centre above the chest origin. */
-export const HINT_HEIGHT = 2.55;
+function keyholeShape(): THREE.Shape {
+  const s = new THREE.Shape();
+  const w = 0.1;
+  const h = 0.125;
+  const r = 0.025;
+  s.moveTo(-w + r, -h);
+  s.lineTo(w - r, -h);
+  s.quadraticCurveTo(w, -h, w, -h + r);
+  s.lineTo(w, h - r);
+  s.quadraticCurveTo(w, h, w - r, h);
+  s.lineTo(-w + r, h);
+  s.quadraticCurveTo(-w, h, -w, h - r);
+  s.lineTo(-w, -h + r);
+  s.quadraticCurveTo(-w, -h, -w + r, -h);
+  const hole = new THREE.Path();
+  hole.absarc(0, 0.03, 0.036, -Math.PI * 0.35, Math.PI * 1.35, false);
+  hole.lineTo(-0.022, -0.085);
+  hole.lineTo(0.022, -0.085);
+  hole.closePath();
+  s.holes.push(hole);
+  return s;
+}
+
+function arrowShape(): THREE.Shape {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.3);
+  s.lineTo(0.17, 0.06);
+  s.lineTo(0.065, 0.06);
+  s.lineTo(0.065, -0.24);
+  s.lineTo(-0.065, -0.24);
+  s.lineTo(-0.065, 0.06);
+  s.lineTo(-0.17, 0.06);
+  s.closePath();
+  return s;
+}
 
 /**
- * The answer to the lock, for the STRONG eye only: a large glowing symbol floating over the chest
- * (turns to face the camera) and a small matching one on the lid. The six floor buttons in the main
- * scene never reveal which one is right, so the two eyes have to work together.
+ * Build the strong-eye lock for a chest. `side` is the keyhole side (0..3), `rightIdx` the right
+ * symbol (0..2). All positions are in the chest's local frame.
  */
-export function buildSymbolHint(symbol: number): SymbolHintModel {
-  const kind = SYMBOLS[symbol % 3];
+export function buildLock(side: number, rightIdx: number): LockModel {
+  const root = new THREE.Group();
+  root.name = 'chest-lock';
   const disposables: { dispose(): void }[] = [];
   const track = <T extends { dispose(): void }>(d: T): T => {
     disposables.push(d);
     return d;
   };
-  const root = new THREE.Group();
-  root.name = 'chest-symbol';
-  const symMat = track(new THREE.MeshBasicMaterial({ vertexColors: true }));
-  const haloMat = track(createGlowMaterial({ level: 1, coreOpacity: 0.3, rimPower: 1.6, pulse: 0.25 }));
 
-  const bigGeo = track(shadeGrey(extrudeShape(symbolShape(kind, 0.6), 0.12, 0.035), 1, 0.62, facet));
-  const float = new THREE.Group();
-  float.position.y = HINT_HEIGHT;
-  float.add(new THREE.Mesh(bigGeo, symMat));
-  const haloGeo = track(new THREE.SphereGeometry(1.05, 20, 14));
-  float.add(new THREE.Mesh(haloGeo, haloMat));
-  root.add(float);
+  const face = new THREE.Group();
+  const half = side % 2 === 0 ? CHEST.depth / 2 : CHEST.width / 2;
+  face.rotation.y = (side * Math.PI) / 2;
+  face.position.set(Math.sin((side * Math.PI) / 2) * (half + 0.04), 0.29, Math.cos((side * Math.PI) / 2) * (half + 0.04));
+  root.add(face);
 
-  const smallGeo = track(shadeGrey(extrudeShape(symbolShape(kind, 0.12), 0.03, 0.01), 1, 0.62, facet));
-  const lid = new THREE.Group();
-  lid.position.set(0, CHEST.bodyH + CHEST.lidR + 0.03, 0);
-  const small = new THREE.Mesh(smallGeo, symMat);
-  small.rotation.x = -Math.PI / 2; // lie flat, facing up
-  lid.add(small);
-  const lidHalo = new THREE.Mesh(track(new THREE.CircleGeometry(0.2, 20)), track(createLayerMaterial(1, 0.4)));
-  lidHalo.rotation.x = -Math.PI / 2;
-  lidHalo.position.y = -0.012;
-  lid.add(lidHalo);
-  root.add(lid);
+  const plateGeo = track(shadeGrey(extrudeShape(keyholeShape(), 0.022, 0.008), 1, 0.55, facet));
+  const plateMat = track(new THREE.MeshBasicMaterial({ vertexColors: true }));
+  face.add(new THREE.Mesh(plateGeo, plateMat));
+
+  const ring = new THREE.Group();
+  ring.position.z = 0.012;
+  face.add(ring);
+  const R = 0.225;
+  const trackGeo = track(shadeGrey(new THREE.TorusGeometry(R, 0.007, 6, 40), 0.55, 0.7));
+  ring.add(new THREE.Mesh(trackGeo, plateMat));
+  for (let i = 0; i < 3; i++) {
+    const right = i === rightIdx;
+    const g = track(shadeGrey(extrudeShape(symbolShape(SYMBOLS[i], right ? 0.085 : 0.062), 0.02, 0.006), right ? 1 : 0.5, 0.55, facet));
+    const mesh = new THREE.Mesh(g, plateMat);
+    const a = Math.PI / 2 + (i * Math.PI * 2) / 3;
+    mesh.position.set(Math.cos(a) * R, Math.sin(a) * R, 0.004);
+    mesh.userData.baseAngle = a;
+    mesh.userData.right = right;
+    ring.add(mesh);
+    if (right) {
+      // A soft halo behind the right symbol so it reads as "the one".
+      const halo = new THREE.Mesh(track(new THREE.CircleGeometry(0.125, 20)), track(createLayerMaterial(1, 0.35)));
+      halo.position.set(mesh.position.x, mesh.position.y, -0.004);
+      mesh.userData.halo = halo;
+      ring.add(halo);
+    }
+  }
+
+  // Floating arrow over the lid pointing at the keyhole side.
+  const arrow = new THREE.Group();
+  const arrowGeo = track(shadeGrey(extrudeShape(arrowShape(), 0.045, 0.012), 1, 0.6, facet));
+  const arrowMat = track(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
+  arrowMesh.rotation.x = Math.PI / 2; // shape +Y -> world +Z
+  arrow.add(arrowMesh);
+  arrow.rotation.y = (side * Math.PI) / 2;
+  arrow.position.y = CHEST.bodyH + CHEST.lidR + 0.36;
+  root.add(arrow);
 
   return {
     root,
-    float,
-    lid,
-    update(t, bill) {
-      float.position.y = HINT_HEIGHT + Math.sin(t * 1.9) * 0.1;
-      float.rotation.y = bill - root.rotation.y + Math.sin(t * 1.3) * 0.12;
-      float.scale.setScalar(1 + 0.06 * Math.sin(t * 3.1));
+    ring,
+    arrow,
+    update(t) {
+      ring.rotation.z = t * 0.5;
+      for (const c of ring.children) {
+        if (c.userData.baseAngle !== undefined) {
+          c.rotation.z = -t * 0.5; // symbols stay upright while the ring turns
+          if (c.userData.right) c.scale.setScalar(1 + 0.08 * Math.sin(t * 3));
+        }
+      }
+      arrow.position.y = CHEST.bodyH + CHEST.lidR + 0.36 + Math.sin(t * 2.4) * 0.045;
     },
     dispose() {
       for (const d of disposables) d.dispose();
