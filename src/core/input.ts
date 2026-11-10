@@ -1,9 +1,11 @@
 /**
- * Keyboard + mouse (pointer lock) + gamepad → one `InputState`.
- * This is the only module in the game that reads raw key/mouse/gamepad events.
+ * Keyboard + mouse (pointer lock) + gamepad + touch → one `InputState`.
+ * This is the only module in the game that reads raw key/mouse/gamepad events; touch fingers come
+ * from the on-screen controls in `src/ui/touch` through `touchControls(api)` (see input-touch.ts).
  */
 import type { GameContext, InputApi, InputState } from '../types';
 import { keyboardMove, lookCurve, mergeMove, radialDeadZone, sanitizeMouseDelta } from './input-math';
+import { applyTouchQualityDefault, createTouchSource, registerTouchControls } from './input-touch';
 import { LOOK } from './tuning';
 
 const NEUTRAL: Readonly<InputState> = Object.freeze({
@@ -42,7 +44,9 @@ function isTextField(t: EventTarget | null): boolean {
   return t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
 }
 
-export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): InputApi {
+export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Partial<Pick<GameContext, 'settings'>>): InputApi {
+  applyTouchQualityDefault(ctx.settings, ctx.testMode);
+  const touch = createTouchSource();
   const state: InputState = { ...NEUTRAL };
   const held = new Set<string>();
   const queued = new Set<Action>();
@@ -62,6 +66,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
   const onKeyDown = (e: KeyboardEvent): void => {
     if (isTextField(e.target) && e.code !== 'Escape') return;
     device = 'keyboard';
+    touch.noteOtherDevice();
     if (gameplay && GAME_KEYS.has(e.code)) e.preventDefault();
     if (!e.repeat) {
       const action = KEY_ACTIONS[e.code];
@@ -152,7 +157,10 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
     if (Math.hypot(m.x, m.y) < 0.2) padSprintLatch = false;
     const l = lookCurve(ax(2), ax(3), LOOK.lookDeadZone);
     const anyButton = pad.buttons.some((_, i) => btn(i));
-    if (anyButton || m.x !== 0 || m.y !== 0 || l.x !== 0 || l.y !== 0) device = 'gamepad';
+    if (anyButton || m.x !== 0 || m.y !== 0 || l.x !== 0 || l.y !== 0) {
+      device = 'gamepad';
+      touch.noteOtherDevice();
+    }
     return {
       move: m,
       lookX: l.x * LOOK.stickYawRate * dt,
@@ -171,9 +179,11 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
     state,
     update(dt) {
       const pad = readGamepad(dt);
+      const tf = touch.read();
       const pressed = new Set<Action>(queued);
       queued.clear();
       if (pad) for (const a of pad.pressed) pressed.add(a);
+      for (const a of tf.pressed) pressed.add(a);
       const pausePressed = pressed.has('pause') || pauseFromLockLoss;
       pauseFromLockLoss = false;
 
@@ -182,14 +192,14 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
       state.pausePressed = pausePressed;
       if (gameplay) {
         const kb = keyboardMove(key('KeyA', 'ArrowLeft'), key('KeyD', 'ArrowRight'), key('KeyS', 'ArrowDown'), key('KeyW', 'ArrowUp'));
-        const move = pad ? mergeMove(kb, pad.move) : kb;
+        const move = mergeMove(pad ? mergeMove(kb, pad.move) : kb, tf.move);
         state.moveX = move.x;
         state.moveY = move.y;
-        state.lookX = mouseX * LOOK.mouseSensitivity + (pad?.lookX ?? 0);
-        state.lookY = mouseY * LOOK.mouseSensitivity + (pad?.lookY ?? 0);
-        state.sprint = key('ShiftLeft', 'ShiftRight') || !!pad?.sprint;
-        state.jump = key('Space') || !!pad?.jump;
-        state.use = key('KeyE') || !!pad?.use;
+        state.lookX = mouseX * LOOK.mouseSensitivity + (pad?.lookX ?? 0) + tf.lookX;
+        state.lookY = mouseY * LOOK.mouseSensitivity + (pad?.lookY ?? 0) + tf.lookY;
+        state.sprint = key('ShiftLeft', 'ShiftRight') || !!pad?.sprint || tf.sprint;
+        state.jump = key('Space') || !!pad?.jump || tf.jump;
+        state.use = key('KeyE') || !!pad?.use || tf.use;
         state.jumpPressed = pressed.has('jump');
         state.usePressed = pressed.has('use');
         state.flopPressed = pressed.has('flop');
@@ -212,7 +222,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
       }
     },
     capturePointer() {
-      if (locked()) return;
+      // Touch play has no pointer lock (phones don't support it; a stray lock would eat taps).
+      if (locked() || touch.controls.active) return;
       try {
         const r = ctx.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
         if (r && typeof r.catch === 'function') r.catch(() => undefined);
@@ -228,6 +239,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
     setGameplayEnabled(enabled) {
       if (enabled === gameplay) return;
       gameplay = enabled;
+      touch.setGameplay(enabled);
       // Don't carry presses made in a menu into gameplay (or vice versa); pause always survives.
       for (const a of [...queued]) if (a !== 'pause') queued.delete(a);
       mouseX = mouseY = 0;
@@ -237,5 +249,6 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
     },
   };
   triggersByApi.set(api, triggers);
+  registerTouchControls(api, touch.controls);
   return api;
 }
