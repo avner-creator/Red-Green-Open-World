@@ -18,6 +18,8 @@ mkdirSync(out, { recursive: true });
 // Player position (x, z), facing (towards tx, tz) and the camera override.
 const VIEWS = [
   { name: 'spawn', spawn: true },
+  { name: 'fingerpost', x: 2.5, z: 8.5, tx: 8.4, tz: 4.9, d: 4, h: 1.2 },
+  { name: 'fingerpost-back', x: 14.5, z: 1.5, tx: 8.4, tz: 4.9, d: 4, h: 1.2 },
   { name: 'ranch', x: -47, z: 25, tx: -74, tz: 44, d: 11, h: 4.5 },
   { name: 'barn', x: -84, z: 46, tx: -101, tz: 44, d: 8, h: 3 },
   { name: 'bridge', x: 22, z: -88, tx: 0, tz: -110, d: 10, h: 5 },

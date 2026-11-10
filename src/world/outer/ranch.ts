@@ -267,9 +267,12 @@ export function buildRanch(k: Kit): RanchResult {
   const zB = a.z + PADDOCK.hz;
 
   // ── Paddock ground: soft trampled grass, a sand arena track round the edge with hoof marks ──
-  groundRect(k, a.x, a.z, PADDOCK.hx - 0.2, PADDOCK.hz - 0.2, 0, 2, 0.04, (lx, lz) => {
-    const n = Math.sin(lx * 0.7 + lz * 0.3) * Math.cos(lz * 0.55 - lx * 0.2);
-    return n > 0.35 ? 0x8aa652 : n < -0.4 ? 0x6f9442 : 0x7d9d4a;
+  groundRect(k, a.x, a.z, PADDOCK.hx - 0.2, PADDOCK.hz - 0.2, 0, 1.5, 0.04, (lx, lz) => {
+    // Trampled, sandier ground in the middle where the horses stand; clover-dark patches near the fence.
+    const n = Math.sin(lx * 0.7 + lz * 0.3) * Math.cos(lz * 0.55 - lx * 0.2) + 0.35 * Math.sin(lx * 1.9 - lz * 1.3);
+    const mid = Math.max(0, 1 - Math.hypot(lx / 9, lz / 7));
+    if (mid > 0.45 && n > -0.2) return n > 0.4 ? 0xb3a36c : 0xa29a5e;
+    return n > 0.45 ? 0x8fab55 : n < -0.45 ? 0x5f8a3c : 0x779a46;
   });
   const track = roundedRect(a.x, a.z, TRACK.hx, TRACK.hz, TRACK.r, 0, 6);
   const tw = TRACK.width / 2;
