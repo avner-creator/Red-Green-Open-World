@@ -70,9 +70,11 @@ export function installLife(world: WorldApi, ctx: LifeCtx, parent: THREE.Object3
   });
   root.add(folk.group);
 
-  // Load the townsfolk once play starts (they share the hero GLBs), never during boot.
+  // Load the townsfolk once play starts (they share the hero GLBs), never during boot. In test mode
+  // only on request (`__rgLife.loadTownsfolk()`): an async pop-in between two frames a test compares
+  // would make pixel tests flaky.
   ctx.events.on('session:phase', (e) => {
-    if (e.phase === 'playing') void folk.load();
+    if (e.phase === 'playing' && !ctx.testMode) void folk.load();
   });
   ctx.events.on('stunt', () => {
     const p = ctx.player?.position;

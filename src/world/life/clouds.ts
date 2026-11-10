@@ -4,7 +4,7 @@
  * Cloud shadows: a handful of soft cloud-shaped cards that only the sun's shadow camera sees (their
  * own layer), placed between the sun and the ground around the camera and drifting with the wind
  * the same way as the sky's cloud layer. Their depth pass is dithered with an ordered pattern in
- * shadow-map texels, so after PCF filtering they read as soft, partial shade (≈ 35 % at most), not
+ * shadow-map texels, so after PCF filtering they read as soft, partial shade (≈ 50 % at most), not
  * hard black patches. One draw in the shadow pass; nothing at all on Low (no shadow map).
  *
  * Wind: `U.wind` (shared uniform) scales the flutter of flags, bunting and awnings and the sway of
@@ -17,13 +17,13 @@ import { gust } from './math';
 
 /** Layer only the sun's shadow camera renders. */
 export const CLOUD_LAYER = 7;
-const N = 6;
+const N = 7;
 /** Wrap period of the cloud field around the camera (m), and the drift (m/s). */
-const PERIOD = 220;
+const PERIOD = 170;
 const DRIFT = { x: 2.2, z: 0.8 } as const;
 /** Distance from the ground point towards the sun at which the card floats (inside the shadow box). */
 const LIFT = 70;
-const MAX_SHADE = 0.38;
+const MAX_SHADE = 0.5;
 
 export interface Clouds {
   object: THREE.Object3D;
@@ -40,7 +40,7 @@ export function createClouds(sun: THREE.DirectionalLight | null): Clouds {
   for (let i = 0; i < N; i++) {
     const a = i * 2.39996;
     const r = PERIOD * 0.42 * Math.sqrt((i + 0.5) / N);
-    base.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, size: 22 + ((i * 37) % 13), stretch: 1.2 + ((i * 53) % 7) / 10 });
+    base.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, size: 8 + ((i * 37) % 6), stretch: 1 + ((i * 53) % 7) / 10 });
     const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
     corners.forEach(([u, v], k) => cloud.set([u, v, i * 1.37], (i * 4 + k) * 3));
     const o = i * 4;
@@ -65,7 +65,7 @@ export function createClouds(sun: THREE.DirectionalLight | null): Clouds {
         {
           vec2 uv = vCloud.xy;
           float n = rgNoise(uv * 1.7 + vCloud.z * 5.3) * 0.65 + rgNoise(uv * 4.1 + vCloud.z * 2.1) * 0.35;
-          float dens = smoothstep(1.0, 0.25, length(uv) + (n - 0.5) * 0.7) * ${MAX_SHADE.toFixed(2)};
+          float dens = (1.0 - smoothstep(0.25, 1.0, length(uv) + (n - 0.5) * 0.7)) * ${MAX_SHADE.toFixed(2)};
           // 4x4 ordered dither in shadow-map texels: PCF turns it into partial shade.
           ivec2 p = ivec2(gl_FragCoord.xy) & 3;
           int bayer[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
@@ -76,7 +76,10 @@ export function createClouds(sun: THREE.DirectionalLight | null): Clouds {
   };
   depth.customProgramCacheKey = () => 'rg-life-cloud-depth';
 
-  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ visible: false }));
+  // The main camera never renders CLOUD_LAYER; the material must still be `visible` (three skips
+  // shadow casters with an invisible material) but it never writes anything. Double-sided: the
+  // shadow pass otherwise draws only back faces.
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide }));
   mesh.name = 'life-cloud-shadows';
   mesh.customDepthMaterial = depth;
   mesh.castShadow = true;
