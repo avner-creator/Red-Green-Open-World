@@ -8,6 +8,7 @@ weaker eye to work.
 **Read `docs/DIRECTIVES.md` first: the user's directives override everything below.**
 Then read `docs/GAME_DESIGN.md` (what we build) and `docs/BUILD_PLAN.md` (milestones, agent ownership)
 before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/DECISIONS.md`.
+Picking the project up in a new session? Start with `docs/HANDOFF.md`.
 
 ## Autonomy rules (the user asked for these explicitly)
 
@@ -123,6 +124,9 @@ before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/D
   Code against the interfaces in `src/types.ts`; get other systems through `GameContext`.
 - **Commit your work on your worktree branch** before you finish (small clear commits), and put
   the branch name in your report. Uncommitted work is lost.
+- **Commit and push work in progress often** (at least every ~20 minutes and at every working
+  state): `git push -f origin HEAD:refs/heads/agent/<area>-<task>` with the branch name from your
+  brief. The session can end at any time; pushed WIP is what lets another session continue.
 - Run `npm run verify` before finishing. If it fails because of code outside your folders, say so.
 - Look at your own screenshots (Read the PNG) before you report. Keep the report under 300 words.
 

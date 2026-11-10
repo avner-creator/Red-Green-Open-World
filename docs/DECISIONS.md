@@ -38,3 +38,4 @@
 - `heightAt` uses Rapier's triangle split instead of bilinear. Reason: bilinear was up to 13 cm off the collider.
 - E2e boots at Low quality (`?test=1&quality=low`) except smoke, vision and screenshots. Reason: shadows cost ~330 of ~520 ms per frame on the software renderer.
 - Next wave scope follows the DIRECTIVES core list: one car, balloon skydive, both-eye chests with 3 outfits; horse, bungee and Silly Zone only if the timeboxes allow.
+- Handoff:  is the single entry point for a new session/account; workers push WIP to  branches. Reason: usage limits may end this session; nothing may live only in the container.
