@@ -64,6 +64,8 @@ function sillyZone(k: Kit): Keepout[] {
   // Inflatable bollards around the edge.
   const cols = [0xd85a8c, 0x2f8fb0, 0xf2c14e, 0x8ac04a];
   for (let i = 0; i < 10; i++) {
+    // The south-east one (≈ 17, 80) stood on the buggy race's lap: leave that gap open.
+    if (i === 8) continue;
     const ang = (i / 10) * Math.PI * 2 + 0.15;
     const bx = a.x + Math.cos(ang) * (r + 2);
     const bz = a.z + Math.sin(ang) * (r + 2);

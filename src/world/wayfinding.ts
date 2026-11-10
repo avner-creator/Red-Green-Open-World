@@ -14,74 +14,12 @@ import { PLAZA } from './village';
 import type { ProcessedRoad } from './terrain';
 import type { Keepout } from './scatter';
 import { Decals } from './decals';
-import type { IconId, PanelId } from './pictograms';
+import type { IconId } from './pictograms';
+import { ATTRACTIONS, attractionFor, type Attraction } from './attractions';
 
-export interface Attraction {
-  anchor: AnchorName;
-  icon: IconId;
-  /** Dark arm/board colour (signs) and bright balloon colour (beacon). */
-  arm: number;
-  balloon: number;
-  panels: PanelId[];
-  /** Beacon tether stake (x, z) and balloon height above it. */
-  beacon: { x: number; z: number; h: number };
-  /** How-to board: centre and the point it faces. */
-  board: { x: number; z: number; faceX: number; faceZ: number };
-}
+export { ATTRACTIONS, type Attraction } from './attractions';
 
-export const ATTRACTIONS: readonly Attraction[] = [
-  {
-    anchor: 'trampoline', icon: 'iTrampoline', arm: 0x8a2c22, balloon: 0xe0513a, panels: ['tramp1', 'tramp2', 'tramp3'],
-    beacon: { x: 62, z: -37.5, h: 12 }, board: { x: 37.5, z: -25.5, faceX: 28, faceZ: -14 },
-  },
-  {
-    anchor: 'bouncePads', icon: 'iBounce', arm: 0x1c6660, balloon: 0x22a89a, panels: ['bounce1', 'bounce2'],
-    beacon: { x: 97, z: -14, h: 12 }, board: { x: 66, z: -3, faceX: 66, faceZ: 10 },
-  },
-  {
-    anchor: 'garage', icon: 'iCar', arm: 0x20437a, balloon: 0x2f72d8, panels: ['car1', 'car2', 'car3'],
-    beacon: { x: 50, z: 40, h: 13 }, board: { x: 22.5, z: 18, faceX: 22.5, faceZ: 4 },
-  },
-  {
-    anchor: 'launchPads', icon: 'iRocket', arm: 0x86285a, balloon: 0xe04a86, panels: ['rocket1', 'rocket2', 'rocket3'],
-    beacon: { x: 93, z: 31, h: 12 }, board: { x: 64.5, z: 20.5, faceX: 57, faceZ: 28 },
-  },
-  {
-    anchor: 'balloon', icon: 'iBalloon', arm: 0x553082, balloon: 0x8d55d6, panels: ['balloon1', 'balloon2', 'balloon3'],
-    beacon: { x: 96, z: 81, h: 18 }, board: { x: 90.5, z: 50.8, faceX: 86, faceZ: 40 },
-  },
-  {
-    anchor: 'landingRings', icon: 'iTarget', arm: 0x7a5410, balloon: 0xf0b030, panels: [],
-    beacon: { x: 148, z: 6, h: 22 }, board: { x: NaN, z: NaN, faceX: 0, faceZ: 0 },
-  },
-  // ── Outer areas (stream G) ──
-  {
-    anchor: 'ranch', icon: 'iHorse', arm: 0x6b3f1e, balloon: 0xe08a2e, panels: ['horse1', 'horse2', 'horse3'],
-    beacon: { x: -46, z: 52, h: 13 }, board: { x: -46, z: 38, faceX: -36, faceZ: 24 },
-  },
-  {
-    anchor: 'bungee', icon: 'iBungee', arm: 0x2f5418, balloon: 0x7cc243, panels: ['bungee1', 'bungee2'],
-    beacon: { x: -12, z: -84, h: 14 }, board: { x: 12, z: -87.2, faceX: 12, faceZ: -78 },
-  },
-  {
-    anchor: 'sillyZone', icon: 'iSilly', arm: 0x7a1f6a, balloon: 0xf060c8, panels: ['silly1', 'silly2'],
-    beacon: { x: -22, z: 112, h: 13 }, board: { x: -3, z: 71, faceX: -1, faceZ: 60 },
-  },
-  {
-    anchor: 'lakePlatform', icon: 'iLake', arm: 0x14506e, balloon: 0x2fb8e8, panels: [],
-    beacon: { x: -110, z: 2, h: 14 }, board: { x: NaN, z: NaN, faceX: 0, faceZ: 0 },
-  },
-  {
-    anchor: 'lighthouse', icon: 'iLighthouse', arm: 0x232c6e, balloon: 0x5468e0, panels: [],
-    beacon: { x: -48, z: -124, h: 22 }, board: { x: NaN, z: NaN, faceX: 0, faceZ: 0 },
-  },
-];
-
-const byAnchor = (a: AnchorName): Attraction => {
-  const r = ATTRACTIONS.find((q) => q.anchor === a);
-  if (!r) throw new Error(a);
-  return r;
-};
+const byAnchor = attractionFor;
 
 export interface FingerpostDef {
   x: number;
@@ -95,6 +33,8 @@ export interface FingerpostDef {
    */
   rows?: AnchorName[][];
   hang?: AnchorName[];
+  /** Candy-striped post (the Carnival Island post next to the plaza post). */
+  stripe?: boolean;
 }
 
 /**
@@ -111,18 +51,36 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
     rows: [['balloon', 'bouncePads', 'trampoline'], ['garage', 'sillyZone', 'lakePlatform', 'bungee'], ['launchPads', 'ranch', 'lighthouse'], ['landingRings']],
     hang: ['bouncePads', 'trampoline', 'ranch'],
   },
-  { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon'] },
+  // Carnival Island post: on the plaza's south-east rim, right of the spawn camera's line of sight and
+  // clear of the first chest's lock view
+  // (the plaza post is left of it), so both read from the spawn view. Arms in three rows; the race arm
+  // points straight away from the camera, so it also carries a hanging disc.
+  {
+    x: 8, z: 14.8, scale: 1, stripe: true,
+    targets: ['raceStart', 'foamCourse', 'dinoRing', 'iceCream', 'bubbleArena', 'dragonRoost', 'carnivalRow', 'airstrip'],
+    rows: [['raceStart', 'foamCourse', 'dinoRing'], ['iceCream', 'bubbleArena', 'dragonRoost'], ['carnivalRow', 'airstrip']],
+    hang: ['raceStart'],
+  },
+  { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon', 'raceStart'] },
   { x: 57.5, z: 32, scale: 0.85, targets: ['launchPads', 'balloon', 'landingRings', 'garage'] },
   { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads'] },
-  { x: 1.5, z: 78.5, scale: 0.85, targets: ['balloon', 'landingRings', 'sillyZone'] },
-  // Outer roads: north end of the village street, the bridge's far end, the ranch approach.
-  { x: -5.5, z: -61, scale: 0.85, targets: ['bungee', 'lighthouse'] },
+  { x: 1.5, z: 78.5, scale: 0.85, targets: ['balloon', 'landingRings', 'sillyZone', 'dinoRing', 'bubbleArena'] },
+  // Carnival Island junctions: where each footpath leaves its road.
+  { x: 16.2, z: -16.4, scale: 0.85, targets: ['carnivalRow', 'trampoline', 'iceCream'] },
+  { x: 10.6, z: 42, scale: 0.85, targets: ['dinoRing', 'bubbleArena', 'airstrip', 'balloon'] },
+  // North end of the village street (outer roads + Carnival Island paths share this junction).
+  { x: -6.5, z: -61, scale: 0.85, targets: ['bungee', 'lighthouse', 'dragonRoost', 'carnivalRow', 'foamCourse'] },
+  // The bridge's far end, the roost path, the ranch approach.
   { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee'] },
+  { x: 4.6, z: -133, scale: 0.85, targets: ['dragonRoost'] },
   { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform'] },
 ];
 
 /** Roads that get painted chevrons, all pointing forward along the road (towards attractions). */
-const CHEVRON_ROADS = ['park', 'east', 'south', 'loop', 'rocket', 'parklink', 'west', 'ridge', 'north', 'beach'];
+const CHEVRON_ROADS = [
+  'park', 'east', 'south', 'loop', 'rocket', 'parklink', 'west', 'ridge', 'north', 'beach',
+  'carnivalPath', 'foamPath', 'arenaPath', 'airPath', 'roostPath',
+];
 
 export interface ArmInfo {
   x: number;
@@ -218,7 +176,12 @@ function fingerpost(k: Kit, d: Decals, def: FingerpostDef, arms: ArmInfo[]): voi
   const pw = (plaza ? 0.32 : 0.4) * s;
   // Stone plinth, timber post, gold finial.
   k.b.add('matte', rbox(1.0 * s, 0.45, 1.0 * s, 0.06), C.stone, T(x, y - 0.05, z), { aoY: y, aoH: 0.3, ao: 0.35 });
-  k.b.add('paint', rbox(pw, top, pw, 0.05), C.woodDark, T(x, y, z), { aoY: y, aoH: 0.6, ao: 0.3 });
+  if (def.stripe) {
+    // Candy stripes: cream and red bands, a navy collar under the arms.
+    const n = Math.round(top / 0.5);
+    for (let i = 0; i < n; i++) k.b.add('paint', cylG(12), i % 2 ? 0xc8433a : CREAM, T(x, y + (i * top) / n, z, 0, pw * 0.62, top / n, pw * 0.62));
+    k.b.add('paint', cylG(12), 0x24476a, T(x, y + ARM_LOW - 0.65 * s, z, 0, pw * 0.75, 0.3, pw * 0.75));
+  } else k.b.add('paint', rbox(pw, top, pw, 0.05), C.woodDark, T(x, y, z), { aoY: y, aoH: 0.6, ao: 0.3 });
   k.b.add('paint', coneG(4), C.woodDark, T(x, y + top, z, Math.PI / 4, 0.22 * s, 0.22 * s, 0.22 * s));
   k.b.add('gloss', sphereG(2), 0xf2c14e, T(x, y + top + 0.3 * s, z, 0, 0.18 * s, 0.18 * s, 0.18 * s));
   k.col.cyl(x, y, z, (top + 0.4) / 2, 0.5 * s);

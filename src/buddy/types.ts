@@ -7,4 +7,6 @@ export type BuddyExtraIcon = 'paw' | 'wave' | 'question' | 'pip' | 'nose' | 'par
 export type BuddyPicto = PictoName | BuddyExtraIcon;
 
 /** Attractions Pip knows by name (they all have a world anchor). */
-export type Attraction = 'trampoline' | 'balloon' | 'launchPads' | 'garage' | 'gearShack' | 'bungee' | 'ranch' | 'sillyZone' | 'bouncePads';
+export type Attraction =
+  | 'trampoline' | 'balloon' | 'launchPads' | 'garage' | 'gearShack' | 'bungee' | 'ranch' | 'sillyZone' | 'bouncePads'
+  | 'carnivalRow' | 'iceCream' | 'bubbleArena' | 'dinoRing' | 'raceStart' | 'foamCourse' | 'airstrip' | 'dragonRoost';

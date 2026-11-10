@@ -10,7 +10,9 @@ import * as THREE from 'three';
 
 export type IconId =
   | 'iTrampoline' | 'iBounce' | 'iCar' | 'iBalloon' | 'iTarget' | 'iRocket'
-  | 'iHorse' | 'iBungee' | 'iSilly' | 'iLake' | 'iLighthouse';
+  | 'iHorse' | 'iBungee' | 'iSilly' | 'iLake' | 'iLighthouse'
+  // Carnival Island attractions.
+  | 'iCarnival' | 'iIceCream' | 'iBubble' | 'iDino' | 'iFlag' | 'iFoam' | 'iPlane' | 'iDragon';
 export type PanelId =
   | 'tramp1' | 'tramp2' | 'tramp3'
   | 'bounce1' | 'bounce2'
@@ -22,9 +24,12 @@ export type PanelId =
   | 'silly1' | 'silly2';
 export type PictoId = IconId | PanelId;
 
-/** Atlas width (and the unit for UV maths); the atlas is ATLAS_SIZE × ATLAS_H pixels. */
+/**
+ * Atlas width (and the unit for UV maths); the atlas is ATLAS_SIZE × ATLAS_H pixels: six 512 px
+ * rows of panels and icons, plus one 256 px row of Carnival Island icons at the bottom.
+ */
 export const ATLAS_SIZE = 2048;
-export const ATLAS_H = 3072;
+export const ATLAS_H = 3328;
 const CELL = 512;
 const COLS = ATLAS_SIZE / CELL;
 
@@ -36,6 +41,9 @@ const PANEL_ORDER: PanelId[] = [
 const ICON_ORDER: IconId[] = [
   'iTrampoline', 'iBounce', 'iCar', 'iBalloon', 'iTarget', 'iRocket', 'iHorse', 'iBungee', 'iSilly', 'iLake', 'iLighthouse',
 ];
+/** Carnival Island icons: one 256 px row under the 512 px grid. */
+const ICON_ROW2: IconId[] = ['iCarnival', 'iIceCream', 'iBubble', 'iDino', 'iFlag', 'iFoam', 'iPlane', 'iDragon'];
+const GRID_H = 6 * CELL;
 
 /** Pixel rectangles [x, y, size] in the atlas (y down, canvas convention). */
 export const PICTO_RECTS: Readonly<Record<PictoId, readonly [number, number, number]>> = (() => {
@@ -47,6 +55,7 @@ export const PICTO_RECTS: Readonly<Record<PictoId, readonly [number, number, num
     const j = i % 4;
     r[id] = [(cell % COLS) * CELL + (j % 2) * 256, Math.floor(cell / COLS) * CELL + Math.floor(j / 2) * 256, 256];
   });
+  ICON_ROW2.forEach((id, i) => (r[id] = [i * 256, GRID_H, 256]));
   return r;
 })();
 
@@ -490,6 +499,223 @@ function iconBg(c: C2): void {
   disc(c, 50, 50, 43, INK);
 }
 
+
+// ── Carnival Island figures ──
+
+function bigTop(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Walls with a dark doorway, a striped roof cone and a pennant on the pole.
+  poly(c, [-28, 2, 28, 2, 26, 26, -26, 26], WHITE);
+  c.beginPath();
+  c.moveTo(-8, 26);
+  c.quadraticCurveTo(0, 6, 8, 26);
+  c.closePath();
+  c.fillStyle = INK;
+  c.fill();
+  for (const sx of [-17, 17]) line(c, [sx, 4, sx, 25], 3.2, YEL);
+  c.beginPath();
+  c.moveTo(-32, 4);
+  c.lineTo(0, -24);
+  c.lineTo(32, 4);
+  c.quadraticCurveTo(0, 10, -32, 4);
+  c.closePath();
+  c.fillStyle = WHITE;
+  c.fill();
+  c.save();
+  c.clip();
+  for (const xb of [-22, 0, 22]) poly(c, [0, -24, xb - 6, 12, xb + 6, 12], YEL);
+  c.restore();
+  line(c, [0, -24, 0, -36], 2.6);
+  poly(c, [0, -36, 12, -32, 0, -28], YEL);
+  c.restore();
+}
+
+function cone2(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Waffle cone with a dark criss-cross, two scoops and a drip.
+  poly(c, [-14, -6, 14, -6, 0, 30], YEL);
+  c.save();
+  c.beginPath();
+  c.moveTo(-14, -6);
+  c.lineTo(14, -6);
+  c.lineTo(0, 30);
+  c.closePath();
+  c.clip();
+  for (let i = -3; i <= 3; i++) {
+    line(c, [i * 8 - 12, -8, i * 8 + 12, 32], 2, INK);
+    line(c, [i * 8 + 12, -8, i * 8 - 12, 32], 2, INK);
+  }
+  c.restore();
+  disc(c, 0, -10, 13, WHITE);
+  disc(c, -9, -6, 8, WHITE);
+  disc(c, 9, -6, 8, WHITE);
+  disc(c, 0, -27, 10, WHITE);
+  line(c, [-6, -30, -2, -33], 2.6, INK);
+  disc(c, 2, -38, 3.6, YEL);
+  line(c, [2, -41, 6, -45], 2, YEL);
+  c.restore();
+}
+
+function bubbleBall(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // A see-through bubble (white ring + shine) with a hero inside, rolling a big ball.
+  ellipse(c, -8, 0, 25, 25, null, WHITE, 5);
+  line(c, [-24, -8, -20, -16], 3.4, WHITE);
+  line(c, [-17, -21, -12, -24], 3.4, WHITE);
+  person(c, -8, 4, 0.58, 'walk');
+  line(c, [-34, 27, 38, 27], 3.4, YEL);
+  disc(c, 27, 14, 11, WHITE);
+  poly(c, [27, 9, 31.5, 12.5, 29.8, 18, 24.2, 18, 22.5, 12.5], INK);
+  for (const a of [0.3, 1.55, 2.8, 4.05, 5.3]) line(c, [27 + Math.cos(a - 1.57) * 6, 14 + Math.sin(a - 1.57) * 6, 27 + Math.cos(a - 1.57) * 11, 14 + Math.sin(a - 1.57) * 11], 1.8, INK);
+  c.restore();
+}
+
+function dino(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Round, friendly dinosaur: big body, tail, little arms, a big eye and back spikes.
+  for (let i = 0; i < 4; i++) {
+    const a = -2.5 + i * 0.42;
+    const px = -2 + Math.cos(a) * 20;
+    const py = 2 + Math.sin(a) * 20;
+    poly(c, [px - 4, py + 2, px + Math.cos(a) * 9, py + Math.sin(a) * 9, px + 4, py + 2], YEL);
+  }
+  c.beginPath();
+  c.moveTo(-18, 10);
+  c.quadraticCurveTo(-34, 16, -40, 4);
+  c.quadraticCurveTo(-30, 22, -10, 22);
+  c.closePath();
+  c.fillStyle = WHITE;
+  c.fill();
+  ellipse(c, -2, 6, 20, 17, WHITE);
+  ellipse(c, 16, -14, 13, 11, WHITE);
+  line(c, [14, 0, 20, 4], 4, WHITE);
+  line(c, [-10, 20, -10, 28], 6, WHITE);
+  line(c, [6, 20, 6, 28], 6, WHITE);
+  disc(c, 19, -17, 3.6, INK);
+  disc(c, 20, -18, 1.2, WHITE);
+  line(c, [20, -8, 27, -9], 2.2, INK);
+  ellipse(c, -2, 10, 10, 8, YEL);
+  c.restore();
+}
+
+function chequerFlag(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  line(c, [-20, -30, -20, 34], 5, YEL);
+  // A waving chequered flag: 5 × 4 squares along a gentle wave.
+  const S = 9;
+  for (let i = 0; i < 5; i++) {
+    for (let j = 0; j < 4; j++) {
+      const x0 = -18 + i * S;
+      const w0 = Math.sin(i * 0.9) * 3;
+      const w1 = Math.sin((i + 1) * 0.9) * 3;
+      const y0 = -30 + j * S;
+      poly(c, [x0, y0 + w0, x0 + S, y0 + w1, x0 + S, y0 + S + w1, x0, y0 + S + w0], (i + j) % 2 ? INK : WHITE);
+    }
+  }
+  c.beginPath();
+  c.moveTo(-18, -30);
+  for (let i = 0; i <= 5; i++) c.lineTo(-18 + i * S, -30 + Math.sin(i * 0.9) * 3);
+  for (let i = 5; i >= 0; i--) c.lineTo(-18 + i * S, 6 + Math.sin(i * 0.9) * 3);
+  c.closePath();
+  c.lineWidth = 2.6;
+  c.strokeStyle = WHITE;
+  c.stroke();
+  c.restore();
+}
+
+function foam(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Foam "lava" (bubbly heap) with a hero hopping across a float above it.
+  c.beginPath();
+  c.moveTo(-34, 30);
+  for (const [bx, r] of [[-26, 9], [-12, 11], [3, 9], [17, 11], [30, 8]] as [number, number][]) c.arc(bx, 18, r, Math.PI, 0);
+  c.lineTo(38, 30);
+  c.closePath();
+  c.fillStyle = WHITE;
+  c.fill();
+  for (const [bx, by, r] of [[-20, 22, 3], [-4, 24, 2.4], [12, 21, 3], [26, 24, 2.2]] as [number, number, number][]) ellipse(c, bx, by, r, r, null, GREY, 1.6);
+  roundRect(c, -8, 2, 22, 7, 3);
+  c.fillStyle = YEL;
+  c.fill();
+  person(c, 4, -14, 0.62, 'jump');
+  for (const [bx, by, r] of [[-26, -18, 5], [-20, -28, 3], [26, -24, 4.5], [32, -12, 3]] as [number, number, number][]) ellipse(c, bx, by, r, r, null, WHITE, 2.4);
+  c.restore();
+}
+
+function biplane(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Front-three-quarter toy biplane: two wings with struts, round body, spinning prop.
+  roundRect(c, -40, -16, 80, 9, 4);
+  c.fillStyle = WHITE;
+  c.fill();
+  for (const sx of [-26, 26]) line(c, [sx, -8, sx, 8], 3, WHITE);
+  roundRect(c, -36, 6, 72, 8, 4);
+  c.fillStyle = YEL;
+  c.fill();
+  ellipse(c, 0, 2, 13, 13, WHITE);
+  disc(c, 0, 2, 6.5, INK);
+  disc(c, 0, 2, 3, YEL);
+  // Propeller blur + blades.
+  ellipse(c, 0, 2, 5, 22, null, GREY, 2);
+  line(c, [0, -16, 0, 20], 4, YEL);
+  // Tail fin peeking above, wheels below.
+  poly(c, [-3, -12, 0, -24, 3, -12], WHITE);
+  for (const sx of [-10, 10]) {
+    line(c, [sx * 0.6, 14, sx, 24], 2.6, WHITE);
+    disc(c, sx, 26, 4.2, WHITE);
+    disc(c, sx, 26, 1.8, INK);
+  }
+  c.restore();
+}
+
+function dragon(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Round friendly dragon in profile: yellow wing, curly tail, big eye, blowing bubbles.
+  c.beginPath();
+  c.moveTo(-6, -4);
+  c.quadraticCurveTo(-14, -34, -34, -26);
+  c.quadraticCurveTo(-26, -20, -28, -12);
+  c.quadraticCurveTo(-20, -14, -18, -4);
+  c.closePath();
+  c.fillStyle = YEL;
+  c.fill();
+  c.beginPath();
+  c.moveTo(-14, 14);
+  c.quadraticCurveTo(-38, 24, -36, 6);
+  c.quadraticCurveTo(-34, 0, -28, 4);
+  c.lineWidth = 6;
+  c.strokeStyle = WHITE;
+  c.lineCap = 'round';
+  c.stroke();
+  ellipse(c, -4, 8, 18, 14, WHITE);
+  ellipse(c, 14, -10, 13, 11, WHITE);
+  poly(c, [6, -20, 8, -30, 13, -20], YEL);
+  poly(c, [14, -20, 18, -29, 20, -18], YEL);
+  disc(c, 17, -12, 3.4, INK);
+  disc(c, 18, -13, 1.1, WHITE);
+  line(c, [-10, 20, -10, 26], 5, WHITE);
+  line(c, [4, 20, 4, 26], 5, WHITE);
+  ellipse(c, -2, 12, 9, 6, YEL);
+  for (const [bx, by, r] of [[31, -6, 4], [39, -14, 3], [36, 2, 2.6]] as [number, number, number][]) ellipse(c, bx, by, r, r, null, WHITE, 2.2);
+  c.restore();
+}
+
 const DRAW: Record<PictoId, (c: C2) => void> = {
   // ── icons ──
   iTrampoline: (c) => {
@@ -514,6 +740,38 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
   iBalloon: (c) => {
     iconBg(c);
     hotAirBalloon(c, 50, 52, 1.0);
+  },
+  iCarnival: (c) => {
+    iconBg(c);
+    bigTop(c, 50, 54, 1.02);
+  },
+  iIceCream: (c) => {
+    iconBg(c);
+    cone2(c, 50, 50, 1.0);
+  },
+  iBubble: (c) => {
+    iconBg(c);
+    bubbleBall(c, 50, 50, 0.95);
+  },
+  iDino: (c) => {
+    iconBg(c);
+    dino(c, 52, 50, 1.0);
+  },
+  iFlag: (c) => {
+    iconBg(c);
+    chequerFlag(c, 53, 48, 1.0);
+  },
+  iFoam: (c) => {
+    iconBg(c);
+    foam(c, 50, 50, 0.95);
+  },
+  iPlane: (c) => {
+    iconBg(c);
+    biplane(c, 50, 50, 0.92);
+  },
+  iDragon: (c) => {
+    iconBg(c);
+    dragon(c, 52, 52, 1.0);
   },
   iTarget: (c) => {
     iconBg(c);

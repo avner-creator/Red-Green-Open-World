@@ -18,7 +18,8 @@ export const SILLY_RING = { inner: 18.8, outer: 23.4, fence: 26.5 } as const;
 /** Extra openings in the fence (centre angle, world cos→x sin→z; half width, radians). Spans near roads are left open too. */
 export const SILLY_GAPS: readonly [number, number][] = [[Math.PI * 0.95, 0.12], [0.12, 0.12]];
 /** Inflatable welcome arch across the end of the south road (centre, yaw along the road, half span). */
-export const SILLY_ARCH = { x: 6.6, z: 71.5, yaw: Math.atan2(2, 14), half: 4.95 } as const;
+// half 5.4: the east post and bunting pole keep ≥ 3.8 m off the buggy race's lap line.
+export const SILLY_ARCH = { x: 6.6, z: 71.5, yaw: Math.atan2(2, 14), half: 5.9 } as const;
 
 const CREAM = 0xf6eedb;
 const PLUM = 0x3e2458;

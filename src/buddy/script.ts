@@ -86,6 +86,14 @@ export const ATTRACTIONS: Record<Attraction, { icon: BuddyPicto; name: string; h
   ranch: { icon: 'horse', name: 'pony ranch', howTo: (k) => ({ text: `Press ${k.use} to ride!`, icon: 'horse', mood: 'happy' }) },
   sillyZone: { icon: 'party', name: 'Silly Zone', howTo: () => ({ text: 'Everything is wobbly here!', icon: 'party', mood: 'silly' }) },
   bouncePads: { icon: 'wPads', name: 'bounce pads', howTo: () => ({ text: 'Bounce, bounce, bounce!', icon: 'wPads', mood: 'excited' }) },
+  carnivalRow: { icon: 'tent', name: 'carnival games', howTo: (k) => ({ text: `Press ${k.use} to play!`, icon: 'tent', mood: 'excited' }) },
+  iceCream: { icon: 'cone', name: 'ice-cream shop', howTo: (k) => ({ text: `Press ${k.use} for a cone!`, icon: 'cone', mood: 'happy' }) },
+  bubbleArena: { icon: 'bubble', name: 'bubble ball', howTo: (k) => ({ text: `Press ${k.use} to suit up!`, icon: 'bubble', mood: 'silly' }) },
+  dinoRing: { icon: 'dragon', name: 'dino sumo', howTo: (k) => ({ text: `Press ${k.use} to wobble!`, icon: 'dragon', mood: 'silly' }) },
+  raceStart: { icon: 'flag', name: 'buggy race', howTo: (k) => ({ text: `Press ${k.use} to race!`, icon: 'flag', mood: 'excited' }) },
+  foamCourse: { icon: 'bubble', name: 'foam course', howTo: () => ({ text: "Don't fall in the foam!", icon: 'bubble', mood: 'silly' }) },
+  airstrip: { icon: 'plane', name: 'stunt planes', howTo: (k) => ({ text: `Press ${k.use} to fly!`, icon: 'plane', mood: 'excited' }) },
+  dragonRoost: { icon: 'dragon', name: 'dragon ride', howTo: (k) => ({ text: `Press ${k.use} to fly the dragon!`, icon: 'dragon', mood: 'excited' }) },
 };
 
 export interface KeyNames {

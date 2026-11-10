@@ -54,6 +54,14 @@ const VISIT_RADIUS: Record<Attraction, number> = {
   bungee: 5,
   sillyZone: 14,
   ranch: 12,
+  carnivalRow: 12,
+  iceCream: 6,
+  bubbleArena: 13,
+  dinoRing: 8,
+  raceStart: 7,
+  foamCourse: 8,
+  airstrip: 12,
+  dragonRoost: 8,
 };
 const TRAMPOLINE_MAT = 9;
 
@@ -187,7 +195,10 @@ export function createBuddy(ctx: GameContext): GameSystem {
   };
 
   const availableAttractions = (): Attraction[] => {
-    const list: Attraction[] = ['trampoline', 'gearShack', 'balloon', 'launchPads', 'garage', 'bouncePads', 'bungee', 'sillyZone'];
+    const list: Attraction[] = [
+      'trampoline', 'gearShack', 'balloon', 'launchPads', 'garage', 'bouncePads', 'bungee', 'sillyZone',
+      'carnivalRow', 'iceCream', 'bubbleArena', 'dinoRing', 'raceStart', 'foamCourse', 'airstrip', 'dragonRoost',
+    ];
     if (ctx.vehicles?.all.some((v) => v.kind === 'horse')) list.push('ranch');
     return list.filter((a) => !!ctx.world.anchors[a]);
   };
