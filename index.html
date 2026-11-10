@@ -4,19 +4,170 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="A tiny island adventure played with red-green glasses." />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="color-scheme" content="dark" />
     <title>Red-Green Open World</title>
+    <!--
+      The loading screen is pure inline HTML + CSS so it paints before any JavaScript downloads.
+      Colours: white and warm yellow on navy, so it reads in the red channel alone and in the green
+      channel alone. Animations use only transform/opacity, so they stay smooth while the main thread
+      is busy building the island. src/boot/loader.ts moves the bar and reveals the title screen.
+    -->
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; }
       #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
       #ui-root { position: fixed; inset: 0; pointer-events: none; font-family: system-ui, sans-serif; }
-      #boot { position: fixed; inset: 0; display: grid; place-items: center; color: #fff;
-              font: 700 28px system-ui, sans-serif; background: #0b1020; transition: opacity .4s; }
+
+      #boot { position: fixed; inset: 0; z-index: 2147482000; display: grid; place-items: center; overflow: hidden;
+              color: #fff; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+              background: radial-gradient(120% 90% at 50% 35%, #1d2a52 0%, #111a36 45%, #0b1020 100%);
+              transition: opacity .45s ease; --u: min(1vmin, 1.6vh); }
+      #boot.out { opacity: 0; pointer-events: none; }
+      #boot .bt { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 4.2);
+                  transition: transform .45s cubic-bezier(.3,.0,.2,1); }
+      #boot.out .bt { transform: scale(1.08); }
+
+      /* Soft floating sparkles behind everything (both channels: white). */
+      #boot .bt-sky { position: absolute; inset: 0; pointer-events: none; }
+      #boot .bt-sky i { position: absolute; width: calc(var(--u) * 1.1); height: calc(var(--u) * 1.1); border-radius: 50%;
+                        background: #fff; opacity: 0; animation: bt-twinkle 3.2s ease-in-out infinite; }
+      #boot .bt-sky i:nth-child(1) { left: 12%; top: 22%; }
+      #boot .bt-sky i:nth-child(2) { left: 84%; top: 18%; animation-delay: .7s; }
+      #boot .bt-sky i:nth-child(3) { left: 22%; top: 78%; animation-delay: 1.4s; }
+      #boot .bt-sky i:nth-child(4) { left: 74%; top: 72%; animation-delay: 2.1s; }
+      #boot .bt-sky i:nth-child(5) { left: 50%; top: 10%; animation-delay: 2.6s; }
+      #boot .bt-sky i:nth-child(6) { left: 92%; top: 48%; animation-delay: 1s; }
+      #boot .bt-sky i:nth-child(7) { left: 6%; top: 52%; animation-delay: 1.8s; }
+
+      /* Glasses: white frame, red + green lenses, gently bobbing; a glint sweeps the lenses. */
+      #boot .bt-glasses { width: calc(var(--u) * 30); height: auto; overflow: visible;
+                          animation: bt-bob 2.4s ease-in-out infinite; filter: drop-shadow(0 calc(var(--u) * 1) calc(var(--u) * 2) rgba(0,0,0,.45)); }
+      #boot .bt-glint { animation: bt-glint 2.4s ease-in-out infinite; }
+
+      /* Wordmark: letters drop in one by one, then breathe. Each word is bright in BOTH channels. */
+      #boot h1 { margin: 0; display: flex; flex-direction: column; align-items: center; line-height: .95; letter-spacing: .02em;
+                 font-weight: 900; text-transform: uppercase; }
+      #boot .bt-line1 { display: flex; gap: .04em; font-size: calc(var(--u) * 11.5); }
+      #boot .bt-line2 { display: flex; font-size: calc(var(--u) * 5.4); letter-spacing: .32em; margin-right: -.32em; color: #ffe27a;
+                        margin-top: calc(var(--u) * 1.4); }
+      #boot h1 span { display: inline-block; }
+      #boot h1 .w { display: flex; }
+      #boot h1 .w span { animation: bt-drop .7s cubic-bezier(.2,1.6,.4,1) both, bt-breathe 3s ease-in-out 1.6s infinite;
+                         animation-delay: calc(var(--i) * 55ms), calc(1.6s + var(--i) * 90ms); }
+      #boot .bt-dash { color: #fff; text-shadow: 0 .06em 0 #3a4060; }
+      #boot .r { color: #ffa3a3; text-shadow: 0 .06em 0 #6b1f2e, 0 0 .4em rgba(255,120,120,.35); }
+      #boot .g { color: #b4ffb4; text-shadow: 0 .06em 0 #1d5a33, 0 0 .4em rgba(120,255,140,.3); }
+      #boot .bt-line2 span { animation: bt-fade .6s ease-out both; animation-delay: calc(500ms + var(--i) * 40ms); }
+
+      /* Progress bar: the fill is scaled on the compositor (src/boot/loader.ts sets the transform). */
+      #boot .bt-bar { position: relative; width: calc(var(--u) * 56); height: calc(var(--u) * 2.6); border-radius: 999px;
+                      background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 calc(var(--u) * .35) rgba(255,255,255,.35); overflow: hidden; }
+      #boot #boot-fill { position: absolute; inset: 0; border-radius: inherit; transform-origin: 0 50%; transform: scaleX(.03);
+                         background: linear-gradient(90deg, #fff6c8, #ffd84a); transition: transform .3s; }
+      #boot .bt-bar::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
+                             background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%);
+                             transform: translateX(-100%); animation: bt-sheen 1.6s ease-in-out infinite; }
+
+      /* Icon tips (no words): four little pictures fade in turn. */
+      #boot .bt-tips { position: relative; width: calc(var(--u) * 40); height: calc(var(--u) * 13); }
+      #boot .bt-tips svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0;
+                           animation: bt-tip 12s ease-in-out infinite; }
+      #boot .bt-tips svg:nth-child(2) { animation-delay: 3s; }
+      #boot .bt-tips svg:nth-child(3) { animation-delay: 6s; }
+      #boot .bt-tips svg:nth-child(4) { animation-delay: 9s; }
+
+      /* No JavaScript ran (blocked or the first file failed): offer a reload after a while. */
+      #boot .bt-nojs { position: absolute; bottom: calc(var(--u) * 6); display: grid; place-items: center;
+                       width: calc(var(--u) * 14); height: calc(var(--u) * 14); border-radius: 50%; background: #ffd84a; color: #141a30;
+                       opacity: 0; pointer-events: none; animation: bt-fade .4s ease-out 25s forwards; }
+      #boot .bt-nojs svg { width: 60%; height: 60%; }
+      #boot.js .bt-nojs { display: none; }
+      #boot:not(.js) .bt-nojs { pointer-events: auto; }
+
+      @keyframes bt-drop { from { transform: translateY(-.8em) scale(.6); opacity: 0; } }
+      @keyframes bt-breathe { 50% { transform: translateY(-.05em); } }
+      @keyframes bt-fade { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes bt-bob { 50% { transform: translateY(calc(var(--u) * -1.2)) rotate(-2deg); } }
+      @keyframes bt-glint { 0%, 55% { transform: translateX(-60px) skewX(-20deg); opacity: 0; } 65% { opacity: .9; } 85%, 100% { transform: translateX(240px) skewX(-20deg); opacity: 0; } }
+      @keyframes bt-sheen { 60%, 100% { transform: translateX(100%); } }
+      @keyframes bt-twinkle { 50% { opacity: .7; transform: scale(1.4); } }
+      @keyframes bt-tip { 0% { opacity: 0; transform: translateY(8%); } 4%, 21% { opacity: 1; transform: none; } 25%, 100% { opacity: 0; transform: translateY(-8%); } }
+
+      /* Phones in landscape (e.g. 640x360): a little tighter. */
+      @media (max-height: 420px) {
+        #boot .bt { gap: calc(var(--u) * 3); }
+        #boot .bt-glasses { width: calc(var(--u) * 24); }
+        #boot .bt-tips { height: calc(var(--u) * 11); }
+      }
+      /* Test mode (src/boot/loader.ts): no decorative motion, the bar still moves. */
+      #boot.still *, #boot.still *::after { animation: none !important; }
+      #boot.still .bt-tips svg:first-child { opacity: 1; }
+      @media (prefers-reduced-motion: reduce) {
+        #boot *, #boot *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+        #boot .bt-tips svg:first-child { opacity: 1; animation: none; }
+      }
     </style>
   </head>
   <body>
     <canvas id="game" tabindex="0"></canvas>
     <div id="ui-root"></div>
-    <div id="boot">Loading…</div>
+    <div id="boot" data-testid="boot" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="bt-sky" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="bt">
+        <svg class="bt-glasses" viewBox="0 0 220 90" aria-hidden="true">
+          <defs><clipPath id="bt-lenses"><rect x="14" y="18" width="80" height="56" rx="24"/><rect x="126" y="18" width="80" height="56" rx="24"/></clipPath></defs>
+          <rect x="14" y="18" width="80" height="56" rx="24" fill="#ff5a5a"/>
+          <rect x="126" y="18" width="80" height="56" rx="24" fill="#3fe08a"/>
+          <g clip-path="url(#bt-lenses)"><rect class="bt-glint" x="0" y="0" width="22" height="100" fill="#fff" opacity="0"/></g>
+          <g fill="none" stroke="#fff" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+            <rect x="14" y="18" width="80" height="56" rx="24"/><rect x="126" y="18" width="80" height="56" rx="24"/>
+            <path d="M94 38q16-12 32 0M14 34L2 26M206 34l12-8"/>
+          </g>
+        </svg>
+        <h1 aria-label="Red-Green Open World">
+          <span class="bt-line1" aria-hidden="true">
+            <span class="w r"><span style="--i:0">R</span><span style="--i:1">e</span><span style="--i:2">d</span></span><span class="w"><span class="bt-dash" style="--i:3">-</span></span>
+            <span class="w g"><span style="--i:4">G</span><span style="--i:5">r</span><span style="--i:6">e</span><span style="--i:7">e</span><span style="--i:8">n</span></span>
+          </span>
+          <span class="bt-line2" aria-hidden="true"><span style="--i:0">O</span><span style="--i:1">p</span><span style="--i:2">e</span><span style="--i:3">n</span><span style="--i:4">&nbsp;</span><span style="--i:5">W</span><span style="--i:6">o</span><span style="--i:7">r</span><span style="--i:8">l</span><span style="--i:9">d</span></span>
+        </h1>
+        <div class="bt-bar" aria-hidden="true"><i id="boot-fill"></i></div>
+        <div class="bt-tips" aria-hidden="true">
+          <!-- Tip 1: glasses on → gems appear. -->
+          <svg viewBox="0 0 300 100" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="20" y="34" width="44" height="32" rx="13"/><rect x="80" y="34" width="44" height="32" rx="13"/><path d="M64 46q8-6 16 0"/>
+            <path d="M150 50h40m-12-12 12 12-12 12" stroke="#ffd84a"/>
+            <path d="M232 20l26 18-26 46-26-46z M206 38h52 M232 20l-10 18 10 46 10-46z" stroke="#ffd84a"/>
+            <path d="M272 22l6-6m2 18h8m-36-26v-8" stroke="#fff"/>
+          </svg>
+          <!-- Tip 2: Space → big bounce. -->
+          <svg viewBox="0 0 300 100" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="14" y="56" width="110" height="30" rx="8"/><path d="M44 71h50"/>
+            <path d="M150 62h40m-12-12 12 12-12 12" stroke="#ffd84a"/>
+            <circle cx="248" cy="16" r="9"/><path d="M248 26v26m0-18-16-8m16 8 16-8m-16 18-12 18m12-18 12 18"/>
+            <path d="M216 92q32-14 64 0" stroke="#ffd84a"/>
+          </svg>
+          <!-- Tip 3: key + lock → treasure chest (both eyes together). -->
+          <svg viewBox="0 0 300 100" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="34" cy="50" r="14" stroke="#ffd84a"/><path d="M48 50h40m-10 0v12m-14-12v9" stroke="#ffd84a"/>
+            <path d="M104 50h0"/><rect x="112" y="46" width="34" height="30" rx="5"/><path d="M118 46v-8a11 11 0 0 1 22 0v8"/>
+            <path d="M166 58h34m-10-10 10 10-10 10" stroke="#ffd84a"/>
+            <rect x="216" y="44" width="70" height="44" rx="6"/><path d="M216 56q35-34 70 0M216 62h70M251 62v12" />
+            <path d="M232 28l-6-8m25 2v-10m19 16 6-8" stroke="#ffd84a"/>
+          </svg>
+          <!-- Tip 4: keys / stick → run around the island. -->
+          <svg viewBox="0 0 300 100" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="46" y="14" width="30" height="30" rx="6"/><rect x="12" y="52" width="30" height="30" rx="6"/>
+            <rect x="46" y="52" width="30" height="30" rx="6"/><rect x="80" y="52" width="30" height="30" rx="6"/>
+            <path d="M61 36V22m-6 6 6-6 6 6" stroke="#ffd84a"/>
+            <path d="M134 50h40m-12-12 12 12-12 12" stroke="#ffd84a"/>
+            <circle cx="236" cy="18" r="9"/><path d="M236 28l-6 26m3-18-18 10m18-10 20 6m-26 12-14 22m14-22 18 20"/>
+            <path d="M262 76h26m-20 10h14" stroke="#ffd84a"/>
+          </svg>
+        </div>
+      </div>
+      <a class="bt-nojs" href="./" aria-label="Try again"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 15a19 19 0 1 1-16.5 9.5" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M20 15.5 22.5 29 8 21z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg></a>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
