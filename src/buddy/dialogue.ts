@@ -73,7 +73,8 @@ export class DialogueQueue {
 
   /**
    * Offer a line. Returns 'now' (on screen), 'queued' or 'dropped'.
-   * A strictly higher priority interrupts the current line; an equal or lower one waits.
+   * A strictly higher priority interrupts the current line (a story line also replaces another
+   * story line); an equal or lower one waits.
    * Idle chatter is never queued (only said when Pip is free).
    */
   say(line: Line): 'now' | 'queued' | 'dropped' {
@@ -83,9 +84,12 @@ export class DialogueQueue {
       return 'now';
     }
     if (cur.line.text === line.text) return 'dropped';
-    if (line.priority > cur.line.priority) {
-      // A story/tip line that got interrupted goes back to the front of the queue.
-      if (cur.line.priority >= PRIORITY.tip && cur.t < cur.reveal) this.enqueue(cur.line, true);
+    // Story lines replace each other (the newest story beat wins); otherwise only a strictly
+    // higher priority interrupts.
+    const storyBeat = line.priority === PRIORITY.story && cur.line.priority === PRIORITY.story;
+    if (line.priority > cur.line.priority || storyBeat) {
+      // A tip line that got interrupted goes back to the front of the queue.
+      if (!storyBeat && cur.line.priority >= PRIORITY.tip && cur.t < cur.reveal) this.enqueue(cur.line, true);
       this.finish(true);
       this.start(line);
       return 'now';

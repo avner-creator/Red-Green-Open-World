@@ -100,6 +100,8 @@ export interface BuddyTestApi {
   director(): { step: string; introT: number; playT: number };
   line(): string | null;
   ride(): RideView;
+  /** Every line Pip started saying, in order (text + id). */
+  history(): { text: string; id: string }[];
 }
 
 declare global {
@@ -294,9 +296,11 @@ export function createBuddy(ctx: GameContext): GameSystem {
   };
   const director = new Director(sink, store, rand);
 
+  const history: { text: string; id: string }[] = [];
   queue.onChange = (a: ActiveLine | null) => {
     ui.show(a);
     if (a) {
+      if (ctx.testMode && history.length < 200) history.push({ text: a.line.text, id: a.line.id ?? '' });
       voice.speak(a.line.text, a.line.mood ?? 'happy');
       if (a.line.priority >= PRIORITY.tip) barkPulse = 0.6;
     } else voice.hush();
@@ -526,7 +530,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     let pose: Pose = 'stand';
     let clear: number = FOLLOW.personal;
     const dHero = Math.hypot(pos.x - h.x, pos.z - h.z);
-    const sniffing = t < sniffUntil && !lead && !onTramp && p.mode === 'walk';
+    const sniffing = t < sniffUntil && !lead && !onTramp && p.mode === 'walk' && hs < 2.5 && dHero < 5;
     inp.look = lookV.set(p.position.x, p.position.y + 1.35, p.position.z);
     if (lickPending || lickT > 0) {
       // Run over after a flop, lick, then wag.
@@ -680,6 +684,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       director: () => ({ step: director.step, introT: director.introT, playT: director.playT }),
       line: () => queue.current?.line.text ?? null,
       ride: () => ride,
+      history: () => history.slice(),
     };
   }
 
