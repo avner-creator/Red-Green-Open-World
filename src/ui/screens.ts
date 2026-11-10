@@ -52,9 +52,12 @@ export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
   grown.addEventListener('click', a.openGate);
   const cred = btn('b d corner r', 'Credits', 'credits', icon('credits'));
   cred.addEventListener('click', a.openCredits);
+  // Wardrobe one click away (Play itself opens the hero select).
+  const wardrobe = btn('b d wardrobe', 'Wardrobe', 'title-wardrobe', icon('backpack'), icon('hat'));
+  wardrobe.addEventListener('click', a.openWardrobe);
   // A returning child sees their gems right away.
   const wallet = createWalletChip(ctx, 'titlew', 'title-wallet');
-  const el = h('div', 'screen title shade', { 'data-screen': 'title' }, logo, h('div', 'center', {}, play), h('div'), grown, cred, wallet.el);
+  const el = h('div', 'screen title shade', { 'data-screen': 'title' }, logo, h('div', 'center', {}, play, wardrobe), h('div'), grown, cred, wallet.el);
   return {
     el,
     wallet,
@@ -131,7 +134,12 @@ export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): E
   again.addEventListener('click', a.play);
   const home = btn('b d', 'Home', 'home', icon('home'));
   home.addEventListener('click', a.toTitle);
-  const panel = h('div', 'panel endp', {}, header, stickers, econRow, smalls, h('div', 'btnrow', {}, again, home));
+  // Change hero or outfit before the next run, one click each (Play again stays the fast path).
+  const hero = btn('b d', 'Hero', 'end-hero', icon('grownup'), icon('sparkle'));
+  hero.addEventListener('click', () => (a.choose ?? a.play)());
+  const wardrobe = btn('b d', 'Wardrobe', 'end-wardrobe', icon('backpack'), icon('hat'));
+  wardrobe.addEventListener('click', a.openWardrobe);
+  const panel = h('div', 'panel endp', {}, header, stickers, econRow, smalls, h('div', 'btnrow', {}, again, hero, wardrobe, home));
   const el = h('div', 'screen dim', { 'data-screen': 'end' }, confetti, panel);
 
   // Chests opened and outfits unlocked this run, from events (the session state may lag behind).

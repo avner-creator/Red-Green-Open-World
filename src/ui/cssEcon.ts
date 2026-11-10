@@ -126,7 +126,7 @@ export const ECON_CSS = `
 /* ---------- pause: wardrobe tile ---------- */
 .rg .grid3{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(var(--u)*2)}
 .rg .pausep .grid3 .tile{min-width:calc(var(--u)*18);min-height:calc(var(--u)*14.5)}
-.rg .pausep .grid3 .tile.main{grid-column:1/4;min-height:calc(var(--u)*15)}
+.rg .pausep .grid3 .tile.main{grid-column:1/3;min-height:calc(var(--u)*15)}
 
 /* ---------- Gear Shack / wardrobe ---------- */
 .rg .shopscr{background:radial-gradient(ellipse at 50% 30%,rgba(30,36,80,.6),rgba(6,8,20,.9))}

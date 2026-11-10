@@ -53,12 +53,13 @@ describe('carousel index maths', () => {
   });
   it('finds a character, falling back to the default', () => {
     expect(indexOfCharacter('frog')).toBe(CHARACTERS.findIndex((c) => c.id === 'frog'));
-    expect(indexOfCharacter('???')).toBe(0);
-    expect(indexOfCharacter(null)).toBe(0);
+    const def = CHARACTERS.findIndex((c) => c.id === 'frog'); // the first-run default
+    expect(indexOfCharacter('???')).toBe(def);
+    expect(indexOfCharacter(null)).toBe(def);
   });
   it('preselects the remembered pick only while owned', () => {
-    expect(preselectId(defaultCharacterAccess, 'frog')).toBe('frog');
-    expect(preselectId(defaultCharacterAccess, 'rex')).toBe('robot');
-    expect(preselectId(defaultCharacterAccess, null)).toBe('robot');
+    expect(preselectId(defaultCharacterAccess, 'robot')).toBe('robot');
+    expect(preselectId(defaultCharacterAccess, 'rex')).toBe('frog');
+    expect(preselectId(defaultCharacterAccess, null)).toBe('frog');
   });
 });

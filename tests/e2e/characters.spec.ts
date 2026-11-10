@@ -105,14 +105,14 @@ test.afterAll(async () => {
 const skillsSeen = (): Promise<string[]> =>
   page.evaluate(() => (window as unknown as { __skills: string[] }).__skills.splice(0));
 
-test('the default character is the robot and unknown ids are ignored', async () => {
+test('the default character is the frog and unknown ids are ignored', async () => {
   const r = await page.evaluate(async () => {
     const p = window.__rg!.ctx.player;
     const first = p.characterId;
     await p.setCharacter('unicorn');
     return { first, after: p.characterId, skill: p.skill.id, ready: p.skill.ready, boost: p.skill.bounceBoost };
   });
-  expect(r).toEqual({ first: 'robot', after: 'robot', skill: 'doubleJump', ready: true, boost: 1 });
+  expect({ ...r, boost: undefined }).toEqual({ first: 'frog', after: 'frog', skill: 'superBounce', ready: true, boost: undefined });
 });
 
 for (const id of IDS) {

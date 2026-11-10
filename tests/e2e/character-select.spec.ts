@@ -63,7 +63,7 @@ test.describe('character select', () => {
       window.__rg!.freeze(true);
       try {
         localStorage.removeItem('rgow.character.v1');
-        window.__rg!.ctx.profile.equip('character', 'robot');
+        window.__rg!.ctx.profile.equip('character', 'frog');
       } catch {
         /* ignore */
       }
@@ -77,18 +77,20 @@ test.describe('character select', () => {
     await page.getByTestId('play').click();
     await expect(page.getByTestId('csel-go')).toBeVisible();
     expect(await phase(page)).toBe('title');
-    await settle(page, 'robot');
-    await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
-    await save(page, 'select-robot');
-
-    // Browse with the keyboard (the focused chip is the selected one).
-    await page.keyboard.press('ArrowRight');
+    // A new profile starts with the frog (the first-run default).
     await settle(page, 'frog');
     await expect(page.getByTestId('csel-name')).toHaveText('HOPPER');
     await expect(page.getByTestId('csel-skill')).toHaveAttribute('data-skill', 'superBounce');
     await save(page, 'select-frog');
 
+    // Browse with the keyboard (the focused chip is the selected one).
+    await page.keyboard.press('ArrowLeft');
+    await settle(page, 'robot');
+    await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
+    await save(page, 'select-robot');
+
     // A priced character shows a padlock and the price, can be previewed, and cannot start.
+    await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
     await settle(page, 'panda');
     await expect(page.getByTestId('csel-locked')).toBeVisible();
@@ -101,33 +103,33 @@ test.describe('character select', () => {
     // Back returns to the title and the saved (default) hero comes back.
     await page.getByTestId('csel-back').click();
     await expect(page.getByTestId('play')).toBeVisible();
-    await settle(page, 'robot');
+    await settle(page, 'frog');
   });
 
-  test('choosing the frog starts the session as the frog, and a reload preselects it', async () => {
+  test('choosing the robot starts the session as the robot, and a reload preselects it', async () => {
     await page.getByTestId('play').click();
-    await page.getByTestId('csel-frog').click();
-    await settle(page, 'frog');
+    await page.getByTestId('csel-robot').click();
+    await settle(page, 'robot');
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
-    await settle(page, 'frog');
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('frog');
+    await settle(page, 'robot');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('robot');
     await step(page, 5);
     await expect(page.getByTestId('skill-chip')).toBeVisible();
-    await expect(page.getByTestId('skill-chip')).toHaveAttribute('data-skill', 'superBounce');
+    await expect(page.getByTestId('skill-chip')).toHaveAttribute('data-skill', 'doubleJump');
     await save(page, 'hud-skill-chip');
 
     await page.reload();
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
     await page.evaluate(() => window.__rg!.freeze(true));
-    await settle(page, 'frog');
+    await settle(page, 'robot');
     await page.getByTestId('play').click();
-    await expect(page.getByTestId('csel-frog')).toHaveClass(/sel/);
-    await expect(page.getByTestId('csel-name')).toHaveText('HOPPER');
+    await expect(page.getByTestId('csel-robot')).toHaveClass(/sel/);
+    await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
     // Play, Go: two clicks for a returning player.
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
-    expect(await charId(page)).toBe('frog');
+    expect(await charId(page)).toBe('robot');
   });
 
   test('a character that can be afforded unlocks with a celebration and then starts', async () => {
@@ -171,8 +173,8 @@ test.describe('character select', () => {
     expect(await phase(page)).toBe('playing');
     // A wipe locks the paid heroes again and swaps back to a free one.
     await page.evaluate(() => window.__rg!.ctx.profile.reset());
-    await settle(page, 'robot');
-    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('panda'), window.__rg!.ctx.profile.equipped('character')])).toEqual([false, 'robot']);
+    await settle(page, 'frog');
+    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('panda'), window.__rg!.ctx.profile.equipped('character')])).toEqual([false, 'frog']);
     expect(consoleErrors).toEqual([]);
   });
 });

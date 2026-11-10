@@ -15,7 +15,8 @@ export function hintKind(mode: PlayerMode): 'driving' | 'skydive' | null {
 }
 
 const ROWS: Record<'driving' | 'skydive', ControlId[]> = {
-  driving: ['steer', 'drive', 'hop', 'slide', 'horn', 'exit'],
+  // Four at most: a strip of tiny pictograms is noise (slide and horn are on the controls card).
+  driving: ['steer', 'drive', 'hop', 'exit'],
   skydive: ['move', 'chute'],
 };
 

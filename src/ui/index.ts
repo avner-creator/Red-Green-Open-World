@@ -119,7 +119,10 @@ export function createUi(ctx: GameContext): UiApi {
   // Pause menu: change hero (same screen as the title's).
   const heroTile = h('button', 'b tile d', { type: 'button', 'aria-label': 'Hero', 'data-testid': 'pause-hero' }, h('span', 'pair', {}, icon('grownup'), icon('sparkle')), 'Hero');
   heroTile.addEventListener('click', openSelect);
-  pause.el.querySelector('.grid2')?.append(heroTile);
+  // Right after Resume: row 1 = Resume, Hero, Wardrobe; row 2 = Restart, Home, Grown-ups, "?".
+  const pauseGrid = pause.el.querySelector('.grid3, .grid2');
+  if (pauseGrid?.firstElementChild) pauseGrid.firstElementChild.after(heroTile);
+  else pauseGrid?.append(heroTile);
   applyStoredCharacter(ctx);
   // Tests plug a fake wallet in through this hook (the economy calls setCharacterAccess directly).
   if (ctx.testMode) (window as unknown as { __rgSetCharacterAccess?: typeof setCharacterAccess }).__rgSetCharacterAccess = setCharacterAccess;
