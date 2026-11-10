@@ -9,6 +9,8 @@ import { createVision } from './vision';
 import { createInput, createPhysics, createPlayerSystems } from './core';
 import { createWorld } from './world';
 import { createActivities } from './activities';
+import { createEconomy } from './activities/economy';
+import { createProfile } from './profile';
 import { createUi } from './ui';
 import type { GameContext, Quality, TestApi } from './types';
 
@@ -50,6 +52,7 @@ async function boot(): Promise<void> {
   // Filled in boot order; see GameContext docs.
   const base: Partial<GameContext> = { canvas, uiRoot, renderer, scene, camera, settings, events, session, audio, testMode };
   const ctx = base as GameContext;
+  ctx.profile = createProfile(events);
 
   ctx.vision = createVision(ctx);
   ctx.input = createInput(ctx);
@@ -60,6 +63,8 @@ async function boot(): Promise<void> {
   ctx.cameraRig = core.cameraRig;
   ctx.interactions = core.interactions;
   ctx.vehicles = core.vehicles;
+  const economy = createEconomy(ctx);
+  ctx.economy = economy;
   const activities = await createActivities(ctx);
   ctx.ui = createUi(ctx);
 
@@ -82,6 +87,7 @@ async function boot(): Promise<void> {
     if (e.phase === 'playing' && e.previous === 'title') {
       ctx.player.respawn();
       ctx.world.setTimeOfDay(0);
+      ctx.profile.noteSession();
     }
   });
   resize();
@@ -100,6 +106,7 @@ async function boot(): Promise<void> {
       session.update(dt);
       ctx.physics.step(dt);
       core.system.update(dt);
+      economy.update(dt);
       activities.update(dt);
     }
     ctx.world.update(dt);

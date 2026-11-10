@@ -4,6 +4,7 @@
  */
 import type { GameContext, GameSystem } from '../types';
 import { createChests } from './chests';
+import { createGear } from './gear';
 import { createGems } from './gems';
 import { createBouncePads } from './pads';
 import { createTrampoline } from './trampoline';
@@ -13,6 +14,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const trampoline = createTrampoline(ctx);
   const pads = createBouncePads(ctx);
   const chests = createChests(ctx);
+  const gear = createGear(ctx);
   return {
     update(dt) {
       if (ctx.session.state.phase === 'playing') {
@@ -21,12 +23,14 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       }
       gems.update(dt);
       chests.update(dt);
+      gear.update(dt);
     },
     dispose() {
       gems.dispose();
       trampoline.dispose();
       pads.dispose();
       chests.dispose();
+      gear.dispose?.();
     },
   };
 }
