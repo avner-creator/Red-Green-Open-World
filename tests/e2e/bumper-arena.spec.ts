@@ -228,7 +228,7 @@ test('Dino Sumo: the magic water balloons touch only the weak channel (all 4 com
   });
 });
 
-test('Dino Sumo: a full 45 s round from the booth to the result card, then E plays again and R leaves', async () => {
+test('Dino Sumo: a full 45 s round to the result card; E plays again (beat ring + balloons weak-only, 4 combos); R leaves', async () => {
   const r = await page.evaluate(async () => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -291,6 +291,28 @@ test('Dino Sumo: a full 45 s round from the booth to the result card, then E pla
   // Replays cost a ticket only when the economy is present; without it the game is free.
   expect(again.phase).toBe('round');
   expect(again.clock).toBe(45);
+  // Live round: the weak-eye beat ring round the hero and the magic balloons, all 4 combos.
+  expect(await page.evaluate(() => window.__rg!.ctx.vision.channels().weak)).toBe('r');
+  for (const combo of COMBOS) {
+    await page.evaluate((eye) => window.__rg!.setEye(eye), combo.eye);
+    const shots: PNG[] = [];
+    for (const v of [true, false]) {
+      await page.evaluate((on) => {
+        window.__rgDinoSumo!.layer(on);
+        window.__rg!.render();
+      }, v);
+      shots.push(await canvasShot(page));
+    }
+    const d = channelDiff(shots[0], shots[1]);
+    const tag = `${combo.eye.leftLens}/${combo.eye.weakEye}`;
+    expect(d[combo.weak], tag).toBeGreaterThan(100);
+    expect(maxOf(d, combo.strong), tag).toBe(0);
+    expect(d.maxB, tag).toBe(0);
+  }
+  await page.evaluate(() => {
+    window.__rgDinoSumo!.layer(true);
+    window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' });
+  });
   const left = await page.evaluate(() => {
     const rg = window.__rg!;
     rg.inject({ respawnPressed: true });

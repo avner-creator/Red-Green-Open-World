@@ -4,9 +4,10 @@
  * time only) → 3-2-1 → a 60-second match with bumps, flips and goal parties → result card (stars and
  * a gem prize) → E plays again, R leaves. The player is an ExternalController for the whole visit.
  *
- * Glasses twist: bonus hoops that pop up in mid-air are weak-eye only (VisionLayer.WeakOnly). Roll
- * the ball through one and it sparkles (also weak-eye only): its next goal for your team counts
- * double. The friends can't see the hoops, so they never aim for them.
+ * Glasses twist: bonus hoops that pop up in mid-air and drift slowly from side to side are
+ * weak-eye only (VisionLayer.WeakOnly): find and follow one, then roll the ball through it. The
+ * ball sparkles (also weak-eye only) and your team's next goal counts double. The friends can't
+ * see the hoops, so they never aim for them.
  */
 import * as THREE from 'three';
 import { CAMERA } from '../../config';
@@ -476,7 +477,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
         if (phase === 'idle') begin();
       },
       ring: (x, z) => {
-        if (match) match.ring = { x, z, age: 1, popT: 0, alive: true };
+        if (match) match.ring = { x, z, z0: z, age: 0, popT: 0, alive: true };
       },
       charge: () => {
         if (match) {

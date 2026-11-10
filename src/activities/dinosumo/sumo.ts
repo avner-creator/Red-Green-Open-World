@@ -18,6 +18,22 @@ export const TAIL = { seconds: 0.5, cooldown: 0.85, reach: 2.05, push: 6.2, popR
 export const OUT = { roll: 1.1, back: 1.6, points: 2 } as const;
 export const BALLOON = { respawn: 3.5, weakMax: 2, splashSlow: 0.8, soakSlow: 1.4 } as const;
 export const POINTS = { out: 2, balloon: 1, weakBalloon: 3 } as const;
+/**
+ * Glasses "time it": a weak-eye ring pulses round the player's dino, shrinking in to the dino once
+ * per `period`. A tail swing in the last `window` seconds (when the ring hugs the dino) is a super
+ * swing: a bigger shove and +1. With the weak eye shut the beat is invisible.
+ */
+export const BEAT = { period: 1.5, window: 0.32, push: 1.6, reach: 1.15, points: 1 } as const;
+
+/** 0 → 1 through each beat (the ring shrinks as it goes). */
+export function beatPhase(t: number): number {
+  return (((t % BEAT.period) + BEAT.period) % BEAT.period) / BEAT.period;
+}
+
+/** Is `t` inside the "now!" window at the end of a beat? */
+export function isPerfect(t: number): boolean {
+  return beatPhase(t) * BEAT.period >= BEAT.period - BEAT.window;
+}
 
 export type DinoState = 'ok' | 'rolling' | 'waddle';
 
@@ -69,11 +85,16 @@ export interface SumoState {
   phase: 'countdown' | 'play' | 'end' | 'over';
   phaseT: number;
   weakPops: number;
+  /** Seconds of play (drives the weak-eye beat ring). */
+  beat: number;
+  /** Super swings the player timed on the beat. */
+  perfects: number;
 }
 
 export type SumoEvent =
   | { kind: 'bump'; a: number; b: number; speed: number }
   | { kind: 'swing'; dino: number }
+  | { kind: 'perfect' }
   | { kind: 'tailHit'; from: number; to: number }
   | { kind: 'out'; dino: number; by: number }
   | { kind: 'back'; dino: number }
@@ -146,7 +167,7 @@ export function createSumo(seconds: number = SUMO.seconds, skills: readonly numb
       weak--;
     }
   }
-  return { dinos, balloons, clock: seconds, phase: 'countdown', phaseT: 0, weakPops: 0 };
+  return { dinos, balloons, clock: seconds, phase: 'countdown', phaseT: 0, weakPops: 0, beat: 0, perfects: 0 };
 }
 
 /** Rank of the player among all dinos (1 = top; ties go to the player). */
@@ -204,6 +225,7 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
   if (s.phase === 'over') return;
   const live = s.phase === 'play';
   if (live) {
+    s.beat += dt;
     s.clock = Math.max(0, s.clock - dt);
     if (s.clock <= 0) {
       s.phase = 'end';
@@ -345,14 +367,21 @@ function startSwing(s: SumoState, i: number, out: SumoEvent[]): void {
   d.swingCd = TAIL.cooldown;
   out.push({ kind: 'swing', dino: i });
   const b = d.body;
+  const perfect = d.human && isPerfect(s.beat);
+  if (perfect) {
+    d.points += BEAT.points;
+    s.perfects++;
+    out.push({ kind: 'perfect' });
+  }
+  const reach = TAIL.reach * (perfect ? BEAT.reach : 1);
   // The tail sweeps a full circle: bump everyone close, pop every balloon in reach.
   s.dinos.forEach((o, j) => {
     if (j === i || o.state !== 'ok') return;
     const dx = o.body.x - b.x;
     const dz = o.body.z - b.z;
     const dist = Math.hypot(dx, dz);
-    if (dist > TAIL.reach + o.body.r * 0.5 || dist < 1e-6) return;
-    const k = TAIL.push * (d.human ? 1 : 0.8);
+    if (dist > reach + o.body.r * 0.5 || dist < 1e-6) return;
+    const k = TAIL.push * (d.human ? 1 : 0.8) * (perfect ? BEAT.push : 1);
     o.body.vx += (dx / dist) * k;
     o.body.vz += (dz / dist) * k;
     o.body.vy = Math.max(o.body.vy, 2.2);

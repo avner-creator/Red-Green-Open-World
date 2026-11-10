@@ -16,7 +16,13 @@ export const MATCH = { seconds: 60, countdown: 3, goalPause: 2.6, endPause: 1.6 
 export const MOVE = { speed: 6.4, sprint: 8.2, accel: 18, hopVy: 5.4, hopBoost: 3.2, hopCooldown: 0.8 } as const;
 export const AI = { speed: 4.6, accel: 11, think: [0.28, 0.6] as const } as const;
 export const FLIP = { impulse: 4.6, seconds: 0.95 } as const;
-export const RING = { r: 1.25, cy: 1.2, life: 9, gap: [3, 6] as const, pass: 1.05, chargeSeconds: 14 } as const;
+export const RING = { r: 1.25, cy: 1.2, life: 9, gap: [3, 6] as const, pass: 1.05, chargeSeconds: 14, drift: 1.3, driftRate: 1.1 } as const;
+
+/** Where a drifting hoop is across the pitch at `age` (stays inside the side walls). */
+export function ringZ(z0: number, age: number): number {
+  const lim = PITCH.hz - RING.r - 0.2;
+  return Math.max(-lim, Math.min(lim, z0 + Math.sin(age * RING.driftRate) * RING.drift));
+}
 
 export type Team = 'home' | 'away';
 export type Role = 'striker' | 'support' | 'keeper';
@@ -50,6 +56,8 @@ export interface Agent {
 export interface Ring {
   x: number;
   z: number;
+  /** Centre of its slow side-to-side drift (a moving target to follow with the weak eye). */
+  z0: number;
   age: number;
   /** Pops (0..1 animation) once the ball went through. */
   popT: number;
@@ -489,11 +497,12 @@ function updateRing(m: MatchState, dt: number, prevBallX: number, rand: () => nu
     const side = m.ball.x >= 0 ? 1 : -1;
     const x = side * (1.5 + rand() * (PITCH.hx - 4.5));
     const z = (rand() * 2 - 1) * (PITCH.hz - 1.8);
-    m.ring = { x, z, age: 0, popT: 0, alive: true };
+    m.ring = { x, z, z0: z, age: 0, popT: 0, alive: true };
     out.push({ kind: 'ring' });
     return;
   }
   r.age += dt;
+  r.z = ringZ(r.z0, r.age);
   const ball = m.ball;
   const crossed = (prevBallX - r.x) * (ball.x - r.x) <= 0 && prevBallX !== ball.x;
   if (crossed && Math.abs(ball.z - r.z) < RING.pass) {

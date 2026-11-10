@@ -4,12 +4,16 @@
  * tail (Space) to pop the water balloons overhead. E at the booth → friends load (first time) →
  * 3-2-1 → a 45-second round → result card (stars, gems) → E again, R leaves.
  *
- * Glasses twist: some water balloons are weak-eye only (VisionLayer.WeakOnly, never in the main
- * scene, popped with a burst drawn on the layer). They soak everybody else and score triple.
+ * Glasses twist (two kinds): some water balloons are weak-eye only (VisionLayer.WeakOnly, never in
+ * the main scene, popped with a burst drawn on the layer); they soak everybody else and score
+ * triple ("find"). And a weak-eye beat ring pulses round your dino: swing your tail when it hugs
+ * the dino for a super swing ("time it").
  */
 import * as THREE from 'three';
 import { CAMERA } from '../../config';
+import { VisionLayer } from '../../types';
 import type { ExternalController, GameContext, GameSystem, InputState } from '../../types';
+import { createGlowMaterial, createLayerMaterial } from '../../vision';
 import { localToWorld, rng, worldToLocal } from '../bubbleball/bodies';
 import { acquireFriendPool, releaseFriendPool } from '../bubbleball/friends';
 import type { Friend } from '../bubbleball/friends';
@@ -21,7 +25,7 @@ import { ThrillConfetti } from '../thrillConfetti';
 import { createBalloons } from './balloons';
 import { SET, createRingModel } from './ring';
 import { createSuits } from './suits';
-import { OUT, SUMO, TAIL, createSumo, playerRank, stepSumo, sumoPrize, sumoStars } from './sumo';
+import { OUT, SUMO, TAIL, beatPhase, createSumo, isPerfect, playerRank, stepSumo, sumoPrize, sumoStars } from './sumo';
 import type { SumoEvent, SumoInput, SumoState } from './sumo';
 
 const FRIEND_SCALE = 0.9;
@@ -84,6 +88,20 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
   ring.add(balloons.group);
   const confetti = new ThrillConfetti();
   ctx.scene.add(confetti.group);
+  // Weak-eye beat ring round the hero: shrinks in once per beat, bright in the "now!" window.
+  const beatGroup = new THREE.Group();
+  beatGroup.name = 'dinosumo-beat-ring';
+  const beatGeo = new THREE.TorusGeometry(1, 0.05, 8, 56).rotateX(Math.PI / 2);
+  const beatGlowGeo = new THREE.TorusGeometry(1, 0.16, 8, 56).rotateX(Math.PI / 2);
+  const beatDim = createLayerMaterial(0.55);
+  const beatHot = createLayerMaterial(1);
+  const beatGlowMat = createGlowMaterial({ level: 1, coreOpacity: 0.35, rimPower: 1.3, pulse: 0 });
+  const beatMesh = new THREE.Mesh(beatGeo, beatDim);
+  const beatGlow = new THREE.Mesh(beatGlowGeo, beatGlowMat);
+  beatGroup.add(beatMesh, beatGlow);
+  beatGroup.visible = false;
+  ctx.vision.add(beatGroup, VisionLayer.WeakOnly);
+  let layerOn = true;
   const hud = createRoundHud(ctx.uiRoot, 'dinosumo-hud');
   const ticket = createTicket(ctx);
   const pool = acquireFriendPool();
@@ -250,6 +268,12 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           }
           break;
         }
+        case 'perfect':
+          hud.splash('tail', 1);
+          ctx.audio.play('star', { pitch: 1.6 });
+          ctx.cameraRig.shake(0.25);
+          ctx.events.emit('stunt', { kind: 'bullseye', value: 1, stars: 1 });
+          break;
         case 'start':
           ctx.audio.play('start');
           hud.count(0, 'dino');
@@ -269,7 +293,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     resultT = 0;
     const rank = playerRank(round);
     const stars = sumoStars(rank);
-    const gems = sumoPrize(stars, round.weakPops);
+    const gems = sumoPrize(stars, round.weakPops + round.perfects);
     ticket.prize(gems);
     const me = round.dinos[0].points;
     ctx.events.emit('stunt', { kind: 'bullseye', value: me, stars });
@@ -300,6 +324,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     for (const f of friends) f.object.removeFromParent();
     friends = [];
     suits.setVisible(false);
+    beatGroup.visible = false;
     hud.hide();
     ctx.cameraRig.setOverride(null);
     wasTumbling = false;
@@ -420,8 +445,24 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
       triangles: () => model.triangles,
       layer: (v) => {
         balloons.layer.visible = v;
+        layerOn = v;
+        placeBeat();
       },
     };
+  }
+
+  function placeBeat(): void {
+    const d = round?.dinos[0];
+    const show = !!round && layerOn && phase === 'round' && round.phase === 'play' && d?.state === 'ok';
+    beatGroup.visible = show;
+    if (!show || !round || !d) return;
+    const hot = isPerfect(round.beat);
+    const r = 2.3 - 1.35 * beatPhase(round.beat);
+    toWorld(d.body.x, 0.12, d.body.z, beatGroup.position);
+    beatGroup.rotation.y = site.yaw;
+    beatGroup.scale.set(r, hot ? 2 : 1, r);
+    beatMesh.material = hot ? beatHot : beatDim;
+    beatGlow.visible = hot;
   }
 
   /** Is the player close enough for the idle set to animate? */
@@ -435,6 +476,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
       const slots = (round ?? idle).balloons;
       balloons.update(slots, model.ropeY, ring.matrixWorld, dt, time);
       if (phase === 'idle') return;
+      placeBeat();
       if (round) {
         placeSuitsAndFriends(dt);
         // Drips while wet.
@@ -460,6 +502,12 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
       model.dispose();
       suits.dispose();
       balloons.dispose();
+      ctx.vision.remove(beatGroup);
+      beatGeo.dispose();
+      beatGlowGeo.dispose();
+      beatDim.dispose();
+      beatHot.dispose();
+      beatGlowMat.dispose();
       confetti.group.removeFromParent();
       confetti.dispose();
       hud.dispose();

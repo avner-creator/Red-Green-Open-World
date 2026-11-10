@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../src/activities/bubbleball/bodies';
 import {
+  BEAT,
   POINTS,
   RING,
   SUMO,
   TAIL,
   balloonSlots,
+  beatPhase,
   createSumo,
   friendSkillScale,
   isOut,
+  isPerfect,
   playerRank,
   stepSumo,
   sumoPrize,
@@ -140,6 +143,32 @@ describe('Dino Sumo', () => {
     for (const d of s.dinos.slice(1)) expect(d.wet).toBeGreaterThan(0);
     expect(me.wet).toBe(0);
     expect(s.balloons[8].kind).toBe('plain');
+  });
+
+  it('a tail swing on the weak-eye beat is a super swing (+1, bigger shove); off the beat it is not', () => {
+    expect(beatPhase(0)).toBe(0);
+    expect(isPerfect(BEAT.period - 0.05)).toBe(true);
+    expect(isPerfect(BEAT.period * 0.5)).toBe(false);
+    const shove = (beat: number): { vx: number; points: number; perfects: number } => {
+      const s = createSumo();
+      s.phase = 'play';
+      s.balloons.forEach((b) => (b.kind = 'none'));
+      s.dinos[0].body.x = 0;
+      s.dinos[0].body.z = 0;
+      s.dinos[1].body.x = 1.6;
+      s.dinos[1].body.z = 0;
+      for (const d of s.dinos.slice(2)) d.body.z = -3.5;
+      s.beat = beat - 1 / 60; // the step adds one frame
+      stepSumo(s, 1 / 60, { rand: rng(3), input: { ...still, swing: true } }, []);
+      return { vx: s.dinos[1].body.vx, points: s.dinos[0].points, perfects: s.perfects };
+    };
+    const on = shove(BEAT.period * 3 - 0.1);
+    const off = shove(BEAT.period * 3 + 0.5);
+    expect(on.perfects).toBe(1);
+    expect(on.points).toBe(BEAT.points);
+    expect(off.perfects).toBe(0);
+    expect(off.points).toBe(0);
+    expect(on.vx).toBeGreaterThan(off.vx * 1.3);
   });
 
   it('a full round runs to the end; nobody leaves the mat; a child who tries usually comes first', () => {

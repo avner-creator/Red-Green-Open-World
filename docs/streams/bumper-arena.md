@@ -18,7 +18,8 @@ Shift = faster, Space = bubble hop (dash; hitting the ball mid-hop lofts it). Ha
 bubbles head over heels (players too); everything bounces. Goals: confetti, fanfare, `+1` splash,
 a quick kick-off. Rivals ease off when they lead and are slower than the player; in unit tests a
 "child who tries" wins 9 of 10 matches.
-Glasses twist: **bonus hoops** pop up in mid-air (weak-eye only). Roll the ball through one and it
+Glasses twist (depth-pass kinds **find + follow + line it up**): **bonus hoops** pop up in mid-air
+(weak-eye only) and drift slowly from side to side. Roll the both-eye ball through one and it
 sparkles (weak-eye only): your team's next goal counts **double**. Friends can't see hoops.
 
 **Dino Sumo** (booth on the ring's north side, E): four wobbly inflatable dinosaurs (instanced
@@ -26,13 +27,16 @@ suits with big eyes, a cream belly, bright spikes and a lagging five-piece tail;
 pokes out of the top) on a round inflatable mat. 45 s round. Bump friends out of the pool-noodle
 ring (+2 for the last bumper); they tumble out giggling and waddle back. Space = tail swing (a full
 spin that shoves nearby dinos and pops water balloons in reach). Plain balloons splash you (+1,
-short slow-down). Glasses twist: **magic water balloons** are weak-eye only, only the player's tail
-can pop them (friends can't see them), they soak everybody else and score **triple** (+3).
+short slow-down). Glasses twist (kinds **find + time it**): **magic water balloons** are weak-eye
+only, only the player's tail can pop them (friends can't see them), they soak everybody else and
+score **triple** (+3); and a weak-eye **beat ring** pulses round your dino, shrinking in once every
+1.5 s: swing while it hugs the dino (last 0.32 s, drawn brighter) for a **super swing** (+1, a 1.6×
+shove, a little more reach). With the weak eye shut the beat is invisible.
 
 Both: first play per session free, then a 3-gem ticket via `ctx.profile.spend` when the economy
 is present (coded defensively: without `ctx.profile` everything is free and prizes are skipped).
 Prize: Bubble Ball 2/4/6 gems by stars (loss/draw/win) + 1 per double goal (max 3); Dino Sumo
-2/4/6 by rank (4th–3rd/2nd/1st) + 1 per magic balloon (max 3). Result card: stars, `+gems`,
+2/4/6 by rank (4th–3rd/2nd/1st) + 1 per magic balloon or super swing (max 3). Result card: stars, `+gems`,
 E (gamepad X) = play again, R (gamepad Y) = leave; touch: use = again, flop = leave; auto-leave
 after 14 s. R or F during a round always leaves safely, back on foot beside the booth.
 Signals: `stunt {kind:'bullseye'}` per home goal / player knock-out / player balloon pop and one
@@ -82,11 +86,13 @@ Deck tops: highest ground under the footprint + 0.25 m (≈ y 17.7 and 17.5).
 - Unit: `tests/activities/bubbleball.test.ts` (bodies, walls, transforms, stars/prizes, rubber
   band, full matches incl. "a child who tries wins", bonus hoop → double goal, kick-off clock) and
   `tests/activities/dinosumo.test.ts` (ring-out credit and waddle back, weak balloon triple + soak,
-  full rounds incl. "a child who tries comes first", friends act on their own).
-- E2e: `tests/e2e/bumper-arena.spec.ts` (~28 s): full Bubble Ball match from the booth to the
+  super swing on the beat vs off it, full rounds incl. "a child who tries comes first", friends
+  act on their own). Bubble Ball also tests the hoop drift staying inside the walls.
+- E2e: `tests/e2e/bumper-arena.spec.ts` (~32 s): full Bubble Ball match from the booth to the
   result card and R back to walking; canvas-readback channel tests for the bonus hoop + ball
   sparkle and for the magic water balloons (weak channel changes, strong channel and blue
-  bit-identical, all 4 lens/eye combos); full Dino Sumo round, E replays, R leaves; no errors.
+  bit-identical, all 4 lens/eye combos); full Dino Sumo round, E replays, then the beat ring and
+  balloons in a live round (all 4 combos), R leaves; no errors.
 - Screenshots: e2e saves canvas full/R/G to `test-results/bumper-arena/e2e-*`;
   `npm run build && node scripts/shots-bumper.mjs` saves page shots (HUD included) of both idle
   sets, a live round, the weak pieces and the result cards to `test-results/bumper-arena/`.

@@ -3,6 +3,7 @@ import { collideBodies, collideWalls, integrate, localToWorld, makeBody, rng, wo
 import {
   BALL,
   MATCH,
+  RING,
   aimPoint,
   PITCH,
   behindBall,
@@ -11,6 +12,7 @@ import {
   matchStars,
   pitchWalls,
   rivalSkillScale,
+  ringZ,
   stepMatch,
 } from '../../src/activities/bubbleball/soccer';
 import type { HumanInput, MatchEvent, MatchState } from '../../src/activities/bubbleball/soccer';
@@ -147,7 +149,7 @@ describe('Bubble Ball match', () => {
   it('rolling the ball through a bonus ring charges it and the next home goal counts double', () => {
     const m = createMatch();
     m.phase = 'play';
-    m.ring = { x: 3, z: 0, age: 1, popT: 0, alive: true };
+    m.ring = { x: 3, z: 0, z0: 0, age: 0, popT: 0, alive: true };
     m.ringGap = 99;
     m.ball.x = 2;
     m.ball.vx = 8;
@@ -170,6 +172,12 @@ describe('Bubble Ball match', () => {
     expect(goal).toEqual({ kind: 'goal', team: 'home', points: 2, double: true });
     expect(m.score.home).toBe(2);
     expect(m.doubles.home).toBe(1);
+  });
+
+  it('bonus hoops drift from side to side but never into the walls', () => {
+    const zs = [0, 0.5, 1, 1.5, 2, 3, 4].map((t) => ringZ(PITCH.hz, t));
+    for (const z of zs) expect(Math.abs(z)).toBeLessThanOrEqual(PITCH.hz - RING.r - 0.2 + 1e-9);
+    expect(new Set([0, 1, 2].map((t) => ringZ(0, t).toFixed(2))).size).toBe(3);
   });
 
   it('kick-off: countdown then play; the clock only runs during play', () => {
