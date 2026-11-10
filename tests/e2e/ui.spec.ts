@@ -28,6 +28,29 @@ async function save(page: Page, name: string): Promise<void> {
 const step = (page: Page, n = 5): Promise<void> => page.evaluate((k) => window.__rg!.step(1 / 60, k), n);
 
 test.describe('ui', () => {
+  // The flow test below boots its own page (it changes settings and storage). The shorter tests
+  // share one page and go back to the title screen first: a boot costs seconds on SwiftShader.
+  let page: Page;
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+    await boot(page);
+    // Frozen until its first test: a running game loop here would slow down the other page.
+    await page.evaluate(() => window.__rg!.freeze(true));
+  });
+  test.afterAll(async () => {
+    await page.close();
+  });
+  const freshTitle = async (): Promise<void> => {
+    await page.evaluate(() => {
+      const rg = window.__rg!;
+      rg.freeze(false);
+      if (rg.state().phase !== 'title') rg.ctx.session.toTitle();
+      rg.ctx.settings.reset();
+    });
+    await expect(page.getByTestId('play')).toBeVisible();
+    await page.getByTestId('play').focus();
+  };
+
   test('title, play, hud, pause, end, gate, settings', async ({ page }) => {
     const { consoleErrors } = await boot(page);
     await page.evaluate(() => window.__rg!.freeze(true));
@@ -162,8 +185,8 @@ test.describe('ui', () => {
     expect(consoleErrors).toEqual([]);
   });
 
-  test('end screen shows what was earned (fake events)', async ({ page }) => {
-    await boot(page);
+  test('end screen shows what was earned (fake events)', async () => {
+    await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
     await page.getByTestId('play').click();
     await page.evaluate(() => {
@@ -186,8 +209,8 @@ test.describe('ui', () => {
     await save(page, 'end-earned');
   });
 
-  test('tutorial fades after the player moves and looks', async ({ page }) => {
-    await boot(page);
+  test('tutorial fades after the player moves and looks', async () => {
+    await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
     await page.getByTestId('play').click();
     await page.evaluate(() => window.__rg!.step(1 / 60, 5));
@@ -198,8 +221,8 @@ test.describe('ui', () => {
 
   // 1080p screenshots live in scripts/shots-ui-1080.mjs (npm run shots:ui1080): minutes on SwiftShader.
 
-  test('keyboard navigation and credits', async ({ page }) => {
-    await boot(page);
+  test('keyboard navigation and credits', async () => {
+    await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
     await step(page);
     // Play is focused; arrow moves to a corner button; Enter opens credits.
@@ -214,8 +237,8 @@ test.describe('ui', () => {
     await expect(page.getByTestId('play')).toBeVisible();
   });
 
-  test('the hold button opens the gate', async ({ page }) => {
-    await boot(page);
+  test('the hold button opens the gate', async () => {
+    await freshTitle();
     await page.getByTestId('grownups').click();
     const hold = page.getByTestId('gate-hold');
     await expect(hold).toBeVisible();
