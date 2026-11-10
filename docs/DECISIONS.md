@@ -56,3 +56,8 @@
 - Running jump is ~7.9 m (asked 5–6 m). Reason: matching 5–6 m made the jump too low; owner wants "a little crazy".
 - `launchPads` anchor moved to (80, 24) with a fixed landing-net target at (83, −34) inside the park. Reason: tighter attraction hub.
 - UI screenshots in e2e are opt-in (`RG_SHOTS=1`, `npm run shots:ui`). Reason: they cost ~2 min per run on the software renderer.
+
+## Stream B — characters (branch `agent/characters`)
+- Characters come from Quaternius CC0 packs via the trebeljahr/quaternius-showcase GitHub mirror (pinned commit). Reason: quaternius.com, opengameart.org and jsDelivr are blocked from that cloud session; raw.githubusercontent.com works and the mirror lists every pack as CC0-1.0.
+- Cast: robot + four space-suit animals (frog, red panda, bee, flamingo; one shared rig) + a T-rex. Reason: the only fully animated, kid-friendly CC0 characters reachable; no robot re-skins were needed.
+- Missing clips (dance, flop, sit, spin, hop, dino wave/fall) are hand-keyed in code with a two-bone leg IK, because these rigs pin the feet to separate root joints.
