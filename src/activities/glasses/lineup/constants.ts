@@ -25,8 +25,8 @@ export const LINEUP = {
     heights: [2.4, 3.3, 4.2],
     /** Free space needed behind a bubble along the sightline (no wall/tree right behind it). */
     behind: 5,
-    /** Bubbles keep this far apart. */
-    spacing: 3,
+    /** Bubbles keep this far apart, as seen from the pad (degrees). */
+    spacingDeg: 14,
     /** Ground must stay this far below a bubble. */
     clearance: 1.6,
   },

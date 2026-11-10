@@ -2,12 +2,12 @@
 export const ODD = {
   /** Pedestal centres in site-local metres (x right, z towards the approach): a gentle arc. */
   pedestals: [
-    [-2.6, -0.4],
-    [0, -1.2],
-    [2.6, -0.4],
+    [-2.6, -2.2],
+    [0, -3.0],
+    [2.6, -2.2],
   ] as readonly (readonly [number, number])[],
   /** Height of the weak-eye shapes above each pedestal's ground. */
-  shapeHeight: 2.6,
+  shapeHeight: 2.35,
   /** Pedestal parts (heights above the ground). */
   baseHeight: 0.18,
   baseSize: 1.2,

@@ -165,7 +165,10 @@ export function create(env: MechanicEnv): Mechanic {
   function spawn(b: Bubble, delay: number): void {
     if (!spots) spots = findSpots();
     const used = list.filter((o) => o !== b && o.state !== 'empty').map((o) => o.base);
-    const free = spots.map((_, i) => i).filter((i) => i !== b.spot && used.every((u) => u.distanceTo(spots![i]) >= LINEUP.spots.spacing));
+    const eye = tmp.set(padPos.x, padPos.y + 1.6, padPos.z);
+    const apart = (a: THREE.Vector3, c: THREE.Vector3): boolean =>
+      angleBetween({ x: a.x - eye.x, y: a.y - eye.y, z: a.z - eye.z }, { x: c.x - eye.x, y: c.y - eye.y, z: c.z - eye.z }) >= LINEUP.spots.spacingDeg * DEG;
+    const free = spots.map((_, i) => i).filter((i) => i !== b.spot && used.every((u) => apart(u, spots![i])));
     const pool = free.length > 0 ? free : spots.map((_, i) => i);
     b.spot = pool[Math.min(pool.length - 1, Math.floor(env.rng() * pool.length))];
     b.base.copy(spots[b.spot]);
