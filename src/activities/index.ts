@@ -7,6 +7,7 @@ import { createBungee } from './bungee';
 import { createChests } from './chests';
 import { createGear } from './gear';
 import { createGems } from './gems';
+import { createSecrets } from './secrets';
 import { createSilly } from './silly';
 import { createSkydive } from './skydive';
 import { createThrills } from './thrills';
@@ -15,6 +16,7 @@ export { setLaunchGate } from './rocket';
 export { thrillSpots } from './thrillSpots';
 export { bungeeSpots } from './bungee';
 export { sillySpots } from './silly';
+export { secretRewardSpots } from './secrets';
 
 export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const gems = createGems(ctx);
@@ -24,6 +26,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const skydive = createSkydive(ctx);
   const bungee = createBungee(ctx);
   const silly = createSilly(ctx);
+  const secrets = createSecrets(ctx);
   return {
     update(dt) {
       // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
@@ -36,7 +39,8 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       silly.update(dt);
       gems.update(dt);
       chests.update(dt);
-      gear.update(dt);
+      secrets.update(dt); // after chests: arrows read the placed chest keys
+      gear.update(dt); // last: dresses the player in its final pose for this frame
     },
     dispose() {
       gems.dispose();
@@ -46,6 +50,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       skydive.dispose();
       bungee.dispose();
       silly.dispose();
+      secrets.dispose();
     },
   };
 }
