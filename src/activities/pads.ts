@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { GameContext } from '../types';
 import { PADS } from './constants';
 import { solveLaunch } from './ballistics';
-import { PadChain, padLocalPositions } from './bounceLogic';
+import { PadChain, boostedPadApex, padLocalPositions } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
 import type { Trampoline } from './trampoline';
 import { getStuntGate } from './stuntGate';
@@ -101,12 +101,12 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
   let prevPad = -1;
 
   /** Arc from pad `index` to the next pad, or to the middle of the trampoline for the last one. */
-  function arcFrom(index: number, from: { x: number; y: number; z: number }): Arc {
+  function arcFrom(index: number, from: { x: number; y: number; z: number }, boost = 1): Arc {
     const next = pads[index + 1];
     const tx = next ? next.x : tramp.centre.x;
     const tz = next ? next.z : tramp.centre.z;
     const ty = next ? next.y : tramp.matTopY;
-    const sol = solveLaunch(tx - from.x, ty - from.y, tz - from.z, pads[index].apex);
+    const sol = solveLaunch(tx - from.x, ty - from.y, tz - from.z, boostedPadApex(pads[index].apex, boost));
     return { vx: sol.vx, vy: sol.vy, vz: sol.vz, endY: ty, dwell: 0.06, dip: 0.18 };
   }
 
@@ -151,14 +151,20 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
   function launchFrom(index: number): void {
     const p = pads[index];
     if (!p || flight.active || ctx.player.mode !== 'walk') return;
+    // Read the skill boost before the flight takes over (taking over clears it).
+    const boost = ctx.player.skill.bounceBoost;
     ctx.player.position.set(p.x, p.y, p.z);
     target = index + 1;
-    flight.begin('pads', arcFrom(index, p), hooks);
+    flight.begin('pads', arcFrom(index, p, boost), hooks);
     if (!flight.active) {
       target = -1;
       return;
     }
     fx(index);
+    if (boost > 1) {
+      ctx.audio.play('whoosh', { volume: 0.7, pitch: 1.2 });
+      flight.visual.kick(14);
+    }
     cooldown = PADS.cooldown;
   }
 

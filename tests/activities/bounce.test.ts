@@ -4,6 +4,8 @@ import {
   PadChain,
   ThresholdAwards,
   apexFromSpeed,
+  boostedApex,
+  boostedPadApex,
   flightTime,
   launchStars,
   nextBounceApex,
@@ -141,5 +143,27 @@ describe('bounce pads', () => {
     c.hit(2);
     expect(c.hit(60)).toBe(false);
     expect(c.count).toBe(1);
+  });
+});
+
+describe('skill bounce boosts', () => {
+  it('no boost leaves the apex alone', () => {
+    expect(boostedApex(12, 1)).toBe(12);
+    expect(boostedApex(0, Infinity)).toBe(0);
+  });
+  it('a super-bounce adds 25% to the first trampoline bounce, capped at the maximum', () => {
+    const first = nextBounceApex(0, true);
+    expect(boostedApex(first, 1.25)).toBeCloseTo(first * 1.25, 6);
+    expect(boostedApex(40, 1.25)).toBe(BOUNCE.maxHeight);
+  });
+  it('a ground-pound (Infinity) goes straight to the maximum 45 m', () => {
+    expect(boostedApex(nextBounceApex(0, true), Infinity)).toBe(BOUNCE.maxHeight);
+  });
+  it('pads get at most +25% (a pound counts as a super-bounce there)', () => {
+    for (const h of PADS.heights) {
+      expect(boostedPadApex(h, 1)).toBe(h);
+      expect(boostedPadApex(h, 1.25)).toBeCloseTo(h * PADS.maxBoost, 6);
+      expect(boostedPadApex(h, Infinity)).toBeCloseTo(h * PADS.maxBoost, 6);
+    }
   });
 });
