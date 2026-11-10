@@ -10,6 +10,7 @@ import type { PlayerAnim } from '../../types';
 import { CHARACTER_IDS, getCharacter } from '../../core/characters/catalog';
 import type { CharacterId } from '../../core/characters/catalog';
 import { loadCharacter } from '../../core/characters/load';
+import { asShadowProxy } from '../../core/shadow-proxy';
 import type { LoadedCharacter } from '../../core/characters/load';
 import { ConeView } from './coneView';
 import type { ConeState } from './coneView';
@@ -69,6 +70,7 @@ export function createFriends(parent: THREE.Object3D, playerId: string): Friends
     parent.add(root);
     return { id, char: null, root, pos, yaw: Math.PI, target: pos.clone(), anim: 'idle', react: 0, reactAnim: 'idle', hop: 0, cone: null };
   });
+  const proxyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 2, 8);
   let queue = false;
   let loading = false;
   let loaded = false;
@@ -83,7 +85,11 @@ export function createFriends(parent: THREE.Object3D, playerId: string): Friends
         .then((c) => {
           if (disposed) return;
           f.char = c;
-          f.root.add(c.object);
+          // The detailed model skips the shadow pass; a capsule stand-in casts the shadow.
+          c.object.traverse((o) => {
+            if ((o as THREE.Mesh).isMesh) o.castShadow = false;
+          });
+          f.root.add(c.object, asShadowProxy(new THREE.Mesh(proxyGeo)).translateY(0.75));
           c.play('idle');
           loaded = friends.every((x) => x.char);
         })
@@ -185,6 +191,7 @@ export function createFriends(parent: THREE.Object3D, playerId: string): Friends
     },
     dispose() {
       disposed = true;
+      proxyGeo.dispose();
       for (const f of friends) {
         f.cone?.dispose();
         f.root.removeFromParent();

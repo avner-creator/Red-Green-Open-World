@@ -205,3 +205,31 @@ describe('recipes, effects, secret, tickets', () => {
     expect(scoreCone({ ...b, secret: false, toppings: [] }, r)).toMatchObject({ stars: 1, gems: SCOOPS.prizeCone });
   });
 });
+
+describe('effect timing and friends', async () => {
+  const { effectLevel } = await import('../../src/activities/scoops/effects');
+  const { pickFriends } = await import('../../src/activities/scoops/friends');
+
+  it('effects ease in, hold at full strength and ease out to nothing', () => {
+    expect(effectLevel(30, 30)).toBe(0);
+    expect(effectLevel(15, 30)).toBe(1);
+    expect(effectLevel(0.3, 30)).toBeGreaterThan(0);
+    expect(effectLevel(0.3, 30)).toBeLessThan(1);
+    expect(effectLevel(0, 30)).toBe(0);
+    let prev = 0;
+    for (let t = 30; t > 29.6; t -= 0.05) {
+      const k = effectLevel(t, 30);
+      expect(k).toBeGreaterThanOrEqual(prev);
+      prev = k;
+    }
+  });
+
+  it('the two friends are never the hero the player is playing', () => {
+    for (const id of ['robot', 'frog', 'panda', 'bee', 'flamingo', 'rex']) {
+      const f = pickFriends(id);
+      expect(f.length).toBe(2);
+      expect(f).not.toContain(id);
+      expect(new Set(f).size).toBe(2);
+    }
+  });
+});

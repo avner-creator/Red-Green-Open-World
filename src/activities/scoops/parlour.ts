@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { FLAVOURS, SAUCES, TOPPINGS, CONES } from './logic';
 import type { FlavourId, SauceId, ToppingId, ConeId } from './logic';
 import { Kit, T, box, cyl, disc, glossMaterial, paintMaterial, sphere, torus } from './kit';
+import { asShadowProxy } from '../../core/shadow-proxy';
 import { addBottle, addBowlContents, addCone, addTubDome, hash } from './ingredients';
 
 /** Floor top above the ground: high enough to keep the island's grass tufts under it. */
@@ -234,8 +235,25 @@ export function buildParlour(): Parlour {
   const group = new THREE.Group();
   group.name = 'Scoops.parlour';
   const a = matte.mesh(paintMat);
-  a.castShadow = true;
+  a.castShadow = false;
   a.receiveShadow = true;
+  // Shadows come from a low-poly stand-in (shadow-map only).
+  const sp = new Kit();
+  const H = 3.6;
+  sp.box(0, FLOOR + H / 2, -3.05, 8.3, H, 0.3, 0);
+  for (const sx of [-1, 1]) {
+    sp.box(sx * 4.0, FLOOR + H / 2, -0.4, 0.3, H, 5.0, 0);
+    sp.box(sx * 3.95, FLOOR + H / 2, 2.25, 0.4, H, 0.4, 0);
+  }
+  sp.box(0, FLOOR + H + 0.18, -0.35, 8.8, 0.36, 5.9, 0);
+  sp.add(box(), 0, T(0, FLOOR + H - 0.3, 2.95, 0, 8.8, 0.08, 1.5, 0.42));
+  sp.box(0, FLOOR + 0.5, 1.72, 6.6, 1.0, 0.62, 0);
+  sp.box(0, FLOOR + 0.5, -2.45, 7.5, 1.0, 0.66, 0);
+  sp.add(new THREE.ConeGeometry(1, 1, 8).rotateX(Math.PI).translate(0, 0.5, 0), 0, T(0, FLOOR + 4.1, 0.4, 0, 0.66, 1.85, 0.66));
+  sp.add(new THREE.IcosahedronGeometry(1, 0), 0, T(0, FLOOR + 6.3, 0.4, 0, 0.7, 1.5, 0.7));
+  sp.add(new THREE.ConeGeometry(1.25, 0.45, 8).translate(0, 0.225, 0), 0, T(2.9, FLOOR + 2.2, 4.05));
+  const proxy = asShadowProxy(new THREE.Mesh(sp.build()));
+  group.add(proxy);
   const b = gloss.mesh(glossMat);
   b.castShadow = false;
   b.receiveShadow = true;
@@ -301,6 +319,7 @@ export function buildParlour(): Parlour {
     dispose() {
       a.geometry.dispose();
       b.geometry.dispose();
+      proxy.geometry.dispose();
       jars.geometry.dispose();
       lidGeo.dispose();
       paintMat.dispose();

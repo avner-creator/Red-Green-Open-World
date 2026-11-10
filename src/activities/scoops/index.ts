@@ -151,6 +151,9 @@ export function createScoops(ctx: GameContext): Scoops {
   let ate: BuildSnapshot | null = null;
   let toastShown = false;
   let secretForced: boolean | null = null;
+  /** The jar the secret peeks out of while nobody is building (the next cone starts with it there). */
+  let idleJar = Math.floor(r() * SCOOPS.jars);
+  let idleShown = false;
   const hopFrom = new THREE.Vector3();
   const hopTo = new THREE.Vector3();
   const tmp = new THREE.Vector3();
@@ -235,7 +238,9 @@ export function createScoops(ctx: GameContext): Scoops {
     }
     seed += 1;
     r = rng(seed);
-    builder = new ConeBuilder(r);
+    builder = new ConeBuilder(r, idleJar);
+    idleJar = Math.floor(r() * SCOOPS.jars);
+    idleShown = false;
     wobble = new StackWobble(r);
     recipe = makeRecipe(r);
     recipeFriend = Math.floor(r() * 2);
@@ -290,6 +295,7 @@ export function createScoops(ctx: GameContext): Scoops {
     if (phase === 'build' || phase === 'enter') refund();
     phase = 'idle';
     builder = null;
+    idleShown = false;
     ctx.cameraRig.setOverride(null);
     ui.show(false);
     secret.toJar(null);
@@ -595,6 +601,12 @@ export function createScoops(ctx: GameContext): Scoops {
 
       // Secret topping rides on the cone once found.
       if (builder?.secret && phase !== 'idle' && !(phase === 'eat' && phaseT > 2.0)) secret.onCone(coneView.topWorld(secretTop));
+      // While nobody builds, the day's secret peeks out of a jar for the weak eye (a reason to come in).
+      if (phase === 'idle' && !idleShown) {
+        secret.onCone(null);
+        secret.toJar(jarTop(idleJar), true);
+        idleShown = true;
+      }
       if (secretForced !== null) secret.group.visible = secretForced;
       secret.update(dt);
 

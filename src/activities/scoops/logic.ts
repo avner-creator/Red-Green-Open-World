@@ -309,8 +309,12 @@ export class ConeBuilder implements BuildSnapshot {
   openJars: number[] = [];
   selected = 0;
 
-  constructor(private readonly r: () => number = Math.random) {
-    this.secretJar = Math.floor(r() * SCOOPS.jars) % SCOOPS.jars;
+  /** `secretJar`: where the secret already peeks out (it was on show before the cone started). */
+  constructor(
+    private readonly r: () => number = Math.random,
+    secretJar?: number,
+  ) {
+    this.secretJar = secretJar ?? Math.floor(r() * SCOOPS.jars) % SCOOPS.jars;
   }
 
   tiles(): Tile[] {
