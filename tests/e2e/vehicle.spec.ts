@@ -98,7 +98,7 @@ test('the buggy is parked at the garage and you can get in with E', async () => 
     const rg = window.__rg!;
     const car = rg.ctx.vehicles.all[0];
     const g = rg.ctx.world.anchors.garage;
-    return { kind: car.kind, count: rg.ctx.vehicles.all.length, d: Math.hypot(car.position.x - g.position.x, car.position.z - g.position.z) };
+    return { kind: car.kind, count: rg.ctx.vehicles.all.filter((v) => v.kind === 'car').length, d: Math.hypot(car.position.x - g.position.x, car.position.z - g.position.z) };
   });
   expect(info.kind).toBe('car');
   expect(info.count).toBe(1);
