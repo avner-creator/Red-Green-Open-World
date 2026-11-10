@@ -26,6 +26,7 @@ const PICTO: Record<UpgradeId, string> = {
 };
 
 const KEY_ICON: Record<Exclude<UpgradeKey, null>, string> = { skill: 'Q', horn: 'F', hop: '␣' };
+const PAD_ICON: Record<Exclude<UpgradeKey, null>, string> = { skill: 'LB', horn: 'B', hop: 'A' };
 
 const CSS = `
 .rg-ws{position:absolute;inset:0;pointer-events:none;font:900 3.4vmin/1 ui-rounded,"Nunito","Trebuchet MS",system-ui,sans-serif;color:#fff;opacity:0;transition:opacity .2s}
@@ -80,7 +81,7 @@ export interface WorkshopUi {
   readonly cards: readonly CardKind[];
   show(on: boolean): void;
   select(index: number): void;
-  render(wallet: number, view: (id: UpgradeId) => CardView): void;
+  render(wallet: number, view: (id: UpgradeId) => CardView, gamepad?: boolean): void;
   /** Feedback animations. */
   shake(id: UpgradeId, short: number): void;
   pop(id: UpgradeId): void;
@@ -125,10 +126,12 @@ export function createWorkshopUi(root: HTMLElement): WorkshopUi {
     select(index) {
       els.forEach((c, i) => c.classList.toggle('sel', i === index));
     },
-    render(gems, view) {
+    render(gems, view, gamepad = false) {
       walletNum.textContent = String(gems);
       UPGRADES.forEach((u, i) => {
         const c = els[i];
+        const k = c.querySelector('.key');
+        if (k && u.key) k.textContent = (gamepad ? PAD_ICON : KEY_ICON)[u.key];
         const v = view(u.id);
         c.classList.toggle('owned', v.owned);
         c.classList.toggle('on', v.fitted);

@@ -254,6 +254,8 @@ export function createWorkshop(ctx: GameContext): Workshop {
   let havePrev = false;
   function updateParts(dt: number): void {
     if (!hooks || !car) return;
+    // Far away and parked: nothing to animate.
+    if (!hooks.driven && !open && parts.size > 0 && ctx.camera.position.distanceTo(car.position) > 90) return;
     partState.time += dt;
     hornClock += dt;
     rocketCd = Math.max(0, rocketCd - dt);
@@ -331,7 +333,7 @@ export function createWorkshop(ctx: GameContext): Workshop {
     const owned = wallet.owns(itemId(id));
     return { owned, fitted: fitted.has(id), affordable: wallet.gems >= def.price, short: gemsShort(wallet.gems, def.price) };
   };
-  const refresh = (): void => ui.render(wallet.gems, view);
+  const refresh = (): void => ui.render(wallet.gems, view, ctx.input.state.device === 'gamepad');
 
   const partWorldPos = (id: UpgradeId): THREE.Vector3 => {
     const p = parts.get(id);
@@ -511,7 +513,7 @@ export function createWorkshop(ctx: GameContext): Workshop {
       }
       // Lights on the turntable ring breathe a little; nothing else updates far away.
       updateParts(dt);
-      confetti.update(dt);
+      if (open || ctx.camera.position.distanceTo(centre) < 90 || hooks?.driven) confetti.update(dt);
     },
     dispose() {
       removeInteraction();

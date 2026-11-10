@@ -7,6 +7,7 @@ import { createChests } from './chests';
 import { createGems } from './gems';
 import { createSkydive } from './skydive';
 import { createThrills } from './thrills';
+import { createRace } from './race';
 import { createWorkshop } from './workshop';
 
 export { setLaunchGate } from './rocket';
@@ -18,6 +19,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
   const chests = createChests(ctx);
   const skydive = createSkydive(ctx);
   const workshop = createWorkshop(ctx);
+  const race = createRace(ctx);
   return {
     update(dt) {
       // Rides first (they may start/finish a flight and pose the avatar), then the pickup checks
@@ -27,6 +29,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       }
       skydive.update(dt);
       workshop.update(dt);
+      race.update(dt);
       gems.update(dt);
       chests.update(dt);
     },
@@ -36,6 +39,7 @@ export async function createActivities(ctx: GameContext): Promise<GameSystem> {
       chests.dispose();
       skydive.dispose();
       workshop.dispose();
+      race.dispose();
     },
   };
 }
