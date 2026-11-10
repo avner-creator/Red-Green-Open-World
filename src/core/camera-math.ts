@@ -1,8 +1,15 @@
 /** Pure camera maths (unit-tested). */
 
+/** Closest the camera may get to the pivot when a wall is right behind the player (m). */
+export const CAMERA_HARD_MIN = 0.2;
+/** Gap kept to a wall closer than `min` (just over the 0.1 m near plane). */
+const TIGHT_MARGIN = 0.12;
+
 /**
  * Collision-resolved camera distance. Pulls in instantly when something is in the way,
- * eases back out at `easeRate` (1/s) when the view clears, never closer than `min`.
+ * eases back out at `easeRate` (1/s) when the view clears. `min` is the preferred closest
+ * distance; only a wall even closer than that pulls the camera in further (it never goes
+ * through the wall, down to CAMERA_HARD_MIN).
  */
 export function resolveCameraDistance(
   current: number,
@@ -13,7 +20,8 @@ export function resolveCameraDistance(
   easeRate: number,
   dt: number,
 ): number {
-  const limit = hitDistance === null ? desired : Math.max(min, Math.min(desired, hitDistance - margin));
+  let limit = hitDistance === null ? desired : Math.min(desired, hitDistance - margin);
+  if (hitDistance !== null && limit < min) limit = Math.min(min, Math.max(CAMERA_HARD_MIN, hitDistance - TIGHT_MARGIN));
   if (limit <= current) return limit;
   const k = 1 - Math.exp(-easeRate * dt);
   return Math.min(limit, current + (limit - current) * k);

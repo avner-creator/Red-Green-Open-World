@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clamp, orbitOffset, resolveCameraDistance } from '../../src/core/camera-math';
+import { CAMERA_HARD_MIN, clamp, orbitOffset, resolveCameraDistance } from '../../src/core/camera-math';
 
 describe('resolveCameraDistance', () => {
   it('uses the desired distance when nothing is hit', () => {
@@ -8,8 +8,12 @@ describe('resolveCameraDistance', () => {
   it('pulls in instantly in front of a wall (with margin)', () => {
     expect(resolveCameraDistance(6.5, 6.5, 3, 0.3, 0.9, 3, 1 / 60)).toBeCloseTo(2.7);
   });
-  it('never goes closer than the minimum', () => {
-    expect(resolveCameraDistance(6.5, 6.5, 0.2, 0.3, 0.9, 3, 1 / 60)).toBe(0.9);
+  it('prefers the minimum distance when the wall leaves room for it', () => {
+    expect(resolveCameraDistance(6.5, 6.5, 1.1, 0.3, 0.9, 3, 1 / 60)).toBe(0.9);
+  });
+  it('never ends up inside a wall closer than the minimum (bounded by a hard minimum)', () => {
+    expect(resolveCameraDistance(6.5, 6.5, 0.52, 0.3, 0.9, 3, 1 / 60)).toBeCloseTo(0.4);
+    expect(resolveCameraDistance(6.5, 6.5, 0.05, 0.3, 0.9, 3, 1 / 60)).toBe(CAMERA_HARD_MIN);
   });
   it('eases back out smoothly when the view clears', () => {
     const d1 = resolveCameraDistance(2, 6.5, null, 0.3, 0.9, 3, 1 / 60);
