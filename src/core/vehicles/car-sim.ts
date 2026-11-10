@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
-import { PLAYER } from '../../config';
+import { FIXED_DT, PLAYER } from '../../config';
 import type { PhysicsApi } from '../../types';
 import { GROUP_AVATAR, GROUP_VEHICLE, groups } from '../physics';
 import { DRIVE, clamp, driveAccel, gripRate, integrateSpeed, smoothSteer, steerAngle, waterSpeedCap, yawRateFor } from './car-math';
@@ -100,7 +100,23 @@ export interface CarSim {
   readonly velocity: THREE.Vector3;
   /** Heading (yaw of the nose around +Y; facing = (sin yaw, 0, cos yaw)). */
   yaw(): number;
+  /**
+   * Render pose: between the last two physics steps at `interpolate(alpha)`'s alpha. Draw the
+   * car (and everything riding on or following it) from these, never from `position`, or it
+   * stutters whenever the display rate isn't exactly one physics step per frame.
+   */
+  readonly visualPosition: THREE.Vector3;
+  readonly visualQuaternion: THREE.Quaternion;
+  /** Wheels at the render pose (length/spin/steer interpolated like the body). */
+  readonly visualWheels: readonly WheelState[];
+  /** Turn rate about the chassis up axis (rad/s, + = left), interpolated like the pose. */
+  readonly visualYawRate: number;
+  /** Advance one fixed step's worth of handling (call right before `world.step()`). */
   update(dt: number, controls: CarControls, env: CarEnv): CarStepEvents;
+  /** Record the pose the world step just produced (call right after `world.step()`). */
+  snapshot(): void;
+  /** Fill the visual pose at `alpha` (0 = previous step, 1 = latest step). */
+  interpolate(alpha: number): void;
   /** Put the car upright at `pos` (wheels on the ground at pos.y) facing `yaw`, at rest. */
   place(pos: THREE.Vector3Like, yaw: number): void;
   dispose(): void;
@@ -110,6 +126,10 @@ const UP = new THREE.Vector3(0, 1, 0);
 const GRAVITY = PLAYER.gravity;
 /** Fraction of the along-slope gravity cancelled while the wheels are down. */
 const SLOPE_ASSIST = 0.75;
+/** Below this ground speed with no throttle (and all wheels down) the buggy parks dead still. */
+const PARK_SPEED = 0.35;
+/** Fraction of the drift off the parking spot taken back each step. */
+const PARK_HOLD = 0.5;
 /** Suspension length when parked on flat ground. */
 export const STATIC_LENGTH = CAR.restLength - (CAR.mass * GRAVITY) / 4 / CAR.stiffness;
 
@@ -170,6 +190,23 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
   const pointVel = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   const lastSet = new THREE.Vector3();
+  // Interpolation: the body pose and wheels after the previous and the latest physics step.
+  const prevPos = new THREE.Vector3();
+  const prevQuat = new THREE.Quaternion();
+  const currPos = new THREE.Vector3();
+  const currQuat = new THREE.Quaternion();
+  /** Body-origin velocity over the previous / latest step (Hermite tangents: no velocity kinks). */
+  const prevVel = new THREE.Vector3();
+  const currVel = new THREE.Vector3();
+  const visualPosition = new THREE.Vector3();
+  const visualQuaternion = new THREE.Quaternion();
+  const prevWheels = wheels.map((w) => ({ length: w.length, spin: w.spin, steer: w.steer }));
+  const currWheels = wheels.map((w) => ({ length: w.length, spin: w.spin, steer: w.steer }));
+  const visualWheels: WheelState[] = wheels.map((w) => ({ ...w, local: w.local.clone() }));
+  let lastAlpha = 1;
+  let prevYawRate = 0;
+  let currYawRate = 0;
+  let visualYawRate = 0;
   let lastSetValid = false;
   let steer = 0;
   let forwardSpeed = 0;
@@ -183,6 +220,8 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
   let hopCooldown = 0;
   let bumpCooldown = 0;
   let flippedFor = 0;
+  let parked = false;
+  const parkAt = new THREE.Vector3();
 
   const readState = (): void => {
     const t = body.translation();
@@ -208,8 +247,73 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     forwardSpeed = prevForward = accelLong = accelLat = 0;
     flippedFor = 0;
     airTime = 0;
+    parked = false;
     for (const w of wheels) w.length = STATIC_LENGTH;
     readState();
+    // A teleport is not motion: no interpolating across it.
+    snapshot();
+    snapshot();
+    prevVel.set(0, 0, 0);
+    currVel.set(0, 0, 0);
+    interpolate(lastAlpha);
+  }
+
+  function snapshot(): void {
+    prevPos.copy(currPos);
+    prevQuat.copy(currQuat);
+    const t = body.translation();
+    const r = body.rotation();
+    currPos.set(t.x, t.y, t.z);
+    currQuat.set(r.x, r.y, r.z, r.w);
+    // Chord velocities of the body origin (not Rapier's centre-of-mass linvel, which differs
+    // from the origin's motion while the chassis pitches/rolls).
+    prevVel.copy(currVel);
+    currVel.subVectors(currPos, prevPos).divideScalar(FIXED_DT);
+    const w = body.angvel();
+    prevYawRate = currYawRate;
+    tmp.set(0, 1, 0).applyQuaternion(currQuat);
+    currYawRate = tmp.x * w.x + tmp.y * w.y + tmp.z * w.z;
+    for (let i = 0; i < wheels.length; i++) {
+      const p = prevWheels[i];
+      const c = currWheels[i];
+      p.length = c.length;
+      p.spin = c.spin;
+      p.steer = c.steer;
+      c.length = wheels[i].length;
+      c.spin = wheels[i].spin;
+      c.steer = wheels[i].steer;
+    }
+    interpolate(lastAlpha);
+  }
+
+  function interpolate(alpha: number): void {
+    const a = clamp(alpha, 0, 1);
+    lastAlpha = a;
+    // Cubic Hermite between the last two poses with the step velocities as tangents: the visual
+    // velocity is continuous across steps, so no 1-in-N-frames kink at 120/144 Hz.
+    const a2 = a * a;
+    const a3 = a2 * a;
+    const h00 = 2 * a3 - 3 * a2 + 1;
+    const h10 = (a3 - 2 * a2 + a) * FIXED_DT;
+    const h01 = -2 * a3 + 3 * a2;
+    const h11 = (a3 - a2) * FIXED_DT;
+    visualPosition
+      .copy(prevPos)
+      .multiplyScalar(h00)
+      .addScaledVector(prevVel, h10)
+      .addScaledVector(currPos, h01)
+      .addScaledVector(currVel, h11);
+    visualQuaternion.slerpQuaternions(prevQuat, currQuat, a);
+    visualYawRate = prevYawRate + (currYawRate - prevYawRate) * a;
+    for (let i = 0; i < wheels.length; i++) {
+      const p = prevWheels[i];
+      const c = currWheels[i];
+      const v = visualWheels[i];
+      v.length = p.length + (c.length - p.length) * a;
+      v.spin = p.spin + (c.spin - p.spin) * a;
+      v.steer = p.steer + (c.steer - p.steer) * a;
+      v.contact = wheels[i].contact;
+    }
   }
 
   function suspension(dt: number): void {
@@ -364,6 +468,25 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
       velocity.addScaledVector(tmp, Math.min(12, edge * 1.5) * dt);
     }
 
+    // Parked: all four wheels down, no throttle, barely moving → hold dead still. The ray springs
+    // carry the weight, but nothing else holds the chassis against the slope's pull (no tyre
+    // friction in a ray-cast car), so without this it creeps ~1-2 cm/s downhill and sideways.
+    tmp.copy(velocity).addScaledVector(up, -velocity.dot(up));
+    if (contacts === 4 && depth < 0.05 && Math.abs(c.throttle) <= 0.01 && !ev.hopped && tmp.length() < PARK_SPEED && Math.abs(omega.dot(up)) < 0.25) {
+      if (!parked) parkAt.copy(position);
+      parked = true;
+      // Keep only the motion along the springs; along the ground, pull back onto the parking
+      // spot and pre-cancel the coming step's gravity (g_ground = g − (g·up)·up, g = (0, −G, 0)).
+      const vUp = velocity.dot(up);
+      tmp.subVectors(parkAt, position);
+      tmp.addScaledVector(up, -tmp.dot(up)).multiplyScalar(PARK_HOLD / dt);
+      velocity.copy(up).multiplyScalar(vUp - up.y * GRAVITY * dt).add(tmp);
+      velocity.y += GRAVITY * dt;
+      omega.addScaledVector(up, -omega.dot(up));
+    } else {
+      parked = false;
+    }
+
     // Smoothed accelerations for the body lean.
     const aL = (forwardSpeed - prevForward) / dt;
     prevForward = forwardSpeed;
@@ -378,6 +501,8 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
   }
 
   readState();
+  snapshot();
+  snapshot();
   return {
     body,
     collider,
@@ -407,7 +532,15 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     quaternion,
     velocity,
     yaw: () => headingOf(quaternion),
+    visualPosition,
+    visualQuaternion,
+    visualWheels,
+    get visualYawRate() {
+      return visualYawRate;
+    },
     update,
+    snapshot,
+    interpolate,
     place,
     dispose() {
       world.removeRigidBody(body);

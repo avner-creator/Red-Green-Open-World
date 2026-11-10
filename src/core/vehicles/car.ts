@@ -5,9 +5,10 @@
 import * as THREE from 'three';
 import type { CameraApi, GameContext, InputState } from '../../types';
 import { driveTriggers } from '../input';
+import { fixedStepHooks } from '../physics';
 import { clamp, DRIVE, engineSound } from './car-math';
 import { createCarModel } from './car-model';
-import { CAR, NO_CONTROLS, createCarSim, restHeight, type CarControls, type CarEnv } from './car-sim';
+import { CAR, NO_CONTROLS, createCarSim, headingOf, restHeight, type CarControls, type CarEnv } from './car-sim';
 import { createDust } from './dust';
 import { isPaved, nearestRoad } from './surface';
 import type { VehicleInternal } from './types';
@@ -97,10 +98,13 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   const up = new THREE.Vector3();
   const tmp = new THREE.Vector3();
 
+  const hooks = fixedStepHooks(ctx.physics);
+  /** Render pose (interpolated between physics steps): the model, rider, camera and prompt use it. */
   const sync = (): void => {
-    model.root.position.copy(sim.position);
-    model.root.quaternion.copy(sim.quaternion);
-    position.copy(sim.position);
+    sim.interpolate(hooks.alpha);
+    model.root.position.copy(sim.visualPosition);
+    model.root.quaternion.copy(sim.visualQuaternion);
+    position.copy(sim.visualPosition);
   };
 
   const groundAt = (x: number, z: number, fromY: number): number => {
@@ -115,7 +119,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     heave.reset();
     deepFor = 0;
     sync();
-    model.update(sim.wheels, 0, 0, 0);
+    model.update(sim.visualWheels, 0, 0, 0);
   };
 
   const api: VehicleInternal['api'] = {
@@ -139,14 +143,19 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     controls.throttle = clamp(input.moveY + trig.accelerate - trig.brake, -1, 1);
     controls.steer = input.moveX;
     controls.handbrake = input.jump;
-    controls.hop = input.jumpPressed;
+    // Latched until a physics step uses it (a frame can run zero steps at high refresh rates).
+    controls.hop = controls.hop || input.jumpPressed;
     if (input.flopPressed) ctx.audio.play('horn');
   }
 
-  function update(dt: number, input: Readonly<InputState> | null): void {
-    if (input) readControls(input);
-    else Object.assign(controls, NO_CONTROLS);
+  /** Landing thud carried from the fixed steps to this frame's dust. */
+  let landedThisFrame = 0;
+
+  /** One fixed physics step of handling + its game events (runs inside `physics.step`). */
+  function fixedStep(dt: number): void {
     const ev = sim.update(dt, controls, env);
+    controls.hop = false;
+    landedThisFrame = Math.max(landedThisFrame, ev.landed);
     const cam = getCamera();
 
     if (ev.bump > 0) {
@@ -183,22 +192,32 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       safe.pos.set(sim.position.x, sim.position.y - restHeight(), sim.position.z);
       safe.yaw = sim.yaw();
     }
+  }
+  const unhookBefore = hooks.onBeforeStep(fixedStep);
+  const unhookAfter = hooks.onAfterStep(() => sim.snapshot());
+
+  /** Once per rendered frame, after `physics.step`: controls for the next steps, then visuals. */
+  function update(dt: number, input: Readonly<InputState> | null): void {
+    if (input) readControls(input);
+    else Object.assign(controls, NO_CONTROLS);
 
     sync();
-    kickDust(dt, ev.landed);
+    const vp = sim.visualPosition;
+    kickDust(dt, landedThisFrame);
+    landedThisFrame = 0;
     const p = pitch.step(clamp(-sim.accelLong * 0.0055, -0.075, 0.075), dt);
     const r = roll.step(clamp(sim.accelLat * 0.0062, -0.11, 0.11), dt);
     const h = heave.step(0, dt);
-    model.update(sim.wheels, p, r, clamp(h, -0.12, 0.15));
-    const camDist = ctx.camera.position.distanceTo(sim.position);
+    model.update(sim.visualWheels, p, r, clamp(h, -0.12, 0.15));
+    const camDist = ctx.camera.position.distanceTo(vp);
     far = !driven && (far ? camDist > LOD_NEAR : camDist > LOD_FAR);
     model.setDetail(!far);
 
     // Contact shadow on the ground under the car.
-    const gy = ctx.world.heightAt(sim.position.x, sim.position.z);
-    const above = sim.position.y - restHeight() - gy;
-    model.blob.position.set(sim.position.x, Math.max(gy, ctx.world.waterLevel) + 0.06, sim.position.z);
-    model.blob.rotation.y = sim.yaw();
+    const gy = ctx.world.heightAt(vp.x, vp.z);
+    const above = vp.y - restHeight() - gy;
+    model.blob.position.set(vp.x, Math.max(gy, ctx.world.waterLevel) + 0.06, vp.z);
+    model.blob.rotation.y = headingOf(sim.visualQuaternion);
     (model.blob.material as THREE.MeshBasicMaterial).opacity = 0.5 * clamp(1 - above / 3, 0, 1);
 
     if (driven) {
@@ -252,14 +271,14 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     seat: model.seat,
     seatAnim: 'sit',
     chase: {
-      heading: () => sim.yaw(),
+      heading: () => headingOf(sim.visualQuaternion),
       speed: () => sim.forwardSpeed,
       topSpeed: DRIVE.topSpeedRoad,
-      yawRate: () => up.set(0, 1, 0).applyQuaternion(sim.quaternion).dot(tmp.copy(sim.body.angvel())),
+      yawRate: () => sim.visualYawRate,
       distance: 4.6,
       height: 2.0,
     },
-    promptPosition: () => prompt.copy(sim.position).setY(sim.position.y + 0.9),
+    promptPosition: () => prompt.copy(sim.visualPosition).setY(sim.visualPosition.y + 0.9),
     update,
     onEnter() {
       driven = true;
@@ -276,6 +295,8 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       placeAt(anchor.position, anchor.yaw);
     },
     dispose() {
+      unhookBefore();
+      unhookAfter();
       if (engineOn) ctx.audio.setLoop('engine', 0);
       model.root.removeFromParent();
       model.blob.removeFromParent();
