@@ -17,6 +17,33 @@ export const groups = (membership: number, filter: number): number => ((membersh
 /** Query groups for rays that ignore the avatar and vehicle bodies (camera, gameplay probes). */
 export const RAY_GROUPS = groups(ALL, ALL & ~GROUP_AVATAR & ~GROUP_VEHICLE);
 
+/**
+ * Fixed-step hooks. `physics.step(dt)` runs whole 1/60 s steps; anything simulated in those
+ * steps (the buggy) must do its own integration in `beforeStep`, record its pose in `afterStep`,
+ * and draw at `alpha` (0..1, how far the render frame is between the last two steps) so it moves
+ * smoothly at any display rate instead of 0 or 2 steps per frame.
+ */
+export interface FixedStepHooks {
+  /** Run before every fixed world step (dt = FIXED_DT). Returns an unsubscribe function. */
+  onBeforeStep(fn: (dt: number) => void): () => void;
+  /** Run after every fixed world step. Returns an unsubscribe function. */
+  onAfterStep(fn: () => void): () => void;
+  /** Leftover accumulator time after the last `step`, as a fraction of FIXED_DT (0..1). */
+  readonly alpha: number;
+}
+
+const hooksOf = new WeakMap<PhysicsApi, FixedStepHooks>();
+
+/** The fixed-step hooks of a physics world made by `createPhysics`/`createPhysicsSync`. */
+export function fixedStepHooks(physics: PhysicsApi): FixedStepHooks {
+  const h = hooksOf.get(physics);
+  if (!h) throw new Error('fixedStepHooks: unknown physics world');
+  return h;
+}
+
+/** Longest stretch of game time one `step` call may simulate (more is dropped: slow motion). */
+export const MAX_STEPS_PER_FRAME = 5;
+
 /** Rapier wants column-major (x outer, z inner); the API takes row-major [z][x]. */
 export function rowMajorToRapier(nx: number, nz: number, heights: Float32Array): Float32Array {
   const h = new Float32Array((nx + 1) * (nz + 1));
@@ -40,7 +67,23 @@ export function createPhysicsSync(): PhysicsApi {
   };
   const dirN = new THREE.Vector3();
   let acc = 0;
-  return {
+  const before: ((dt: number) => void)[] = [];
+  const after: (() => void)[] = [];
+  const sub = <T>(list: T[], fn: T): (() => void) => {
+    list.push(fn);
+    return () => {
+      const i = list.indexOf(fn);
+      if (i >= 0) list.splice(i, 1);
+    };
+  };
+  const hooks: FixedStepHooks = {
+    onBeforeStep: (fn) => sub(before, fn),
+    onAfterStep: (fn) => sub(after, fn),
+    get alpha() {
+      return Math.min(1, Math.max(0, acc / FIXED_DT));
+    },
+  };
+  const api: PhysicsApi = {
     rapier: RAPIER,
     world,
     addStaticBox: (c, h, q) => fixed(RAPIER.ColliderDesc.cuboid(h.x, h.y, h.z), c, q),
@@ -74,12 +117,16 @@ export function createPhysicsSync(): PhysicsApi {
       };
     },
     step(dt) {
-      acc = Math.min(acc + Math.max(0, dt), 5 * FIXED_DT);
+      acc = Math.min(acc + Math.max(0, dt), MAX_STEPS_PER_FRAME * FIXED_DT);
       while (acc >= FIXED_DT - 1e-6) {
+        for (let i = 0; i < before.length; i++) before[i](FIXED_DT);
         world.step();
+        for (let i = 0; i < after.length; i++) after[i]();
         acc -= FIXED_DT;
       }
       if (acc < 0) acc = 0;
     },
   };
+  hooksOf.set(api, hooks);
+  return api;
 }

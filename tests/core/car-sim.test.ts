@@ -156,3 +156,26 @@ describe('buggy simulation (flat ground)', () => {
     expect(CAR.wheelFrontZ - CAR.wheelRearZ).toBeCloseTo(2.3, 5);
   });
 });
+
+describe('buggy parking', () => {
+  for (const [name, angle, yaw] of [
+    ['flat', 0, 0],
+    ['nose-down 6° slope', 0.105, 0],
+    ['side-on 6° slope', 0.105, Math.PI / 2],
+  ] as const) {
+    it(`rests dead still with no throttle (${name})`, () => {
+      const physics = createPhysicsSync();
+      // A plane tilted down towards +Z.
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
+      physics.addStaticBox(new THREE.Vector3(0, -1, 0).applyQuaternion(q), new THREE.Vector3(300, 1, 300), q);
+      const env: CarEnv = { heightAt: (_x, z) => -Math.tan(angle) * z, waterLevel: -100, halfSize: 400, isPaved: () => true };
+      const sim = createCarSim(physics, new THREE.Vector3(0, 0, 0), yaw);
+      run(physics, sim, env, NO_CONTROLS, 120);
+      const p0 = sim.position.clone();
+      const q0 = sim.quaternion.clone();
+      run(physics, sim, env, NO_CONTROLS, 120);
+      expect(sim.position.distanceTo(p0) * 1000).toBeLessThan(1);
+      expect((sim.quaternion.angleTo(q0) * 180) / Math.PI).toBeLessThan(0.05);
+    });
+  }
+});
