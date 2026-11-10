@@ -347,10 +347,11 @@ export function buildVault(seed: number): VaultModel {
   const roomMesh = mesh(room, new THREE.MeshStandardMaterial({ color: 0x3b3833, roughness: 0.9, side: THREE.BackSide }));
   mats.push(roomMesh.material as THREE.Material);
   mesh(new THREE.BoxGeometry(V.halfW * 2 - 0.05, 0.08, V.depth + 0.9).translate(0, 0.04, -V.depth / 2 + 0.45), floorMat);
-  // Thick wall shells (outside faces) so gaps between boulders never show into the room.
-  for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.6, V.h + 0.6, V.depth + 0.6).translate(s * (V.halfW + 0.3), V.h / 2, -V.depth / 2 - 0.3), wallMat);
-  mesh(new THREE.BoxGeometry(V.halfW * 2 + 1.2, 0.6, V.depth + 0.6).translate(0, V.h + 0.3, -V.depth / 2 - 0.3), wallMat);
-  mesh(new THREE.BoxGeometry(V.halfW * 2 + 1.2, V.h + 0.6, 0.6).translate(0, V.h / 2, -V.depth - 0.3), wallMat);
+  // Thick wall shells (outside faces, set 3 cm back from the room so nothing z-fights) so gaps
+  // between boulders never show into the room.
+  for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.6, V.h + 0.6, V.depth + 0.6).translate(s * (V.halfW + 0.33), V.h / 2, -V.depth / 2 - 0.3), wallMat);
+  mesh(new THREE.BoxGeometry(V.halfW * 2 + 1.2, 0.6, V.depth + 0.6).translate(0, V.h + 0.33, -V.depth / 2 - 0.3), wallMat);
+  mesh(new THREE.BoxGeometry(V.halfW * 2 + 1.2, V.h + 0.6, 0.6).translate(0, V.h / 2, -V.depth - 0.33), wallMat);
 
   // Door frame: cream stone posts and lintel with a dark reveal (reads in both channels).
   const frameMat = new THREE.MeshStandardMaterial({ color: 0xe9dfc8, roughness: 0.7 });
