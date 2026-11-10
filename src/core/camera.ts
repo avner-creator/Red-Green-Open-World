@@ -3,7 +3,7 @@
  * ray-based collision (never inside terrain or walls), overrides, playful shake, title orbit.
  */
 import * as THREE from 'three';
-import { CAMERA } from '../config';
+import { CAMERA, PLAYER } from '../config';
 import type { CameraApi, GameContext } from '../types';
 import { clamp, orbitOffset, resolveCameraDistance, steerOverrideYaw } from './camera-math';
 import { angleDelta, damp } from './motion-math';
@@ -103,12 +103,16 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     chaseK += ((chase ? 1 : 0) - chaseK) * damp(3, dt);
     // Chase framing: further back and a wider FOV as speed builds (sense of speed).
     const sp = chase ? Math.min(1, Math.abs(chase.speed()) / Math.max(1, chase.topSpeed)) : 0;
-    const baseDist = chase ? chase.distance + sp * 1.3 : CAMERA.distance;
+    // On foot: a touch of look-ahead, distance and FOV as the run builds up to a sprint.
+    const pv = ctx.player.velocity;
+    const run =
+      !chase && ctx.player.mode === 'walk' ? Math.max(0, Math.min(1, (Math.hypot(pv.x, pv.z) - PLAYER.walkSpeed * 0.5) / (PLAYER.sprintSpeed - PLAYER.walkSpeed * 0.5))) : 0;
+    const baseDist = chase ? chase.distance + sp * 1.3 : CAMERA.distance + run * CAM.sprintExtraDistance;
     const baseHeight = chase ? chase.height : CAMERA.height;
-    const baseFov = chase ? CAMERA.fov + 4 + sp * 9 : CAMERA.fov;
+    const baseFov = chase ? CAMERA.fov + 4 + sp * 9 : CAMERA.fov + run * CAM.sprintExtraFov;
     wantDistance += ((override?.distance ?? baseDist) - wantDistance) * k;
     extraHeight += ((override?.height ?? baseHeight) - CAMERA.height - extraHeight) * k;
-    lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : 0)) - lookAhead) * k;
+    lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : run * CAM.sprintLookAhead)) - lookAhead) * k;
     const fovTarget = override?.fov ?? baseFov;
     if (Math.abs(fovTarget - fov) > 0.01) {
       fov += (fovTarget - fov) * damp(3, dt);
@@ -148,7 +152,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       }
       // Smooth follow (tighter horizontally than vertically), with bounded lag.
       const kh = damp(CAM.followRate, dt);
-      const kv = damp(CAM.verticalFollowRate, dt);
+      // Fast falls (skydive, big bounces) tighten the vertical follow so the camera doesn't hang
+      // metres above the player looking down on them.
+      const kv = damp(CAM.verticalFollowRate + Math.abs(ctx.player.velocity.y) * CAM.fallFollowGain, dt);
       pivot.x += (target.x - pivot.x) * kh;
       pivot.z += (target.z - pivot.z) * kh;
       pivot.y += (target.y - pivot.y) * kv;
