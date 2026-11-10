@@ -424,8 +424,8 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
   tramp3: (c) => {
     panelBg(c, 3);
     trampoline(c, 56, 82, 34);
-    dashedCurve(c, 56, 74, 58, 50, 56, 40, 3);
-    person(c, 56, 30, 0.82, 'jump');
+    dashedCurve(c, 56, 74, 58, 58, 56, 52, 3);
+    person(c, 56, 38, 0.82, 'jump');
     arrow(c, 18, 86, 18, 22, 6);
     star(c, 82, 22, 8);
     star(c, 30, 30, 5);
@@ -444,8 +444,8 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
   bounce2: (c) => {
     panelBg(c, 2);
     pad(c, 58, 84, 34, 3);
-    dashedCurve(c, 58, 78, 60, 52, 58, 40, 3);
-    person(c, 58, 28, 0.82, 'jump');
+    dashedCurve(c, 58, 78, 60, 60, 58, 52, 3);
+    person(c, 58, 38, 0.82, 'jump');
     arrow(c, 18, 86, 18, 22, 6);
     star(c, 84, 24, 8);
   },
@@ -467,9 +467,9 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
     panelBg(c, 3);
     road(c, 64, 90);
     buggy(c, 28, 64, 0.8);
-    gem(c, 56, 52, 1.25);
-    gem(c, 72, 52, 1.25);
-    gem(c, 88, 52, 1.25);
+    gem(c, 56, 52, 1.0);
+    gem(c, 72, 52, 1.0);
+    gem(c, 88, 52, 1.0);
     star(c, 74, 32, 7);
   },
   // ── balloon: E → rise → jump → parachute → target ──

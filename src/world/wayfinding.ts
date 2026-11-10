@@ -64,7 +64,7 @@ const byAnchor = (a: AnchorName): Attraction => {
 
 /** Fingerposts: plaza (big, every attraction) and smaller ones at road junctions. */
 export const FINGERPOSTS: readonly { x: number; z: number; scale: number; targets: AnchorName[] }[] = [
-  { x: 12, z: 2, scale: 1, targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon'] },
+  { x: 6.5, z: 5.5, scale: 1, targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon'] },
   { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon'] },
   { x: 57.5, z: 32, scale: 0.85, targets: ['launchPads', 'balloon', 'landingRings', 'garage'] },
   { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads'] },
@@ -155,13 +155,13 @@ function fingerpost(k: Kit, d: Decals, x: number, z: number, targets: readonly A
     .sort((p, q) => p.yaw - q.yaw);
   const L = 2.5 * s;
   const H = 0.5 * s;
-  const gap = 0.6 * s;
+  const gap = 0.58 * s;
   // Lowest arm just above head height; the top arm stays inside the on-foot camera's view.
   const lowest = 1.55;
   const top = lowest + (list.length - 1) * gap + H / 2 + 0.3 * s;
   // Stone plinth, timber post, gold finial.
   k.b.add('matte', rbox(1.0 * s, 0.45, 1.0 * s, 0.06), C.stone, T(x, y - 0.05, z), { aoY: y, aoH: 0.3, ao: 0.35 });
-  k.b.add('paint', rbox(0.34 * s, top, 0.34 * s, 0.04), C.woodDark, T(x, y + 0.35, z), { aoY: y + 0.35, aoH: 0.6, ao: 0.3 });
+  k.b.add('paint', rbox(0.4 * s, top, 0.4 * s, 0.05), C.woodDark, T(x, y + 0.35, z), { aoY: y + 0.35, aoH: 0.6, ao: 0.3 });
   k.b.add('paint', coneG(4), C.woodDark, T(x, y + 0.35 + top, z, Math.PI / 4, 0.26 * s, 0.22 * s, 0.26 * s));
   k.b.add('gloss', sphereG(2), 0xf2c14e, T(x, y + 0.35 + top + 0.32 * s, z, 0, 0.2 * s, 0.2 * s, 0.2 * s));
   k.col.cyl(x, y, z, (top + 0.4) / 2, 0.5 * s);
@@ -183,7 +183,7 @@ function fingerpost(k: Kit, d: Decals, x: number, z: number, targets: readonly A
     for (let j = 0; j < n; j++) k.b.add('paint', boxG2(), CREAM, M(am, T(x0 + 0.26 * s + j * 0.15 * s, 0, 0, 0, 0.08 * s, H * 0.52, 0.2 * s)));
     // Roundel across the arm (faces along it): legible when the arm points towards or away from you.
     const rx = x0 + (i % 2 ? 1.5 : 2.02) * s;
-    const R = 0.37 * s;
+    const R = 0.4 * s;
     k.b.add('paint', cylG(28), CREAM, M(am, T(rx - 0.05 * s, 0, 0, 0, R, 0.1 * s, R, 0, -Math.PI / 2)));
     d.add(att.icon, M(am, T(rx + 0.056 * s, 0, 0, Math.PI / 2)), R * 1.86, R * 1.86, true, 0.112 * s);
     arms.push({ x, z, yaw: a.yaw, target: a.t });

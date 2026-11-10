@@ -33,7 +33,7 @@ export interface AnchorDef {
 
 export const ANCHORS: Record<AnchorName, AnchorDef> = {
   // Spawn faces east, towards the fingerpost and the attraction beacons (park, garage, rocket pads, rings).
-  spawn: { x: 0, z: 9, radius: 4, yaw: 1.62, onLand: true },
+  spawn: { x: 0, z: 9, radius: 4, yaw: 1.75, onLand: true },
   garage: { x: 34, z: 20, radius: 8, yaw: Math.PI, onLand: true },
   trampoline: { x: 58, z: -24, radius: 12, yaw: -Math.PI / 2, onLand: true },
   bouncePads: { x: 84, z: -12, radius: 10, yaw: -Math.PI / 2, onLand: true },
