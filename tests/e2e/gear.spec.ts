@@ -299,3 +299,61 @@ test('no errors', async () => {
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+// Fit check (opt-in, RG_SHOTS=1): every hero wearing a head, a face and a back item, front and
+// side, as one grid per look in test-results/gear/characters/.
+test('screenshots: gear fit on every character (RG_SHOTS=1)', async () => {
+  test.skip(!process.env.RG_SHOTS, 'opt-in screenshots');
+  test.setTimeout(240_000);
+  mkdirSync(`${OUT}/characters`, { recursive: true });
+  const heroes = ['robot', 'frog', 'panda', 'bee', 'flamingo', 'rex'];
+  const looks: Record<string, string[]> = {
+    a: ['hat-crown', 'glasses-shades', 'cape-star'],
+    b: ['hat-wizard', 'glasses-goggles', 'pack-rocket'],
+    c: ['hat-propeller', 'glasses-shades', 'pack-explorer'],
+  };
+  const CW = 200;
+  const CH = 300;
+  for (const [look, items] of Object.entries(looks)) {
+    const grid = new PNG({ width: CW * heroes.length, height: CH * 2 });
+    for (let hi = 0; hi < heroes.length; hi++) {
+      const hero = heroes[hi]!;
+      const pose = await page.evaluate(
+        async ({ hero, items }) => {
+          const rg = window.__rg!;
+          const ctx = rg.ctx;
+          await ctx.player.setCharacter(hero);
+          for (const id of items) {
+            ctx.profile.unlock(id, 'shop');
+            ctx.economy.equip(ctx.economy.item(id)!.slot, id);
+          }
+          const sp = ctx.world.anchors.spawn;
+          rg.teleport(sp.position.x, sp.position.y, sp.position.z, sp.yaw);
+          rg.step(1 / 60, 50, false);
+          const pl = ctx.player;
+          return { p: pl.position.toArray() as [number, number, number], fx: Math.sin(pl.yaw), fz: Math.cos(pl.yaw) };
+        },
+        { hero, items },
+      );
+      const { p, fx, fz } = pose;
+      const len = hero === 'rex' ? 1.6 : 1;
+      const views: Array<[[number, number, number], [number, number, number]]> = [
+        // front-ish three-quarter, and from the side-back (shows the back item and glasses depth)
+        [[p[0] + (fx * 2.6 + fz * 1.0) * len, p[1] + 1.7, p[2] + (fz * 2.6 - fx * 1.0) * len], [p[0], p[1] + 1.1, p[2]]],
+        [[p[0] + (-fx * 1.6 + fz * 2.4) * len, p[1] + 1.8, p[2] + (-fz * 1.6 - fx * 2.4) * len], [p[0], p[1] + 1.1, p[2]]],
+      ];
+      for (let v = 0; v < views.length; v++) {
+        await cam(views[v]![0], views[v]![1], 50);
+        const shot = PNG.sync.read(await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' }));
+        PNG.bitblt(shot, grid, (shot.width - CW) / 2, (shot.height - CH) / 2, CW, CH, hi * CW, v * CH);
+      }
+    }
+    writeFileSync(`${OUT}/characters/look-${look}.png`, PNG.sync.write(grid));
+  }
+  await page.evaluate(async () => {
+    const rg = window.__rg!;
+    rg.ctx.profile.reset();
+    await rg.ctx.player.setCharacter('robot');
+    rg.ctx.uiRoot.style.display = '';
+  });
+});
