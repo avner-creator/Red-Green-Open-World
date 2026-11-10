@@ -39,7 +39,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   root.add(terrainMesh.group);
   const water = createWater(terrain);
   root.add(water.mesh);
-  const lighting = createLighting(ctx.scene, ctx.renderer);
+  const lighting = createLighting(ctx.scene, ctx.renderer, heightAt);
 
   const b = new Batcher();
   const col = new Colliders(ctx.physics);
@@ -97,6 +97,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       U.time.value += dt;
       mats.update();
       lighting.update(ctx.camera);
+      water.update(ctx.camera);
       scatter.update(ctx.camera);
       shack.update(dt);
       beacons.update(U.time.value, ctx.camera);

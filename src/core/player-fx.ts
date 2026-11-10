@@ -50,6 +50,11 @@ export interface PlayerFx {
    * Written immediately, so it shows on the frame it is set.
    */
   setExtra(q: THREE.Quaternion | null, stretch: number): void;
+  /**
+   * Skill pose layer (core skills only): `flip` about X (forward flip / lean), `spin` about Y,
+   * `stretch` like setExtra's. Written on the next update.
+   */
+  setSkillPose(flip: number, spin: number, stretch: number): void;
 }
 
 export function createPlayerFx(model: PlayerModel): PlayerFx {
@@ -66,11 +71,14 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
   const extraQ = new THREE.Quaternion();
   let hasExtraQ = false;
   let extraStretch = 0;
+  let skillFlip = 0;
+  let skillSpin = 0;
+  let skillStretch = 0;
 
   const write = (): void => {
-    const st = extraStretch;
+    const st = Math.max(-0.9, extraStretch + skillStretch);
     model.squash.scale.set(baseSxz * (1 - st * 0.5), baseSy * (1 + st), baseSxz * (1 - st * 0.5));
-    model.spin.rotation.set(baseFlip, baseTwist, 0);
+    model.spin.rotation.set(baseFlip + skillFlip, baseTwist + skillSpin, 0);
     if (hasExtraQ) model.spin.quaternion.premultiply(extraQ);
     model.spin.position.y = model.centre + baseHop;
   };
@@ -96,7 +104,13 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
       baseFlip = baseTwist = baseHop = 0;
       hasExtraQ = false;
       extraStretch = 0;
+      skillFlip = skillSpin = skillStretch = 0;
       write();
+    },
+    setSkillPose(flip, spin, stretch) {
+      skillFlip = flip;
+      skillSpin = spin;
+      skillStretch = stretch;
     },
     setExtra(q, stretch) {
       hasExtraQ = q !== null;

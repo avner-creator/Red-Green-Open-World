@@ -18,6 +18,10 @@ export interface CameraInternal {
   snap(yaw: number): void;
   /** Chase-camera mode for a vehicle (null = normal on-foot orbit). Blends smoothly both ways. */
   setChase(source: ChaseSource | null): void;
+  /** Extra on-foot follow distance (metres) for long characters (the T-rex). */
+  setFootExtraDistance(metres: number): void;
+  /** Quick FOV punch (degrees, decays in ~0.3 s): skills, big moments. Deterministic. */
+  kick(fovDegrees: number): void;
 }
 
 /** What the chase camera needs from a vehicle. */
@@ -55,6 +59,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   let shakeTime = 0;
   let sinceLook = 99;
   let titleT = 0;
+  let footExtra = 0;
+  let fovKick = 0;
   const pivot = new THREE.Vector3();
   const target = new THREE.Vector3();
   const tmp = new THREE.Vector3();
@@ -107,16 +113,18 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     const pv = ctx.player.velocity;
     const run =
       !chase && ctx.player.mode === 'walk' ? Math.max(0, Math.min(1, (Math.hypot(pv.x, pv.z) - PLAYER.walkSpeed * 0.5) / (PLAYER.sprintSpeed - PLAYER.walkSpeed * 0.5))) : 0;
-    const baseDist = chase ? chase.distance + sp * 1.3 : CAMERA.distance + run * CAM.sprintExtraDistance;
+    const baseDist = chase ? chase.distance + sp * 1.3 : CAMERA.distance + footExtra + run * CAM.sprintExtraDistance;
     const baseHeight = chase ? chase.height : CAMERA.height;
     const baseFov = chase ? CAMERA.fov + 4 + sp * 9 : CAMERA.fov + run * CAM.sprintExtraFov;
     wantDistance += ((override?.distance ?? baseDist) - wantDistance) * k;
     extraHeight += ((override?.height ?? baseHeight) - CAMERA.height - extraHeight) * k;
     lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : run * CAM.sprintLookAhead)) - lookAhead) * k;
     const fovTarget = override?.fov ?? baseFov;
-    if (Math.abs(fovTarget - fov) > 0.01) {
+    fovKick *= Math.exp(-10 * dt);
+    if (Math.abs(fovKick) < 0.01) fovKick = 0;
+    if (Math.abs(fovTarget - fov) > 0.01 || fovKick !== 0 || Math.abs(camera.fov - fov) > 1e-3) {
       fov += (fovTarget - fov) * damp(3, dt);
-      camera.fov = fov;
+      camera.fov = fov + fovKick;
       camera.updateProjectionMatrix();
     }
 
@@ -188,5 +196,16 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     }
   }
 
-  return { api, update, snap, setChase };
+  return {
+    api,
+    update,
+    snap,
+    setChase,
+    setFootExtraDistance(m) {
+      footExtra = Math.max(0, m);
+    },
+    kick(deg) {
+      fovKick = Math.max(-12, Math.min(12, fovKick + deg));
+    },
+  };
 }

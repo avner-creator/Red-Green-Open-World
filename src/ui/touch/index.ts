@@ -11,6 +11,7 @@ import { h } from '../dom';
 import { icon } from '../icons';
 import type { UiIconName } from '../icons';
 import { TOUCH_CSS } from './css';
+import { bindTouchSkill } from '../skillButton';
 import { createPlatform } from './platform';
 
 export interface TouchUi {
@@ -92,9 +93,13 @@ export function createTouchUi(ctx: GameContext): TouchUi {
   sprint.setAttribute('aria-pressed', 'false');
   const flop = button('flop', 'Flop', flopIcon);
   const pause = button('pause', 'Pause', icon('pause'));
+  const skillSlot = h('span', 'tslot');
+  const skill = button('skill', 'Skill', skillSlot);
+  const emote = button('emote', 'Emote', icon('sparkle'));
+  const skillView = bindTouchSkill(ctx, skill, skillSlot);
   const lookHint = h('div', 'thint look', {}, icon('hand', 'hand'), icon('eye', 'eye'));
 
-  const el = h('div', 'touch', { 'data-testid': 'touch-hud' }, probe, left, right, base, knob, lookHint, flop, use, sprint, jump, pause);
+  const el = h('div', 'touch', { 'data-testid': 'touch-hud' }, probe, left, right, base, knob, lookHint, flop, use, sprint, jump, pause, skill, emote);
   root.append(el);
   useIcon.style.display = flopIcon.style.display = 'contents';
 
@@ -178,7 +183,7 @@ export function createTouchUi(ctx: GameContext): TouchUi {
       if (show !== shown) {
         shown = show;
         el.classList.toggle('on', show);
-        if (!show) for (const b of [jump, use, sprint, flop, pause]) b.classList.remove('down');
+        if (!show) for (const b of [jump, use, sprint, flop, pause, skill, emote]) b.classList.remove('down');
       }
       if (!show) return;
       layout();
@@ -222,6 +227,7 @@ export function createTouchUi(ctx: GameContext): TouchUi {
         setIcon(flopIcon, fl);
       }
       sprint.setAttribute('aria-pressed', String(c.sprint));
+      skillView.update();
       // An activity's own action prompt (skydive: jump out, open the chute) means "press jump".
       jump.classList.toggle('cue', !!root.querySelector('.rg-sky-prompt.on'));
 

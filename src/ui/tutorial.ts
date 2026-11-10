@@ -32,7 +32,7 @@ export function createTutorial(ctx: GameContext): Tutorial {
     const group = (id: ControlId, device: 'keyboard' | 'gamepad'): HTMLElement =>
       h('div', 'tgroup', {}, controlKeys(id, device, true), pictogram(controlIcon(id)));
     if (gamepad) {
-      el.append(...(['move', 'look', 'jump', 'use', 'sprint'] as const).map((id) => group(id, 'gamepad')));
+      el.append(...(['move', 'look', 'jump', 'use', 'sprint', 'skill', 'emote'] as const).map((id) => group(id, 'gamepad')));
       return;
     }
     const row = (...c: HTMLElement[]): HTMLElement => h('div', 'row', {}, ...c);
@@ -42,6 +42,8 @@ export function createTutorial(ctx: GameContext): Tutorial {
       group('jump', 'keyboard'),
       group('use', 'keyboard'),
       group('sprint', 'keyboard'),
+      group('skill', 'keyboard'),
+      group('emote', 'keyboard'),
     );
   };
 

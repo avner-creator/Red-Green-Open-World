@@ -119,6 +119,12 @@ export interface GameEvents {
   'player:land': { speed: number };
   'player:flop': Record<string, never>;
   'player:respawn': Record<string, never>;
+  /** The playable character changed (after its model loaded and swapped in). */
+  'player:character': { id: string };
+  /** A character skill fired (double jump, glide start, dash, super-bounce spring, ground pound). */
+  'player:skill': { id: SkillId };
+  /** The player started the character's signature emote. `id` is the emote id (e.g. 'dance'). */
+  'player:emote': { id: string };
   'vehicle:bump': { speed: number };
   /** Short icon+text toast on the HUD (text is optional; icons first). */
   'ui:toast': { icon: IconName; text?: string };
@@ -216,6 +222,12 @@ export interface InputState {
   flopPressed: boolean;
   respawnPressed: boolean;
   pausePressed: boolean;
+  /** Character skill held (glide, super-bounce charge): Q, gamepad LB, touch skill button. */
+  skill: boolean;
+  /** Edge-triggered: skill pressed this frame. */
+  skillPressed: boolean;
+  /** Edge-triggered: emote (C or G, gamepad D-pad up, touch emote button). */
+  emotePressed: boolean;
   /** Last device used; UI shows matching button icons. */
   device: 'keyboard' | 'gamepad';
 }
@@ -258,6 +270,27 @@ export interface PhysicsApi {
 }
 
 // ───────────────────────────── Player / camera / interaction ─────────────────────────────
+
+/** Character skills (one per character, see `src/core/characters/catalog.ts`). */
+export type SkillId = 'doubleJump' | 'glide' | 'dash' | 'superBounce' | 'groundPound';
+
+/** Read-only view of the current character's skill. */
+export interface PlayerSkillView {
+  readonly id: SkillId;
+  /** Can fire now (cooldown over, nothing in progress). Air/ground rules still apply. */
+  readonly ready: boolean;
+  /** Seconds until ready again (0 when ready). */
+  readonly cooldown: number;
+  /** A skill is in progress (gliding, dashing, charging, pounding). */
+  readonly active: boolean;
+  /**
+   * Multiplier for the NEXT trampoline / bounce-pad bounce (1 = none). 1.25 after a super-bounce;
+   * Infinity after a ground-pound landing (= give the maximum bounce: `min(apex * boost, max)`).
+   * Read it when the bounce starts; it is cleared when an external controller takes over or
+   * shortly after a landing that started no bounce.
+   */
+  readonly bounceBoost: number;
+}
 
 export type PlayerAnim = 'idle' | 'walk' | 'run' | 'jump' | 'fall' | 'flop' | 'dance' | 'wave' | 'cheer' | 'sit';
 
@@ -323,6 +356,17 @@ export interface PlayerApi {
   setVisualStretch(s: number): void;
   /** What the player is riding/driving, if anything. */
   readonly vehicle: VehicleApi | null;
+  /** Current character id (catalog id, e.g. 'robot'). */
+  readonly characterId: string;
+  /**
+   * Switch character (loads its model lazily, swaps it in with a poof, keeps position, velocity,
+   * mode and outfits). Emits `player:character`. Unknown ids are ignored with a warning.
+   */
+  setCharacter(id: string): Promise<void>;
+  /** The current character's skill. */
+  readonly skill: PlayerSkillView;
+  /** Play the character's signature emote (walk mode, on the ground; moving cancels it). */
+  emote(): void;
 }
 
 export interface VehicleApi {

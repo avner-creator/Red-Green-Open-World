@@ -5,6 +5,10 @@
 import type { GameContext, SessionPhase, UiApi } from '../types';
 import { injectCss } from './css';
 import { createEconTracker } from './econState';
+import { h } from './dom';
+import { icon } from './icons';
+import { setCharacterAccess } from './characterAccess';
+import { applyStoredCharacter, createCharacterSelect } from './characterSelect';
 import { createGate } from './gateScreen';
 import type { GateScreen } from './gateScreen';
 import { createHud } from './hud';
@@ -13,6 +17,7 @@ import { createCredits, createEnd, createPause, createTitle } from './screens';
 import type { Actions, Screen } from './screens';
 import { createSettings } from './settingsScreen';
 import { createShop } from './shop';
+import { createSkillChip } from './skillButton';
 import { createTouchUi } from './touch';
 import { createTouchEmote } from './touchEmote';
 import { createTutorial } from './tutorial';
@@ -68,6 +73,10 @@ export function createUi(ctx: GameContext): UiApi {
       stack.push(gate);
       render();
     },
+    choose: () => {
+      ctx.audio.unlock();
+      openSelect();
+    },
     openCredits: () => {
       stack.push(credits);
       render();
@@ -78,6 +87,10 @@ export function createUi(ctx: GameContext): UiApi {
     },
   };
 
+  const openSelect = (): void => {
+    stack.push(select);
+    render();
+  };
   const title = createTitle(ctx, actions);
   const pause = createPause(actions);
   const end = createEnd(ctx, actions, tracker);
@@ -100,10 +113,22 @@ export function createUi(ctx: GameContext): UiApi {
     stack.push(settings);
     render();
   }, pop);
+  const select = createCharacterSelect(ctx, {
+    back: pop,
+    go: () => (phase() === 'paused' ? resume() : play()),
+  });
+  // Pause menu: change hero (same screen as the title's).
+  const heroTile = h('button', 'b tile d', { type: 'button', 'aria-label': 'Hero', 'data-testid': 'pause-hero' }, h('span', 'pair', {}, icon('grownup'), icon('sparkle')), 'Hero');
+  heroTile.addEventListener('click', openSelect);
+  pause.el.querySelector('.grid2')?.append(heroTile);
+  applyStoredCharacter(ctx);
+  // Tests plug a fake wallet in through this hook (the economy calls setCharacterAccess directly).
+  if (ctx.testMode) (window as unknown as { __rgSetCharacterAccess?: typeof setCharacterAccess }).__rgSetCharacterAccess = setCharacterAccess;
   const wayfinding = createWayfinding(ctx, { pause, open: (s) => (stack.push(s), render()), back: pop });
-  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe, wayfinding.screen];
+  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe, select, wayfinding.screen];
   for (const s of all) root.append(s.el);
   const hud = createHud(ctx, tracker);
+  const skillChip = createSkillChip(ctx);
   const tutorial = createTutorial(ctx);
   const touch = createTouchUi(ctx);
   const touchEmote = createTouchEmote(ctx);
@@ -134,6 +159,7 @@ export function createUi(ctx: GameContext): UiApi {
       }
     }
     wasMenu = open;
+    if (shown === select && t !== select) select.leave();
     if (t && t !== shown) t.onShow()?.focus({ preventScroll: true });
     shown = t;
   }
@@ -168,6 +194,7 @@ export function createUi(ctx: GameContext): UiApi {
 
   ctx.events.on('session:phase', (e) => {
     if (e.phase !== 'paused') shopOpen = false;
+    select.leave();
     stack.length = 0;
     shown = null;
     nav.notePhaseChange();
@@ -188,6 +215,8 @@ export function createUi(ctx: GameContext): UiApi {
       if (shown === wardrobe) wardrobe.update(dt);
       if (shown === title) title.wallet.update(dt);
       hud.update(dt);
+      skillChip.update();
+      if (shown === select) select.update();
       wayfinding.update(dt);
       tutorial.update(dt, phase() === 'playing');
       touch.update(dt, phase() === 'playing' && !calibrating);

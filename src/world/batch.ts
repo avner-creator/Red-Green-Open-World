@@ -15,10 +15,17 @@ export interface AddOpts {
   ao?: number;
 }
 
-const CHUNK = 50;
+/**
+ * Chunk size (m). Centred on the origin so the village and plaza share one chunk: big chunks keep
+ * the draw count low (≈ one draw per material per area); frustum culling still drops far areas.
+ */
+const CHUNK = 100;
 /** Parts smaller than this (bounding radius, m) go into buckets that cast no shadow. */
 const SMALL = 0.3;
-const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road']);
+/** Small parts: one island-wide bucket per material (few triangles, so culling gains nothing). */
+const SMALL_CHUNK = 1000;
+/** Flat or tiny things: decals, road paint, paving, bunting and flags cast no shadow. */
+const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road', 'cloth']);
 const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 
 const tmpColor = new THREE.Color();
@@ -63,8 +70,8 @@ export class Batcher {
     if (key !== 'cloth' && g.attributes.aWave) g.deleteAttribute('aWave');
     tmpBox.setFromBufferAttribute(pos as THREE.BufferAttribute).getCenter(tmpV);
     const small = tmpBox.getSize(tmpS).length() / 2 < SMALL && !NO_SHADOW.has(key);
-    const cs = small ? CHUNK * 2 : CHUNK;
-    const id = `${key}:${Math.floor(tmpV.x / cs)},${Math.floor(tmpV.z / cs)}${small ? ':s' : ''}`;
+    const cs = small || NO_SHADOW.has(key) ? SMALL_CHUNK : CHUNK;
+    const id = `${key}:${Math.floor((tmpV.x + cs / 2) / cs)},${Math.floor((tmpV.z + cs / 2) / cs)}${small ? ':s' : ''}`;
     let b = this.buckets.get(id);
     if (!b) this.buckets.set(id, (b = { key, geos: [], small }));
     b.geos.push(g);

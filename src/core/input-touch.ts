@@ -21,7 +21,8 @@ import {
 import type { DeviceHints } from './input-touch-math';
 import type { Vec2 } from './input-math';
 
-export type TouchButton = 'jump' | 'use' | 'flop' | 'pause' | 'sprint';
+/** `skill` (held + tap) and `emote` (tap) have no on-screen button yet: the UI may add them. */
+export type TouchButton = 'jump' | 'use' | 'flop' | 'pause' | 'sprint' | 'skill' | 'emote';
 /** Buttons that act once per tap (sprint is a toggle and has its own state). */
 export type TouchAction = Exclude<TouchButton, 'sprint'>;
 
@@ -68,6 +69,8 @@ export interface TouchFrame {
   sprint: boolean;
   jump: boolean;
   use: boolean;
+  /** Skill button held (glide, super-bounce charge). */
+  skill: boolean;
   pressed: Set<TouchAction>;
 }
 
@@ -143,7 +146,9 @@ export function createTouchSource(): TouchSource {
 
   const stick = { id: -1, active: false, baseX: 0, baseY: 0, knobX: 0, knobY: 0, radius: 60, restX: 0, restY: 0 };
   const look = { id: -1, x: 0, y: 0, dx: 0, dy: 0 };
-  const holders: Record<TouchAction, Set<number>> = { jump: new Set(), use: new Set(), flop: new Set(), pause: new Set() };
+  const holders: Record<TouchAction, Set<number>> = {
+    jump: new Set(), use: new Set(), flop: new Set(), pause: new Set(), skill: new Set(), emote: new Set(),
+  };
   const taps = new Set<TouchAction>();
   let sprint = false;
   let gameplay = true;
@@ -285,6 +290,7 @@ export function createTouchSource(): TouchSource {
         sprint: false,
         jump: false,
         use: false,
+        skill: false,
         pressed: new Set(taps),
       };
       taps.clear();
@@ -297,6 +303,7 @@ export function createTouchSource(): TouchSource {
       out.sprint = sprint;
       out.jump = holders.jump.size > 0;
       out.use = holders.use.size > 0;
+      out.skill = holders.skill.size > 0;
       return out;
     },
     setGameplay(on) {

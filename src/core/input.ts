@@ -10,22 +10,24 @@ import { LOOK } from './tuning';
 
 const NEUTRAL: Readonly<InputState> = Object.freeze({
   moveX: 0, moveY: 0, lookX: 0, lookY: 0, sprint: false, jump: false, use: false, jumpPressed: false,
-  usePressed: false, flopPressed: false, respawnPressed: false, pausePressed: false, device: 'keyboard',
+  usePressed: false, flopPressed: false, respawnPressed: false, pausePressed: false, skill: false, skillPressed: false,
+  emotePressed: false, device: 'keyboard',
 });
 
-type Action = 'jump' | 'use' | 'flop' | 'respawn' | 'pause';
+type Action = 'jump' | 'use' | 'flop' | 'respawn' | 'pause' | 'skill' | 'emote';
 
 const KEY_ACTIONS: Record<string, Action> = {
   Space: 'jump', KeyE: 'use', KeyF: 'flop', KeyR: 'respawn', Escape: 'pause', KeyP: 'pause',
+  KeyQ: 'skill', KeyC: 'emote', KeyG: 'emote',
 };
 /** Keys whose browser default (scrolling) we suppress during gameplay. */
 const GAME_KEYS = new Set([
   'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD',
-  'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyR',
+  'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyF', 'KeyR', 'KeyQ', 'KeyC', 'KeyG',
 ]);
 
 /** Standard gamepad mapping. */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lt: 6, rt: 7, start: 9, ls: 10 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, lt: 6, rt: 7, start: 9, ls: 10, up: 12 } as const;
 
 /** Analogue triggers (0..1) for driving: core-internal, kept out of `InputState`. */
 export interface DriveTriggers {
@@ -37,7 +39,7 @@ const triggersByApi = new WeakMap<InputApi, DriveTriggers>();
 export function driveTriggers(api: InputApi): Readonly<DriveTriggers> {
   return triggersByApi.get(api) ?? { accelerate: 0, brake: 0 };
 }
-const EDGE_FIELDS = ['jumpPressed', 'usePressed', 'flopPressed', 'respawnPressed', 'pausePressed'] as const;
+const EDGE_FIELDS = ['jumpPressed', 'usePressed', 'flopPressed', 'respawnPressed', 'pausePressed', 'skillPressed', 'emotePressed'] as const;
 
 function isTextField(t: EventTarget | null): boolean {
   if (!(t instanceof HTMLElement)) return false;
@@ -116,7 +118,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
   const key = (...codes: string[]): boolean => codes.some((c) => held.has(c));
 
   function readGamepad(dt: number): {
-    move: { x: number; y: number }; lookX: number; lookY: number; sprint: boolean; jump: boolean; use: boolean;
+    move: { x: number; y: number }; lookX: number; lookY: number; sprint: boolean; jump: boolean; use: boolean; skill: boolean;
     pressed: Set<Action>; rt: number; lt: number;
   } | null {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
@@ -148,6 +150,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
     edge(PAD.b, 'flop');
     edge(PAD.y, 'respawn');
     edge(PAD.start, 'pause');
+    edge(PAD.lb, 'skill');
+    edge(PAD.up, 'emote');
     const lsNow = btn(PAD.ls);
     if (lsNow && !padPrev[PAD.ls]) padSprintLatch = true;
     for (let i = 0; i < pad.buttons.length; i++) padPrev[i] = btn(i);
@@ -168,6 +172,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       sprint: btn(PAD.rt) || padSprintLatch,
       jump: btn(PAD.a),
       use: btn(PAD.x),
+      skill: btn(PAD.lb),
       pressed,
       rt: trigger(PAD.rt),
       lt: trigger(PAD.lt),
@@ -204,6 +209,9 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
         state.usePressed = pressed.has('use');
         state.flopPressed = pressed.has('flop');
         state.respawnPressed = pressed.has('respawn');
+        state.skill = key('KeyQ') || !!pad?.skill || tf.skill;
+        state.skillPressed = pressed.has('skill');
+        state.emotePressed = pressed.has('emote');
       }
       triggers.accelerate = gameplay && pad ? pad.rt : 0;
       triggers.brake = gameplay && pad ? pad.lt : 0;

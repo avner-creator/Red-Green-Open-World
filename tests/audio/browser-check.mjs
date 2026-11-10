@@ -34,6 +34,7 @@ await page.mouse.click(5, 5);
 await page.waitForTimeout(1000);
 const afterGesture = [...audioRequests];
 await page.getByTestId('play').click();
+await page.getByTestId('csel-go').click();
 await page.waitForTimeout(5000);
 const afterPlay = [...audioRequests];
 

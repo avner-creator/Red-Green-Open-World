@@ -4,6 +4,7 @@
  */
 import type { CameraApi, GameContext, GameSystem, InteractionApi, PlayerApi, VehiclesApi } from '../types';
 import { createCameraRig } from './camera';
+import { CHARACTERS } from './characters/catalog';
 import { createInteractions } from './interactions';
 import { createPlayer } from './player';
 import { createVehicles } from './vehicles';
@@ -27,6 +28,17 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
   const camera = createCameraRig(ctx);
   cameraYaw = () => camera.api.yaw;
   player.onTeleport = (yaw) => camera.snap(yaw);
+  // Long characters get a little more room; skills punch the FOV.
+  const roomFor = (id: string): number => {
+    const def = CHARACTERS.find((c) => c.id === id);
+    return def ? Math.max(0, (def.length - 1.2) * 0.5) : 0;
+  };
+  camera.setFootExtraDistance(roomFor(player.api.characterId));
+  ctx.events.on('player:character', (e) => camera.setFootExtraDistance(roomFor(e.id)));
+  ctx.events.on('player:skill', (e) => {
+    const punch = { dash: 7, superBounce: 5, doubleJump: 2.5, glide: 1.5, groundPound: -4 }[e.id];
+    camera.kick(punch);
+  });
   const interactions = createInteractions(ctx);
   const vehicles = createVehicles(ctx, player, camera, interactions.api);
 
