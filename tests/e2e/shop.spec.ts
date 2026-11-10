@@ -98,6 +98,41 @@ async function registerFixtures(page: Page): Promise<void> {
   });
 }
 
+/**
+ * HUD parts that overlap each other, measured with every animation paused at `at` ms (the peak of
+ * the combo step and of the "+N" pops), so pops and the badge at full size are checked too.
+ */
+const hudOverlaps = (page: Page, at = 270): Promise<string[]> =>
+  page.evaluate((t) => {
+    for (const a of document.getAnimations()) {
+      a.pause();
+      a.currentTime = t;
+    }
+    const sel = [
+      '[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]',
+      '.wf-compass', '[data-testid="help"]', '[data-testid="touch-jump"]', '[data-testid="touch-use"]', '[data-testid="touch-sprint"]',
+      '[data-testid="touch-flop"]', '[data-testid="touch-pause"]', '[data-testid="touch-emote"]', '[data-testid="touch-stick"]',
+    ];
+    const rs: [string, DOMRect][] = [];
+    for (const s of sel) {
+      const e = document.querySelector(s);
+      const r = e?.getBoundingClientRect();
+      if (e && r && r.width > 0 && getComputedStyle(e).visibility !== 'hidden') rs.push([s, r]);
+    }
+    document.querySelectorAll('[data-testid="wallet-pop"]').forEach((e, i) => rs.push([`pop${i}`, e.getBoundingClientRect()]));
+    const out: string[] = [];
+    for (let i = 0; i < rs.length; i++)
+      for (let j = i + 1; j < rs.length; j++) {
+        const [na, a] = rs[i]!;
+        const [nb, b] = rs[j]!;
+        if (na.startsWith('pop') && (nb.startsWith('pop') || nb.includes('"wallet"'))) continue;
+        if (nb.startsWith('pop') && na.includes('"wallet"')) continue;
+        if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) out.push(`${na} x ${nb}`);
+      }
+    document.getAnimations().forEach((a) => a.play());
+    return out;
+  }, at);
+
 test.describe('economy ui', () => {
   test('wallet, combo, missions, kiosk shop, wardrobe, end screen, reset', async ({ page }) => {
     test.setTimeout(150_000);
@@ -123,7 +158,7 @@ test.describe('economy ui', () => {
       const rg = window.__rg!;
       const ms = rg.ctx.economy.missions.map((m) => ({ ...m }));
       rg.ctx.profile.earn(20, 'gem');
-      rg.ctx.events.emit('combo:changed', { multiplier: 3, streak: 5 });
+      rg.ctx.events.emit('combo:changed', { multiplier: 5, streak: 9 });
       rg.ctx.events.emit('mission:progress', { index: 0, mission: { ...ms[0]!, progress: Math.floor(ms[0]!.target / 2) } });
       rg.ctx.events.emit('mission:completed', { index: 2, mission: { ...ms[2]!, progress: ms[2]!.target, done: true } });
       rg.step(1 / 60, 40);
@@ -132,7 +167,7 @@ test.describe('economy ui', () => {
     expect(missions.length).toBe(3);
     await expect(page.getByTestId('wallet').locator('.n')).toHaveText(String(await wallet(page)));
     await expect(page.getByTestId('combo')).toBeVisible();
-    await expect(page.getByTestId('combo')).toContainText('3');
+    await expect(page.getByTestId('combo')).toContainText('5');
     await expect(page.getByTestId('mission-card')).toHaveCount(3);
     await expect(page.getByTestId('mission-card').nth(0)).toContainText(`/${missions[0]!.target}`);
     await expect(page.getByTestId('mission-card').nth(2)).toHaveAttribute('data-done', 'true');
@@ -145,21 +180,33 @@ test.describe('economy ui', () => {
     });
     await expect(page.locator('[data-testid="wallet-pop"][data-kind="mega"]')).toHaveCount(1);
     await save(page, 'hud-combo-missions', 300);
-    // HUD parts never overlap each other.
-    const overlaps = (): Promise<string[]> =>
-      page.evaluate(() => {
-        const sel = ['[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]', '.wf-compass', '[data-testid="help"]'];
-        const rs = sel.map((s) => [s, document.querySelector(s)?.getBoundingClientRect()] as const).filter(([, r]) => r && r.width > 0);
-        const out: string[] = [];
-        for (let i = 0; i < rs.length; i++)
-          for (let j = i + 1; j < rs.length; j++) {
-            const a = rs[i]![1]!;
-            const b = rs[j]![1]!;
-            if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) out.push(`${rs[i]![0]} x ${rs[j]![0]}`);
-          }
-        return out;
-      });
-    expect(await overlaps()).toEqual([]); // 667x375 and tablet: see the touch test below
+    // HUD parts never overlap each other (pops and the x5 badge at their peak included).
+    expect(await hudOverlaps(page)).toEqual([]); // 667x375 and tablet: see the touch test below
+    // The controls card lists the emote (G on the keyboard, D-pad Up on a gamepad).
+    await page.keyboard.press('KeyH');
+    await expect(page.getByTestId('controls-card')).toHaveClass(/on/);
+    await expect(page.locator('[data-testid="controls-card"] [data-control="emote"]').first()).toContainText('G');
+    await save(page, 'controls-card');
+    await page.keyboard.press('KeyH');
+    // Gamepad D-pad Up plays the emote while playing (a fake pad; no core button uses the D-pad).
+    const padEmotes = await page.evaluate(() => {
+      const rg = window.__rg!;
+      let n = 0;
+      const off = rg.ctx.events.on('emote:play', () => n++);
+      let up = false;
+      const pad = () => ({ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: up && i === 12, value: 0 })) });
+      Object.defineProperty(navigator, 'getGamepads', { value: () => [pad()], configurable: true });
+      rg.step(1 / 60, 2, false);
+      up = true;
+      rg.step(1 / 60, 2, false);
+      up = false;
+      rg.step(1 / 60, 2, false);
+      delete (navigator as unknown as Record<string, unknown>).getGamepads;
+      off();
+      rg.step(1 / 60, 150, false); // let the emote finish
+      return n;
+    });
+    expect(padEmotes).toBe(1);
 
     // Combo back to x1: the badge goes away. A denied ticket: a friendly toast with the price.
     await page.evaluate(() => {
@@ -303,7 +350,7 @@ test.describe('economy ui', () => {
     await expect(page.getByTestId('end-mission')).toHaveCount(3);
     await expect(page.locator('[data-testid="end-mission"][data-earned="true"]')).toHaveCount(3);
     await expect(page.getByTestId('end-jackpot')).toHaveAttribute('data-earned', 'true');
-    await expect(page.getByTestId('end-combo')).toContainText('3');
+    await expect(page.getByTestId('end-combo')).toContainText('5');
     await expect(page.locator('[data-testid="end-unlocked"] .stk')).toHaveCount(3);
     expect(await page.locator('[data-testid="end-unlocked"] img.pic').count()).toBeGreaterThanOrEqual(2);
     await save(page, 'end', 1400);
@@ -340,30 +387,6 @@ test.describe('economy ui', () => {
   });
 });
 
-/** Rects of HUD parts that overlap each other (wallet, combo, missions, timer, compass, help, touch buttons). */
-const hudOverlaps = (page: Page): Promise<string[]> =>
-  page.evaluate(() => {
-    const sel = [
-      '[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]',
-      '.wf-compass', '[data-testid="help"]', '[data-testid="touch-jump"]', '[data-testid="touch-use"]', '[data-testid="touch-sprint"]',
-      '[data-testid="touch-flop"]', '[data-testid="touch-pause"]',
-    ];
-    const rs = sel
-      .map((s) => {
-        const e = document.querySelector(s);
-        return [s, e && getComputedStyle(e).visibility !== 'hidden' ? e.getBoundingClientRect() : null] as const;
-      })
-      .filter(([, r]) => r && r.width > 0);
-    const out: string[] = [];
-    for (let i = 0; i < rs.length; i++)
-      for (let j = i + 1; j < rs.length; j++) {
-        const a = rs[i]![1]!;
-        const b = rs[j]![1]!;
-        if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) out.push(`${rs[i]![0]} x ${rs[j]![0]}`);
-      }
-    return out;
-  });
-
 test.describe('economy ui by touch', () => {
   test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
 
@@ -376,7 +399,8 @@ test.describe('economy ui by touch', () => {
       const rg = window.__rg!;
       rg.freeze(true);
       rg.ctx.profile.earn(30, 'gem');
-      rg.ctx.events.emit('combo:changed', { multiplier: 4, streak: 6 });
+      rg.ctx.events.emit('combo:changed', { multiplier: 5, streak: 9 });
+      rg.ctx.profile.earn(5, 'gem');
       const ms = rg.ctx.economy.missions;
       if (ms[0]) rg.ctx.events.emit('mission:progress', { index: 0, mission: { ...ms[0], progress: Math.floor(ms[0].target / 2) } });
       const a = rg.ctx.world.anchors.gearShack;
@@ -388,7 +412,19 @@ test.describe('economy ui by touch', () => {
     await expect(page.getByTestId('missions')).toBeVisible();
     // Next to the kiosk the use button shows the shop icon.
     await expect(page.getByTestId('touch-use')).toHaveClass(/ready/);
-    await save(page, 'touch-hud', 300);
+    await save(page, 'touch-hud', 270);
+    // The emote button (starter wave owned) plays the emote by tap.
+    await expect(page.getByTestId('touch-emote')).toBeVisible();
+    const emotes = await page.evaluate(() => {
+      const log: string[] = [];
+      window.__rg!.ctx.events.on('emote:play', () => log.push('play'));
+      (window as unknown as { __emotes: string[] }).__emotes = log;
+      return log.length;
+    });
+    expect(emotes).toBe(0);
+    await page.getByTestId('touch-emote').tap();
+    expect(await page.evaluate(() => (window as unknown as { __emotes: string[] }).__emotes.length)).toBe(1);
+    await step(page, 150); // the emote ends (2 s) before walking to the kiosk
     expect(await hudOverlaps(page)).toEqual([]);
     await page.setViewportSize({ width: 1024, height: 768 });
     await step(page, 2);

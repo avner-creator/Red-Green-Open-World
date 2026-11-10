@@ -88,8 +88,12 @@ export function createWalletChip(ctx: GameContext, cls: string, testid: string):
         text,
         kind === 'mega' || kind === 'jackpot' || kind === 'bonus' ? h('span', 'rays') : null,
       );
+      while (pops.children.length > 3) pops.firstElementChild?.remove();
+      // Pops that are still flying sit side by side in the lane under the wallet, never stacked.
+      let x = 0;
+      for (const c of pops.children) x = Math.max(x, (c as HTMLElement).offsetLeft + (c as HTMLElement).offsetWidth);
+      p.style.left = `${x > 0 ? x + 6 : 0}px`;
       pops.append(p);
-      while (pops.children.length > 4) pops.firstElementChild?.remove();
       p.addEventListener('animationend', (e) => {
         if (e.target === p && e.animationName === 'rg-popfly') p.remove();
       });

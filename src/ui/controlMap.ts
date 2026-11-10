@@ -11,7 +11,7 @@ export type Device = 'keyboard' | 'gamepad';
 
 export type ControlId =
   | 'move' | 'look' | 'jump' | 'sprint' | 'use' | 'flop' | 'respawn' | 'pause' | 'air'
-  | 'steer' | 'drive' | 'hop' | 'slide' | 'horn' | 'exit' | 'chute';
+  | 'steer' | 'drive' | 'hop' | 'slide' | 'horn' | 'exit' | 'chute' | 'emote';
 
 export interface ControlDef {
   /** Clusters shown side by side for one press. */
@@ -43,6 +43,8 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   horn: { keys: [['F']], pad: [['B']], icon: 'speaker' },
   exit: { keys: [['E']], pad: [['X']], icon: 'exit' },
   chute: { keys: [['␣']], pad: [['A']], icon: 'parachute' },
+  // Emotes: G is read by the gear emotes; D-pad Up is read by the UI (src/ui/nav.ts) while playing.
+  emote: { keys: [['G']], pad: [['▲']], icon: 'emote' },
 };
 
 /** First gamepad label of a control, e.g. padLabel('use') === 'X'. */

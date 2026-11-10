@@ -22,41 +22,41 @@ export const ECON_CSS = `
 @keyframes rg-wbump{40%{transform:scale(1.14)}}
 @keyframes rg-wbumpb{30%{transform:scale(1.34) rotate(-4deg)}60%{transform:scale(.95) rotate(2deg)}}
 @keyframes rg-wshake{15%{transform:translateX(calc(var(--u)*-1.4)) rotate(-3deg)}35%{transform:translateX(calc(var(--u)*1.4)) rotate(3deg)}55%{transform:translateX(calc(var(--u)*-1)) rotate(-2deg)}75%{transform:translateX(calc(var(--u)*.7))}}
-.rg .wallet .pops{position:absolute;left:calc(var(--u)*3.4);top:calc(100% + var(--u)*.2);width:0;height:0;pointer-events:none;z-index:3}
-.rg .pop{position:absolute;left:0;top:0;display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*4.6);
+.rg .wallet .pops{position:absolute;left:calc(var(--u)*3.4);top:calc(100% + var(--u)*.5);width:0;height:0;pointer-events:none;z-index:3}
+.rg .pop{position:absolute;left:0;top:0;display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*3.9);
   transform-origin:15% 50%;animation:rg-popfly 1.3s cubic-bezier(.2,1.3,.4,1) both;isolation:isolate}
 .rg .pop .v{color:var(--y);font-size:1.05em}
 .rg .pop.neg .v{color:#fff}
-.rg .pop>.ic{font-size:1.3em;color:var(--y)}
+.rg .pop>.ic{font-size:1.2em;color:var(--y)}
 .rg .pop.neg>.ic{color:#fff}
-.rg .pop.k-mega{font-size:calc(var(--u)*5.6);animation-duration:1.7s}
-.rg .pop.k-bonus,.rg .pop.k-jackpot{font-size:calc(var(--u)*5.4);animation-duration:1.9s}
+.rg .pop.k-mega{font-size:calc(var(--u)*4.4);animation-duration:1.7s}
+.rg .pop.k-bonus,.rg .pop.k-jackpot{font-size:calc(var(--u)*4.3);animation-duration:1.9s}
 .rg .pop.k-free>.ic:first-child{animation:rg-spin .5s ease-in-out infinite alternate}
 .rg .pop.again .v{animation:rg-wbump .3s cubic-bezier(.2,1.6,.4,1)}
 .rg .pop .rays{position:absolute;left:-40%;top:50%;width:calc(var(--u)*18);height:calc(var(--u)*18);margin-top:calc(var(--u)*-9);z-index:-1;border-radius:50%;
   background:repeating-conic-gradient(rgba(255,255,255,.8) 0 9deg,transparent 9deg 26deg);-webkit-mask:${RAYS_MASK};mask:${RAYS_MASK};animation:rg-raypop 1.4s ease-out both}
-@keyframes rg-popfly{0%{opacity:0;transform:translateY(calc(var(--u)*-3)) scale(.3)}14%{opacity:1;transform:translateY(0) scale(1.25)}26%{transform:scale(1)}72%{opacity:1;transform:translateY(calc(var(--u)*1))}100%{opacity:0;transform:translateY(calc(var(--u)*2.6)) scale(.9)}}
+@keyframes rg-popfly{0%{opacity:0;transform:translateY(calc(var(--u)*-1.5)) scale(.3)}14%{opacity:1;transform:translateY(0) scale(1.18)}26%{transform:scale(1)}80%{opacity:1;transform:translateY(calc(var(--u)*.4))}100%{opacity:0;transform:translateY(calc(var(--u)*.8)) scale(.92)}}
 @keyframes rg-raypop{0%{transform:scale(0) rotate(0);opacity:0}25%{opacity:1}100%{transform:scale(1.3) rotate(90deg);opacity:0}}
 
 /* ---------- HUD top-left cluster: wallet + combo ---------- */
-.rg .econtop{position:absolute;z-index:4;left:calc(var(--u)*2.4);top:calc(var(--u)*2.4);display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--u)*1.6)}
-.rg .econtop .row2{display:flex;align-items:center;gap:calc(var(--u)*2.2)}
+.rg .econtop{position:absolute;z-index:4;left:calc(var(--u)*2.4);top:calc(var(--u)*2.4);display:flex;flex-direction:column;align-items:flex-start;gap:calc(var(--u)*6.6)}
+.rg .econtop .row2{display:flex;align-items:center;gap:calc(var(--u)*2.6)}
 .rg .econtop .row2 .pill.stars{position:relative;left:auto;top:auto}
 .rg .econtop>.wallet{z-index:2}
 .rg .econtop.near .wallet{animation:rg-near 1.2s ease-out}
-.rg .combo{--cs:1;position:relative;width:calc(var(--u)*9.4);height:calc(var(--u)*9.4);display:none;align-items:center;justify-content:center;font-size:calc(var(--u)*3.9);transform:scale(var(--cs))}
+.rg .combo{--cs:1;position:relative;width:calc(var(--u)*9.4);height:calc(var(--u)*9.4);display:none;align-items:center;justify-content:center;font-size:calc(var(--u)*3.9);transform:scale(var(--cs));transform-origin:30% 50%}
 .rg .combo.on{display:flex}
 .rg .combo svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .rg .combo::before{content:'';position:absolute;inset:15%;border-radius:50%;background:radial-gradient(circle at 40% 30%,#46519e,#0d1130 75%);border:calc(var(--u)*.35) solid #000}
-.rg .combo .fl{position:absolute;left:50%;top:-34%;transform:translateX(-50%);font-size:1.25em;line-height:0}
+.rg .combo .fl{position:absolute;right:-30%;top:50%;transform:translateY(-50%);font-size:1.15em;line-height:0}
 .rg .combo .fl .ic{color:var(--y)}
 .rg .combo .x{position:relative;letter-spacing:-.04em}
-.rg .combo[data-mult="3"]{--cs:1.08}.rg .combo[data-mult="4"]{--cs:1.16}
-.rg .combo[data-mult="5"]{--cs:1.26;filter:drop-shadow(0 0 calc(var(--u)*1) #fff)}
+.rg .combo[data-mult="3"]{--cs:1.04}.rg .combo[data-mult="4"]{--cs:1.08}
+.rg .combo[data-mult="5"]{--cs:1.12;filter:drop-shadow(0 0 calc(var(--u)*1) #fff)}
 .rg .combo[data-mult="5"] .fl .ic{animation:rg-spin .35s ease-in-out infinite alternate}
 .rg .combo.step{animation:rg-cstep .5s cubic-bezier(.2,1.8,.4,1)}
 .rg .combo.late .x{animation:rg-late .32s ease-in-out infinite alternate}
-@keyframes rg-cstep{0%{transform:scale(.3) rotate(-25deg)}55%{transform:scale(calc(var(--cs)*1.4)) rotate(8deg)}100%{transform:scale(var(--cs))}}
+@keyframes rg-cstep{0%{transform:scale(.4) rotate(-20deg)}55%{transform:scale(calc(var(--cs)*1.22)) rotate(6deg)}100%{transform:scale(var(--cs))}}
 @keyframes rg-late{to{opacity:.35}}
 
 /* ---------- mission cards ---------- */
@@ -279,4 +279,9 @@ export const ECON_CSS = `
 /* the shop/wardrobe grid scrolls by finger drag inside the panel; the page never pans */
 .rg .sgrid{touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 @media (hover:none){.rg .card:hover .pv .ic,.rg .card:hover .pv .pic{transform:none}}
+/* touch emote button: centred above the joystick's resting ring (left edge) */
+.rg .tbtn.emote{--te:max(44px,calc(var(--tb)*.8));width:var(--te);height:var(--te);
+  left:calc(var(--sl) + 7vmin + var(--r,60px) - var(--te)/2);bottom:calc(var(--sb) + 7vmin + var(--r,60px)*1.9 + var(--tm)*.8)}
+.rg .tbtn.emote .ic{color:var(--y)}
+.rg .tbtn.emote.off{display:none}
 `;
