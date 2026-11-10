@@ -9,10 +9,10 @@
  *
  * Units: metres. Character space = feet at the origin, +Y up, facing +Z, after `scale`.
  */
-import type { PlayerAnim } from '../../types';
+import type { PlayerAnim, SkillId } from '../../types';
 
 export type CharacterId = 'robot' | 'frog' | 'panda' | 'bee' | 'flamingo' | 'rex';
-export type CharacterSkill = 'doubleJump' | 'glide' | 'dash' | 'superBounce' | 'groundPound';
+export type CharacterSkill = SkillId;
 export type AttachPart = 'head' | 'back' | 'face';
 
 export interface ClipRef {
