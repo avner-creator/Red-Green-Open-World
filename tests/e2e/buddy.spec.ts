@@ -12,18 +12,8 @@ import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { SHOTS, boot } from './helpers';
 
-declare global {
-  interface Window {
-    __rgBuddy?: {
-      pos(): [number, number, number];
-      pose(): string;
-      director(): { step: string; introT: number; playT: number };
-      line(): string | null;
-      ride(): string;
-      history(): { text: string; id: string }[];
-    };
-  }
-}
+// `window.__rgBuddy` is declared in src/buddy/index.ts (test mode only).
+export type { BuddyTestApi } from '../../src/buddy';
 
 async function step(page: Page, seconds: number, inject: Record<string, number | boolean> | null = null): Promise<void> {
   await page.evaluate(
@@ -228,7 +218,8 @@ for (const vp of [
     // Speaking at spawn (welcome line), beside the hero.
     await step(page, 1.6);
     await save(page, `${tag}-speaking`);
-    // Pip beside the hero, quiet (skip the tour).
+    // Pip beside the hero, quiet (skip the tour: allowed after 2 s).
+    await step(page, 0.8);
     await page.keyboard.press('Enter');
     await step(page, 4);
     await save(page, `${tag}-spawn`);

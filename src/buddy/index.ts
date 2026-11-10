@@ -602,7 +602,11 @@ export function createBuddy(ctx: GameContext): GameSystem {
     const speed = Math.hypot(vel.x, vel.z);
     let wantYaw = yaw;
     if (speed > 0.35) wantYaw = Math.atan2(vel.x, vel.z);
-    else if (pose !== 'dance') wantYaw = yawTo(pos, h);
+    else if (pose !== 'dance') {
+      // Standing still: face the hero, or the camera while talking (he talks to the player).
+      const cam = ctx.camera.position;
+      wantYaw = queue.current && !lead ? yawTo(pos, { x: cam.x, z: cam.z }) : yawTo(pos, h);
+    }
     if (pose === 'dance') wantYaw = yaw + dt * 5;
     const prevYaw = yaw;
     yaw = pose === 'dance' ? wantYaw : turnTowards(yaw, wantYaw, 9, dt);

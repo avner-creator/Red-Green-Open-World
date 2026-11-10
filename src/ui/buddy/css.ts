@@ -35,7 +35,7 @@ const CSS = `
   border:calc(var(--u)*.7) solid #ffd93b;box-shadow:0 0 0 calc(var(--u)*.45) #000,inset 0 0 0 calc(var(--u)*.45) #000,0 0 calc(var(--u)*3) rgba(255,217,59,.75);
   animation:pip-ring 1s ease-in-out infinite}
 .rg .pipring.on{opacity:1}
-.rg .piparrow{position:absolute;left:0;top:0;z-index:29;pointer-events:none;width:calc(var(--u)*7.5);height:calc(var(--u)*5);opacity:0;transition:opacity .2s;transform-origin:0 50%}
+.rg .piparrow{position:absolute;left:0;top:0;z-index:29;pointer-events:none;width:calc(var(--u)*10);height:calc(var(--u)*6.6);opacity:0;transition:opacity .2s;transform-origin:0 50%}
 .rg .piparrow.on{opacity:1}
 .rg .piparrow svg{width:100%;height:100%;overflow:visible;animation:pip-wob .55s ease-in-out infinite alternate}
 @keyframes pip-ring{50%{transform:scale(1.06)}}

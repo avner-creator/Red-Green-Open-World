@@ -1,5 +1,5 @@
 /**
- * Where Pip goes while the hero rides something: on the buggy's rear deck, in the balloon basket,
+ * Where Pip goes while the hero rides something: on top of the buggy's rear engine, in the balloon basket,
  * paddling beside the hero in freefall, clinging to the hero's back under the canopy.
  */
 import * as THREE from 'three';
@@ -38,7 +38,7 @@ export function vehicleSpot(v: VehicleApi, out: THREE.Vector3): number {
   let s = seatCache.get(v.object);
   if (!s) {
     const seat = v.object.getObjectByName('buggy-seat');
-    if (v.kind === 'car' && seat?.parent) s = { parent: seat.parent, local: new THREE.Vector3(0, 0.43, -1.04) };
+    if (v.kind === 'car' && seat?.parent) s = { parent: seat.parent, local: new THREE.Vector3(0, 0.83, -1.12) };
     else s = { parent: v.object, local: new THREE.Vector3(0, 1.32, -0.55) };
     seatCache.set(v.object, s);
   }
