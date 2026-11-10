@@ -174,14 +174,25 @@ export function buildGearShack(k: Kit): Keepout[] {
   b.add('paint', rbox(3.72, 2.75, 0.14, 0.04), CREAM, M(m, T(0, 0.12, -1.06)), { aoY: y + 0.12, aoH: 1.0, ao: 0.35 });
   box(b, 'paint', m, 0, 0.12, -1.07, 3.74, 0.95, 0.17, TEAL);
   box(b, 'paint', m, 0, 1.07, -1.07, 3.74, 0.06, 0.18, CREAM);
-  b.add('paint', boxG(), 0xe8cf94, M(m, T(0, 1.15, -0.98, 0, 3.3, 1.5, 0.04)), { aoY: y + 1.1, aoH: 0.4, ao: 0.25 });
+  b.add('paint', boxG(), 0xf3dca0, M(m, T(0, 1.15, -0.98, 0, 3.3, 1.5, 0.04)), { aoY: y + 1.1, aoH: 0.4, ao: 0.25 });
+  // Back outside: vertical board seams and a big gem roundel (seen from the west road).
+  for (let i = 0; i < 6; i++) box(b, 'paint', m, -1.55 + i * 0.62, 1.07, -1.14, 0.03, 1.75, 0.02, 0xd8cdb6);
+  {
+    const rm = M(m, T(0, 1.95, -1.14, Math.PI));
+    b.add('paint', cylG(14), CREAM, M(rm, T(0, 0, -0.01, 0, 0.56, 0.05, 0.56, Math.PI / 2)));
+    b.add('paint', cylG(14), NAVY, M(rm, T(0, 0, 0.0, 0, 0.48, 0.05, 0.48, Math.PI / 2)));
+    gemIcon(k, M(rm, T(0, 0.02, 0.052)), 0.8);
+  }
+  // Warm light tube along the inside of the front beam (lights up the goods at sunset).
+  box(b, 'paint', m, 0, 2.5, 0.88, 3.4, 0.12, 0.12, NAVY);
+  b.add('glow', boxG(), C.bulb, M(m, T(0, 2.45, 0.8, 0, 3.2, 0.05, 0.06)));
   // Side walls (full height): cream with teal wainscot, chunky rounded edges.
   for (const s of [-1, 1]) {
     b.add('paint', rbox(0.14, 2.62, 2.1, 0.04), CREAM, M(m, T(s * 1.79, 0.12, -0.06)), { aoY: y + 0.12, aoH: 1.0, ao: 0.35 });
     box(b, 'paint', m, s * 1.79, 0.12, -0.06, 0.17, 0.95, 2.12, TEAL);
     box(b, 'paint', m, s * 1.79, 1.07, -0.06, 0.18, 0.06, 2.13, CREAM);
     // Gold-gem roundel on the outside of each side wall.
-    const rm = M(m, T(s * 1.875, 1.78, -0.1, (s * Math.PI) / 2));
+    const rm = M(m, T(s * 1.875, 1.78, s < 0 ? -0.45 : -0.1, (s * Math.PI) / 2));
     b.add('paint', cylG(14), CREAM, M(rm, T(0, 0, 0, 0, 0.52, 0.05, 0.52, Math.PI / 2)));
     b.add('paint', cylG(14), NAVY, M(rm, T(0, 0, 0.01, 0, 0.44, 0.05, 0.44, Math.PI / 2)));
     gemIcon(k, M(rm, T(0, 0.02, 0.062)), 0.72);
@@ -208,41 +219,40 @@ export function buildGearShack(k: Kit): Keepout[] {
   };
   // Top hat (navy, gold band).
   {
-    const hm = M(m, T(-1.15, 1.92, -0.74, 0, 1, 1, 1, -0.25, 0.12));
+    const hm = M(m, T(-0.63, 1.92, -0.74, 0, 1, 1, 1, -0.25, 0.12));
     b.add('paint', cylG(12), NAVY, M(hm, T(0, 0, 0, 0, 0.22, 0.025, 0.22)));
     b.add('paint', cylG(12, 0.92), NAVY, M(hm, T(0, 0.02, 0, 0, 0.14, 0.26, 0.14)));
     b.add('gloss', cylG(12, 1, true), GOLD, M(hm, T(0, 0.04, 0, 0, 0.142, 0.05, 0.142)));
-    peg(-1.15, 1.86);
+    peg(-0.63, 1.86);
   }
   // Party cone hat with a pompom (pink and cream stripes).
   {
-    const hm = M(m, T(-0.4, 2.0, -0.76, 0, 1, 1, 1, -0.2, -0.1));
+    const hm = M(m, T(-0.4, 1.09, 0.84, 0.3, 1, 1, 1, 0, 0.12));
     for (let i = 0; i < 3; i++) {
       const r0 = 0.15 * (1 - i / 3);
       b.add('paint', cylG(10, (1 - (i + 1) / 3) / (1 - i / 3) || 0.001), i % 2 ? CREAM : 0xd9487e, M(hm, T(0, i * 0.12, 0, 0, r0, 0.12, r0)));
     }
     b.add('paint', sphereG(1), 0xffffff, M(hm, T(0, 0.37, 0, 0, 0.06, 0.06, 0.06)));
-    peg(-0.4, 1.94);
   }
   // Crown (gold with jewels).
   {
-    const hm = M(m, T(0.38, 1.9, -0.76, 0, 1, 1, 1, -0.22, 0.08));
+    const hm = M(m, T(0.63, 1.9, -0.76, 0, 1, 1, 1, -0.22, 0.08));
     b.add('gloss', cylG(12, 1, true), GOLD, M(hm, T(0, 0, 0, 0, 0.15, 0.11, 0.15)));
     for (let i = 0; i < 6; i++) {
       const an = (i / 6) * Math.PI * 2;
       b.add('gloss', coneG(4), GOLD, M(hm, T(Math.sin(an) * 0.135, 0.1, Math.cos(an) * 0.135, an, 0.045, 0.1, 0.03)));
       if (i % 2 === 0) b.add('gloss', sphereG(0), i ? 0x2a9d8f : 0xc8433a, M(hm, T(Math.sin(an) * 0.152, 0.055, Math.cos(an) * 0.152, 0, 0.028, 0.028, 0.028)));
     }
-    peg(0.38, 1.84);
+    peg(0.63, 1.84);
   }
   // Cap (berry dome with a cream brim, turned sideways for style).
   {
-    const hm = M(m, T(1.12, 1.94, -0.76, 0.6, 1, 1, 1, -0.25));
+    const hm = M(m, T(0, 1.5, -0.76, 0.6, 1, 1, 1, -0.25));
     b.add('paint', sphereG(1), BERRY, M(hm, T(0, 0, 0, 0, 0.14, 0.11, 0.14)));
     b.add('paint', boxG(), BERRY, M(hm, T(0, -0.012, 0, 0, 0.29, 0.02, 0.29)));
     b.add('paint', boxG(), CREAM, M(hm, T(0, -0.012, 0.19, 0, 0.2, 0.02, 0.16)));
     b.add('paint', sphereG(0), CREAM, M(hm, T(0, 0.11, 0, 0, 0.025, 0.02, 0.025)));
-    peg(1.12, 1.86);
+    peg(0, 1.42);
   }
 
   // ── Cape on a hanger (rail near the right wall) ──
@@ -311,10 +321,11 @@ export function buildGearShack(k: Kit): Keepout[] {
   box(b, 'metal', m, 0, 2.27, 1.62, W + 0.06, 0.04, 0.04, C.iron);
 
   // ── Hanging pictogram boards: hat, cape, paint drop ──
-  const boards: [number, IconKey, number][] = [[-1.2, 'hat', NAVY], [0, 'cape', BERRY], [1.2, 'drop', TEAL]];
+  // Hung on S-hooks from the awning's front bar, in front of the bulbs, between the goods behind.
+  const boards: [number, IconKey, number][] = [[-1.25, 'hat', NAVY], [0, 'cape', BERRY], [1.25, 'drop', TEAL]];
   boards.forEach(([bx, ic, col], i) => {
-    const bm = M(m, T(bx, 1.78, 1.6, 0, 1, 1, 1, 0, (i - 1) * 0.05));
-    for (const s of [-1, 1]) box(b, 'metal', bm, s * 0.15, 0.48, 0, 0.012, 0.06, 0.012, C.iron);
+    const bm = M(m, T(bx, 1.6, 1.76, 0, 1.3, 1.3, 1.3, 0, (i - 1) * 0.05));
+    for (const s of [-1, 1]) box(b, 'metal', bm, s * 0.17, 0.48, -0.06, 0.014, 0.06, 0.12, C.iron);
     b.add('paint', boxG(), NAVY, M(bm, T(0, 0, 0, 0, 0.5, 0.48, 0.06)));
     b.add('paint', boxG(), CREAM, M(bm, T(0, 0.04, 0, 0, 0.42, 0.4, 0.07)));
     for (const f of [1, -1]) {
@@ -336,8 +347,9 @@ export function buildGearShack(k: Kit): Keepout[] {
     b.add('paint', cylG(24), NAVY, M(bm, T(0, 0, -0.135, 0, 0.84, 0.27, 0.84, Math.PI / 2)));
     for (const f of [1, -1]) {
       gemIcon(k, M(bm, T(0, 0.02, f * 0.137, f > 0 ? 0 : Math.PI)), 1.15);
-      for (let i = 0; i < 12; i++) {
-        const an = (i / 12) * Math.PI * 2 + Math.PI / 12;
+      const nb = f > 0 ? 12 : 8;
+      for (let i = 0; i < nb; i++) {
+        const an = (i / nb) * Math.PI * 2 + Math.PI / nb;
         b.add('glow', sphereG(0), i % 2 ? C.bulb : 0xfff4d6, M(bm, T(Math.cos(an) * 0.905, Math.sin(an) * 0.905, f * 0.13, 0, 0.045, 0.045, 0.045)));
       }
     }
@@ -348,13 +360,13 @@ export function buildGearShack(k: Kit): Keepout[] {
 
   // ── Bulb strings: across the front, and from the badge down to the post tops ──
   const W3 = (lx: number, ly: number, lz: number): THREE.Vector3 => new THREE.Vector3(lx, ly, lz).applyMatrix4(m);
-  bulbString(k, W3(-2.0, 2.34, 1.69), W3(2.0, 2.34, 1.69), 12, 0.16);
+  bulbString(k, W3(-2.0, 2.34, 1.69), W3(2.0, 2.34, 1.69), 11, 0.16);
   bulbString(k, W3(-0.62, 4.62, -0.55), W3(-1.8, 3.32, 1.0), 6, 0.12);
   bulbString(k, W3(0.62, 4.62, -0.55), W3(1.8, 3.32, 1.0), 6, 0.12);
 
   // ── Giant toy rocket leaning on the left wall ──
   {
-    const rm = M(m, T(-2.2, 0.16, 0.2, 0, 1, 1, 1, 0, -0.14));
+    const rm = M(m, T(-2.2, 0.16, 0.45, 0, 1, 1, 1, 0, -0.14));
     b.add('gloss', cylG(12), 0xf4f1ea, M(rm, T(0, 0.3, 0, 0, 0.23, 1.1, 0.23)), { aoY: y + 0.1, aoH: 0.8, ao: 0.3 });
     b.add('gloss', coneG(12), 0xc8433a, M(rm, T(0, 1.4, 0, 0, 0.23, 0.5, 0.23)));
     b.add('gloss', cylG(12, 1, true), NAVY, M(rm, T(0, 0.55, 0, 0, 0.235, 0.16, 0.235)));
@@ -380,7 +392,7 @@ export function buildGearShack(k: Kit): Keepout[] {
   k.col.cyl(bx0, by, bz0, 0.45, 0.34);
   const [cx0, cz0] = L(1.2, -1.75);
   crate(k, cx0, cz0, 0.85, a.yaw + 0.2);
-  crate(k, cx0, cz0, 0.6, a.yaw + 0.5, k.h(cx0, cz0) + 0.85);
+  paintCan(k, T(cx0, k.h(cx0, cz0) + 0.85, cz0, a.yaw), 0, 0, 0, 2.2, 0x2a9d8f, 0.7);
   // Round mat where the player stands (flat paint, nothing to trip on).
   const [mx, mz] = L(0, SHACK.standZ - 0.4);
   groundDisc(k, mx, mz, 0, 1.0, 0.1, () => TEAL, 1, 32);
@@ -388,7 +400,7 @@ export function buildGearShack(k: Kit): Keepout[] {
 
   // ── Collider: one box for the whole stall (counter front stays a clean wall), the rocket ──
   k.col.box(m, 0, SHACK.height / 2, (SHACK.zBack + SHACK.zFront) / 2, SHACK.hx, SHACK.height / 2, (SHACK.zFront - SHACK.zBack) / 2);
-  const [rx, rz] = L(-2.05, 0.2);
+  const [rx, rz] = L(-2.05, 0.45);
   k.col.cyl(rx, y, rz, 0.95, 0.3);
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
