@@ -215,8 +215,8 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
   const treat = new THREE.Mesh(treatGeo, treatMat);
   treat.visible = false;
   both.add(cloudMesh, cloudOutline, bubbles.mesh, sparks.mesh, puffs.mesh, treat);
-  const toursFx = [cloudMesh, cloudOutline];
-  for (const m of toursFx) m.visible = false;
+  // Only drawn during a ride (idle roost = dragon + rocks + sign).
+  both.visible = false;
 
   // ── State ──
   let phase: DragonPhase = 'idle';
@@ -276,7 +276,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     phaseT = 0;
     treat.visible = false;
     weak.visible = false;
-    for (const m of toursFx) m.visible = false;
+    both.visible = false;
     hud.showTour(false);
     placeDragon(perch.x, perch.y, perch.z, perchYaw, 0, 0);
     fly.speed = 0;
@@ -571,7 +571,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
       if (!pilot.take(hooks)) return;
       enter('feed');
       weak.visible = true;
-      for (const m of toursFx) m.visible = true;
+      both.visible = true;
       hud.showTour(true);
       ctx.audio.play('click');
     },

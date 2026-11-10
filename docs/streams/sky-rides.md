@@ -110,14 +110,14 @@ tour.
 
 ## Performance
 
-Idle (nobody riding): airstrip = plane (5 draws: body, outline, blades, blur disc, scarf; shadow
-via one proxy on layer 7) + runway (1) + props (1) + windsock (1) + sign (2); roost = dragon (7:
-body, outline, head, head outline, eyes ×2 instanced, wings, tail; shadow proxy) + rocks/nest/
-basket (1) + sign (2) + post (1). Contest objects, the rival planes, bubbles and the trail exist
-only while a ride runs (`visible = false` otherwise) and the contest scene is built lazily on the
-first contest. Nothing per-frame runs for an idle ride except the windsock sway, the dragon's
-breathing/blinking and the plane's prop/scarf (a few dozen vertices). Measured draw calls and
-triangles: see "Measured" below.
+Measured idle (nobody riding, Medium, colour pass; shadow proxies on layer 7 not counted):
+**airstrip 9 draws / 8.3k triangles** (runway, props, windsock, sign face ×2; plane body, outline,
+blades, scarf; the prop-blur disc only shows when spinning) and **roost 11 draws / 11.6k
+triangles** (rocks/nest/basket, sign ×2, post; dragon body, outline, head, head outline, eyes
+(1 instanced), wings, tail). Both under the ≤12 draws / ≤40k triangles budget. The contest scene
+(built lazily on the first contest), the rival planes, the bubbles/sparkles and both weak-eye
+groups are hidden between rides. Idle per-frame work is only the windsock sway, the dragon's
+breathing/blinking/wing+tail vertex bend (a few hundred vertices) and the parked prop/scarf.
 
 ## Tests
 
