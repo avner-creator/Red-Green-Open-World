@@ -86,12 +86,14 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
   const r = ANCHORS.landingRings;
   const top = height(b.x, b.z) + 170;
   const bottom = height(r.x, r.z) + 24;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 7; i++) {
     const t = i / 7;
     const x = b.x + (r.x - b.x) * t + Math.sin(t * 5) * 6 * (1 - t);
     const z = b.z + (r.z - b.z) * t + Math.cos(t * 4) * 5 * (1 - t);
     spots.push({ x, y: top + (bottom - top) * Math.pow(t, 0.85), z, tag: 'skydive' });
   }
+  // The last one sits on the final glide just above the landing target (under the canopy).
+  spots.push({ x: r.x, y: height(r.x, r.z) + 6, z: r.z, tag: 'skydive' });
 
   // Bungee fall line beside the platform, then along the canyon floor.
   const fallX = ANCHORS.bungee.x - 6;

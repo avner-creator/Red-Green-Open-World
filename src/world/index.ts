@@ -14,14 +14,9 @@ import { createLighting } from './lighting';
 import { createMaterials, U } from './materials';
 import { Batcher } from './batch';
 import { Colliders, type Kit } from './props';
-import { buildRoads } from './roads';
-import { buildVillage, PLAZA } from './village';
-import { buildPark } from './park';
-import { buildAreas } from './areas';
-import { buildScatter, type Keepout } from './scatter';
-import { buildChestSpots, buildGemSpots } from './spots';
+import { buildScatter } from './scatter';
+import { buildContent } from './content';
 import { createPost } from './post';
-import { LOTS } from './village-data';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -35,7 +30,8 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   root.name = 'world';
   ctx.scene.add(root);
   const mats = createMaterials();
-  root.add(createTerrainMesh(terrain));
+  const terrainMesh = createTerrainMesh(terrain);
+  root.add(terrainMesh.group);
   const water = createWater(terrain);
   root.add(water.mesh);
   const lighting = createLighting(ctx.scene, ctx.renderer);
@@ -43,19 +39,11 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   const b = new Batcher();
   const col = new Colliders(ctx.physics);
   const kit: Kit = { b, col, h: heightAt };
-  buildRoads(b, terrain.roads, heightAt);
-  const villageTrees = buildVillage(kit, { addMeshCollider: (m) => void ctx.physics.addStaticMesh(m) });
-  const park = buildPark(kit);
-  const areas = buildAreas(kit);
-  const keepouts: Keepout[] = [
-    { x: PLAZA.x, z: PLAZA.z, r: PLAZA.r + 1, paved: true },
-    { x: 0, z: -37, hx: 8.5, hz: 22, paved: true },
-    ...LOTS.map((l) => ({ x: l.x, z: l.z, r: Math.max(l.w, l.d) / 2 + 1.5 })),
-    ...park.keepouts,
-    ...areas.keepouts,
-  ];
+  const content = buildContent(kit, terrain, (m) => void ctx.physics.addStaticMesh(m));
   const staticMeshes = b.build(root, mats);
-  const scatter = buildScatter(terrain, mats, col, [...villageTrees, ...park.trees, ...areas.trees], keepouts);
+  const gemSpots = content.gemSpots.map((s) => ({ position: new THREE.Vector3(s.x, s.y, s.z), tag: s.tag }));
+  const chestSpots = content.chestSpots.map((c) => ({ position: new THREE.Vector3(c.x, c.y, c.z), yaw: c.yaw }));
+  const scatter = buildScatter(terrain, mats, col, content.trees, content.keepouts, terrainMesh.colorAt);
   root.add(scatter.group);
 
   const post = createPost(ctx.camera);
@@ -64,8 +52,6 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   for (const [name, a] of Object.entries(ANCHORS) as [AnchorName, (typeof ANCHORS)[AnchorName]][]) {
     anchors[name] = { position: new THREE.Vector3(a.x, a.y ?? heightAt(a.x, a.z), a.z), yaw: a.yaw, radius: a.radius };
   }
-  const gemSpots = buildGemSpots(heightAt, terrain.roads).map((s) => ({ position: new THREE.Vector3(s.x, s.y, s.z), tag: s.tag }));
-  const chestSpots = buildChestSpots(heightAt).map((c) => ({ position: new THREE.Vector3(c.x, c.y, c.z), yaw: c.yaw }));
 
   let quality: Quality | null = null;
   const half = WORLD.size / 2;
@@ -92,6 +78,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       U.time.value += dt;
       mats.update();
       lighting.update(ctx.camera);
+      scatter.update(ctx.camera);
     },
   };
   api.setQuality(ctx.settings.get().quality);

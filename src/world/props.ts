@@ -176,7 +176,7 @@ export function bunting(b: Batcher, a: THREE.Vector3, c: THREE.Vector3, colors: 
   }
 }
 
-export type IconKind = 'trampoline' | 'balloon' | 'car' | 'horse' | 'lighthouse' | 'bridge' | 'star';
+export type IconKind = 'trampoline' | 'balloon' | 'car' | 'horse' | 'lighthouse' | 'bridge' | 'star' | 'wrench';
 
 /** Simple pictograms (white) on a board, in the board's local frame (board faces +Z). */
 export function icon(b: Batcher, m: THREE.Matrix4, kind: IconKind, color = C.white): void {
@@ -205,6 +205,10 @@ export function icon(b: Batcher, m: THREE.Matrix4, kind: IconKind, color = C.whi
     case 'bridge':
       b.add('paint', torusG(0.1, 16, Math.PI), color, M(m, T(0, -0.25, z, 0, 0.3, 0.3, 0.3, Math.PI / 2)));
       box(b, 'paint', m, 0, 0.0, z, 0.66, 0.06, 0.04, color);
+      break;
+    case 'wrench':
+      b.add('paint', boxG(), color, M(m, T(0, -0.28, z, 0, 0.1, 0.5, 0.04, 0, -0.6)));
+      b.add('paint', torusG(0.05, 12, Math.PI * 1.5, 0.12), color, M(m, T(0.16, 0.12, z, 0, 1, 1, 1, Math.PI / 2, 0.2)));
       break;
     case 'star':
       for (let i = 0; i < 5; i++) b.add('paint', coneG(3), color, M(m, T(0, 0, z, 0, 0.08, 0.26, 0.03, 0, (i * Math.PI * 2) / 5)));
