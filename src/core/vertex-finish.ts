@@ -64,6 +64,16 @@ export function finish(g: THREE.BufferGeometry, f: Finish, uv = false): THREE.Bu
   return n;
 }
 
+/** Like `finish`, but keeps the geometry's own (linear) vertex colours. */
+export function finishKeepColors(g: THREE.BufferGeometry, f: Omit<Finish, 'color'>, uv = false): THREE.BufferGeometry {
+  const n = g.index ? g.toNonIndexed() : g;
+  if (n !== g) g.dispose();
+  const colors = n.getAttribute('color');
+  const out = finish(n, { ...f, color: 0xffffff }, uv);
+  if (colors) out.setAttribute('color', colors);
+  return out;
+}
+
 /** Merge finished (or plain) geometries; disposes the inputs. */
 export function mergeFinished(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const m = mergeGeometries(parts, false);

@@ -41,6 +41,7 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
   stars.name = 'skill-sparkles';
   stars.frustumCulled = false;
   stars.count = 0;
+  stars.visible = stars.count > 0;
   scene.add(stars);
   const sparks: Spark[] = [];
   const m = new THREE.Matrix4();
@@ -72,6 +73,7 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
   lines.name = 'skill-speedlines';
   lines.frustumCulled = false;
   lines.count = 0;
+  lines.visible = lines.count > 0;
   scene.add(lines);
   const lineOffsets = Array.from({ length: LINES }, (_, i) => {
     const a = (i / LINES) * Math.PI * 2 + (i % 3) * 0.4;
@@ -123,6 +125,7 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
       stars.setMatrixAt(n++, m);
     }
     stars.count = n;
+    stars.visible = stars.count > 0;
     stars.instanceMatrix.needsUpdate = true;
   };
 
@@ -203,9 +206,11 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
           lines.setMatrixAt(n++, m);
         }
         lines.count = n;
+        lines.visible = lines.count > 0;
         lines.instanceMatrix.needsUpdate = true;
       } else if (lines.count) {
         lines.count = 0;
+        lines.visible = lines.count > 0;
       }
       // Wings.
       wingOpen += ((wantWings ? 1 : 0) - wingOpen) * Math.min(1, dt * 14);
@@ -223,10 +228,12 @@ export function createSkillFx(scene: THREE.Scene, back: THREE.Object3D): SkillFx
     clear() {
       sparks.length = 0;
       stars.count = 0;
+      stars.visible = stars.count > 0;
       ringT = 1;
       ring.visible = false;
       linesOn = 0;
       lines.count = 0;
+      lines.visible = lines.count > 0;
       wantWings = false;
       wingOpen = 0;
       wings.visible = false;

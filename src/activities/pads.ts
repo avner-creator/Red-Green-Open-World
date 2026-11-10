@@ -3,6 +3,7 @@
  * the player (exact arc) onto the next pad, and the last one throws them onto the trampoline.
  */
 import * as THREE from 'three';
+import { finish, finishMaterial, mergeFinished } from '../core/vertex-finish';
 import type { GameContext } from '../types';
 import { PADS } from './constants';
 import { solveLaunch } from './ballistics';
@@ -74,27 +75,35 @@ export function createBouncePads(ctx: GameContext, flight: Flight, tramp: Trampo
   const arrowGeo = new THREE.ShapeGeometry(arrowShape).rotateX(-Math.PI / 2);
   const arrowMat = new THREE.MeshStandardMaterial({ color: 0x1d2a5c, roughness: 0.6 });
   disposables.push(arrowGeo, arrowMat);
+  // Render cost: each cap + its arrow is one mesh (they squash together), all bases one static
+  // mesh: 4 draws; per-vertex finishes (core/vertex-finish).
+  const padMaterial = finishMaterial('rg-bounce-pads');
+  disposables.push(padMaterial);
   pads.forEach((p, i) => {
     const next = pads[i + 1];
     const tx = next ? next.x : tramp.centre.x;
     const tz = next ? next.z : tramp.centre.z;
-    const arrow = new THREE.Mesh(arrowGeo, arrowMat);
-    arrow.position.y = 0.125;
-    arrow.scale.setScalar(PADS.radius * 0.62);
-    arrow.rotation.y = Math.atan2(tx - p.x, tz - p.z);
-    p.cap.add(arrow);
+    const s = PADS.radius * 0.62;
+    const arrow = arrowGeo.clone().scale(s, s, s).rotateY(Math.atan2(tx - p.x, tz - p.z)).translate(0, 0.125, 0);
+    const geo = mergeFinished([finish(capGeo.clone(), { color: 0xffd23a, rough: 0.5, metal: 0 }), finish(arrow, { color: 0x1d2a5c, rough: 0.6, metal: 0 })]);
+    disposables.push(geo);
+    p.cap.geometry = geo;
+    p.cap.material = padMaterial;
   });
 
+  const bases: THREE.BufferGeometry[] = [];
   for (const p of pads) {
     const gy = p.y - PADS.top;
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.position.set(p.x, gy + PADS.top / 2, p.z);
-    base.castShadow = true;
-    base.receiveShadow = true;
+    bases.push(finish(baseGeo.clone().translate(p.x, gy + PADS.top / 2, p.z), { color: 0x2a2f3a, rough: 0.7, metal: 0 }));
     p.cap.position.set(p.x, p.y - 0.1, p.z);
-    root.add(base, p.cap);
+    root.add(p.cap);
     colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(p.x, gy + PADS.top / 2, p.z), PADS.top / 2, PADS.radius));
   }
+  const baseMesh = new THREE.Mesh(mergeFinished(bases), padMaterial);
+  baseMesh.castShadow = true;
+  baseMesh.receiveShadow = true;
+  root.add(baseMesh);
+  disposables.push(baseMesh.geometry);
 
   const chain = new PadChain();
   let clock = 0;
