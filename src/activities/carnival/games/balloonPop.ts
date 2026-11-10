@@ -208,7 +208,7 @@ export function createBalloonPop(env: GameEnv): BoothGame {
     id: 'balloonPop',
     duration: 30,
     thresholds: [8, 16],
-    camera: { distance: 2.7, height: 3.0, fov: 56, lookAhead: 4.2 },
+    camera: { distance: 3.4, height: 0.7, fov: 62, lookAhead: 0 },
     aimLimits: { yaw: 0.6, pitchMin: -0.15, pitchMax: 0.55 },
     how: ['aim', 'throw'],
     idle(dt) {

@@ -14,17 +14,17 @@ import type { RoundResult } from './round';
 const CSS = `
 .rg .cv{position:absolute;inset:0;pointer-events:none;display:none;z-index:6}
 .rg .cv.on{display:block}
-.rg .cv-board{position:absolute;top:calc(var(--u)*16.5);left:50%;transform:translateX(-50%);display:flex;gap:calc(var(--u)*1.6);align-items:flex-end}
-.rg .cv-chip{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.3);padding:calc(var(--u)*.8) calc(var(--u)*1.6);
+.rg .cv-board{position:absolute;top:calc(var(--u)*25);left:calc(var(--u)*3.4);display:flex;flex-direction:column;gap:calc(var(--u)*1.4);align-items:flex-start}
+.rg .cv-chip{display:flex;flex-direction:row;align-items:center;gap:calc(var(--u)*1);transform-origin:left center;padding:calc(var(--u)*.8) calc(var(--u)*1.6);
   background:var(--panel);border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*2);box-shadow:0 0 0 calc(var(--u)*.35) #fff;min-width:calc(var(--u)*9)}
 .rg .cv-chip .nm{font-size:.62em;padding:0 calc(var(--u)*.8);border-radius:calc(var(--u)*1);color:#000;border:calc(var(--u)*.3) solid #000}
-.rg .cv-chip .sc{font-size:1.5em}
-.rg .cv-chip.me{transform:scale(1.18);box-shadow:0 0 0 calc(var(--u)*.45) var(--y),0 0 calc(var(--u)*2) var(--y)}
+.rg .cv-chip .sc{font-size:1.4em;min-width:1.4em;text-align:right}
+.rg .cv-chip.me{transform:scale(1.15);box-shadow:0 0 0 calc(var(--u)*.45) var(--y),0 0 calc(var(--u)*2) var(--y)}
 .rg .cv-chip.bump{animation:cv-bump .35s ease-out}
-@keyframes cv-bump{40%{transform:scale(1.4)}}
+@keyframes cv-bump{40%{transform:scale(1.25)}}
 .rg .cv-chip.me.bump{animation:cv-bump-me .35s ease-out}
-@keyframes cv-bump-me{40%{transform:scale(1.5)}}
-.rg .cv-time{position:absolute;top:calc(var(--u)*28);left:50%;transform:translateX(-50%);width:calc(var(--u)*34);height:calc(var(--u)*2.2);
+@keyframes cv-bump-me{40%{transform:scale(1.4)}}
+.rg .cv-time{position:absolute;top:calc(var(--u)*16);left:50%;transform:translateX(-50%);width:calc(var(--u)*34);height:calc(var(--u)*2.2);
   background:#000;border:calc(var(--u)*.35) solid #fff;border-radius:calc(var(--u)*2);overflow:hidden}
 .rg .cv-time i{display:block;height:100%;background:linear-gradient(90deg,#fff,var(--y));transform-origin:left;border-radius:calc(var(--u)*2)}
 .rg .cv-meter{position:absolute;right:calc(var(--u)*7);top:50%;transform:translateY(-50%);width:calc(var(--u)*4.4);height:calc(var(--u)*34);

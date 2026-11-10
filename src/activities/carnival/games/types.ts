@@ -4,6 +4,7 @@ import type { GameContext, InputState, PlayerAnim } from '../../../types';
 import type { CarnivalFx } from '../fx';
 import type { HowStep } from '../hud';
 import type { GameId } from '../layout';
+import type { PictoId } from '../picto';
 import type { Rng } from '../rng';
 
 export interface GameEnv {
@@ -23,6 +24,8 @@ export interface GameEnv {
    * matrix. Only during construction. `selfLit` 0..1 keeps it bright at dusk.
    */
   addStatic(geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, m: THREE.Matrix4, selfLit?: number): void;
+  /** A pictogram quad (`size` m, facing +Z of `m`), merged into the row's sign mesh. Construction only. */
+  addSign(id: PictoId, m: THREE.Matrix4, size?: number): void;
 }
 
 /** What a game sees of the running round. Contestant 0 is the player, 1 and 2 the friends. */

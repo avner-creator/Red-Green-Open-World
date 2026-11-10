@@ -148,11 +148,6 @@ export function createCarnival(ctx: GameContext): Carnival {
 
   // ── Static row: one vertex-colour mesh, one sign mesh, one merged shadow proxy, colliders.
   const row = buildRow();
-  const atlas = createPictoAtlas();
-  const signMat = new THREE.MeshBasicMaterial({ map: atlas });
-  const signMesh = new THREE.Mesh(row.signs.build(), signMat);
-  signMesh.name = 'carnival-signs';
-  root.add(signMesh);
   const proxyGeo = mergeGeometries(row.proxies, false) ?? new THREE.BoxGeometry(0, 0, 0);
   for (const g of row.proxies) g.dispose();
   const proxy = asShadowProxy(new THREE.Mesh(proxyGeo));
@@ -192,9 +187,15 @@ export function createCarnival(ctx: GameContext): Carnival {
       fx,
       toWorld: (v) => booth.localToWorld(v),
       addStatic: (geo, color, m, selfLit = 0) => void row.kit.add(geo, color, boothM.clone().multiply(m), selfLit),
+      addSign: (picto, m, size = 1) => row.signs.add(picto, boothM.clone().multiply(m), size),
     };
     games.set(id, { game: make(env), booth, weak });
   }
+  const atlas = createPictoAtlas();
+  const signMat = new THREE.MeshBasicMaterial({ map: atlas });
+  const signMesh = new THREE.Mesh(row.signs.build(), signMat);
+  signMesh.name = 'carnival-signs';
+  root.add(signMesh);
   const rowMat = kitMaterial();
   const rowMesh = new THREE.Mesh(row.kit.build(), rowMat);
   rowMesh.name = 'carnival-booths';
