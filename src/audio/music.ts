@@ -62,6 +62,13 @@ export class Music {
     // Bass: beats 1 and 3, every other bar on beat 3 only for breathing room.
     this.note('sine', noteFreq(chord.bass), t, BEAT * 1.6, 0.11, 0.02);
     if (this.barIndex % 2 === 0) this.note('sine', noteFreq(chord.bass + 7), t + BEAT * 2, BEAT * 1.2, 0.07, 0.02);
+    // Music-box arpeggio: chord tones an octave up, gently rising and falling in eighths.
+    const arp = [...chord.pad, (chord.pad[0] ?? 60) + 12];
+    const order = [0, 1, 2, 3, 2, 1, 2, 3];
+    order.forEach((k, i) => {
+      const m = (arp[k] ?? 60) + 12;
+      this.note('sine', noteFreq(m), t + i * EIGHTH, 0.45, i % 2 === 0 ? 0.03 : 0.02, 0.004);
+    });
     // Melody: sparse; every 4th bar thinner.
     const density = this.barIndex % 4 === 3 ? 0.25 : 0.5;
     const bar = generateMelodyBar(this.rng, this.melodyIdx, density);
