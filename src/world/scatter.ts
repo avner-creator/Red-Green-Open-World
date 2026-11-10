@@ -98,6 +98,13 @@ function oakGeo(far: boolean): THREE.BufferGeometry {
   return assemble(parts);
 }
 
+/** Oak shadow proxy: the near crown's five blobs (same silhouette) at the lowest detail. */
+function oakShadowGeo(): THREE.BufferGeometry {
+  const parts: Part[] = [{ geo: cylG(5, 0.62), color: 0, m: T(0, -0.3, 0, 0, 0.32, 3.4, 0.32) }];
+  OAK_BLOBS.forEach(([x, y, z, r], i) => parts.push({ geo: blobG(70 + i, 0, 0.16), color: 0, m: T(x, y, z, i, r * 1.12, r * 0.97, r * 1.12) }));
+  return assemble(parts);
+}
+
 function pineGeo(far: boolean): THREE.BufferGeometry {
   const parts: Part[] = [{ geo: cylG(far ? 4 : 7, 0.5), color: 0x5e4330, m: T(0, -0.3, 0, 0, 0.28, 3.0, 0.28) }];
   const tiers: [number, number, number][] = far ? [[1.6, 2.5, 3.6], [3.6, 1.9, 3.2], [5.5, 1.2, 2.6]] : [[1.6, 2.5, 3.2], [3.2, 2.0, 2.8], [4.6, 1.5, 2.5], [5.9, 1.0, 2.2]];
@@ -588,7 +595,7 @@ export function buildScatter(
     if (grass) sp.midLod = mkLod(sp, grassGeo(7, 7), 8000, false, 'mid');
     if (sp.far) sp.farLod = mkLod(sp, sp.far, cap, false, 'far');
     if (sp.shadow) {
-      const proxy = new THREE.InstancedMesh(sp.far ?? sp.near, shadowProxyMaterial(), cap);
+      const proxy = new THREE.InstancedMesh(sp.name === 'oak' ? oakShadowGeo() : sp.far ?? sp.near, shadowProxyMaterial(), cap);
       proxy.instanceMatrix = sp.nearLod.mesh.instanceMatrix;
       proxy.count = 0;
       proxy.frustumCulled = false;
