@@ -17,6 +17,10 @@ import { Colliders, type Kit } from './props';
 import { buildScatter } from './scatter';
 import { buildContent } from './content';
 import { createPost } from './post';
+import { createPictogramAtlas } from './pictograms';
+import { createDecalMesh, pictoMaterial } from './decals';
+import { createBeacons } from './beacons';
+import { LAUNCH_NET } from './layout';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -45,6 +49,12 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   const chestSpots = content.chestSpots.map((c) => ({ position: new THREE.Vector3(c.x, c.y, c.z), yaw: c.yaw }));
   const scatter = buildScatter(terrain, mats, col, content.trees, content.keepouts, terrainMesh.colorAt);
   root.add(scatter.group);
+  // Wayfinding: one pictogram atlas shared by all sign faces and the beacon badges.
+  const atlas = createPictogramAtlas();
+  atlas.anisotropy = Math.min(8, ctx.renderer.capabilities.getMaxAnisotropy());
+  root.add(createDecalMesh(content.wayfinding.decals, pictoMaterial(atlas)));
+  const beacons = createBeacons(content.wayfinding.beacons, atlas);
+  root.add(beacons.group);
 
   const post = createPost(ctx.camera);
 
@@ -52,6 +62,11 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   for (const [name, a] of Object.entries(ANCHORS) as [AnchorName, (typeof ANCHORS)[AnchorName]][]) {
     anchors[name] = { position: new THREE.Vector3(a.x, a.y ?? heightAt(a.x, a.z), a.z), yaw: a.yaw, radius: a.radius };
   }
+  // Extra data (not in the Anchor type): where the rocket-pad flight should land (the landing net).
+  Object.assign(anchors.launchPads, {
+    target: new THREE.Vector3(LAUNCH_NET.x, heightAt(LAUNCH_NET.x, LAUNCH_NET.z), LAUNCH_NET.z),
+    targetRadius: LAUNCH_NET.radius,
+  });
 
   let quality: Quality | null = null;
   const half = WORLD.size / 2;
@@ -79,6 +94,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       mats.update();
       lighting.update(ctx.camera);
       scatter.update(ctx.camera);
+      beacons.update(U.time.value, ctx.camera);
     },
   };
   api.setQuality(ctx.settings.get().quality);

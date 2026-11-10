@@ -32,7 +32,8 @@ export interface AnchorDef {
 }
 
 export const ANCHORS: Record<AnchorName, AnchorDef> = {
-  spawn: { x: 0, z: 9, radius: 4, yaw: Math.PI, onLand: true },
+  // Spawn faces east, towards the fingerpost and the attraction beacons (park, garage, rocket pads, rings).
+  spawn: { x: 0, z: 9, radius: 4, yaw: 1.62, onLand: true },
   garage: { x: 34, z: 20, radius: 8, yaw: Math.PI, onLand: true },
   trampoline: { x: 58, z: -24, radius: 12, yaw: -Math.PI / 2, onLand: true },
   bouncePads: { x: 84, z: -12, radius: 10, yaw: -Math.PI / 2, onLand: true },
@@ -45,8 +46,12 @@ export const ANCHORS: Record<AnchorName, AnchorDef> = {
   lighthouse: { x: -62, z: -134, radius: 8, yaw: -Math.PI / 4, onLand: true },
   ranch: { x: -74, z: 44, radius: 16, yaw: Math.PI / 2 + 0.6, onLand: true },
   sillyZone: { x: 8, z: 98, radius: 16, yaw: Math.PI, onLand: true },
-  launchPads: { x: -30, z: 102, radius: 10, yaw: Math.PI / 2, onLand: true },
+  // Just south of Bouncy Park; yaw points the flight north over the park to the landing net.
+  launchPads: { x: 80, z: 24, radius: 12, yaw: Math.atan2(3, -58), onLand: true },
 };
+
+/** Where the rocket-pad flight lands (flat, clear spot inside Bouncy Park for the landing net). */
+export const LAUNCH_NET = { x: 83, z: -34, radius: 5 } as const;
 
 export type RoadKind = 'street' | 'road' | 'path';
 export interface RoadDef {
@@ -71,6 +76,8 @@ export const ROADS: readonly RoadDef[] = [
   { id: 'south', kind: 'road', width: 7, points: [[0, 16], [2, 40], [5, 60], [7, 74]] },
   { id: 'loop', kind: 'road', width: 7, points: [[7, 74], [28, 80], [46, 82], [60, 78], [66, 70], [68, 58], [72, 50]] },
   { id: 'west', kind: 'road', width: 7, points: [[-14, 6], [-34, 16], [-52, 30], [-60, 40]] },
+  { id: 'rocket', kind: 'path', width: 4.5, points: [[61.6, 28.5], [70.5, 26]] },
+  { id: 'parklink', kind: 'path', width: 4.5, points: [[73, 2.5], [76.5, 14.5]] },
   { id: 'beach', kind: 'path', width: 4.5, points: [[-86, 34], [-96, 16], [-100, 0], [-102, -10]] },
 ];
 
@@ -98,7 +105,7 @@ export const PADS: readonly PadDef[] = [
   { id: 'rings', shape: 'circle', x: 124, z: 22, r: 24, falloff: 12 },
   { id: 'ranch', shape: 'rect', x: -78, z: 44, hx: 26, hz: 18, falloff: 12 },
   { id: 'silly', shape: 'circle', x: 8, z: 98, r: 19, falloff: 10 },
-  { id: 'launch', shape: 'circle', x: -30, z: 102, r: 12, falloff: 8 },
+  { id: 'launch', shape: 'circle', x: 80, z: 24, r: 13, y: VILLAGE_Y, falloff: 8 },
   { id: 'lighthouse', shape: 'circle', x: -62, z: -134, r: 12, falloff: 8 },
   { id: 'bungeeLanding', shape: 'circle', x: -18, z: CANYON.z, r: 5, falloff: 3, clear: true },
 ];

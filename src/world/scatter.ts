@@ -193,6 +193,69 @@ function grassGeo(seed = 7, blades = 11): THREE.BufferGeometry {
   return g;
 }
 
+/**
+ * Close-up tuft (near LOD): 16 slim blades, each a 3-segment curve that tapers to a point and arches
+ * outwards, with a dark root → bright, slightly warm tip gradient. Reads soft and full at the
+ * player's feet; the cheaper `grassGeo` takes over a few metres away.
+ */
+function tuftGeo(seed = 21, blades = 16): THREE.BufferGeometry {
+  const rng = new Rng(seed);
+  const pos: number[] = [];
+  const col: number[] = [];
+  const nrm: number[] = [];
+  // Colour multipliers along the blade (root → tip); the tip leans warm (less blue).
+  const shade = (t: number): [number, number, number] => {
+    const v = 0.55 + 0.8 * t ** 0.8;
+    return [v * (1 + 0.06 * t), v * (1 + 0.03 * t), v * (1 - 0.18 * t)];
+  };
+  const SEG = 3;
+  for (let i = 0; i < blades; i++) {
+    const a = (i / blades) * Math.PI * 2 + rng.range(-0.35, 0.35);
+    const r = rng.range(0.0, 0.17);
+    const bx = Math.cos(a) * r;
+    const bz = Math.sin(a) * r;
+    const h = rng.range(0.24, 0.5) * (r < 0.08 ? 1.15 : 0.9);
+    const w = rng.range(0.028, 0.045);
+    const fy = a + Math.PI / 2 + rng.range(-0.7, 0.7);
+    const lx = Math.cos(fy);
+    const lz = Math.sin(fy);
+    const ox = Math.cos(a);
+    const oz = Math.sin(a);
+    const bend = rng.range(0.25, 0.6) * h;
+    const ring: number[][] = [];
+    for (let s = 0; s <= SEG; s++) {
+      const t = s / SEG;
+      const cx = bx + ox * bend * t * t;
+      const cz = bz + oz * bend * t * t;
+      const cy = h * (t - 0.18 * t * t * (bend / h));
+      const ww = w * (1 - t * 0.85);
+      ring.push([cx - lx * ww, cy, cz - lz * ww, cx + lx * ww, cy, cz + lz * ww, t]);
+    }
+    const put = (p: number[], o: number): void => {
+      pos.push(p[o], p[o + 1], p[o + 2]);
+      col.push(...shade(p[6]));
+      nrm.push(ox * 0.3, 0.94, oz * 0.3);
+    };
+    for (let s = 0; s < SEG; s++) {
+      const A = ring[s];
+      const B = ring[s + 1];
+      if (s < SEG - 1) {
+        for (const [p, o] of [[A, 0], [A, 3], [B, 0], [A, 3], [B, 3], [B, 0]] as const) put(p, o);
+      } else {
+        // Pointed tip.
+        const tip = [(B[0] + B[3]) / 2, B[1], (B[2] + B[5]) / 2, 0, 0, 0, 1];
+        for (const [p, o] of [[A, 0], [A, 3], [tip, 0]] as const) put(p, o);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  g.computeBoundingSphere();
+  return g;
+}
+
 /** A small clump of leaves with 5 flower heads. Head colour comes from the instance colour. */
 function flowerGeo(): THREE.BufferGeometry {
   const leaves = grassGeo(13, 6);
@@ -315,7 +378,7 @@ export function buildScatter(
     { name: 'bush', near: bushGeo(false), far: bushGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.5, medium: 0.85, high: 1 }, lod: { low: 30, medium: 50, high: 70 }, max: { low: 110, medium: 170, high: 230 }, size: 1.5 },
     { name: 'rockA', near: rockGeo(301, false), far: rockGeo(301, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
     { name: 'rockB', near: rockGeo(302, false), far: rockGeo(302, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
-    { name: 'grass', near: grassGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: inf, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
+    { name: 'grass', near: tuftGeo(), far: grassGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: { low: 5, medium: 8, high: 12 }, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
     { name: 'flower', near: flowerGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: inf, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
   ];
   const species: Record<string, Species> = {};
