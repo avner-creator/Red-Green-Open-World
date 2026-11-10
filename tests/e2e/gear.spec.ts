@@ -82,7 +82,7 @@ test('buy a hat, a paint and a trail: worn, painted, particles; persists; reset 
   expect(r.res).toEqual(['ok', 'ok', 'ok']);
   expect(r.wallet).toBe(200 - 12 - 55 - 20);
   expect((await attached()).head).toBe('hat-propeller');
-  expect(await page.evaluate(() => window.__rgGear!.carColor())).toBe(0xc4122e);
+  expect(await page.evaluate(() => window.__rgGear!.carColor())).toBe(0xbf4d52);
   expect(await page.evaluate(() => window.__rgGear!.trail())).toBe('sparkle');
 
   // Walk: the trail leaves particles (never more than 60).
@@ -107,7 +107,7 @@ test('buy a hat, a paint and a trail: worn, painted, particles; persists; reset 
     rg.step(1 / 60, 10, false);
   });
   expect((await attached()).head).toBe('hat-propeller');
-  expect(await page.evaluate(() => window.__rgGear!.carColor())).toBe(0xc4122e);
+  expect(await page.evaluate(() => window.__rgGear!.carColor())).toBe(0xbf4d52);
   expect(await page.evaluate(() => window.__rgGear!.trail())).toBe('sparkle');
 
   // Reset: everything off, buggy back to its own colour.
@@ -119,7 +119,7 @@ test('buy a hat, a paint and a trail: worn, painted, particles; persists; reset 
   });
   expect(after.att).toEqual({ head: null, back: null, face: null });
   expect(after.trail).toBeNull();
-  expect(after.car).not.toBe(0xc4122e);
+  expect(after.car).not.toBe(0xbf4d52);
   expect(after.car).toBe(r.defaultColor);
 });
 
