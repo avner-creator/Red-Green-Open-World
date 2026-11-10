@@ -22,20 +22,20 @@ export const ECON_CSS = `
 @keyframes rg-wbump{40%{transform:scale(1.14)}}
 @keyframes rg-wbumpb{30%{transform:scale(1.34) rotate(-4deg)}60%{transform:scale(.95) rotate(2deg)}}
 @keyframes rg-wshake{15%{transform:translateX(calc(var(--u)*-1.4)) rotate(-3deg)}35%{transform:translateX(calc(var(--u)*1.4)) rotate(3deg)}55%{transform:translateX(calc(var(--u)*-1)) rotate(-2deg)}75%{transform:translateX(calc(var(--u)*.7))}}
-.rg .wallet .pops{position:absolute;left:calc(100% + var(--u)*.8);top:62%;width:0;height:0;pointer-events:none;z-index:3}
+.rg .wallet .pops{position:absolute;left:calc(var(--u)*3.4);top:calc(100% + var(--u)*.2);width:0;height:0;pointer-events:none;z-index:3}
 .rg .pop{position:absolute;left:0;top:0;display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*4.6);
   transform-origin:15% 50%;animation:rg-popfly 1.3s cubic-bezier(.2,1.3,.4,1) both;isolation:isolate}
 .rg .pop .v{color:var(--y);font-size:1.05em}
 .rg .pop.neg .v{color:#fff}
 .rg .pop>.ic{font-size:1.3em;color:var(--y)}
 .rg .pop.neg>.ic{color:#fff}
-.rg .pop.k-mega{font-size:calc(var(--u)*6.6);animation-duration:1.7s}
-.rg .pop.k-bonus,.rg .pop.k-jackpot{font-size:calc(var(--u)*6.2);animation-duration:1.9s}
+.rg .pop.k-mega{font-size:calc(var(--u)*5.6);animation-duration:1.7s}
+.rg .pop.k-bonus,.rg .pop.k-jackpot{font-size:calc(var(--u)*5.4);animation-duration:1.9s}
 .rg .pop.k-free>.ic:first-child{animation:rg-spin .5s ease-in-out infinite alternate}
 .rg .pop.again .v{animation:rg-wbump .3s cubic-bezier(.2,1.6,.4,1)}
 .rg .pop .rays{position:absolute;left:-40%;top:50%;width:calc(var(--u)*18);height:calc(var(--u)*18);margin-top:calc(var(--u)*-9);z-index:-1;border-radius:50%;
   background:repeating-conic-gradient(rgba(255,255,255,.8) 0 9deg,transparent 9deg 26deg);-webkit-mask:${RAYS_MASK};mask:${RAYS_MASK};animation:rg-raypop 1.4s ease-out both}
-@keyframes rg-popfly{0%{opacity:0;transform:translate(calc(var(--u)*-3),-50%) scale(.3)}14%{opacity:1;transform:translate(0,-50%) scale(1.3)}26%{transform:translate(0,-50%) scale(1)}72%{opacity:1;transform:translate(calc(var(--u)*.6),calc(-50% + var(--u)*1.6))}100%{opacity:0;transform:translate(calc(var(--u)*1),calc(-50% + var(--u)*3.4)) scale(.9)}}
+@keyframes rg-popfly{0%{opacity:0;transform:translateY(calc(var(--u)*-3)) scale(.3)}14%{opacity:1;transform:translateY(0) scale(1.25)}26%{transform:scale(1)}72%{opacity:1;transform:translateY(calc(var(--u)*1))}100%{opacity:0;transform:translateY(calc(var(--u)*2.6)) scale(.9)}}
 @keyframes rg-raypop{0%{transform:scale(0) rotate(0);opacity:0}25%{opacity:1}100%{transform:scale(1.3) rotate(90deg);opacity:0}}
 
 /* ---------- HUD top-left cluster: wallet + combo ---------- */
@@ -249,4 +249,18 @@ export const ECON_CSS = `
 .rg .holdbar .ic{font-size:1.2em}
 .rg .holdbar.done{background:linear-gradient(180deg,#fff,#d9dcef)}
 .rg .holdbar.done .ic{color:#15110a;--out:#fff}
+
+/* ---------- item pictures (rendered previews) ---------- */
+.rg .pic{display:block;object-fit:contain;-webkit-user-drag:none;pointer-events:none;filter:drop-shadow(0 calc(var(--u)*.6) calc(var(--u)*.7) rgba(0,0,0,.65))}
+.rg .card .pv.has-pic{background:radial-gradient(circle at 50% 50%,#ffffff38,#ffffff00 66%)}
+.rg .card .pv .pic{width:100%;height:100%;max-height:calc(var(--u)*17);transition:transform .15s}
+.rg .card:hover .pv .pic,.rg.nav-kb .card:focus .pv .pic{transform:scale(1.08) rotate(-3deg)}
+.rg .card.s-equipped .pv.has-pic{background:radial-gradient(circle at 50% 50%,#ffffffd0,#ffffff00 70%)}
+.rg .card.s-poor .pv .pic{opacity:.5;filter:grayscale(1) brightness(.6) drop-shadow(0 calc(var(--u)*.6) calc(var(--u)*.7) rgba(0,0,0,.65))}
+.rg .card.s-chest .pv .pic{filter:brightness(0) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 calc(var(--u)*1.6) rgba(255,255,255,.85))}
+.rg .celebrate .badge .pic{position:relative;width:80%;height:80%;animation:rg-wig 1.1s ease-in-out .85s infinite;filter:drop-shadow(0 calc(var(--u)*1) calc(var(--u)*1) rgba(0,0,0,.7))}
+.rg .moment .badge .pic{width:82%;height:82%}
+.rg .pic.pic-in{animation:rg-picin .35s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes rg-picin{from{opacity:0;transform:scale(.5)}}
+.rg .stk .pic{width:2.1em;height:2.1em;filter:drop-shadow(0 calc(var(--u)*.3) calc(var(--u)*.4) rgba(0,0,0,.5))}
 `;

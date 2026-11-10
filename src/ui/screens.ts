@@ -2,6 +2,7 @@
 import type { GameContext, StuntKind } from '../types';
 import type { EconTracker } from './econState';
 import { itemIcon } from './hudEcon';
+import { createPictureQueue, itemPicture, picturePending, swapInPicture } from './itemArt';
 import { createWalletChip } from './wallet';
 import type { WalletChip } from './wallet';
 import { CREDITS } from './credits';
@@ -146,12 +147,13 @@ export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): E
   });
   ctx.events.on('outfit:unlocked', (e) => outfitIds.add(e.outfitId));
 
-  const sticker = (ic: UiIconName, text: string, i: number, earned: boolean, cls = ''): HTMLElement =>
+  const pics = createPictureQueue(() => el.classList.contains('on'));
+  const sticker = (ic: UiIconName | HTMLElement, text: string, i: number, earned: boolean, cls = ''): HTMLElement =>
     h(
       'div',
       `stk ${earned ? 'earned' : 'empty'} ${cls}`.trim(),
       { 'data-earned': String(earned), style: `--r:${(i % 2 ? 1 : -1) * (1 + (i % 3))}deg;--d:${Math.min(i, 7) * 0.05}s` },
-      icon(ic),
+      typeof ic === 'string' ? icon(ic) : ic,
       text ? h('span', '', {}, text) : null,
     );
 
@@ -159,6 +161,7 @@ export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): E
     el,
     onShow: () => again,
     fill() {
+      pics.clear();
       const s = ctx.session.state;
       stickers.replaceChildren();
       smalls.replaceChildren();
@@ -207,7 +210,13 @@ export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): E
       const un = tracker.unlocked;
       if (un.length) {
         const group = h('div', 'grp new', { 'data-testid': 'end-unlocked' }, h('span', 'lbl', {}, icon('sparkle')));
-        for (const id of un.slice(0, 5)) group.append(sticker(itemIcon(ctx, id), '', i++, true, 'item'));
+        for (const id of un.slice(0, 5)) {
+          const it = ctx.economy.item(id);
+          const fb = itemIcon(ctx, id);
+          const st = sticker(itemPicture(it, fb), '', i++, true, 'item');
+          group.append(st);
+          if (it && picturePending(it)) pics.request(it, () => swapInPicture(st, it, fb));
+        }
         if (un.length > 5) group.append(h('span', 'more t', {}, `+${un.length - 5}`));
         econRow.append(group);
       }

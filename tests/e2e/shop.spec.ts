@@ -57,6 +57,62 @@ test.describe('economy ui', () => {
     await page.getByTestId('play').click();
     expect(await phase(page)).toBe('playing');
 
+    // Fixture items with rendered pictures, in their own tab (the real catalog leaves 'character'
+    // empty) so they never queue behind slow real previews; one has no picture (keeps its icon).
+    // preview() is only called once a card is shown, asynchronously.
+    await page.evaluate(() => {
+      const calls: string[] = [];
+      (window as unknown as { __previewCalls: string[] }).__previewCalls = calls;
+      const draw = (kind: string): string => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const g = c.getContext('2d')!;
+        g.lineWidth = 6;
+        g.strokeStyle = '#1a1a2a';
+        g.lineJoin = 'round';
+        if (kind === 'hat') {
+          const grad = g.createLinearGradient(30, 10, 100, 110);
+          grad.addColorStop(0, '#ffe86a');
+          grad.addColorStop(1, '#e07a10');
+          g.fillStyle = grad;
+          g.beginPath();
+          g.moveTo(64, 8); g.lineTo(104, 96); g.lineTo(24, 96); g.closePath(); g.fill(); g.stroke();
+          g.fillStyle = '#d0244a';
+          g.fillRect(34, 72, 60, 14); g.strokeRect(34, 72, 60, 14);
+          g.fillStyle = '#ffffff';
+          g.beginPath(); g.ellipse(64, 104, 52, 14, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+        } else if (kind === 'cape') {
+          const grad = g.createLinearGradient(0, 0, 0, 128);
+          grad.addColorStop(0, '#5fb0ff');
+          grad.addColorStop(1, '#1d3fa8');
+          g.fillStyle = grad;
+          g.beginPath();
+          g.moveTo(40, 14); g.lineTo(88, 14); g.quadraticCurveTo(110, 70, 116, 118);
+          g.quadraticCurveTo(64, 100, 12, 118); g.quadraticCurveTo(18, 70, 40, 14); g.fill(); g.stroke();
+          g.fillStyle = '#ffd93b';
+          g.beginPath(); g.arc(64, 60, 14, 0, Math.PI * 2); g.fill(); g.stroke();
+        } else {
+          g.fillStyle = '#ff6fb5';
+          for (const x of [36, 92]) { g.beginPath(); g.arc(x, 64, 26, 0, Math.PI * 2); g.fill(); g.stroke(); }
+          g.fillStyle = '#20243c';
+          for (const x of [36, 92]) { g.beginPath(); g.arc(x, 64, 15, 0, Math.PI * 2); g.fill(); }
+          g.beginPath(); g.moveTo(58, 60); g.lineTo(70, 60); g.stroke();
+        }
+        return c.toDataURL('image/png');
+      };
+      const pic = (id: string, kind: string) => () => {
+        calls.push(id);
+        return draw(kind);
+      };
+      window.__rg!.ctx.economy.registerItems([
+        { id: 'fx-hat', category: 'character', slot: 'head', name: 'Party hat', icon: 'hat', price: 12, preview: pic('fx-hat', 'hat') },
+        { id: 'fx-cape', category: 'character', slot: 'back', name: 'Hero cape', icon: 'cape', price: 99, preview: pic('fx-cape', 'cape') },
+        { id: 'fx-specs', category: 'character', slot: 'face', name: 'Pink specs', icon: 'glasses', price: 0, chestOnly: true, preview: pic('fx-specs', 'specs') },
+        { id: 'fx-plain', category: 'character', slot: 'face', name: 'Plain specs', icon: 'glasses', price: 7, preview: () => null },
+      ]);
+    });
+    expect(await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls.length)).toBe(0);
+
     // Real missions from the economy; drive the HUD cards with events.
     const missions = await page.evaluate(() => {
       const rg = window.__rg!;
@@ -128,9 +184,8 @@ test.describe('economy ui', () => {
     await expect(page.getByTestId('shop')).toBeVisible();
     expect(await phase(page)).toBe('paused');
     expect(await page.evaluate(() => window.__rg!.ctx.ui.menuOpen)).toBe(true);
-    // Only categories with items get a tab (no 'character' items yet).
     await expect(page.getByTestId('shop-tab-outfit')).toBeVisible();
-    await expect(page.getByTestId('shop-tab-character')).toHaveCount(0);
+    await expect(page.getByTestId('shop-tab-character')).toBeVisible();
     const fits = async (): Promise<boolean> =>
       page.evaluate(() => {
         const r = document.querySelector('[data-testid="shop"]')!.getBoundingClientRect();
@@ -139,27 +194,38 @@ test.describe('economy ui', () => {
       });
     expect(await fits()).toBe(true);
     await save(page, 'shop');
-    await page.setViewportSize({ width: 667, height: 375 });
-    expect(await fits()).toBe(true);
-    await page.setViewportSize({ width: 640, height: 360 });
-
     const card = (id: string) => page.locator(`[data-testid="shop"] [data-testid="shop-card"][data-item="${id}"]`);
     const chestId = await page.evaluate(() => window.__rg!.ctx.economy.catalog.find((i) => i.chestOnly && i.category === 'outfit')!.id);
     await expect(card('hat-crown')).toHaveAttribute('data-state', 'poor');
     await expect(card(chestId)).toHaveAttribute('data-state', 'chest');
+    // Item pictures: the icon at once, then an <img> where a preview exists; the icon where not.
+    await page.getByTestId('shop-tab-character').click();
+    expect(await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls.length)).toBeLessThanOrEqual(1);
+    await expect(card('fx-hat').locator('img.pic')).toHaveCount(1);
+    await expect(card('fx-plain').locator('img')).toHaveCount(0);
+    await expect(card('fx-plain').locator('.pv .ic')).toHaveCount(1);
+    await expect(card('fx-cape')).toHaveAttribute('data-state', 'poor');
+    await expect(card('fx-specs')).toHaveAttribute('data-state', 'chest');
+    await expect(card('fx-specs').locator('img.pic')).toHaveCount(1);
+    await save(page, 'shop-pictures');
+    await page.setViewportSize({ width: 667, height: 375 });
+    expect(await fits()).toBe(true);
+    await page.setViewportSize({ width: 640, height: 360 });
 
     // Buy: wallet drops, unlock moment, owned + worn.
     const w0 = await wallet(page);
-    await card('hat-propeller').click();
+    await card('fx-hat').click();
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
+    await expect(page.locator('[data-testid="unlock-moment"] img.pic')).toHaveCount(1);
     expect(await wallet(page)).toBe(w0 - 12);
     await save(page, 'unlock', 1000);
     await dismiss(page);
     await expect(page.getByTestId('unlock-moment')).toBeHidden();
-    await expect(card('hat-propeller')).toHaveAttribute('data-state', 'equipped');
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('hat-propeller');
+    await expect(card('fx-hat')).toHaveAttribute('data-state', 'equipped');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('fx-hat');
 
     // Too expensive / chest-only: nothing happens to the wallet.
+    await page.getByTestId('shop-tab-outfit').click();
     await card('hat-crown').click();
     await card(chestId).click();
     expect(await wallet(page)).toBe(w0 - 12);
@@ -192,11 +258,12 @@ test.describe('economy ui', () => {
     const wcard = (id: string) => page.locator(`[data-testid="wardrobe"] [data-testid="shop-card"][data-item="${id}"]`);
     await expect(wcard('hat-crown')).toHaveCount(0);
     await expect(wcard('emote-wave')).toHaveCount(1);
-    await wcard('hat-propeller').click();
+    await expect(wcard('fx-hat').locator('img.pic')).toHaveCount(1);
+    await wcard('fx-hat').click();
     expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe(null);
-    await expect(wcard('hat-propeller')).toHaveAttribute('data-state', 'owned');
-    await wcard('hat-propeller').click();
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('hat-propeller');
+    await expect(wcard('fx-hat')).toHaveAttribute('data-state', 'owned');
+    await wcard('fx-hat').click();
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('fx-hat');
     await save(page, 'wardrobe');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('resume')).toBeVisible();
@@ -208,8 +275,9 @@ test.describe('economy ui', () => {
       const rg = window.__rg!;
       rg.ctx.profile.unlock(chest, 'chest');
       rg.step(1 / 60, 2);
-    }, chestId);
+    }, 'fx-specs');
     await expect(page.getByTestId('moment-unlock')).toHaveCount(1);
+    await expect(page.locator('[data-testid="moment-unlock"] img.pic')).toHaveCount(1);
     await save(page, 'hud-chest-unlock', 700);
     await page.evaluate((ms) => {
       const rg = window.__rg!;
@@ -238,6 +306,7 @@ test.describe('economy ui', () => {
     await expect(page.getByTestId('end-jackpot')).toHaveAttribute('data-earned', 'true');
     await expect(page.getByTestId('end-combo')).toContainText('3');
     await expect(page.locator('[data-testid="end-unlocked"] .stk')).toHaveCount(3);
+    expect(await page.locator('[data-testid="end-unlocked"] img.pic').count()).toBeGreaterThanOrEqual(2);
     await save(page, 'end', 1400);
     const endFits = await page.evaluate(() => {
       const p = document.querySelector('.endp') as HTMLElement;
@@ -266,7 +335,7 @@ test.describe('economy ui', () => {
     await page.evaluate(() => window.__rg!.step(1 / 60, 150, false));
     await page.mouse.up();
     expect(await wallet(page)).toBe(0);
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('hat-propeller'))).toBe(false);
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.owns('fx-hat'))).toBe(false);
 
     expect(consoleErrors).toEqual([]);
   });
