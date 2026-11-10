@@ -1,6 +1,6 @@
 /**
- * Scoops station DOM: a bottom bar of big picture tiles (click, tap, or drag a tile up onto the
- * cone), a stage strip, a scoop meter, key hints for the current device, the friend's recipe card,
+ * Scoops station DOM: a bar of big picture tiles (click, tap, or drag a tile off the bar onto the
+ * cone; the bar moves to the top on touch screens, clear of the touch buttons), a stage strip, a scoop meter, key hints for the current device, the friend's recipe card,
  * the "need more gems" note, the result card and the active-effect chips. No reading needed.
  * White/yellow on dark with thick outlines (R-only and G-only readable).
  */
@@ -100,6 +100,10 @@ const CSS = `
 .rg-scoops .sc-fxc svg.sc-ring circle{fill:none;stroke:#ffd93b;stroke-width:7;stroke-linecap:round}
 .rg-scoops .sc-ghost{position:fixed;width:9.4vmin;height:9.4vmin;pointer-events:none;transform:translate(-50%,-50%) scale(1.1);opacity:.9;display:none;z-index:7}
 .rg-scoops .sc-ghost svg{width:100%;height:100%}
+/* Touch: the corners belong to the joystick and the action buttons. */
+.rg-scoops.sc-touch .sc-bar{top:25vmin;bottom:auto}
+.rg-scoops.sc-touch .sc-meter{top:39vmin;bottom:auto}
+.rg-scoops.sc-touch .sc-exit{right:auto;left:2.4vmin;bottom:auto;top:38vmin}
 @keyframes rg-sc-nope{0%,100%{translate:0}25%{translate:-1vmin}75%{translate:1vmin}}
 `;
 
@@ -201,8 +205,10 @@ export function createScoopsUi(root: HTMLElement, handlers: UiHandlers): ScoopsU
     const d = drag;
     drag = null;
     ghost.style.display = 'none';
-    const barTop = bar.getBoundingClientRect().top;
-    if (!d.moved || e.clientY < barTop) handlers.onTile(d.index);
+    // A tap adds; a drag adds when it is let go off the bar (onto the cone), else it is cancelled.
+    const r = bar.getBoundingClientRect();
+    const onBar = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    if (!d.moved || !onBar) handlers.onTile(d.index);
   };
   bar.addEventListener('pointerup', end);
   bar.addEventListener('pointercancel', () => {
@@ -263,6 +269,7 @@ export function createScoopsUi(root: HTMLElement, handlers: UiHandlers): ScoopsU
       meter.style.display = m.stage === 'scoops' ? 'flex' : 'none';
       meterDots.forEach((d, i) => d.classList.toggle('sc-on', i < m.scoops));
       bar.style.display = m.tiles.length ? 'flex' : 'none';
+      el.classList.toggle('sc-touch', m.device === 'touch');
       renderKeys(m.device, m.stage);
       const rk = m.recipe ? JSON.stringify(m.recipe) : '';
       if (rk !== recipeKey) {

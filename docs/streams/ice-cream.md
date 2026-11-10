@@ -54,8 +54,9 @@ eyes apart from their 1/2/3 dot numbers; nothing in the main scene, HUD or audio
 
 **Controls** (all through `ctx.input.state`): left/right (A/D, stick, touch joystick) chooses a
 tile, jump (Space, A, touch jump) adds it, use (E, X, touch hand) is next/eat, respawn (R, Y)
-leaves. Tiles can also be **clicked/tapped, or dragged up off the bar** onto the cone; a round exit
-button (above the skill button) leaves on touch. A bobbing 3D arrow points at the counter item the
+leaves. Tiles can also be **clicked/tapped, or dragged off the bar** onto the cone; a round exit button
+leaves (above the skill button; on touch screens the bar moves to the top and the exit button to
+the left, clear of the joystick and the action buttons). A bobbing 3D arrow points at the counter item the
 selected tile stands for. Key hints follow the input device; nothing needs reading.
 
 **Economy** (defensive: works with or without Stream C): the first cone each session is free;
@@ -93,10 +94,11 @@ Gem spots nearest: (24, −14) and (15, −9), both outside the footprint.
 
 ## Performance
 
-Measured at Medium, 640×360, from the plaza looking at the parlour with both friends loaded:
-**+9 draw calls** for the whole frame, about **33k triangles** in the colour pass (parlour 12k
-matte + 8k gloss, jars 1.2k, friends 12k), shadows from a 160-triangle stand-in plus two capsule
-stand-ins for the friends (layer 7). The build station adds the cone (≤ 7 small draws) only while
+Measured at 640×360 from the plaza looking at the parlour, both friends loaded, whole frame
+with and without the shop (shadow pass included): **Medium +9 draw calls, +33k triangles; Low +6
+draw calls, +33k triangles** (budget ≤ ~12 / 40k). Parlour 12k matte + 8k gloss, jars 1.2k,
+friends 12k; shadows come from a 160-triangle stand-in and two capsule stand-ins (layer 7).
+The build station adds the cone (≤ 7 small draws) only while
 in use. Nothing but active effects updates when the player is more than 45 m away; the friends'
 GLBs load lazily the first time the player comes within 45 m.
 
