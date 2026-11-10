@@ -136,7 +136,7 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
     c.right = e;
     c.top = e;
     c.bottom = -e;
-    c.far = 260 + Math.max(220, e * 1.5);
+    c.far = (e > baseExtent ? 260 : 200) + Math.max(220, e * 1.5);
     c.updateProjectionMatrix();
   };
 
@@ -213,7 +213,7 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
       center.y = Math.round(center.y / texel) * texel;
       center.applyMatrix4(lightRot);
       sun.target.position.copy(center);
-      sun.position.copy(center).addScaledVector(sunDir, 260);
+      sun.position.copy(center).addScaledVector(sunDir, extent > baseExtent ? 260 : 200);
       sun.target.updateMatrixWorld();
       sun.updateMatrixWorld();
     },
