@@ -194,7 +194,7 @@ function grassGeo(seed = 7, blades = 11): THREE.BufferGeometry {
 }
 
 /**
- * Close-up tuft (near LOD): 16 slim blades, each a 3-segment curve that tapers to a point and arches
+ * Close-up tuft (near LOD): 12 slim blades, each a 3-segment curve that tapers to a point and arches
  * outwards, with a dark root → bright, slightly warm tip gradient. Reads soft and full at the
  * player's feet; the cheaper `grassGeo` takes over a few metres away.
  */
@@ -335,7 +335,7 @@ export interface Scatter {
 
 const GRASS: Record<Quality, { far: number; density: number }> = {
   low: { far: 26, density: 0.45 },
-  medium: { far: 42, density: 0.7 },
+  medium: { far: 36, density: 0.7 },
   high: { far: 62, density: 1 },
 };
 
@@ -378,7 +378,7 @@ export function buildScatter(
     { name: 'bush', near: bushGeo(false), far: bushGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.5, medium: 0.85, high: 1 }, lod: { low: 30, medium: 50, high: 70 }, max: { low: 110, medium: 170, high: 230 }, size: 1.5 },
     { name: 'rockA', near: rockGeo(301, false), far: rockGeo(301, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
     { name: 'rockB', near: rockGeo(302, false), far: rockGeo(302, true), mat: mats.rock, shadow: true, density: all, lod: { low: 35, medium: 55, high: 80 }, max: inf, size: 3 },
-    { name: 'grass', near: tuftGeo(), far: grassGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: { low: 5, medium: 8, high: 12 }, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
+    { name: 'grass', near: tuftGeo(21, 12), far: grassGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: { low: 4, medium: 6, high: 10 }, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
     { name: 'flower', near: flowerGeo(), mat: mats.grass, shadow: false, density: { ...all }, lod: inf, max: { low: GRASS.low.far, medium: GRASS.medium.far, high: GRASS.high.far }, size: 0.6 },
   ];
   const species: Record<string, Species> = {};

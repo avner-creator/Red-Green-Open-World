@@ -12,6 +12,9 @@ export const U = {
   glow: { value: 0 },
   /** Grass and flowers shrink away between 70% and 100% of this distance from the camera. */
   grassFar: { value: 42 },
+  /** Direction towards the sun and its colour × intensity (set by the lighting; used by the sea glint). */
+  sunDir: { value: new THREE.Vector3(0, 1, 0) },
+  sunColor: { value: new THREE.Color(1, 1, 1) },
 };
 
 export const GLSL_NOISE = /* glsl */ `
