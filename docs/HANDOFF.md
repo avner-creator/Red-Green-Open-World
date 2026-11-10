@@ -28,19 +28,20 @@ Rules that matter for a newcomer: the orchestrator writes no code (workers on Op
 interfaces are in `src/types.ts` (integrator only); tests use `?test=1` and `window.__rg`;
 parallel agents must each use their own `RG_PORT`.
 
-## State (updated 2026-11-10 ~23:00 UTC)
+## State (updated 2026-11-11 ~03:00 UTC)
 
-**On `main` (verified, 233 unit + 54 e2e; live on Netlify):** red-green compositor + calibration,
-robot player (walk 6.5 / sprint 11 m/s), island with dressed plaza / Bouncy Park / garage /
-balloon field / landing field, wayfinding (beacons, plaza fingerpost, road waymarks, how-to
-boards, HUD compass, "?" controls card), 63 weak-eye gems, giant trampoline (12 m → 45 m) with
-air tricks, 8/15/25 m bounce pads, rocket pads + landing net, both-eye chests + 6 outfits,
-drivable buggy, balloon skydive with assisted parachute and landing rings, adaptive CC0 music.
+**On `main` (verified, 71 e2e; live on Netlify):** everything in the previous state plus: six
+playable CC0 characters with skills (Q) and emotes (C), character-select onboarding (Play → pick
+→ Go; last pick remembered), HUD skill chip, touch/mobile controls, compass de-overlap, correct
+gamepad glyphs, trick/confetti/apex fixes, fingerpost readable from spawn, skydive sea/fog detail.
 
 Interface additions since M1 (other streams must keep them): `CameraApi.setOverride` accepts
-`yawOffset`/`orbitRate`; `PlayerApi.setTilt`, `setVisualRotation`, `setVisualStretch`;
-`Anchor.target`/`targetRadius`; `TestApi.step(dt, n, render)`. Activities export
-`setLaunchGate(fn)` (ticket hook for rocket pads) and `thrillSpots` (mega-gem positions).
+`yawOffset`/`orbitRate`; `PlayerApi.setTilt`, `setVisualRotation`, `setVisualStretch`,
+`setCharacter`, `characterId`, `skill`, `emote()`; `InputState.skillPressed`/`emotePressed`/`skill`;
+events `player:character`/`player:skill`/`player:emote`; `Anchor.target`/`targetRadius`;
+`TestApi.step(dt, n, render)`. Activities export `setLaunchGate(fn)` (rocket-pad ticket hook) and
+`thrillSpots` (mega-gem positions). **Economy plug-in point for character buying:**
+`setCharacterAccess({owns, canAfford, buy, wallet})` in `src/ui/characterAccess.ts`.
 
 ## In flight
 
@@ -48,9 +49,8 @@ Main session (worktree subagents, WIP pushed):
 
 | Branch | Owner agent | Task |
 |---|---|---|
-| `agent/world-fixes` | world-artist | Fingerpost arms readable from the spawn camera; less haze and more sea/island detail from altitude; draw calls back to ≤ ~230 on Medium. |
-| `agent/ui-fixes` | ui-designer | Compass icon de-overlap; one gamepad glyph table; new moves on the controls card. |
-| `agent/activities-thrills-fixes` | activities-designer | No accidental flip when running onto the mat with W held; confetti readable in G-only; avatar readable at the 45 m peak. |
+| `agent/integrate-glue2` | integrator | Skill bounce boosts, `'touch'` device, phone quality/pixel cap, rex seated pose, remove old robot GLB + asset manifest test, boot loads the saved character. Re-merging `integration/m0` (conflict in `src/ui/controlMap.ts`). |
+| `agent/perf-heroes` | engine-engineer | Batch buggy / balloon / player draws, shadow proxies, `scripts/perf-report.mjs`. Whole frame at spawn on Medium was 336 draws / 779k triangles; target ≤ ~230 / 500k. |
 
 Second account (see `docs/PARALLEL_WORK.md`; merge each when the owner says it is pushed):
 `agent/economy` (Stream C, orchestrated), `agent/mobile-touch` (A), `agent/characters` (B);
