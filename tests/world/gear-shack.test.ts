@@ -5,7 +5,7 @@ import { buildTerrain, sampleHeight } from '../../src/world/terrain';
 import { ANCHORS, VILLAGE_Y } from '../../src/world/layout';
 import { PLAZA } from '../../src/world/village';
 import { Batcher } from '../../src/world/batch';
-import { Colliders, type Kit } from '../../src/world/props';
+import { Colliders } from '../../src/world/props';
 import { buildContent } from '../../src/world/content';
 import { buildGearShack, SHACK } from '../../src/world/gear-shack';
 
@@ -42,6 +42,9 @@ function inside(p: THREE.Vector3, boxes: Box[], cyls: { c: THREE.Vector3; hh: nu
 describe('gear shack', () => {
   const terrain = buildTerrain();
   const h = (x: number, z: number): number => sampleHeight(terrain, x, z);
+  // Build the static world once (it is the slow part) and record its colliders.
+  const rec = recorder();
+  const content = buildContent({ b: new Batcher(), col: new Colliders(rec.physics), h }, terrain, () => undefined);
 
   it('stands on flat plaza land, a short walk from spawn and clear of the fountain', () => {
     expect(a.onLand).toBe(true);
@@ -58,7 +61,6 @@ describe('gear shack', () => {
   });
 
   it('keeps gem and chest spots out of its footprint and standing area', () => {
-    const content = buildContent({ b: new Batcher(), col: new Colliders(recorder().physics), h }, terrain, () => undefined);
     const [sx, sz] = toWorld(0, SHACK.standZ);
     for (const s of [...content.gemSpots, ...content.chestSpots]) {
       expect(Math.hypot(s.x - a.x, s.z - a.z)).toBeGreaterThan(a.radius);
@@ -67,9 +69,6 @@ describe('gear shack', () => {
   });
 
   it('has a solid stall body and a flat, free standing area in front of the counter', () => {
-    const rec = recorder();
-    const kit: Kit = { b: new Batcher(), col: new Colliders(rec.physics), h };
-    buildContent(kit, terrain, () => undefined);
     const y = h(a.x, a.z);
     // Inside the stall: blocked.
     for (const [lx, lz] of [[0, 0], [1.5, -0.8], [-1.5, 0.8]]) {
