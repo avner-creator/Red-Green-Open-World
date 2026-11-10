@@ -1,23 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER, TRAMPOLINE } from '../../src/config';
+import { PLAYER } from '../../src/config';
 import {
   PadChain,
   ThresholdAwards,
   apexFromSpeed,
   flightTime,
+  launchStars,
   nextBounceApex,
   padLocalPositions,
   pushSpeed,
   speedFromApex,
+  trickStars,
 } from '../../src/activities/bounceLogic';
-import { PADS } from '../../src/activities/constants';
+import { BOUNCE, BOUNCE_STARS, PADS } from '../../src/activities/constants';
 
 describe('bounce maths', () => {
   it('apex and speed are inverse with PLAYER.gravity', () => {
-    for (const h of [3, 6, 10, 40]) {
+    for (const h of [3, 8, 25, 45]) {
       expect(apexFromSpeed(speedFromApex(h))).toBeCloseTo(h, 6);
     }
-    expect(speedFromApex(40)).toBeCloseTo(Math.sqrt(2 * PLAYER.gravity * 40), 6);
+    expect(speedFromApex(45)).toBeCloseTo(Math.sqrt(2 * PLAYER.gravity * 45), 6);
   });
 
   it('flight time matches 2v/g', () => {
@@ -25,107 +27,119 @@ describe('bounce maths', () => {
   });
 });
 
-describe('trampoline progression', () => {
-  it('holding jump grows each bounce by growth and caps at maxHeight', () => {
+describe('giant trampoline progression', () => {
+  it('walking on is already a ~12 m bounce, jump held or not', () => {
+    expect(nextBounceApex(0, false)).toBeCloseTo(12);
+    expect(nextBounceApex(0, true)).toBeCloseTo(12);
+  });
+
+  it('holding jump grows each bounce x1.5 and reaches the 45 m cap within five bounces', () => {
     let apex = nextBounceApex(0, true);
-    expect(apex).toBeCloseTo(TRAMPOLINE.firstBounce);
     const seen = [apex];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 10; i++) {
       const next = nextBounceApex(apex, true);
       expect(next).toBeGreaterThanOrEqual(apex);
       apex = next;
       seen.push(apex);
     }
-    expect(seen[1]).toBeCloseTo(TRAMPOLINE.firstBounce * TRAMPOLINE.growth);
-    expect(apex).toBe(TRAMPOLINE.maxHeight);
-    expect(Math.max(...seen)).toBe(TRAMPOLINE.maxHeight);
+    expect(seen[1]).toBeCloseTo(18);
+    expect(seen[2]).toBeCloseTo(27);
+    expect(seen[3]).toBeCloseTo(40.5);
+    expect(seen[4]).toBe(45);
+    expect(Math.max(...seen)).toBe(BOUNCE.maxHeight);
   });
 
-  it('the 40 m cap is reached in a handful of bounces', () => {
-    let apex = 0;
-    let n = 0;
-    while (apex < TRAMPOLINE.maxHeight && n < 30) {
-      apex = nextBounceApex(apex, true);
-      n++;
-    }
-    expect(apex).toBe(TRAMPOLINE.maxHeight);
-    expect(n).toBeLessThan(12);
+  it('the 45 m cap is about 150 ft', () => {
+    expect(BOUNCE.maxHeight / 0.3048).toBeGreaterThan(145);
   });
 
-  it('not holding decays and eventually stops', () => {
-    let apex = 20;
+  it('not holding decays gently and stops, so kids can get off', () => {
+    let apex = 12;
     let steps = 0;
     while (apex > 0 && steps < 20) {
       const next = nextBounceApex(apex, false);
       if (next > 0) expect(next).toBeLessThan(apex);
+      expect(next === 0 || next >= BOUNCE.stopBelow).toBe(true);
       apex = next;
       steps++;
     }
     expect(apex).toBe(0);
+    expect(steps).toBeGreaterThanOrEqual(4); // gentle: several bounces before it stops
     expect(steps).toBeLessThan(10);
   });
 
-  it('a gentle first bounce is smaller than a held one', () => {
-    expect(nextBounceApex(0, false)).toBeLessThan(nextBounceApex(0, true));
+  it('a long fall onto the mat starts higher, within the cap', () => {
+    expect(nextBounceApex(0, true, 60)).toBeGreaterThan(BOUNCE.firstBounce);
+    expect(nextBounceApex(0, true, 10_000)).toBeLessThanOrEqual(BOUNCE.maxFromFall);
+    expect(nextBounceApex(0, false, 2)).toBe(BOUNCE.firstBounce);
   });
 
-  it('a big fall starts the chain higher, but never above the cap', () => {
-    expect(nextBounceApex(0, true, 100)).toBeGreaterThan(TRAMPOLINE.firstBounce);
-    expect(nextBounceApex(0, true, 10_000)).toBeLessThanOrEqual(TRAMPOLINE.maxHeight);
+  it('a bounce never exceeds the cap, even from a huge previous apex', () => {
+    expect(nextBounceApex(1000, true)).toBe(BOUNCE.maxHeight);
   });
 });
 
 describe('stunt thresholds', () => {
-  it('awards 10/20/30/40 m once each with 1/1/2/3 stars', () => {
+  it('awards 15 / 30 / 45 m as 1 / 2 / 3 stars, each once', () => {
+    expect([...BOUNCE_STARS]).toEqual([15, 30, 45]);
     const a = new ThresholdAwards();
-    expect(a.reached(5)).toEqual([]);
-    expect(a.reached(12).map((t) => t.stars)).toEqual([1]);
     expect(a.reached(12)).toEqual([]);
-    expect(a.reached(31).map((t) => [t.height, t.stars])).toEqual([
-      [20, 1],
+    expect(a.reached(18).map((t) => [t.height, t.stars])).toEqual([[15, 1]]);
+    expect(a.reached(18)).toEqual([]);
+    expect(a.reached(45).map((t) => [t.height, t.stars])).toEqual([
       [30, 2],
+      [45, 3],
     ]);
-    expect(a.reached(TRAMPOLINE.maxHeight).map((t) => [t.height, t.stars])).toEqual([[40, 3]]);
-    expect(a.reached(TRAMPOLINE.maxHeight)).toEqual([]);
+    expect(a.reached(45)).toEqual([]);
   });
 
-  it('reset allows awards again in a new session', () => {
+  it('reset allows awarding again', () => {
     const a = new ThresholdAwards();
-    a.reached(40);
+    a.reached(45);
     a.reset();
-    expect(a.reached(10)).toHaveLength(1);
+    expect(a.reached(16)).toHaveLength(1);
+  });
+
+  it('trick and launch stars', () => {
+    expect([1, 2, 3, 4].map(trickStars)).toEqual([1, 1, 2, 2]);
+    expect(launchStars(0, true)).toBe(1);
+    expect(launchStars(2, true)).toBe(3);
+    expect(launchStars(5, true)).toBe(3);
+    expect(launchStars(2, false)).toBe(1);
   });
 });
 
 describe('bounce pads', () => {
-  it('push speed lands the player one pad spacing away', () => {
-    const v = pushSpeed(PADS.spacing, 6);
-    expect(v * flightTime(6)).toBeCloseTo(PADS.spacing, 6);
+  it('pads are 8 / 15 / 25 m', () => {
+    expect([...PADS.heights]).toEqual([8, 15, 25]);
   });
 
-  it('pads are laid out PADS.spacing apart', () => {
+  it('forward push covers the pad spacing over the flight time', () => {
+    const v = pushSpeed(PADS.spacing, 8);
+    expect(v * flightTime(8)).toBeCloseTo(PADS.spacing, 6);
+  });
+
+  it('pad positions keep their spacing', () => {
     const p = padLocalPositions(3, PADS.spacing);
+    expect(p).toHaveLength(3);
     expect(Math.hypot(p[1].x - p[0].x, p[1].z - p[0].z)).toBeCloseTo(PADS.spacing, 5);
     expect(Math.hypot(p[2].x - p[1].x, p[2].z - p[1].z)).toBeCloseTo(PADS.spacing, 5);
   });
 
-  it('chaining 3 pads awards bigAir once; a long pause restarts the chain', () => {
+  it('three pads in time count as a chain, once', () => {
     const c = new PadChain();
     expect(c.hit(0)).toBe(false);
-    expect(c.hit(1.5)).toBe(false);
-    expect(c.hit(3)).toBe(true);
-    expect(c.hit(4.5)).toBe(false); // already awarded for this chain
-    expect(c.hit(60)).toBe(false); // new chain
-    expect(c.count).toBe(1);
-    expect(c.hit(61)).toBe(false);
-    expect(c.hit(62)).toBe(true);
+    expect(c.hit(2)).toBe(false);
+    expect(c.hit(4)).toBe(true);
+    expect(c.hit(6)).toBe(false);
+    expect(c.count).toBe(4);
   });
 
-  it('reset clears the chain', () => {
+  it('a long pause restarts the chain', () => {
     const c = new PadChain();
     c.hit(0);
-    c.hit(1);
-    c.reset();
-    expect(c.hit(2)).toBe(false);
+    c.hit(2);
+    expect(c.hit(60)).toBe(false);
+    expect(c.count).toBe(1);
   });
 });
