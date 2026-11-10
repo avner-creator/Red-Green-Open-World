@@ -221,10 +221,9 @@ export function createSkydive(ctx: GameContext): Skydive {
   // ── Rider ──
   const player = ctx.player;
 
+  /** Belly-down / swing pose: tilts the body about its centre, so pickups stay on the body. */
   function setPose(pitchX: number, roll: number): void {
-    player.object.rotation.order = 'YXZ';
-    player.object.rotation.x = pitchX;
-    player.object.rotation.z = roll;
+    player.setTilt(pitchX, roll);
   }
 
   function cleanup(): void {
@@ -234,9 +233,7 @@ export function createSkydive(ctx: GameContext): Skydive {
     canopy.root.visible = false;
     ctx.audio.setLoop('wind', 0);
     ctx.cameraRig.setOverride(null);
-    player.object.rotation.x = 0;
-    player.object.rotation.z = 0;
-    player.object.rotation.order = 'XYZ';
+    player.setTilt(0, 0);
     pitch = 0;
     pitchV = 0;
     bank = 0;
@@ -358,7 +355,9 @@ export function createSkydive(ctx: GameContext): Skydive {
           driven = true;
           player.position.copy(balloonPos);
           if (phaseT > 2.5) player.setAnimation('idle');
-          ctx.cameraRig.setOverride({ distance: 9 + 17 * ascentFrac, height: 4 + 9 * ascentFrac, fov: CAMERA.fov + 6 * ascentFrac });
+          // Slow reveal orbit round the island; it eases in with the climb and out near the top.
+          const orbit = SKY.ascentOrbitRate * Math.sin(Math.PI * Math.min(1, balloonT / BALLOON.ascentSeconds));
+          ctx.cameraRig.setOverride({ distance: 9 + 17 * ascentFrac, height: 4 + 9 * ascentFrac, fov: CAMERA.fov + 6 * ascentFrac, orbitRate: orbit });
           ctx.audio.setLoop('wind', 0.12 + 0.2 * ascentFrac, 0.7);
           if (balloonT >= BALLOON.ascentSeconds) {
             enterPhase('top');
@@ -371,6 +370,8 @@ export function createSkydive(ctx: GameContext): Skydive {
           driven = true;
           player.position.copy(balloonPos);
           ctx.audio.setLoop('wind', 0.3, 0.7);
+          // Swing round behind the rider (facing the rings) so the jump and steering line up.
+          ctx.cameraRig.setOverride({ distance: 26, height: 13, fov: CAMERA.fov + 6, yawOffset: 0 });
           prompt.show('jump', input.device === 'gamepad', phaseT / SKY.autoJumpSeconds);
           if ((input.jumpPressed && phaseT > 0.3) || phaseT >= SKY.autoJumpSeconds) {
             prompt.hide();

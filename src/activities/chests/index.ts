@@ -108,6 +108,8 @@ export function createChests(ctx: GameContext): Chests {
   const entries: Entry[] = [];
   const tmp = new THREE.Vector3();
   const tmp2 = new THREE.Vector3();
+  /** Player feet last frame: carried keys follow in the player's frame (no lag at freefall speed). */
+  const lastPlayer = new THREE.Vector3();
 
   for (let i = 0; i < n; i++) {
     const spot = spots[i];
@@ -345,8 +347,8 @@ export function createChests(ctx: GameContext): Chests {
       } else if (e.lock.key === 'carried') {
         const slot = carried.indexOf(e);
         const a = time * 2.3 + (slot * Math.PI * 2) / Math.max(1, carried.length);
-        tmp.set(ctx.player.position.x + Math.cos(a) * 0.9, ctx.player.position.y + 1.6 + Math.sin(time * 3 + slot) * 0.07, ctx.player.position.z + Math.sin(a) * 0.9);
-        kg.position.lerp(tmp, 1 - Math.exp(-10 * dt));
+        tmp.set(Math.cos(a) * 0.9, 1.6 + Math.sin(time * 3 + slot) * 0.07, Math.sin(a) * 0.9);
+        kg.position.sub(lastPlayer).lerp(tmp, 1 - Math.exp(-10 * dt)).add(ctx.player.position);
         kg.scale.setScalar(0.34);
         e.keyModel.body.rotation.y = time * 3;
         e.keyModel.body.rotation.z = 0;
@@ -392,6 +394,7 @@ export function createChests(ctx: GameContext): Chests {
 
     prev.copy(cur);
     havePrev = true;
+    lastPlayer.copy(ctx.player.position);
     confetti.update(dt);
 
     // Wearables.

@@ -39,6 +39,8 @@ export const SKY = {
   landedSeconds: 1.1,
   /** The balloon floats back down to its pad after the jump. */
   returnSeconds: 16,
+  /** Peak camera orbit rate during the ascent, rad/s (sine-eased: about 200° over the climb). */
+  ascentOrbitRate: 0.55,
   /** Boarding hop into the basket. */
   boardSeconds: 0.7,
   /** Landing ring radii (bullseye, middle, outer), metres. */
