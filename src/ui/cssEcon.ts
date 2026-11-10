@@ -257,7 +257,7 @@ export const ECON_CSS = `
 .rg .card:hover .pv .pic,.rg.nav-kb .card:focus .pv .pic{transform:scale(1.08) rotate(-3deg)}
 .rg .card.s-equipped .pv.has-pic{background:radial-gradient(circle at 50% 50%,#ffffffd0,#ffffff00 70%)}
 .rg .card.s-poor .pv .pic{opacity:.5;filter:grayscale(1) brightness(.6) drop-shadow(0 calc(var(--u)*.6) calc(var(--u)*.7) rgba(0,0,0,.65))}
-.rg .card.s-chest .pv .pic{filter:brightness(0) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 calc(var(--u)*1.2) rgba(255,255,255,.7))}
+.rg .card.s-chest .pv .pic{filter:brightness(0) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 calc(var(--u)*1.6) rgba(255,255,255,.85))}
 .rg .celebrate .badge .pic{position:relative;width:80%;height:80%;animation:rg-wig 1.1s ease-in-out .85s infinite;filter:drop-shadow(0 calc(var(--u)*1) calc(var(--u)*1) rgba(0,0,0,.7))}
 .rg .moment .badge .pic{width:82%;height:82%}
 .rg .pic.pic-in{animation:rg-picin .35s cubic-bezier(.2,1.6,.4,1) both}
