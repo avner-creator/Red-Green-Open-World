@@ -310,7 +310,8 @@ test('outfits follow every character (explorer hat), and everyone sits in the bu
       { x, z },
     );
   await stand(c.key[0], c.key[2]);
-  const [rx, rz] = await page.evaluate(([s]) => window.__rgChests!.sidePoint(0, s), [c.keyholeSide]);
+  const rb = c.buttons.find((b) => b.symbol === c.symbol)!;
+  const [rx, rz] = [rb.x, rb.z];
   await stand(rx, rz);
   await page.evaluate(() => {
     const rg = window.__rg!;

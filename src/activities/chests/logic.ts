@@ -1,17 +1,13 @@
 /**
- * Pure chest logic (no three, no DOM): the key/lock state machine, the keyhole side test, key
- * placement candidates and the outfit slot rules.
+ * Pure chest logic (no three, no DOM): the key/symbol-lock state machine, the button ring layout,
+ * the once-per-approach hints, key placement candidates and the outfit slot rules.
  *
- * Sides are numbered in the chest's local frame: 0 = +Z (front), 1 = +X, 2 = -Z, 3 = -X.
+ * There is no "right side" to a chest: any direction works. Sides are only used to lay out the
+ * key slots on the four plates (0 = +Z front, 1 = +X, 2 = -Z, 3 = -X).
  */
 import type { OutfitDef, OutfitSlot } from '../../types';
 
-export const SIDES = 4;
-export type Side = 0 | 1 | 2 | 3;
-
 export const CHEST_RULES = {
-  /** Largest angle between the player and the keyhole direction that still counts as that side. */
-  sideTolerance: Math.PI / 4 + 0.09,
   /** Key pickup radius around the player's chest, metres. */
   keyPickupRadius: 1.7,
   /** Metres from a chest the key floats. */
@@ -27,80 +23,134 @@ export function hash32(n: number): number {
   return (x ^ (x >>> 14)) >>> 0;
 }
 
-/** Keyhole side of chest `index`. Fixed per chest, so a restart plays the same. */
-export function keyholeSide(index: number, count = 6): Side {
-  // Spread the sides first (so 6 chests show all 4 sides), then let a hash decide the rotation.
-  const base = (index + (hash32(count * 31 + 7) % SIDES)) % SIDES;
-  const flip = hash32(index * 977 + 13) % 3 === 0 ? 2 : 0;
-  return ((base + flip) % SIDES) as Side;
-}
-
-/** Which of the three symbols on the lock ring is the right one (0..2). */
+/** Which of the three symbols (0 star, 1 moon, 2 circle) opens chest `index`. Fixed per chest per session. */
 export function rightSymbol(index: number): number {
   return hash32(index * 131 + 5) % 3;
 }
 
-/** Unit direction (x, z) of a side in the chest's local frame. */
+/** Unit direction (x, z) of a side in the chest's local frame (0 = +Z, 1 = +X, 2 = -Z, 3 = -X). */
 export function sideDirection(side: number): { x: number; z: number } {
   const a = (side * Math.PI) / 2;
   return { x: Math.round(Math.sin(a)) + 0, z: Math.round(Math.cos(a)) + 0 };
 }
 
-export interface SideProbe {
-  /** Nearest of the four sides the player stands on. */
-  side: Side;
-  /** Absolute angle (radians) between the player and the centre line of that side. */
-  error: number;
+// ───────────────────────────── Symbol ring ─────────────────────────────
+
+export const RING = {
+  /** Six floor buttons: three symbols, each twice (opposite each other), so a right one is always near. */
+  count: 6,
+  /** Metres from the chest centre to a button centre. */
+  radius: 2.3,
+  /** Button width, metres. */
+  size: 1.2,
+  /** A button counts as stepped on when the player's feet are this close to its centre. */
+  stepRadius: 0.62,
+  /** Seconds a wrong button stays sunk. */
+  sunkSeconds: 2,
+  /** Pressing E picks the nearest button within this distance. */
+  useReach: 2.6,
+} as const;
+
+export interface RingButton {
+  /** 0..count-1 */
+  index: number;
+  /** 0 star, 1 moon, 2 circle. */
+  symbol: number;
+  /** Angle in the chest's local frame (0 = +Z, +pi/2 = +X). */
+  angle: number;
 }
 
-/** Which side of the chest (at `cx,cz`, facing `yaw`) is the point `px,pz` on? */
-export function playerSide(cx: number, cz: number, yaw: number, px: number, pz: number): SideProbe {
-  const dx = px - cx;
-  const dz = pz - cz;
-  // Rotate into the chest frame (undo yaw about Y).
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
-  const lx = c * dx - s * dz;
-  const lz = s * dx + c * dz;
-  const theta = Math.atan2(lx, lz); // 0 = +Z, +pi/2 = +X
-  const q = Math.round(theta / (Math.PI / 2));
-  const side = (((q % SIDES) + SIDES) % SIDES) as Side;
-  return { side, error: Math.abs(theta - q * (Math.PI / 2)) };
+/** Symbols go star, moon, circle, star, moon, circle: each appears twice, opposite its twin. */
+export function ringButtons(count: number = RING.count): RingButton[] {
+  return Array.from({ length: count }, (_, i) => ({ index: i, symbol: i % 3, angle: (i * Math.PI * 2) / count }));
 }
 
-/** Is the player standing on the keyhole's side? (Needs the right quadrant, not a diagonal.) */
-export function onKeyholeSide(
-  cx: number,
-  cz: number,
-  yaw: number,
-  keyhole: number,
-  px: number,
-  pz: number,
-  tolerance: number = CHEST_RULES.sideTolerance,
-): boolean {
-  const dx = px - cx;
-  const dz = pz - cz;
-  if (dx * dx + dz * dz < 1e-6) return false;
+/** World x,z of a ring button for a chest at `cx,cz` turned by `yaw`. */
+export function buttonWorld(cx: number, cz: number, yaw: number, angle: number, radius: number = RING.radius): { x: number; z: number } {
+  const lx = Math.sin(angle) * radius;
+  const lz = Math.cos(angle) * radius;
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
-  const theta = Math.atan2(c * dx - s * dz, s * dx + c * dz);
-  const target = (keyhole * Math.PI) / 2;
-  let d = Math.abs(theta - target) % (Math.PI * 2);
-  if (d > Math.PI) d = Math.PI * 2 - d;
-  return d <= tolerance;
+  return { x: cx + c * lx + s * lz, z: cz - s * lx + c * lz };
+}
+
+/** Index of the button nearest to `px,pz` within `reach` (or -1). `pts` are button world positions. */
+export function nearestButton(pts: readonly { x: number; z: number }[], px: number, pz: number, reach: number): number {
+  let best = -1;
+  let bd = reach * reach;
+  pts.forEach((p, i) => {
+    const d = (p.x - px) ** 2 + (p.z - pz) ** 2;
+    if (d <= bd) {
+      bd = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
+export type HintKind = 'find-key' | 'step-shape';
+
+/**
+ * Says each hint once per approach: "Find the key!" when a player without the key comes near, and
+ * "Step on the right shape!" once the key is in hand while near. Leaving (beyond `exitRadius`)
+ * re-arms both. Pure: feed it the distance and key state every frame.
+ */
+export class ApproachHints {
+  private said = { find: false, shape: false };
+  private near = false;
+
+  constructor(
+    readonly enterRadius = 5,
+    readonly exitRadius = 7.5,
+  ) {}
+
+  /** Is the player inside the approach zone right now? */
+  get isNear(): boolean {
+    return this.near;
+  }
+
+  update(dist: number, hasKey: boolean, open: boolean): HintKind | null {
+    if (open) {
+      this.near = false;
+      return null;
+    }
+    if (this.near && dist > this.exitRadius) {
+      this.near = false;
+      this.said = { find: false, shape: false };
+    } else if (!this.near && dist <= this.enterRadius) {
+      this.near = true;
+    }
+    if (!this.near) return null;
+    if (!hasKey && !this.said.find) {
+      this.said.find = true;
+      return 'find-key';
+    }
+    if (hasKey && !this.said.shape) {
+      this.said.shape = true;
+      return 'step-shape';
+    }
+    return null;
+  }
+
+  reset(): void {
+    this.said = { find: false, shape: false };
+    this.near = false;
+  }
 }
 
 // ───────────────────────────── Key / lock state machine ─────────────────────────────
 
 export type KeyState = 'ground' | 'carried' | 'used';
 export type ChestState = 'locked' | 'open';
-export type UseResult = 'no-key' | 'wrong-side' | 'opened' | 'already-open';
+export type UseResult = 'no-key' | 'wrong-symbol' | 'opened' | 'already-open';
 
 export class ChestLock {
   key: KeyState = 'ground';
   chest: ChestState = 'locked';
+  /** Wrong shapes tried with the key in hand (for a friendly guide; never a penalty). */
+  wrongTries = 0;
 
-  constructor(readonly keyholeSide: number) {}
+  constructor(readonly symbol: number) {}
 
   get hasKey(): boolean {
     return this.key === 'carried';
@@ -117,11 +167,14 @@ export class ChestLock {
     return true;
   }
 
-  /** The player pressed use at the chest from `onCorrectSide`. */
-  use(onCorrectSide: boolean): UseResult {
+  /** The player stepped on (or pressed E at) a button showing `symbol`, from any direction. */
+  press(symbol: number): UseResult {
     if (this.chest === 'open') return 'already-open';
     if (this.key !== 'carried') return 'no-key';
-    if (!onCorrectSide) return 'wrong-side';
+    if (symbol !== this.symbol) {
+      this.wrongTries++;
+      return 'wrong-symbol';
+    }
     this.key = 'used';
     this.chest = 'open';
     return 'opened';
@@ -130,6 +183,7 @@ export class ChestLock {
   reset(): void {
     this.key = 'ground';
     this.chest = 'locked';
+    this.wrongTries = 0;
   }
 }
 
