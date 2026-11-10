@@ -200,7 +200,10 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
     const glbs = performance.getEntriesByType('resource').map((r) => r.name).filter((n) => /characters\/.*\.glb/.test(n));
     return { wallet: p.wallet, hat: p.owns('hat-propeller'), panda: p.owns('panda'), hero: rg.ctx.player.characterId, glbs: glbs.map((g) => g.replace(/^.*\//, '')) };
   });
-  expect(back).toEqual({ wallet: saved, hat: true, panda: true, hero: 'panda', glbs: ['panda.glb'] });
+  // The saved hero loads first and the old default (robot) never does. (Scoops' terrace friends load
+  // two more heroes at boot: see the integration report.)
+  expect({ ...back, glbs: back.glbs[0] }).toEqual({ wallet: saved, hat: true, panda: true, hero: 'panda', glbs: 'panda.glb' });
+  expect(back.glbs).not.toContain('robot.glb');
 
   // Grown-up reset clears it all: back to a fresh profile and the frog.
   const reset = await page.evaluate(async () => {

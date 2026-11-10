@@ -261,8 +261,15 @@ test.describe('economy ui', () => {
     await expect(card('hat-crown')).toHaveAttribute('data-state', 'poor');
     await expect(card(chestId)).toHaveAttribute('data-state', 'chest');
     // Item pictures: the icon at once, then an <img> where a preview exists; the icon where not.
-    await page.getByTestId('shop-tab-character').click();
-    expect(await page.evaluate(() => (window as unknown as { __previewCalls: string[] }).__previewCalls.length)).toBeLessThanOrEqual(1);
+    // Click and count in the same task: showing the cards never calls preview() synchronously (the
+    // queue runs one per 16 ms timer tick, so a count taken after a separate Playwright round trip
+    // depended on machine load).
+    expect(
+      await page.evaluate(() => {
+        (document.querySelector('[data-testid="shop-tab-character"]') as HTMLElement).click();
+        return (window as unknown as { __previewCalls: string[] }).__previewCalls.length;
+      }),
+    ).toBeLessThanOrEqual(1);
     await expect(card('fx-hat').locator('img.pic')).toHaveCount(1);
     await expect(card('fx-plain').locator('img')).toHaveCount(0);
     await expect(card('fx-plain').locator('.pv .ic')).toHaveCount(1);
