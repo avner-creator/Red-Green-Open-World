@@ -39,7 +39,7 @@ export const ECON_CSS = `
 @keyframes rg-raypop{0%{transform:scale(0) rotate(0);opacity:0}25%{opacity:1}100%{transform:scale(1.3) rotate(90deg);opacity:0}}
 
 /* ---------- HUD top-left cluster: wallet + combo ---------- */
-.rg .econtop{position:absolute;left:calc(var(--u)*2.4);top:calc(var(--u)*2.4);display:flex;align-items:center;gap:calc(var(--u)*1.6)}
+.rg .econtop{position:absolute;z-index:4;left:calc(var(--u)*2.4);top:calc(var(--u)*2.4);display:flex;align-items:center;gap:calc(var(--u)*1.6)}
 .rg .econtop.near .wallet{animation:rg-near 1.2s ease-out}
 .rg .hud .pill.stars{top:calc(var(--u)*13.8)}
 .rg .combo{--cs:1;position:relative;width:calc(var(--u)*9.4);height:calc(var(--u)*9.4);display:none;align-items:center;justify-content:center;font-size:calc(var(--u)*3.9);transform:scale(var(--cs))}
@@ -140,7 +140,7 @@ export const ECON_CSS = `
 .rg .shop .bar .wallet{margin-left:auto;font-size:calc(var(--u)*4.6)}
 .rg .shop .close{min-width:max(44px,calc(var(--u)*8))!important;min-height:max(44px,calc(var(--u)*8))!important;font-size:calc(var(--u)*3.6)}
 .rg .sgrid{position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--u)*21),1fr));
-  grid-auto-rows:calc(var(--u)*26);gap:calc(var(--u)*2.2);padding:calc(var(--u)*1.8);margin:0 calc(var(--u)*-.6);align-content:start;scrollbar-width:thin;scrollbar-color:#fff #0b0f22}
+  grid-auto-rows:minmax(calc(var(--u)*26),calc((100% - var(--u)*2.2) / 2));gap:calc(var(--u)*2.2);padding:calc(var(--u)*1.8);margin:0 calc(var(--u)*-.6);align-content:start;scrollbar-width:thin;scrollbar-color:#fff #0b0f22}
 .rg .card{flex-direction:column;justify-content:flex-start;gap:calc(var(--u)*.7);min-width:0!important;min-height:0!important;width:100%;height:100%;
   padding:calc(var(--u)*1.2) calc(var(--u)*1) calc(var(--u)*1.2);color:#fff;--out:#000;border-radius:calc(var(--u)*2.4);
   background:linear-gradient(180deg,#2e3768,#151a38);box-shadow:0 0 0 calc(var(--u)*.45) #fff,0 calc(var(--u)*1) 0 calc(var(--u)*.45) #000,inset 0 calc(var(--u)*.3) 0 rgba(255,255,255,.25)}
@@ -182,12 +182,12 @@ export const ECON_CSS = `
 @keyframes rg-cbought{0%{transform:scale(.6)}50%{transform:scale(1.15) rotate(3deg)}100%{transform:scale(1)}}
 @keyframes rg-cdip{40%{transform:scale(.9)}}
 .rg .sgrid .empty{grid-column:1/-1;grid-row:span 2;display:flex;gap:calc(var(--u)*3);justify-content:center;align-items:center;font-size:calc(var(--u)*12);opacity:.45}
-.rg .sgrid.wardrobe{display:flex;flex-direction:column;gap:calc(var(--u)*2)}
-.rg .wrow{display:flex;align-items:center;gap:calc(var(--u)*2);flex:none}
+.rg .sgrid.wardrobe{display:flex;flex-flow:row wrap;align-content:flex-start;gap:calc(var(--u)*2) calc(var(--u)*4)}
+.rg .wrow{display:flex;align-items:center;gap:calc(var(--u)*1.6);flex:none;padding:calc(var(--u)*1) calc(var(--u)*1.6) calc(var(--u)*1) calc(var(--u)*1);border-radius:calc(var(--u)*3);background:#ffffff0f;border:calc(var(--u)*.3) solid #ffffff26}
 .rg .wrow .slot{flex:none;width:calc(var(--u)*7.4);height:calc(var(--u)*7.4);border-radius:50%;display:flex;align-items:center;justify-content:center;background:#ffffff1a;border:calc(var(--u)*.4) solid #ffffff70}
 .rg .wrow .slot .ic{font-size:calc(var(--u)*4.6);color:var(--y)}
-.rg .wcards{display:flex;gap:calc(var(--u)*2.2);flex-wrap:wrap;flex:1;min-width:0;padding:calc(var(--u)*.6) 0 calc(var(--u)*1.6)}
-.rg .wcards .card{width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.rg .wcards{display:flex;gap:calc(var(--u)*2.2);flex-wrap:wrap;min-width:0;padding:calc(var(--u)*.6) 0 calc(var(--u)*1.8)}
+.rg .wcards .card{width:calc(var(--u)*19);height:calc(var(--u)*19)}
 .rg .wcards .card .pv .ic{font-size:calc(var(--u)*9)}
 .rg .wcards .card .pv .sw{width:calc(var(--u)*11);height:calc(var(--u)*11)}
 
@@ -231,7 +231,15 @@ export const ECON_CSS = `
 .rg .stk.jp.earned{background:linear-gradient(180deg,#fff3a8,var(--y))}
 .rg .stk .sm.wal{margin-top:calc(var(--u)*.2);padding:0 .4em;border-radius:1em;background:#15110a;color:#fff;--out:#000}
 .rg .stk .sm.wal .ic{color:var(--y)}
-.rg .stk.big{min-width:calc(var(--u)*15.5)}
+.rg .endp{gap:calc(var(--u)*1.3);padding:calc(var(--u)*2) calc(var(--u)*2.6)}
+.rg .endp .burst{font-size:calc(var(--u)*4.4)}
+.rg .endp .stk.big{flex-direction:row;flex-wrap:wrap;gap:0 calc(var(--u)*.8);min-width:calc(var(--u)*17);padding:calc(var(--u)*.8) calc(var(--u)*1.4);font-size:calc(var(--u)*4.4)}
+.rg .endp .stk.big>.ic{font-size:1.6em}
+.rg .endp .stk .sm.wal{flex-basis:100%;justify-content:center;font-size:.6em}
+.rg .endp .stickers.small .stk{padding:calc(var(--u)*.5) calc(var(--u)*.5)}
+.rg .endp .stickers.small .stk .ic{font-size:1.9em}
+.rg .endp .btnrow{margin-top:0}
+.rg .endp .btnrow .play{min-height:calc(var(--u)*11.5);font-size:calc(var(--u)*4.8)}
 
 /* ---------- settings: hold-to-reset profile ---------- */
 .rg .holdbar{overflow:hidden;isolation:isolate}

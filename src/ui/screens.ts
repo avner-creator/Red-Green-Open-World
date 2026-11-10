@@ -81,7 +81,7 @@ export function createPause(a: Actions): Screen {
   grown.addEventListener('click', a.openGate);
   const quit = tile('d', 'Home', 'quit', 'home');
   quit.addEventListener('click', a.toTitle);
-  const wardrobe = tile('d wardrobe', 'Wardrobe', 'wardrobe', 'backpack', 'hat');
+  const wardrobe = tile('d wardrobe', 'Wardrobe', 'pause-wardrobe', 'backpack', 'hat');
   wardrobe.addEventListener('click', a.openWardrobe);
   const panel = h(
     'div',

@@ -32,7 +32,7 @@ export function createShop(ctx: GameContext, mode: ShopMode, onClose: () => void
   const tabs = h('div', 'tabs stabs', { role: 'tablist' });
   const head = h('div', 'head t', {}, icon(mode === 'shop' ? 'shop' : 'backpack'));
   const grid = h('div', `sgrid ${mode}`, { 'data-testid': `${mode}-grid` });
-  const fx = h('div', 'celebrate', { 'data-testid': 'unlock-moment', 'aria-hidden': 'true' });
+  const fx = h('div', 'celebrate', { 'data-testid': mode === 'shop' ? 'unlock-moment' : 'wardrobe-moment', 'aria-hidden': 'true' });
   const panel = h(
     'div',
     `panel shop m-${mode}`,
