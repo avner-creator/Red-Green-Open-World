@@ -142,6 +142,8 @@ export function createScoops(ctx: GameContext): Scoops {
   let recipeFriend = 0;
   let cones = 0;
   let paid = 0;
+  /** Could not pay: a practice cone (no gem prize). */
+  let practice = false;
   let seed = ctx.testMode ? 1234 : (Date.now() & 0xffff) + 1;
   let r = rng(seed);
   let lastMove = 0;
@@ -222,19 +224,33 @@ export function createScoops(ctx: GameContext): Scoops {
   function tryOpen(): void {
     if (phase !== 'idle' || ctx.session.state.phase !== 'playing') return;
     const p = profile();
-    const t = ticketFor(cones, p ? p.wallet : undefined);
-    if (!t.ok) {
-      ui.showNeed(t.need);
-      ctx.audio.play('tick', { pitch: 0.7 });
-      return;
-    }
     paid = 0;
-    if (t.price > 0 && p) {
-      if (!p.spend(t.price, 'ticket')) {
-        ui.showNeed(t.price - p.wallet);
+    practice = false;
+    const economy = (ctx as Partial<GameContext>).economy;
+    if (economy) {
+      // Through the economy: first cone free, then a ticket; short of gems = a practice cone
+      // (no prize). A paid ticket is refunded if the player leaves before eating.
+      const price = economy.ticketPrice('scoops');
+      const out = economy.rideTicket('scoops');
+      if (out === 'paid') paid = price;
+      if (out === 'practice') {
+        practice = true;
+        if (p) ui.showNeed(Math.max(1, price - p.wallet));
+      }
+    } else {
+      const t = ticketFor(cones, p ? p.wallet : undefined);
+      if (!t.ok) {
+        ui.showNeed(t.need);
+        ctx.audio.play('tick', { pitch: 0.7 });
         return;
       }
-      paid = t.price;
+      if (t.price > 0 && p) {
+        if (!p.spend(t.price, 'ticket')) {
+          ui.showNeed(t.price - p.wallet);
+          return;
+        }
+        paid = t.price;
+      }
     }
     seed += 1;
     r = rng(seed);
@@ -393,10 +409,10 @@ export function createScoops(ctx: GameContext): Scoops {
     cones += 1;
     paid = 0;
     const p = profile();
-    if (p) p.earn(score.gems, 'mission');
-    ctx.events.emit('stunt', { kind: 'bullseye', value: score.stars, stars: score.stars });
+    if (p && !practice) p.earn(score.gems, 'mission');
+    ctx.events.emit('stunt', { kind: 'scoops', value: score.stars, stars: score.stars });
     ctx.events.emit('ui:toast', { icon: 'check' });
-    ui.showResult({ stars: score.stars, gems: p ? score.gems : null, recipe: score.recipe, secret: score.secret });
+    ui.showResult({ stars: score.stars, gems: p && !practice ? score.gems : null, recipe: score.recipe, secret: score.secret });
     ctx.audio.play('fanfare', { volume: 0.8 });
     ctx.cameraRig.shake(0.2);
     friends.react('dance');

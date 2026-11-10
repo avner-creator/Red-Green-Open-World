@@ -6,7 +6,7 @@
  */
 import * as THREE from 'three';
 import { CHARACTER_KEY, PLAYER } from '../config';
-import type { ExternalController, GameContext, PlayerAnim, PlayerApi, PlayerMode, PlayerSkillView, VehicleApi } from '../types';
+import type { ExternalController, GameContext, MoveModifier, PlayerAnim, PlayerApi, PlayerMode, PlayerSkillView, VehicleApi } from '../types';
 import { CHARACTER_IDS, DEFAULT_CHARACTER, getCharacter } from './characters/catalog';
 import type { CharacterId } from './characters/catalog';
 import { loadCharacter } from './characters/load';
@@ -280,7 +280,41 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     },
   };
 
+  // Movement modifiers (PlayerApi.addMoveModifier): multiplied together, expire on game time.
+  interface ActiveMod { mod: MoveModifier; left: number }
+  const mods: ActiveMod[] = [];
+  const modK = { speed: 1, gravity: 1, friction: 1, jump: 1 };
+  const recomputeMods = (): void => {
+    modK.speed = modK.gravity = modK.friction = modK.jump = 1;
+    for (const { mod } of mods) {
+      modK.speed *= mod.speed ?? 1;
+      modK.gravity *= mod.gravity ?? 1;
+      modK.friction *= mod.friction ?? 1;
+      modK.jump *= mod.jump ?? 1;
+    }
+  };
+  const tickMods = (dt: number): void => {
+    for (let i = mods.length - 1; i >= 0; i--) {
+      mods[i].left -= dt;
+      if (mods[i].left <= 0) mods.splice(i, 1);
+    }
+    // Owners may ease a modifier's factors while it is active, so re-multiply every frame.
+    recomputeMods();
+  };
+
   const api: PlayerApi = {
+    addMoveModifier(mod) {
+      const entry: ActiveMod = { mod, left: mod.duration ?? Infinity };
+      mods.push(entry);
+      recomputeMods();
+      return () => {
+        const i = mods.indexOf(entry);
+        if (i >= 0) {
+          mods.splice(i, 1);
+          recomputeMods();
+        }
+      };
+    },
     get characterId() {
       return characterId;
     },
@@ -456,6 +490,11 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       safeYaw = spawn.yaw;
     }
     if (e.phase === 'title' && e.previous !== 'title') api.respawn();
+    // Effects never leak from one session into the next.
+    if (e.phase === 'title' || e.phase === 'ended' || (e.phase === 'playing' && e.previous === 'title')) {
+      mods.length = 0;
+      recomputeMods();
+    }
   });
 
   function playAnim(next: ModelAnim, rate = 1): void {
@@ -485,7 +524,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     const startGrounded = grounded;
     const dir = inputActive ? cameraRelative(input.moveX, input.moveY, cameraYaw()) : { x: 0, z: 0 };
     const mag = Math.min(1, Math.hypot(dir.x, dir.z));
-    const top = input.sprint && inputActive ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+    const top = (input.sprint && inputActive ? PLAYER.sprintSpeed : PLAYER.walkSpeed) * modK.speed;
 
     // Skills first: they may replace the jump, the gravity or the horizontal motion this frame.
     const airJump = inputActive && input.jumpPressed && !grounded && sinceGrounded > MOVE.coyoteTime;
@@ -511,7 +550,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     } else if (phase === 'charge') {
       approachVec2(hv, 0, 0, MOVE.groundDecel * 1.5 * dt);
     } else if (grounded) {
-      const accel = mag > 0.01 ? MOVE.groundAccel : MOVE.groundDecel;
+      const accel = (mag > 0.01 ? MOVE.groundAccel : MOVE.groundDecel) * modK.friction;
       approachVec2(hv, dir.x * top, dir.z * top, accel * dt);
     } else if (mag > 0.01) {
       const before = Math.hypot(hv.x, hv.z);
@@ -535,7 +574,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     // Jump: buffered press + coyote time.
     if (inputActive && input.jumpPressed && !jumpUsed) sincePressed = 0;
     if (mode === 'walk' && phase !== 'charge' && canJump(sinceGrounded, sincePressed, MOVE.coyoteTime, MOVE.jumpBuffer)) {
-      velocity.y = PLAYER.jumpSpeed;
+      velocity.y = PLAYER.jumpSpeed * modK.jump;
       grounded = false;
       sinceGrounded = Infinity;
       sincePressed = Infinity;
@@ -570,7 +609,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       dy = ((vy0 + vy) / 2) * dt;
     } else {
       const floaty = phase === 'spin' && skills.floaty && vy0 > 0;
-      const step = integrateVertical(vy0, PLAYER.gravity * (floaty ? SKILL.doubleJump.floatyGravity : 1), dt);
+      const step = integrateVertical(vy0, PLAYER.gravity * modK.gravity * (floaty ? SKILL.doubleJump.floatyGravity : 1), dt);
       dy = step.dy;
       vy = Math.max(step.vy, -MOVE.maxFallSpeed);
     }
@@ -859,6 +898,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
 
   function update(dt: number): void {
     const input = ctx.input.state;
+    if (mods.length) tickMods(dt);
     if (external) {
       updateExternal(dt);
     } else if (vehicle) {

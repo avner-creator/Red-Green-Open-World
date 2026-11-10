@@ -61,7 +61,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
   const site = siteFor(ctx, 'airstrip');
   const strip = buildAirstrip(ctx, site);
   const pilot = getSkyPilot(ctx);
-  const tickets = new RideTickets(ctx);
+  const tickets = new RideTickets(ctx, 'plane');
   const player = ctx.player;
 
   const model = createPlaneModel(LIVERIES[0], true);
@@ -185,8 +185,8 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     const stars = resultStars(score);
     const prize = prizeFor(place);
     lastResult = { score, place, stars, prize, scores: entries };
-    payPrize(ctx, prize);
-    if (stars > 0) getStuntGate(ctx).stunt({ kind: 'bigAir', value: score, stars });
+    if (!tickets.practice) payPrize(ctx, prize);
+    if (stars > 0) getStuntGate(ctx).stunt({ kind: 'sky', value: score, stars });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${place}` });
     ctx.audio.play(place === 1 ? 'fanfare' : 'star');
     const colorOf = (id: string): string => racerViews().find((r) => r.id === id)?.color ?? '#fff';
@@ -311,7 +311,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     trickPitch = 0;
     trickRoll = 0;
     award('trick', CONTEST.points.trick);
-    getStuntGate(ctx).stunt({ kind: 'bigAir', value: kind === 'loop' ? 2 : 1, stars: 1 });
+    getStuntGate(ctx).stunt({ kind: 'sky', value: kind === 'loop' ? 2 : 1, stars: 1 });
   }
 
   function bounce(): void {

@@ -29,7 +29,7 @@ import { ACTIVE_RANGE, BOOTH_FRONT_Z, DECK_H, BOOTH_X, FRIEND_SPOTS, GAME_IDS, S
 import type { GameId, SiteSpec } from './layout';
 import { createPictoAtlas } from './picto';
 import { PlushShelf } from './plush';
-import { TICKET_PRICE, payTicket, resultOf, walletOf } from './round';
+import { TICKET_PRICE, resultOf, walletOf } from './round';
 import type { ProfileLike, RoundResult, TicketOutcome } from './round';
 import { makeRng } from './rng';
 import type { Rng } from './rng';
@@ -226,6 +226,8 @@ export function createCarnival(ctx: GameContext): Carnival {
     contestants: Contestant[];
     exitRequested: boolean;
     goT: number;
+    /** Could not pay: a practice round (no prize). */
+    practice: boolean;
   } | null = null;
   let autopilot = false;
   let seed = 1;
@@ -286,13 +288,14 @@ export function createCarnival(ctx: GameContext): Carnival {
     a.t = 0;
     a.round.meter(null);
     const profile = profileOf(ctx);
+    if (a.practice) r.gems = 0;
     try {
-      profile?.earn?.(r.gems, 'mission');
+      if (r.gems > 0) profile?.earn?.(r.gems, 'mission');
     } catch (err) {
       console.warn('carnival: earn failed', err);
     }
     if (r.won) plush.add(a.id);
-    ctx.events.emit('stunt', { kind: 'bullseye', value: s[0], stars: r.stars });
+    ctx.events.emit('stunt', { kind: 'carnival', value: s[0], stars: r.stars });
     ctx.events.emit('ui:toast', { icon: 'gem', text: `+${r.gems}` });
     ctx.audio.play(r.won ? 'fanfare' : 'chest');
     const burst = boothWorld(a.id, 0, 2.2, 0.4);
@@ -320,12 +323,14 @@ export function createCarnival(ctx: GameContext): Carnival {
   };
 
   const ticket = (id: GameId): TicketOutcome => {
-    const profile = profileOf(ctx);
-    const out = payTicket(freeUsed, id, profile, TICKET_PRICE);
-    if (out === 'short') {
-      const have = walletOf(profile);
+    // Through the economy: first carnival play per session free, then a ticket; a child who
+    // cannot pay plays a practice round (no prize). The economy emits ticket:paid / ticket:denied.
+    freeUsed.add(id);
+    const economy = (ctx as Partial<GameContext>).economy;
+    const out = economy ? economy.rideTicket('carnival') : 'free';
+    if (out === 'practice') {
+      const have = walletOf(profileOf(ctx));
       ctx.events.emit('ui:toast', { icon: 'gem', text: `${have ?? 0}/${TICKET_PRICE}` });
-      ctx.audio.play('bump');
       keepers.cheer(id);
     }
     return out;
@@ -421,6 +426,7 @@ export function createCarnival(ctx: GameContext): Carnival {
       contestants: [contestantOf(me, true), ...fl.map((f) => contestantOf(f.def.id, false))],
       exitRequested: false,
       goT: 0,
+      practice: out === 'practice',
     };
     friends.setVisible(true);
     for (let i = 0; i < 2; i++) friends.act(i, 'wave', 1.2);
@@ -439,6 +445,7 @@ export function createCarnival(ctx: GameContext): Carnival {
       active.exitRequested = true;
       return;
     }
+    active.practice = out === 'practice';
     ctx.audio.play('click');
     beginCountdown();
   }

@@ -216,12 +216,17 @@ test('the buggy feels the same at every display rate (launch, hop, real-time)', 
       let to14 = -1;
       let i = 0;
       rg.inject({ moveY: 1 });
+      let zPrev = z0;
+      let tPrev = 0;
       while (t < 2 && i < dts.length) {
+        zPrev = car.position.z;
+        tPrev = t;
         rg.step(dts[i], 1, false);
         t += dts[i++];
         if (to14 < 0 && car.speed >= 14) to14 = t;
       }
-      const dist2s = car.position.z - z0;
+      // Distance at exactly 2 s of game time (the last frame can overshoot by up to one frame).
+      const dist2s = zPrev + ((car.position.z - zPrev) * (2 - tPrev)) / Math.max(1e-6, t - tPrev) - z0;
       // Hop at speed: one press, peak height above the start over the next second.
       const y0 = car.position.y;
       rg.inject({ moveY: 1, jumpPressed: true });

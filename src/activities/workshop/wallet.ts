@@ -74,6 +74,13 @@ export function getWallet(ctx: GameContext): Wallet {
   ctx.events.on('session:phase', (e) => {
     if (e.phase === 'playing' && e.previous === 'title') spent = earned = 0;
   });
+  // Parts bought before the economy existed (localStorage only) move into the saved profile once.
+  let migrated = false;
+  const migrate = (p: ProfileLike): void => {
+    if (migrated) return;
+    migrated = true;
+    for (const id of data.owned) if (!p.owns(id)) p.unlock(id, 'shop');
+  };
   const wallet: Wallet = {
     get gems() {
       const p = profileOf(ctx);
@@ -95,11 +102,18 @@ export function getWallet(ctx: GameContext): Wallet {
     },
     owns(id) {
       const p = profileOf(ctx);
-      return (p ? p.owns(id) : false) || data.owned.includes(id);
+      if (p) {
+        migrate(p);
+        return p.owns(id);
+      }
+      return data.owned.includes(id);
     },
     unlock(id) {
       const p = profileOf(ctx);
-      if (p) p.unlock(id, 'shop');
+      if (p) {
+        migrate(p);
+        p.unlock(id, 'shop');
+      }
       if (!data.owned.includes(id)) data.owned.push(id);
       save(data);
     },

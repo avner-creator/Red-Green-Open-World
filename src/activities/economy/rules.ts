@@ -41,16 +41,22 @@ export function checkBuy(item: ShopItem | undefined, owned: boolean, wallet: num
   return 'ok';
 }
 
-/** Price of the next ride, given how many balloon rides were already taken this session. */
-export function ticketPriceFor(kind: TicketKind, balloonRidesThisSession: number): number {
-  if (kind === 'balloon') return balloonRidesThisSession < ECONOMY.freeBalloonRides ? 0 : ECONOMY.balloonTicket;
-  return ECONOMY.rocketPadTicket;
+/**
+ * Price of the next ride, given how many rides of this kind were already taken this session
+ * (balloon: the first `freeBalloonRides` are free; attractions: the first play is free).
+ */
+export function ticketPriceFor(kind: TicketKind, ridesThisSession: number): number {
+  if (kind === 'balloon') return ridesThisSession < ECONOMY.freeBalloonRides ? 0 : ECONOMY.balloonTicket;
+  if (kind === 'rocketPad') return ECONOMY.rocketPadTicket;
+  return ridesThisSession < 1 ? 0 : ECONOMY.attractionTicket;
 }
 
 export function createEconomyRules(events: EventBus, profile: ProfileApi, opts: EconomyOptions = {}): EconomyRules {
   const items: ShopItem[] = [];
   const byId = new Map<string, ShopItem>();
-  let balloonRides = 0;
+  /** Rides of each kind this session (balloon and attractions). */
+  const rides = new Map<TicketKind, number>();
+  const ridesOf = (k: TicketKind): number => rides.get(k) ?? 0;
   const rand = opts.rand ?? mulberry32((Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0);
   const comboTracker = new ComboTracker(ECONOMY.comboWindow, ECONOMY.comboMax);
   const tracker = new MissionTracker();
@@ -86,7 +92,7 @@ export function createEconomyRules(events: EventBus, profile: ProfileApi, opts: 
     events.on('session:phase', (e) => {
       phase = e.phase;
       if (e.phase === 'playing' && e.previous === 'title') {
-        balloonRides = 0;
+        rides.clear();
         comboTracker.reset();
         jackpotPaid = false;
         tracker.start(pickMissions(rand));
@@ -110,7 +116,7 @@ export function createEconomyRules(events: EventBus, profile: ProfileApi, opts: 
     events.on('profile:reset', grantStarters),
   ];
 
-  return {
+  const rules: EconomyRules = {
     get catalog() {
       return items;
     },
@@ -146,17 +152,23 @@ export function createEconomyRules(events: EventBus, profile: ProfileApi, opts: 
       return true;
     },
     ticketPrice(kind) {
-      return ticketPriceFor(kind, balloonRides);
+      return ticketPriceFor(kind, ridesOf(kind));
     },
     payTicket(kind) {
-      const price = ticketPriceFor(kind, balloonRides);
+      const price = ticketPriceFor(kind, ridesOf(kind));
       if (price > 0 && !profile.spend(price, 'ticket')) {
         events.emit('ticket:denied', { kind, price, wallet: profile.wallet });
         return false;
       }
-      if (kind === 'balloon') balloonRides += 1;
+      rides.set(kind, ridesOf(kind) + 1);
       events.emit('ticket:paid', { kind, price, free: price === 0 });
       return true;
+    },
+    rideTicket(kind) {
+      const price = ticketPriceFor(kind, ridesOf(kind));
+      // A child short of gems still plays: a practice round with no prize (never a locked gate).
+      if (!rules.payTicket(kind)) return 'practice';
+      return price === 0 ? 'free' : 'paid';
     },
     get missions() {
       return tracker.missions;
@@ -181,4 +193,5 @@ export function createEconomyRules(events: EventBus, profile: ProfileApi, opts: 
       for (const off of offs) off();
     },
   };
+  return rules;
 }

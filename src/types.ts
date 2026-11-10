@@ -95,7 +95,10 @@ export interface VisionApi {
 
 export type SessionPhase = 'title' | 'playing' | 'paused' | 'ended';
 export type PlayerMode = 'walk' | 'flop' | 'driving' | 'riding' | 'external';
-export type StuntKind = 'bigBounce' | 'longGlide' | 'bullseye' | 'bigAir' | 'bungee' | 'launch';
+export type StuntKind =
+  | 'bigBounce' | 'longGlide' | 'bullseye' | 'bigAir' | 'bungee' | 'launch'
+  /** Attraction rounds finished (value = score or place, stars = result). */
+  | 'carnival' | 'scoops' | 'race' | 'sky' | 'bumper' | 'foam';
 
 export interface GameEvents {
   'session:phase': { phase: SessionPhase; previous: SessionPhase };
@@ -308,6 +311,20 @@ export interface ExternalController {
   onRelease?(): void;
 }
 
+/** See `PlayerApi.addMoveModifier`. Each factor defaults to 1. */
+export interface MoveModifier {
+  /** Top walk/sprint speed. */
+  speed?: number;
+  /** Gravity while walking/jumping (< 1 = floaty). */
+  gravity?: number;
+  /** Ground grip: acceleration and braking (< 1 = slippery). */
+  friction?: number;
+  /** Jump take-off speed. */
+  jump?: number;
+  /** Seconds until it removes itself (omit = until `remove()`). */
+  duration?: number;
+}
+
 export interface PlayerApi {
   /** Root object (feet at origin). Outfits attach to named bones via `attach`. */
   readonly object: THREE.Object3D;
@@ -330,6 +347,13 @@ export interface PlayerApi {
   flop(): void;
   /** Back to the last safe spot (or the spawn point). */
   respawn(): void;
+  /**
+   * Walk-mode movement modifier (ice-cream effects, slippery ground…). Active modifiers multiply
+   * together; `duration` (s, game time) makes it expire on its own. Returns `remove()`. All are
+   * cleared when a session starts or ends. The object is kept (not copied): its factors may be
+   * eased while it is active (re-read every frame).
+   */
+  addMoveModifier(mod: MoveModifier): () => void;
   setExternalController(controller: ExternalController | null): void;
   /** Force an animation while in external mode (ignored in walk mode). */
   setAnimation(anim: PlayerAnim): void;
@@ -412,7 +436,8 @@ export type IconName =
   | 'gem' | 'key' | 'lock' | 'chest' | 'star' | 'car' | 'horse' | 'balloon' | 'parachute'
   | 'bungee' | 'trampoline' | 'rocket' | 'hat' | 'cape' | 'glasses' | 'paint' | 'exit'
   | 'hand' | 'clock' | 'flop' | 'eye' | 'check'
-  | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet';
+  | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet'
+  | 'tent' | 'plane' | 'dragon' | 'cone' | 'flag' | 'bubble';
 
 export interface Interactable {
   id: string;
@@ -477,7 +502,8 @@ export interface WorldApi {
 
 export type SfxName =
   | 'gem' | 'gemNear' | 'jump' | 'land' | 'boing' | 'bigBoing' | 'flop' | 'splash' | 'whoosh'
-  | 'chute' | 'key' | 'chest' | 'star' | 'click' | 'horn' | 'bump' | 'neigh' | 'start' | 'fanfare' | 'tick';
+  | 'chute' | 'key' | 'chest' | 'star' | 'click' | 'horn' | 'bump' | 'neigh' | 'start' | 'fanfare' | 'tick'
+  | 'roar' | 'baa' | 'cluck' | 'squeak';
 
 export interface AudioApi {
   /** Must be called from a user gesture once (Play button). */
@@ -583,7 +609,12 @@ export type EquipSlot = OutfitSlot | 'trail' | 'emote' | 'character';
 export type ShopCategory = 'character' | 'outfit' | 'paint' | 'trail' | 'emote';
 export type WalletReason = 'gem' | 'mission' | 'jackpot' | 'shop' | 'ticket' | 'test';
 export type UnlockSource = 'shop' | 'chest' | 'starter';
-export type TicketKind = 'balloon' | 'rocketPad';
+export type TicketKind =
+  | 'balloon' | 'rocketPad'
+  /** Attractions: first play of each per session free, then `ECONOMY.attractionTicket`. */
+  | 'bubbleBall' | 'dinoSumo' | 'carnival' | 'foam' | 'plane' | 'dragon' | 'race' | 'scoops';
+/** `EconomyApi.rideTicket` outcome: 'practice' = could not pay; play anyway, no prize. */
+export type TicketOutcome = 'free' | 'paid' | 'practice';
 export type BuyResult = 'ok' | 'owned' | 'tooPoor' | 'notForSale' | 'unknown';
 export type MissionKind =
   | 'collectGems' | 'megaGems' | 'combo' | 'bounceHeight' | 'openChest' | 'driveGems' | 'landRings' | 'stars';
@@ -670,6 +701,11 @@ export interface EconomyApi {
   ticketPrice(kind: TicketKind): number;
   /** Call when the player starts a ride. true = go (paid or free; emits `ticket:paid`). false = not enough gems (emits `ticket:denied`; the ride must not start). */
   payTicket(kind: TicketKind): boolean;
+  /**
+   * Attractions: like `payTicket`, but a child who cannot pay still plays a practice round
+   * ('practice': no prize; `ticket:denied` is still emitted so the HUD/Pip can say why).
+   */
+  rideTicket(kind: TicketKind): TicketOutcome;
   /** This session's three missions (empty on the title screen before the first session). */
   readonly missions: readonly MissionState[];
   /** Current streak. multiplier 1 = no combo. timeLeft = seconds before it drops. */

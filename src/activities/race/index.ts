@@ -258,11 +258,19 @@ export function createRace(ctx: GameContext): Race {
     const driving = ctx.player.vehicle === car;
     if (!driving && ctx.player.mode !== 'walk') return false;
     // Ticket: first race per session free; then 3 gems, or a practice run without a prize.
-    const price = racePrice(racesThisSession);
-    prize = true;
-    if (price > 0 && !wallet.spend(price, 'ticket')) {
-      prize = false;
-      ctx.events.emit('ui:toast', { icon: 'gem', text: `+${Math.max(1, price - wallet.gems)}` });
+    // Through the economy when there is one (ticket:paid / ticket:denied); else the session wallet.
+    const economy = (ctx as Partial<GameContext>).economy;
+    if (economy) {
+      const price = economy.ticketPrice('race');
+      prize = economy.rideTicket('race') !== 'practice';
+      if (!prize) ctx.events.emit('ui:toast', { icon: 'gem', text: `+${Math.max(1, price - wallet.gems)}` });
+    } else {
+      const price = racePrice(racesThisSession);
+      prize = true;
+      if (price > 0 && !wallet.spend(price, 'ticket')) {
+        prize = false;
+        ctx.events.emit('ui:toast', { icon: 'gem', text: `+${Math.max(1, price - wallet.gems)}` });
+      }
     }
     racesThisSession++;
     const g = gridPose(0);
@@ -325,7 +333,7 @@ export function createRace(ctx: GameContext): Race {
     const p = prizeFor(place);
     result = { place, stars: p.stars, gems: prize ? p.gems : 0 };
     if (prize) wallet.earn(p.gems);
-    ctx.events.emit('stunt', { kind: 'bullseye', value: place, stars: p.stars });
+    ctx.events.emit('stunt', { kind: 'race', value: place, stars: p.stars });
     ctx.events.emit('ui:toast', { icon: 'car', text: place === 1 ? '1st' : place === 2 ? '2nd' : '3rd' });
     phase = 'finishing';
     phaseT = 0;

@@ -122,3 +122,28 @@ describe('tickets', () => {
     expect(eco.combo).toEqual({ multiplier: 1, streak: 0, timeLeft: 0 });
   });
 });
+
+describe('attraction tickets (rideTicket)', () => {
+  it('first play per kind is free, then a ticket; a 0-gem child gets a practice round', () => {
+    const { eco, events, profile } = setup(4);
+    const denied = record(events, 'ticket:denied');
+    expect(eco.rideTicket('carnival')).toBe('free');
+    expect(eco.ticketPrice('carnival')).toBe(ECONOMY.attractionTicket);
+    expect(eco.rideTicket('race')).toBe('free'); // each attraction has its own free play
+    expect(eco.rideTicket('carnival')).toBe('paid');
+    expect(profile.wallet).toBe(4 - ECONOMY.attractionTicket);
+    expect(eco.rideTicket('carnival')).toBe('practice');
+    expect(denied).toHaveLength(1);
+    expect(profile.wallet).toBe(4 - ECONOMY.attractionTicket);
+  });
+  it('a new session makes every attraction free again', () => {
+    const { eco, events } = setup(0);
+    events.emit('session:phase', { phase: 'playing', previous: 'title' });
+    expect(eco.rideTicket('foam')).toBe('free');
+    expect(eco.rideTicket('foam')).toBe('practice');
+    events.emit('session:phase', { phase: 'ended', previous: 'playing' });
+    events.emit('session:phase', { phase: 'title', previous: 'ended' });
+    events.emit('session:phase', { phase: 'playing', previous: 'title' });
+    expect(eco.rideTicket('foam')).toBe('free');
+  });
+});

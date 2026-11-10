@@ -228,11 +228,9 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   function begin(): void {
     if (phase !== 'idle' && phase !== 'result') return;
     // Ticket: first run each session is free, then 3 gems; with too few gems it is a practice run.
-    const prof = profile();
-    practice = false;
-    if (freeUsed && prof) {
-      if (!prof.spend(TICKET, 'ticket')) practice = true;
-    }
+    // Through the economy (ticket:paid / ticket:denied); without one every run is free.
+    const economy = (ctx as Partial<GameContext>).economy;
+    practice = economy ? economy.rideTicket('foam') === 'practice' : false;
     freeUsed = true;
     runs++;
     phase = 'countdown';
@@ -289,7 +287,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     last = { time, medal, prize, beatFriend };
     phase = 'result';
     phaseT = 0;
-    ctx.events.emit('stunt', { kind: 'bullseye', value: stars, stars });
+    ctx.events.emit('stunt', { kind: 'foam', value: stars, stars });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${(Math.floor(time * 10) / 10).toFixed(1)}` });
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rg:attraction-done', { detail: { id: 'foamLava', medal, time, stars, beatFriend } }));
     sfx('fanfare');

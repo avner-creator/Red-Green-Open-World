@@ -35,7 +35,8 @@ export function resultOf(player: number, friends: readonly number[], thresholds:
   return { place, stars, gems: prizeGems(stars, won), won };
 }
 
-export type TicketOutcome = 'free' | 'paid' | 'short';
+/** 'practice' = could not pay, plays without a prize; 'short' is no longer returned (kept for old callers). */
+export type TicketOutcome = 'free' | 'paid' | 'short' | 'practice';
 
 /** Minimal view of the economy profile (Stream C). Every member is optional: code defensively. */
 export interface ProfileLike {

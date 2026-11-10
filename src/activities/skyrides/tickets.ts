@@ -3,8 +3,7 @@
  * main yet. First ride of each kind per session is free, then a 3-gem ticket; prizes are paid with
  * `profile.earn`. Without a profile every ride is free and prizes are just stars and toasts.
  */
-import type { GameContext } from '../../types';
-import { ticketPrice } from './contestLogic';
+import type { GameContext, TicketKind, TicketOutcome } from '../../types';
 
 /** The part of the economy profile we use (see the economy stream's ProfileApi). */
 export interface WalletLike {
@@ -21,37 +20,40 @@ export function walletOf(ctx: GameContext): WalletLike | null {
 
 export const TICKET_PRICE = 3;
 
+/**
+ * Tickets through the economy (`ctx.economy.rideTicket`): first ride of each kind per session free,
+ * then 3 gems; a child who cannot pay rides anyway as practice (no contest prize).
+ */
 export class RideTickets {
-  private rides = 0;
+  private outcome: TicketOutcome = 'free';
 
-  constructor(private readonly ctx: GameContext) {}
+  constructor(
+    private readonly ctx: GameContext,
+    private readonly kind: TicketKind,
+  ) {}
 
   /** Price of the next ride (0 = free). */
   get price(): number {
-    return walletOf(this.ctx) ? ticketPrice(this.rides, TICKET_PRICE) : 0;
+    const e = (this.ctx as Partial<GameContext>).economy;
+    return e ? e.ticketPrice(this.kind) : 0;
   }
 
-  /** Try to pay for a ride. true = go. On false a toast says how many more gems are needed. */
+  /** True while the current ride is a practice ride (no prize). */
+  get practice(): boolean {
+    return this.outcome === 'practice';
+  }
+
+  /** Pay for a ride. Always true: nobody is locked out (practice ride instead). */
   pay(): boolean {
-    const w = walletOf(this.ctx);
-    const price = this.price;
-    if (!w || price === 0) {
-      this.rides++;
-      return true;
-    }
-    if (w.spend(price, 'ticket')) {
-      this.rides++;
-      return true;
-    }
-    const need = Math.max(1, price - Math.floor(w.wallet));
-    this.ctx.events.emit('ui:toast', { icon: 'lock', text: `+${need}` });
-    this.ctx.audio.play('click', { pitch: 0.7 });
-    return false;
+    const e = (this.ctx as Partial<GameContext>).economy;
+    this.outcome = e ? e.rideTicket(this.kind) : 'free';
+    if (this.outcome === 'practice') this.ctx.audio.play('click', { pitch: 0.7 });
+    return true;
   }
 
-  /** New session: the first ride is free again. */
+  /** New session (the economy resets its own free-ride count). */
   reset(): void {
-    this.rides = 0;
+    this.outcome = 'free';
   }
 }
 

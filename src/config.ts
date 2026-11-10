@@ -48,6 +48,7 @@ export const ECONOMY = {
   respawnSeconds: 45,
   balloonTicket: 5,
   rocketPadTicket: 3,
+  attractionTicket: 3, // after each attraction's first (free) play per session
   freeBalloonRides: 1, // per session
   missionsPerSession: 3,
   jackpot: 15, // bonus for finishing all three missions

@@ -103,7 +103,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
   ctx.vision.add(beatGroup, VisionLayer.WeakOnly);
   let layerOn = true;
   const hud = createRoundHud(ctx.uiRoot, 'dinosumo-hud');
-  const ticket = createTicket(ctx);
+  const ticket = createTicket(ctx, 'dinoSumo');
   const pool = acquireFriendPool();
 
   // ── State ──
@@ -236,7 +236,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           confetti.burst(toWorld(b.x, 1.2, b.z, tmpV), e.by === 0 ? 70 : 25);
           if (e.by === 0) {
             hud.splash('dino', 2);
-            ctx.events.emit('stunt', { kind: 'bullseye', value: 2, stars: 1 });
+            ctx.events.emit('stunt', { kind: 'bumper', value: 2, stars: 1 });
           }
           if (e.dino === 0) ctx.cameraRig.shake(0.45);
           break;
@@ -263,7 +263,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           }
           if (e.dino === 0) {
             hud.splash('splash', e.weak ? 3 : 1);
-            ctx.events.emit('stunt', { kind: 'bullseye', value: e.weak ? 3 : 1, stars: e.weak ? 2 : 1 });
+            ctx.events.emit('stunt', { kind: 'bumper', value: e.weak ? 3 : 1, stars: e.weak ? 2 : 1 });
             ctx.cameraRig.shake(e.weak ? 0.3 : 0.15);
           }
           break;
@@ -272,7 +272,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           hud.splash('tail', 1);
           ctx.audio.play('star', { pitch: 1.6 });
           ctx.cameraRig.shake(0.25);
-          ctx.events.emit('stunt', { kind: 'bullseye', value: 1, stars: 1 });
+          ctx.events.emit('stunt', { kind: 'bumper', value: 1, stars: 1 });
           break;
         case 'start':
           ctx.audio.play('start');
@@ -294,14 +294,14 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     const rank = playerRank(round);
     const stars = sumoStars(rank);
     const gems = sumoPrize(stars, round.weakPops + round.perfects);
-    ticket.prize(gems);
+    const paid = ticket.prize(gems);
     const me = round.dinos[0].points;
-    ctx.events.emit('stunt', { kind: 'bullseye', value: me, stars });
+    ctx.events.emit('stunt', { kind: 'bumper', value: me, stars });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${me}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
     if (stars >= 3) confetti.burst(toWorld(0, 3, 0, tmpV), 180);
     hud.chip(null, false);
-    hud.result(stars, gems, ctx.input.state.device);
+    hud.result(stars, paid, ctx.input.state.device);
   }
 
   function startRound(): void {

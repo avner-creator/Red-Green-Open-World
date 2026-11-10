@@ -91,7 +91,7 @@ test('every layer feature touches only its own channel with all content present 
   });
   // The new attractions really carry mega gems.
   for (const tag of ['bungee', 'silly', 'secret', 'vault']) expect(setup.megaTags, tag).toContain(tag);
-  for (const n of ['glow-gems', 'secret-path-trampoline', 'secret-arrows', `vault-${setup.door.id}-weak`, `vault-${setup.door.id}-strong`, 'chest-key', 'chest-lock']) {
+  for (const n of ['glow-gems', 'secret-path-trampoline', 'secret-arrows', `vault-${setup.door.id}-weak`, `vault-${setup.door.id}-strong`, 'chest-key', 'chest-symbol', 'chest-trail']) {
     expect(setup.names, n).toContain(n);
   }
 
@@ -124,9 +124,9 @@ test('every layer feature touches only its own channel with all content present 
       from: [c.position[0] + 5, c.position[1] + 4, c.position[2] + 5],
       at: [(c.position[0] + c.key[0]) / 2, c.position[1], (c.position[2] + c.key[2]) / 2],
       features: [
-        { prefix: 'chest-lock', layer: 'strong' },
+        { prefix: 'chest-symbol', layer: 'strong' }, // the symbol-ring lock hint
         { prefix: 'chest-key', layer: 'weak' },
-        { prefix: 'secret-arrows', layer: 'weak' }, // the key's arrow trail
+        { prefix: 'chest-trail', layer: 'weak' }, // the key's arrow trail
       ],
     },
     {

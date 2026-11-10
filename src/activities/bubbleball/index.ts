@@ -111,7 +111,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   const confetti = new ThrillConfetti();
   ctx.scene.add(confetti.group);
   const hud = createRoundHud(ctx.uiRoot, 'bubbleball-hud');
-  const ticket = createTicket(ctx);
+  const ticket = createTicket(ctx, 'bubbleBall');
   const pool = acquireFriendPool();
 
   // ── State ──
@@ -271,7 +271,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           ctx.cameraRig.shake(home ? 0.35 : 0.15);
           const gx = home ? PITCH.hx + PITCH.goalDepth * 0.5 : -(PITCH.hx + PITCH.goalDepth * 0.5);
           confetti.burst(toWorld(gx, 1.6, 0, tmpV), home ? 140 : 60);
-          if (home) ctx.events.emit('stunt', { kind: 'bullseye', value: e.points, stars: e.points });
+          if (home) ctx.events.emit('stunt', { kind: 'bumper', value: e.points, stars: e.points });
           break;
         }
         case 'over':
@@ -290,13 +290,13 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     const { home, away } = match.score;
     const stars = matchStars(home, away);
     const gems = matchPrize(stars, match.doubles.home);
-    ticket.prize(gems);
-    ctx.events.emit('stunt', { kind: 'bullseye', value: home, stars });
+    const paid = ticket.prize(gems);
+    ctx.events.emit('stunt', { kind: 'bumper', value: home, stars });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${home} – ${away}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
     if (stars >= 3) confetti.burst(toWorld(0, 3, 0, tmpV), 200);
     hud.chip(null, false);
-    hud.result(stars, gems, ctx.input.state.device);
+    hud.result(stars, paid, ctx.input.state.device);
     for (const a of match.agents) a.cheer = a.team === (home >= away ? 'home' : 'away') ? 99 : 0;
   }
 

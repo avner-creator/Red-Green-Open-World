@@ -93,7 +93,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
   const site = siteFor(ctx, 'dragonRoost');
   const roost = buildRoost(ctx, site);
   const pilot = getSkyPilot(ctx);
-  const tickets = new RideTickets(ctx);
+  const tickets = new RideTickets(ctx, 'dragon');
   const player = ctx.player;
   const w = ctx.world;
 
@@ -552,7 +552,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
   function finishTour(): void {
     const stars = tourStars(treasure);
     lastTour = { treasure, clouds: cloudsPopped, stars };
-    if (stars > 0) getStuntGate(ctx).stunt({ kind: 'longGlide', value: treasure, stars });
+    if (stars > 0) getStuntGate(ctx).stunt({ kind: 'sky', value: treasure, stars });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${treasure}` });
     ctx.audio.play('fanfare');
     happy = 1;
