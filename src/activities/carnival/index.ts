@@ -18,6 +18,7 @@ import { Friends } from './friends';
 import { createBalloonPop } from './games/balloonPop';
 import { createDuckPond } from './games/duckPond';
 import { createRingToss } from './games/ringToss';
+import { createGlowDodge } from './games/glowDodge';
 import type { BoothGame, GameEnv, GameFactory, RoundApi } from './games/types';
 import { CarnivalHud } from './hud';
 import type { Contestant } from './hud';
@@ -38,6 +39,7 @@ const FACTORIES: Partial<Record<GameId, GameFactory>> = {
   balloonPop: createBalloonPop,
   ringToss: createRingToss,
   duckPond: createDuckPond,
+  glowDodge: createGlowDodge,
 };
 
 const COUNTDOWN = 3;
