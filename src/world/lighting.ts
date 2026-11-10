@@ -1,12 +1,45 @@
 /**
  * Sun, shadows, sky, fog and exposure over the session: warm afternoon (t=0) → sunset (t=1).
- * One shadow map follows the camera, snapped to texels so edges don't shimmer.
+ * One shadow map follows the camera, snapped to texels so edges don't shimmer; it widens with the
+ * camera's height above the ground so the island keeps its shadows seen from the balloon.
+ * Fog is height-aware (thick near sea level, thin higher up) so the view from 100–180 m stays clear
+ * while the far horizon still melts into the warm haze.
  */
 import * as THREE from 'three';
 import type { Quality } from '../types';
 import { createSky } from './sky';
 import type { Sky, SkyState } from './sky';
 import { U } from './materials';
+
+/** Height (m) at which the fog has its nominal density, and how fast it thins above (1/m). */
+const FOG_BASE = 18;
+const FOG_FALLOFF = 1 / 60;
+
+let fogPatched = false;
+/**
+ * Replace three's exponential-squared fog with height fog, for every material in the scene.
+ * Optical depth along the view ray integrates density·exp(−k(h − base)) between the camera and the
+ * fragment; beyond ~850 m everything fades fully into the fog colour (= the sky below the horizon),
+ * so the edge of the sea plane never shows.
+ */
+function patchFogChunks(): void {
+  if (fogPatched) return;
+  fogPatched = true;
+  const C = THREE.ShaderChunk;
+  C.fog_pars_vertex = C.fog_pars_vertex.replace('varying float vFogDepth;', 'varying float vFogDepth;\nvarying vec3 vFogMv;');
+  C.fog_vertex = C.fog_vertex.replace('vFogDepth = - mvPosition.z;', 'vFogDepth = - mvPosition.z;\n\tvFogMv = mvPosition.xyz;');
+  C.fog_pars_fragment = C.fog_pars_fragment.replace('varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying vec3 vFogMv;');
+  C.fog_fragment = C.fog_fragment.replace(
+    'float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );',
+    /* glsl */ `float rgFogDist = length( vFogMv );
+		float rgFogDy = ( vec4( vFogMv, 0.0 ) * viewMatrix ).y;
+		float rgFogK = ${FOG_FALLOFF.toFixed(5)};
+		float rgFogE = exp( - rgFogK * ( cameraPosition.y - ${FOG_BASE.toFixed(1)} ) );
+		float rgFogH = abs( rgFogDy ) > 0.05 ? rgFogE * ( 1.0 - exp( - rgFogK * rgFogDy ) ) / ( rgFogK * rgFogDy ) : rgFogE;
+		float rgFogOd = fogDensity * rgFogDist * min( rgFogH, 1.5 );
+		float fogFactor = max( 1.0 - exp( - rgFogOd * rgFogOd ), smoothstep( 850.0, 1150.0, rgFogDist ) );`,
+  );
+}
 
 interface Key {
   t: number;
@@ -61,7 +94,8 @@ export interface Lighting {
   update(camera: THREE.Camera): void;
 }
 
-export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer): Lighting {
+export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer, heightAt: (x: number, z: number) => number): Lighting {
+  patchFogChunks();
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
@@ -85,7 +119,26 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
   const envGround = new THREE.Color();
   const fogColor = new THREE.Color();
   let bakedAt = -1;
+  /** Shadow box half-size on the ground (quality) and the current one (widened with altitude). */
+  let baseExtent = 55;
   let extent = 55;
+  const fwd = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  const lightRot = new THREE.Matrix4();
+  const lightInv = new THREE.Matrix4();
+  const origin = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+
+  const setExtent = (e: number): void => {
+    extent = e;
+    const c = sun.shadow.camera;
+    c.left = -e;
+    c.right = e;
+    c.top = e;
+    c.bottom = -e;
+    c.far = 260 + Math.max(220, e * 1.5);
+    c.updateProjectionMatrix();
+  };
 
   const api: Lighting = {
     sun,
@@ -99,10 +152,12 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
       state.sun.setRGB(...k.sun);
       state.zenith.setRGB(...k.zenith);
       state.horizon.setRGB(...k.horizon);
-      // Fog / below-horizon colour: the horizon, a touch hazier.
-      state.ground.copy(state.horizon).lerp(state.zenith, 0.18);
-      // Fog: the warm horizon haze, so distance melts into the sky's glow.
-      fogColor.copy(state.horizon).lerp(state.zenith, 0.08);
+      // Fog: the warm horizon haze, so distance melts into the sky's glow. The sky below the
+      // horizon uses the same colour, so far sea and sky meet without a seam.
+      fogColor.copy(state.horizon).lerp(state.zenith, 0.1);
+      state.ground.copy(fogColor);
+      U.sunDir.value.copy(sunDir);
+      U.sunColor.value.copy(state.sun).multiplyScalar(k.sunI);
       envGround.setRGB(0.26, 0.24, 0.15).multiply(state.sun);
       sky.set(state, envGround);
       fog.color.copy(fogColor);
@@ -122,40 +177,43 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
       const s = SHADOW[q];
       sun.castShadow = s !== null;
       if (s) {
-        extent = s.extent;
+        baseExtent = extent = s.extent;
         sun.shadow.radius = s.radius;
         if (sun.shadow.mapSize.x !== s.size) {
           sun.shadow.mapSize.set(s.size, s.size);
           sun.shadow.map?.dispose();
           sun.shadow.map = null;
         }
-        const c = sun.shadow.camera;
-        c.left = -extent;
-        c.right = extent;
-        c.top = extent;
-        c.bottom = -extent;
-        c.updateProjectionMatrix();
+        setExtent(extent);
       }
       fog.density = q === 'low' ? 0.0024 : 0.0019;
     },
     update(camera) {
       sky.mesh.position.copy(camera.position);
-      // Centre the shadow box a little ahead of the camera, snapped to shadow texels.
-      const fwd = new THREE.Vector3();
+      if (!sun.castShadow) return;
+      // Widen the shadow box with height above the ground (in 8 m steps, so it rarely re-snaps):
+      // from the balloon the whole diorama below keeps its tree and house shadows.
+      const ground = heightAt(camera.position.x, camera.position.z);
+      const agl = Math.max(0, camera.position.y - Math.max(ground, 0));
+      const want = Math.min(baseExtent * 4, baseExtent * (1 + agl / 45));
+      const stepped = Math.max(baseExtent, Math.round(want / 8) * 8);
+      if (stepped !== extent) setExtent(stepped);
+      // Centre the box on the ground a little ahead of the camera, snapped to shadow texels.
       camera.getWorldDirection(fwd);
       fwd.y = 0;
       if (fwd.lengthSq() > 1e-6) fwd.normalize();
-      const center = camera.position.clone().addScaledVector(fwd, extent * 0.45);
+      center.copy(camera.position).addScaledVector(fwd, extent * 0.45);
+      center.y = agl > 20 ? Math.max(heightAt(center.x, center.z), 0) : camera.position.y;
       const texel = (2 * extent) / sun.shadow.mapSize.x;
       // Snap in light space so the projected grid stays fixed.
-      const lightRot = new THREE.Matrix4().lookAt(sunDir, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0));
-      const inv = lightRot.clone().invert();
-      center.applyMatrix4(inv);
+      lightRot.lookAt(sunDir, origin, up);
+      lightInv.copy(lightRot).invert();
+      center.applyMatrix4(lightInv);
       center.x = Math.round(center.x / texel) * texel;
       center.y = Math.round(center.y / texel) * texel;
       center.applyMatrix4(lightRot);
       sun.target.position.copy(center);
-      sun.position.copy(center).addScaledVector(sunDir, 200);
+      sun.position.copy(center).addScaledVector(sunDir, 260);
       sun.target.updateMatrixWorld();
       sun.updateMatrixWorld();
     },

@@ -40,7 +40,7 @@ export const ATTRACTIONS: readonly Attraction[] = [
   },
   {
     anchor: 'garage', icon: 'iCar', arm: 0x20437a, balloon: 0x2f72d8, panels: ['car1', 'car2', 'car3'],
-    beacon: { x: 50, z: 40, h: 9 }, board: { x: 22.5, z: 18, faceX: 22.5, faceZ: 4 },
+    beacon: { x: 50, z: 40, h: 13 }, board: { x: 22.5, z: 18, faceX: 22.5, faceZ: 4 },
   },
   {
     anchor: 'launchPads', icon: 'iRocket', arm: 0x86285a, balloon: 0xe04a86, panels: ['rocket1', 'rocket2', 'rocket3'],
