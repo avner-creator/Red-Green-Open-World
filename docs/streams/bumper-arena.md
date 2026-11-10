@@ -75,11 +75,18 @@ Deck tops: highest ground under the footprint + 0.25 m (≈ y 17.7 and 17.5).
 ## Performance (Medium, measured with the set visible vs hidden, all passes)
 
 - Bubble Ball idle: **5 draw calls, 24.4k triangles** (one merged set mesh, sign, ball, shadow proxies).
-- Dino Sumo idle: **12 draw calls, 31.6k triangles** (set, sign, plain balloons + strings, weak-eye
+- Dino Sumo idle: **11 draw calls, 15.6k triangles** (set, sign, plain balloons + strings, weak-eye
   balloons in the layer pass, shadow proxies). Splash particles cost nothing while idle.
 - In a round: bubbles = 2 instanced draws + 1 proxy; suits = 2 instanced draws + 1 proxy; friends
   are the catalog GLBs (their own draws, no shadow casting). Nothing updates while idle and far
   away (Dino Sumo's balloons only sway within 60 m; Bubble Ball idles with zero work).
+
+## Known limits
+
+- The whole e2e suite was already over the ~3 min target before this stream (≈5 min on this
+  container); this stream adds ≈32 s.
+- Leaving mid-round is R / F (touch: flop button); there is no on-screen "leave" chip during play,
+  only on the result card.
 
 ## Tests
 

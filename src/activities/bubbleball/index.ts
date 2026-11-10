@@ -373,7 +373,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     // Camera: behind the hero, looking down the pitch at the goal to attack.
     let off = attackYaw - player.yaw;
     off = Math.atan2(Math.sin(off), Math.cos(off));
-    ctx.cameraRig.setOverride({ distance: 8.2, height: 3.9, fov: CAMERA.fov + 6, lookAhead: 0.3, yawOffset: off });
+    ctx.cameraRig.setOverride({ distance: 7, height: 3.4, fov: CAMERA.fov + 6, lookAhead: 0.3, yawOffset: off });
   }
 
   const controller: ExternalController = {
