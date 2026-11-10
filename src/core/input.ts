@@ -23,7 +23,18 @@ const GAME_KEYS = new Set([
 ]);
 
 /** Standard gamepad mapping. */
-const PAD = { a: 0, b: 1, x: 2, y: 3, rt: 7, start: 9, ls: 10 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lt: 6, rt: 7, start: 9, ls: 10 } as const;
+
+/** Analogue triggers (0..1) for driving: core-internal, kept out of `InputState`. */
+export interface DriveTriggers {
+  accelerate: number;
+  brake: number;
+}
+const triggersByApi = new WeakMap<InputApi, DriveTriggers>();
+/** Gamepad RT/LT of the last `update` (zeros without a pad, or while gameplay is off). */
+export function driveTriggers(api: InputApi): Readonly<DriveTriggers> {
+  return triggersByApi.get(api) ?? { accelerate: 0, brake: 0 };
+}
 const EDGE_FIELDS = ['jumpPressed', 'usePressed', 'flopPressed', 'respawnPressed', 'pausePressed'] as const;
 
 function isTextField(t: EventTarget | null): boolean {
@@ -101,7 +112,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
 
   function readGamepad(dt: number): {
     move: { x: number; y: number }; lookX: number; lookY: number; sprint: boolean; jump: boolean; use: boolean;
-    pressed: Set<Action>;
+    pressed: Set<Action>; rt: number; lt: number;
   } | null {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     let pad: Gamepad | null = null;
@@ -115,6 +126,12 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
     const btn = (i: number): boolean => {
       const b = pad.buttons[i];
       return !!b && (b.pressed || b.value > LOOK.triggerThreshold);
+    };
+    const trigger = (i: number): number => {
+      const b = pad.buttons[i];
+      if (!b) return 0;
+      const v = Math.max(b.value, b.pressed ? 1 : 0);
+      return v < 0.08 ? 0 : Math.min(1, (v - 0.08) / 0.84);
     };
     const pressed = new Set<Action>();
     const edge = (i: number, action: Action): void => {
@@ -144,9 +161,12 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
       jump: btn(PAD.a),
       use: btn(PAD.x),
       pressed,
+      rt: trigger(PAD.rt),
+      lt: trigger(PAD.lt),
     };
   }
 
+  const triggers: DriveTriggers = { accelerate: 0, brake: 0 };
   const api: InputApi = {
     state,
     update(dt) {
@@ -175,6 +195,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
         state.flopPressed = pressed.has('flop');
         state.respawnPressed = pressed.has('respawn');
       }
+      triggers.accelerate = gameplay && pad ? pad.rt : 0;
+      triggers.brake = gameplay && pad ? pad.lt : 0;
       mouseX = mouseY = 0;
 
       if (injected) {
@@ -214,5 +236,6 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'>): Inpu
       injected = patch ? { ...patch } : null;
     },
   };
+  triggersByApi.set(api, triggers);
   return api;
 }

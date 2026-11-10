@@ -21,8 +21,11 @@ export interface PlayerInternal {
   update(dt: number): void;
   /** Called after teleport/respawn so the camera can snap behind the player. */
   onTeleport: ((yaw: number) => void) | null;
-  /** M2 hook: put the player in/out of a vehicle (hides avatar, mode driving/riding). */
-  setVehicle(vehicle: VehicleApi | null, mode?: 'driving' | 'riding'): void;
+  /**
+   * Put the player in/out of a vehicle (mode driving/riding). With a `seat`, the avatar hops into
+   * it and stays visible there, playing `anim`; without one it is hidden.
+   */
+  setVehicle(vehicle: VehicleApi | null, mode?: 'driving' | 'riding', seat?: THREE.Object3D, anim?: PlayerAnim): void;
 }
 
 export async function createPlayer(ctx: GameContext, cameraYaw: () => number): Promise<PlayerInternal> {
@@ -72,6 +75,17 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   let external: ExternalController | null = null;
   let externalAnim: PlayerAnim = 'idle';
   let vehicle: VehicleApi | null = null;
+  let seat: THREE.Object3D | null = null;
+  let seatAnim: PlayerAnim = 'sit';
+  /** 0 → 1 while hopping into the seat. */
+  let hopIn = 1;
+  /** Set on the frame the player leaves a vehicle: that frame's R/F press belonged to the vehicle. */
+  let justLeftVehicle = false;
+  const hopFrom = new THREE.Vector3();
+  const hopFromQ = new THREE.Quaternion();
+  const seatPos = new THREE.Vector3();
+  const seatQ = new THREE.Quaternion();
+  const seatFwd = new THREE.Vector3();
   const desired = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
   /**
@@ -117,15 +131,26 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     api: undefined as unknown as PlayerApi, // set below
     onTeleport: null,
     update,
-    setVehicle(v, m = 'driving') {
+    setVehicle(v, m = 'driving', s, anim = 'sit') {
       if (v) {
         releaseExternal();
+        if (mode === 'flop') fx.reset();
         vehicle = v;
+        seat = s ?? null;
+        seatAnim = anim;
+        hopIn = 0;
+        hopFrom.copy(position);
+        hopFromQ.copy(object.quaternion);
         collider.setEnabled(false);
-        object.visible = false;
+        object.visible = !!seat;
+        intended.valid = false;
         setMode(m);
+        if (seat) fx.kick(2);
       } else if (vehicle) {
         vehicle = null;
+        seat = null;
+        justLeftVehicle = true;
+        object.rotation.set(0, api.yaw, 0);
         collider.setEnabled(true);
         syncCollider();
         object.visible = true;
@@ -406,14 +431,43 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     playAnim('run', Math.min(1.4, Math.max(0.8, hs / 7.5)));
   }
 
+  /** In a vehicle: hop into the seat, then ride along with it (position feeds gem pickup). */
+  function followSeat(dt: number): void {
+    prevPos.copy(position);
+    if (!seat) {
+      position.copy((vehicle as VehicleApi).position);
+    } else {
+      seat.updateWorldMatrix(true, false);
+      seat.matrixWorld.decompose(seatPos, seatQ, seatFwd);
+      if (hopIn < 1) {
+        hopIn = Math.min(1, hopIn + dt / 0.38);
+        const k = hopIn * hopIn * (3 - 2 * hopIn);
+        position.lerpVectors(hopFrom, seatPos, k);
+        position.y += Math.sin(hopIn * Math.PI) * 0.7;
+        object.quaternion.slerpQuaternions(hopFromQ, seatQ, k);
+      } else {
+        position.copy(seatPos);
+        object.quaternion.copy(seatQ);
+      }
+      seatFwd.set(0, 0, 1).applyQuaternion(object.quaternion);
+      api.yaw = Math.atan2(seatFwd.x, seatFwd.z);
+      playAnim(hopIn < 0.6 ? 'jump' : seatAnim);
+    }
+    if (dt > 0) velocity.subVectors(position, prevPos).divideScalar(dt);
+    grounded = false;
+    airTime = 0;
+  }
+
   function update(dt: number): void {
     const input = ctx.input.state;
     if (external) {
       updateExternal(dt);
     } else if (vehicle) {
-      position.copy(vehicle.position);
+      followSeat(dt);
     } else {
-      if (input.respawnPressed && (mode === 'walk' || mode === 'flop')) api.respawn();
+      if (justLeftVehicle) {
+        /* the press that got us out of the vehicle is not also a respawn/flop */
+      } else if (input.respawnPressed && (mode === 'walk' || mode === 'flop')) api.respawn();
       else if (input.flopPressed && mode === 'walk') api.flop();
       if (mode === 'flop') {
         flopT += dt;
@@ -425,6 +479,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       checkHazards();
       chooseAnim();
     }
+    justLeftVehicle = false;
     fx.update(dt);
     model.update(dt);
   }

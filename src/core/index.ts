@@ -6,6 +6,7 @@ import type { CameraApi, GameContext, GameSystem, InteractionApi, PlayerApi, Veh
 import { createCameraRig } from './camera';
 import { createInteractions } from './interactions';
 import { createPlayer } from './player';
+import { createVehicles } from './vehicles';
 
 export { createInput } from './input';
 export { createPhysics } from './physics';
@@ -27,16 +28,17 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
   cameraYaw = () => camera.api.yaw;
   player.onTeleport = (yaw) => camera.snap(yaw);
   const interactions = createInteractions(ctx);
-  // Cars and horse arrive in M2 (player.setVehicle is ready for them).
-  const vehicles: VehiclesApi = { all: [] };
+  const vehicles = createVehicles(ctx, player, camera, interactions.api);
 
   return {
     player: player.api,
     cameraRig: camera.api,
     interactions: interactions.api,
-    vehicles,
+    vehicles: vehicles.api,
     system: {
       update(dt) {
+        // Vehicles first: the rider then sits exactly where the vehicle is this frame.
+        vehicles.update(dt);
         player.update(dt);
         interactions.update(dt);
         camera.update(dt);
