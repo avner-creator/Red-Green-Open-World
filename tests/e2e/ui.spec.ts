@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot } from './helpers';
+import { SHOTS, boot } from './helpers';
 
 const OUT = 'test-results/ui';
 mkdirSync(OUT, { recursive: true });
@@ -17,6 +17,8 @@ function channel(png: PNG, c: number): Buffer {
 }
 
 async function save(page: Page, name: string): Promise<void> {
+  if (!SHOTS) return;
+  await page.evaluate(() => window.__rg!.render());
   // Finish CSS transitions/animations instantly (the game loop is frozen) instead of waiting.
   const buf = await page.screenshot({ type: 'png', animations: 'disabled' });
   writeFileSync(`${OUT}/${name}.png`, buf);
@@ -25,16 +27,17 @@ async function save(page: Page, name: string): Promise<void> {
   writeFileSync(`${OUT}/${name}-G.png`, channel(png, 1));
 }
 
-const step = (page: Page, n = 5): Promise<void> => page.evaluate((k) => window.__rg!.step(1 / 60, k), n);
+/** Advance the frozen game without rendering (renders cost seconds; `save` renders when on). */
+const step = (page: Page, n = 5): Promise<void> => page.evaluate((k) => window.__rg!.step(1 / 60, k, false), n);
 
 test.describe('ui', () => {
-  // The flow test below boots its own page (it changes settings and storage). The shorter tests
-  // share one page and go back to the title screen first: a boot costs seconds on SwiftShader.
+  // All tests share one page (a boot costs 5-15 s on SwiftShader). The flow test runs first, on
+  // the freshly booted page; the later ones go back to the title screen and reset settings first.
   let page: Page;
+  let consoleErrors: string[] = [];
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
-    await boot(page);
-    // Frozen until its first test: a running game loop here would slow down the other page.
+    ({ consoleErrors } = await boot(page));
     await page.evaluate(() => window.__rg!.freeze(true));
   });
   test.afterAll(async () => {
@@ -43,16 +46,16 @@ test.describe('ui', () => {
   const freshTitle = async (): Promise<void> => {
     await page.evaluate(() => {
       const rg = window.__rg!;
-      rg.freeze(false);
+      rg.freeze(true); // logic-only steps: a running render loop makes every click wait seconds
       if (rg.state().phase !== 'title') rg.ctx.session.toTitle();
       rg.ctx.settings.reset();
+      rg.step(1 / 60, 2, false);
     });
     await expect(page.getByTestId('play')).toBeVisible();
     await page.getByTestId('play').focus();
   };
 
-  test('title, play, hud, pause, end, gate, settings', async ({ page }) => {
-    const { consoleErrors } = await boot(page);
+  test('title, play, hud, pause, end, gate, settings', async () => {
     await page.evaluate(() => window.__rg!.freeze(true));
     await step(page);
     await save(page, 'title');
@@ -77,7 +80,7 @@ test.describe('ui', () => {
       rg.ctx.events.emit('gem:collected', { id: 'g1', count: 3, total: 60, position: rg.ctx.player.position.clone() });
       rg.ctx.events.emit('stunt', { kind: 'bigBounce', value: 22, stars: 2 });
       rg.ctx.events.emit('ui:toast', { icon: 'key' });
-      rg.step(1 / 60, 4);
+      rg.step(1 / 60, 4, false);
     });
     await expect(page.getByTestId('gems')).toHaveText('3/60');
     await expect(page.getByTestId('stars')).toHaveText('2');
@@ -89,7 +92,7 @@ test.describe('ui', () => {
     // Pause menu
     await page.evaluate(() => {
       window.__rg!.ctx.session.pause();
-      window.__rg!.step(1 / 60, 2);
+      window.__rg!.step(1 / 60, 2, false);
     });
     await expect(page.getByTestId('resume')).toBeVisible();
     expect(await page.evaluate(() => window.__rg!.ctx.ui.menuOpen)).toBe(true);
@@ -170,7 +173,7 @@ test.describe('ui', () => {
       const rg = window.__rg!;
       rg.ctx.events.emit('outfit:unlocked', { outfitId: 'hat_party' });
       rg.setRemaining(0.05);
-      rg.step(1 / 60, 30);
+      rg.step(1 / 60, 30, false);
     });
     await expect(page.getByTestId('play-again')).toBeVisible();
     // 2 stars earned this run: exactly one gold header star, the rest dotted; the hat shows.
@@ -200,7 +203,7 @@ test.describe('ui', () => {
       e.emit('outfit:unlocked', { outfitId: 'ghost_unknown' });
       e.emit('stunt', { kind: 'bigBounce', value: 22, stars: 4 });
       rg.setRemaining(0.05);
-      rg.step(1 / 60, 30);
+      rg.step(1 / 60, 30, false);
     });
     await expect(page.getByTestId('play-again')).toBeVisible();
     expect(await page.locator('.stk.outfit.earned').count()).toBe(2);
@@ -213,9 +216,9 @@ test.describe('ui', () => {
     await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
     await page.getByTestId('play').click();
-    await page.evaluate(() => window.__rg!.step(1 / 60, 5));
+    await page.evaluate(() => window.__rg!.step(1 / 60, 5, false));
     await expect(page.getByTestId('tutorial')).toHaveClass(/on/);
-    await page.evaluate(() => window.__rg!.step(1 / 60, 480));
+    await page.evaluate(() => window.__rg!.step(1 / 60, 480, false));
     await expect(page.getByTestId('tutorial')).not.toHaveClass(/on/);
   });
 
@@ -252,7 +255,7 @@ test.describe('ui', () => {
     await page.evaluate(() => window.__rg!.step(1 / 60, 150, false));
     await expect(page.getByTestId('settings')).toBeHidden();
     // ...3 s is.
-    await page.evaluate(() => window.__rg!.step(1 / 60, 40));
+    await page.evaluate(() => window.__rg!.step(1 / 60, 40, false));
     await expect(page.getByTestId('settings')).toBeVisible();
     await page.mouse.up();
   });

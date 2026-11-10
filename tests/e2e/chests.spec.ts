@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, canvasShot, channelDiff, shot } from './helpers';
+import { SHOTS, boot, canvasShot, channelDiff, shot } from './helpers';
 import { VisionLayer } from '../../src/types';
 import type { EyeSettings } from '../../src/types';
 import type { ChestInfo } from '../../src/activities/chests';
@@ -60,6 +60,7 @@ function splitChannel(png: PNG, c: number): Buffer {
 }
 
 async function save(name: string): Promise<void> {
+  if (!SHOTS) return;
   const buf = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' });
   const png = PNG.sync.read(buf);
   writeFileSync(`${OUT}/${name}-full.png`, buf);
@@ -217,6 +218,7 @@ test('the key lives only in the weak channel and the lock only in the strong cha
 
 /** Free camera for screenshots: placed after the last step, then the same state is re-rendered. */
 async function cam(from: [number, number, number], at: [number, number, number], fov = 60): Promise<void> {
+  if (!SHOTS) return; // only frames screenshots (and a render costs seconds on SwiftShader)
   await page.evaluate(
     ({ from, at, fov }) => {
       const rg = window.__rg!;
@@ -232,7 +234,7 @@ async function cam(from: [number, number, number], at: [number, number, number],
   );
 }
 
-test('screenshots: key and lock in view (full / R / G), then every wearable', async () => {
+test('every chest opens and its wearable goes on (screenshots with RG_SHOTS=1)', async () => {
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.start();

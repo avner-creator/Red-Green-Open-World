@@ -11,6 +11,9 @@ import {
   stepCanopy,
   stepFreefall,
   terminalFor,
+  updateAssist,
+  freefallAssistSteer,
+  nextBelow,
 } from '../../src/activities/skydive/flight';
 import type { CanopyState, V3 } from '../../src/activities/skydive/flight';
 import { segmentSphereHit } from '../../src/activities/gemLogic';
@@ -121,13 +124,14 @@ describe('canopy', () => {
   });
 
   it('turns gently towards the stick and homes towards the rings hands-off', () => {
-    const pos: V3 = { x: 0, y: 500, z: 0 };
+    // 70 m up, the rings 57 m away behind-right: a nudge on the stick, then hands-off.
+    const pos: V3 = { x: 0, y: 70, z: 0 };
     const vel: V3 = { x: 0, y: -5, z: 9 };
     const st: CanopyState = { yaw: 0, turn: 0 };
-    stepCanopy(pos, vel, st, { x: 1, z: 0 }, null, 400, DT);
+    stepCanopy(pos, vel, st, { x: 1, z: 0 }, null, pos.y, DT);
     expect(st.turn).toBeCloseTo(SKY.canopyTurn, 6);
-    for (let i = 0; i < 60 * 30; i++) stepCanopy(pos, vel, st, { x: 0, z: 0 }, { x: 40, z: 40 }, 400, DT);
-    expect(Math.hypot(pos.x - 40, pos.z - 40)).toBeLessThan(2 * SKY.canopyGlide / SKY.canopyAssistTurn);
+    for (let i = 0; i < 60 * 30 && pos.y > 0; i++) stepCanopy(pos, vel, st, { x: 0, z: 0 }, { x: 40, z: -40 }, pos.y, DT);
+    expect(Math.hypot(pos.x - 40, pos.z + 40)).toBeLessThan(SKY.rings[2]);
   });
 });
 
@@ -208,5 +212,69 @@ describe('skydive gem trail', () => {
     const freefall = (k: number): boolean => trail[k].y - h(trail[k].x, trail[k].z) > BALLOON.autoChuteHeight;
     expect([...missed].filter(freefall).map((k) => trail[k])).toEqual([]);
     expect(trail.filter((_, k) => freefall(k)).length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('a hands-off jump from the normal jump point lands inside the outer ring', () => {
+    const h = (x: number, z: number): number => sampleHeight(terrain, x, z);
+    const trail = buildGemSpots(h, terrain.roads)
+      .filter((s) => s.tag === 'skydive')
+      .sort((a, b) => b.y - a.y);
+    const b = ANCHORS.balloon;
+    const r = ANCHORS.landingRings;
+    const rings = { x: r.x, y: h(r.x, r.z), z: r.z };
+    // Same jump as the game: from above the first gem, hop towards the rings.
+    const pos: V3 = { x: trail[0].x, y: h(b.x, b.z) + BALLOON.topHeight + 0.4, z: trail[0].z };
+    const yaw0 = Math.atan2(r.x - pos.x, r.z - pos.z);
+    const vel: V3 = { x: Math.sin(yaw0) * SKY.hopForward, y: SKY.hopUp, z: Math.cos(yaw0) * SKY.hopForward };
+    const st: CanopyState = { yaw: yaw0, turn: 0 };
+    let open = false;
+    let fall = 0;
+    let yaw = yaw0;
+    let gems = 0;
+    for (let i = 0; i < 60 * 90; i++) {
+      const agl = pos.y - h(pos.x, pos.z);
+      if (agl <= 0) break;
+      if (!open && shouldOpenChute(agl, fall, false)) {
+        open = true;
+        st.yaw = yaw;
+      }
+      const before = chest(pos);
+      if (open) {
+        stepCanopy(pos, vel, st, { x: 0, z: 0 }, rings, agl, DT);
+      } else {
+        updateAssist(st, 0, DT);
+        const target = nextBelow(trail, pos.y + PLAYER.height / 2) ?? rings;
+        stepFreefall(pos, vel, freefallAssistSteer(pos, vel, target), DT);
+        if (Math.hypot(vel.x, vel.z) > 3) yaw = Math.atan2(vel.x, vel.z);
+        fall += DT;
+      }
+      const after = chest(pos);
+      for (const g of trail) if (segmentSphereHit(before, after, g, GEMS.pickupRadius)) gems++;
+    }
+    const dist = Math.hypot(pos.x - r.x, pos.z - r.z);
+    console.log(`hands-off landing ${dist.toFixed(2)} m from the centre, ${gems} gem hits`);
+    expect(dist).toBeLessThanOrEqual(SKY.rings[2]);
+  });
+});
+
+const chest = (p: V3): V3 => ({ x: p.x, y: p.y + PLAYER.height / 2, z: p.z });
+
+describe('hands-off assist', () => {
+  it('any stick input blends the assist out, and it returns after ~1 s hands-off', () => {
+    const a = { assist: 1, idle: 0 };
+    expect(updateAssist(a, 1, DT)).toBe(0);
+    expect(updateAssist(a, 0, 0.5)).toBe(0);
+    let w = 0;
+    for (let t = 0; t < 2.5; t += DT) w = updateAssist(a, 0, DT);
+    expect(w).toBeGreaterThan(0.9);
+    expect(updateAssist({ assist: 1 }, 0.5, DT)).toBeCloseTo(0.5, 6);
+  });
+
+  it('full stick under canopy is full manual control even with the rings set', () => {
+    const pos: V3 = { x: 0, y: 100, z: 0 };
+    const vel: V3 = { x: 0, y: -5, z: 9 };
+    const st: CanopyState = { yaw: 0, turn: 0 };
+    stepCanopy(pos, vel, st, { x: 1, z: 0 }, { x: -50, z: 0 }, 100, DT);
+    expect(st.turn).toBeCloseTo(SKY.canopyTurn, 6);
   });
 });

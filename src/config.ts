@@ -18,9 +18,9 @@ export const WORLD = {
 } as const;
 
 export const PLAYER = {
-  walkSpeed: 4.5,
-  sprintSpeed: 8.5,
-  jumpSpeed: 7.5,
+  walkSpeed: 6.5,
+  sprintSpeed: 11,
+  jumpSpeed: 7.8,
   gravity: 22,
   height: 1.7,
   radius: 0.35,
