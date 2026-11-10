@@ -253,7 +253,7 @@ function garage(k: Kit): CoreAreas {
   k.col.box(T(px, py, pz), 0, 0.75, 0, 0.3, 0.75, 0.22);
   for (const [cx, cz] of [[-9.6, -4.6], [-10.4, -3.8], [9.8, -4.4]]) cone(b, a.x + cx, k.h(a.x + cx, a.z + cz) + 0.02, a.z + cz);
   lamp(k, a.x - 13.6, a.z - 5.5);
-  lamp(k, a.x + 13.6, a.z - 5.5);
+  lamp(k, a.x + 13.6, a.z - 3.4);
   lamp(k, a.x - 13.6, a.z + 6.5);
   // Planters along the building front between the piers' outer ends.
   planter(k, a.x - 12.5, a.z + 1.2, 2.4, 0.9, Math.PI / 2, 11);

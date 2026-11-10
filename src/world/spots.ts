@@ -61,7 +61,7 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
 
   // ── First 15: plaza, rooftops, trampoline ──
   ground(0, -2, 'plaza', 3.4); // on top of the fountain
-  ground(7, 4, 'plaza');
+  ground(7.5, 2.5, 'plaza');
   ground(-7, 4, 'plaza');
   ground(15, -9, 'plaza');
   ground(-14, -13, 'plaza');
@@ -123,7 +123,8 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
   const lhY = height(lh.x, lh.z);
   ground(lh.x + 9, lh.z + 2, 'lighthouse');
   ground(lh.x - 3, lh.z + 10, 'lighthouse');
-  spots.push({ x: lh.x + 2.4, y: lhY + 13.6 + FLOAT, z: lh.z + 0.8, tag: 'lighthouse' });
+  // Gallery: between the lantern (r 1.4) and the rail (r 2.8), a metre above the deck.
+  spots.push({ x: lh.x + 2.15, y: lhY + 14.3 + 0.25 + 1.0, z: lh.z + 0.7, tag: 'lighthouse' });
   spots.push({ x: lh.x, y: lhY + 21, z: lh.z, tag: 'lighthouse' });
 
   // Silly Zone ring.

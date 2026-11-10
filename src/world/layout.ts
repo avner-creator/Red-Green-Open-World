@@ -38,11 +38,12 @@ export const ANCHORS: Record<AnchorName, AnchorDef> = {
   bouncePads: { x: 84, z: -12, radius: 10, yaw: -Math.PI / 2, onLand: true },
   balloon: { x: 84, z: 64, radius: 12, yaw: Math.PI * 0.75, onLand: true },
   landingRings: { x: 124, z: 22, radius: 18, yaw: -Math.PI / 2, onLand: true },
-  bungee: { x: -1.5, z: CANYON.z, radius: 3, yaw: -Math.PI / 2, y: DECK_Y, onLand: false },
+  // yaw faces back along the deck (the approach); the jump itself goes west (−X) off the platform.
+  bungee: { x: -1.5, z: CANYON.z, radius: 3, yaw: 0, y: DECK_Y, onLand: false },
   bungeeLanding: { x: -18, z: CANYON.z, radius: 5, yaw: Math.PI / 2, onLand: true },
   lakePlatform: { x: -118, z: -50, radius: 4, yaw: Math.PI / 4, y: 0.75, onLand: false },
   lighthouse: { x: -62, z: -134, radius: 8, yaw: -Math.PI / 4, onLand: true },
-  ranch: { x: -74, z: 44, radius: 16, yaw: Math.PI / 2, onLand: true },
+  ranch: { x: -74, z: 44, radius: 16, yaw: Math.PI / 2 + 0.6, onLand: true },
   sillyZone: { x: 8, z: 98, radius: 16, yaw: Math.PI, onLand: true },
   launchPads: { x: -30, z: 102, radius: 10, yaw: Math.PI / 2, onLand: true },
 };

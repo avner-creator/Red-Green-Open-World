@@ -39,7 +39,7 @@ export class GradeEffect extends Effect {
         ['exposure', new THREE.Uniform(1)],
         ['saturation', new THREE.Uniform(1.14)],
         ['contrast', new THREE.Uniform(1.06)],
-        ['vignette', new THREE.Uniform(0.22)],
+        ['vignette', new THREE.Uniform(0.3)],
       ]),
     });
   }
@@ -57,8 +57,8 @@ export function createPost(camera: THREE.Camera): Post {
   const gradeLow = new GradeEffect();
   const grade = new GradeEffect();
   const bloom = new BloomEffect({
-    intensity: 0.55,
-    luminanceThreshold: 0.82,
+    intensity: 0.8,
+    luminanceThreshold: 0.74,
     luminanceSmoothing: 0.25,
     mipmapBlur: true,
     radius: 0.72,

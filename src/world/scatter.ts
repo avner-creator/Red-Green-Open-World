@@ -198,7 +198,7 @@ function flowerGeo(): THREE.BufferGeometry {
   const leaves = grassGeo(13, 6);
   // Leaves: tint to green-ish multipliers (instance colour is the flower colour).
   const lc = leaves.attributes.color;
-  for (let i = 0; i < lc.count; i++) lc.setXYZ(i, 0.22 * lc.getX(i), 0.42 * lc.getY(i), 0.12 * lc.getZ(i));
+  for (let i = 0; i < lc.count; i++) lc.setXYZ(i, 0.36 * lc.getX(i), 0.6 * lc.getY(i), 0.2 * lc.getZ(i));
   const heads: Part[] = [];
   const rng = new Rng(11);
   for (let i = 0; i < 5; i++) {
@@ -307,7 +307,7 @@ export function buildScatter(
   group.name = 'scatter';
   const all = { low: 1, medium: 1, high: 1 };
   const inf = { low: 1e9, medium: 1e9, high: 1e9 };
-  const treeLod = { low: 45, medium: 72, high: 105 };
+  const treeLod = { low: 45, medium: 62, high: 100 };
   const defs: SpeciesDef[] = [
     { name: 'oak', near: oakGeo(false), far: oakGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },
     { name: 'pine', near: pineGeo(false), far: pineGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },
