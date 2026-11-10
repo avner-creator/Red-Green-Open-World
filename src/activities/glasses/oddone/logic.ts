@@ -119,3 +119,99 @@ export function differs(a: ShapeSpec, b: ShapeSpec): boolean {
   if (a.kind === 'circle' || a.kind === 'square' || a.kind === 'diamond' || a.kind === 'triangle') return false;
   return ((a.dir % 4) + 4) % 4 !== ((b.dir % 4) + 4) % 4;
 }
+
+// ───────────────────────────── the game (pure; the mechanic and the bot tests share it) ─────────────────────────────
+
+/** Nap after a miss (seconds, from when the next round appears): 5 s, 8 s from the second miss in a row. */
+export function napSeconds(missStreak: number): number {
+  return missStreak <= 0 ? 0 : missStreak === 1 ? ODD.nap.first : ODD.nap.again;
+}
+
+/**
+ * Gems for a hit: the tier's gems, but only 1 for the first `ODD.warmHits` hits after a miss, so
+ * random pressing cannot farm gems (a player who reads the shapes rarely misses).
+ */
+export function payout(tier: GlassesTier, hitsSinceMiss: number): number {
+  return hitsSinceMiss <= ODD.warmHits ? 1 : gemsForTier(tier);
+}
+
+export interface PressResult {
+  hit: boolean;
+  tier: GlassesTier;
+  gems: number;
+}
+
+export class OddOneGame {
+  level = 0;
+  /** Fixed level (bot tests); null = the staircase. */
+  lockLevel: number | null = null;
+  round: Round;
+  phase: 'ask' | 'feedback' = 'ask';
+  phaseT = 0;
+  /** Seconds the buttons still nap (counts down only while a round asks). */
+  nap = 0;
+  missStreak = 0;
+  /** Hits since the last miss (Infinity before the first miss). */
+  hitsSinceMiss = Infinity;
+  pressed = -1;
+  lastHit = false;
+  hits = 0;
+  misses = 0;
+  gems = 0;
+
+  constructor(private readonly rng: () => number) {
+    this.round = makeRound(0, rng);
+  }
+
+  canPress(): boolean {
+    return this.phase === 'ask' && this.nap <= 0;
+  }
+
+  newRound(): void {
+    this.round = makeRound(this.lockLevel ?? this.level, this.rng);
+    this.phase = 'ask';
+    this.phaseT = 0;
+    this.pressed = -1;
+  }
+
+  press(i: number): PressResult | null {
+    if (!this.canPress()) return null;
+    const hit = i === this.round.answer;
+    const tier = this.round.tier;
+    this.pressed = i;
+    this.lastHit = hit;
+    this.phase = 'feedback';
+    this.phaseT = 0;
+    let gems = 0;
+    if (hit) {
+      this.hits++;
+      this.missStreak = 0;
+      this.hitsSinceMiss++;
+      gems = payout(tier, this.hitsSinceMiss);
+      this.gems += gems;
+    } else {
+      this.misses++;
+      this.missStreak++;
+      this.hitsSinceMiss = 0;
+      this.nap = napSeconds(this.missStreak);
+    }
+    this.level = nextLevel(this.level, hit);
+    return { hit, tier, gems };
+  }
+
+  step(dt: number): void {
+    this.phaseT += dt;
+    if (this.phase === 'feedback') {
+      if (this.phaseT >= ODD.feedbackSeconds) this.newRound();
+    } else this.nap = Math.max(0, this.nap - dt);
+  }
+
+  reset(): void {
+    this.level = 0;
+    this.missStreak = 0;
+    this.hitsSinceMiss = Infinity;
+    this.hits = this.misses = this.gems = 0;
+    this.nap = 0;
+    this.newRound();
+  }
+}

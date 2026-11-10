@@ -18,17 +18,17 @@ export type GlassesPicto =
   | 'toy'
   | 'odd' // three shapes, one different
   | 'press' // hand pressing a button
-  | 'reticle' // reticle on a target
+  | 'hoop' // a magic ring around a soap bubble, and a press
   | 'arches' // three arches, run through the right one
   | 'halves' // half + half = whole
   | 'dots' // dot picture with a hidden shape
   | 'gems' // gem with a plus
-  | 'arrows'
+  | 'pad' // stand on the pad: footprints on a ring
   | 'check';
 
 export const GLASSES_PICTOS: readonly GlassesPicto[] = [
   'magic', 'glasses', 'run', 'firefly', 'paw', 'toy', 'odd', 'press',
-  'reticle', 'arches', 'halves', 'dots', 'gems', 'arrows', 'check',
+  'hoop', 'arches', 'halves', 'dots', 'gems', 'pad', 'check',
 ];
 
 export const GLASSES_ATLAS = 1024;
@@ -398,16 +398,25 @@ const DRAW: Record<GlassesPicto, (c: C2) => void> = {
     hand(c, 50, 72, 1.0);
     for (const [x0, y0, x1, y1] of [[24, 70, 16, 66], [76, 70, 84, 66], [26, 80, 16, 82], [74, 80, 84, 82]]) line(c, [x0, y0, x1, y1], 3, YEL);
   },
-  reticle: (c) => {
+  hoop: (c) => {
     panelBg(c);
-    // Target.
-    disc(c, 50, 52, 26, WHITE);
-    disc(c, 50, 52, 19, INK);
-    disc(c, 50, 52, 12, WHITE);
-    disc(c, 50, 52, 5, INK);
-    // Reticle on top.
-    ring(c, 50, 52, 33, 4, YEL);
-    for (const [x0, y0, x1, y1] of [[50, 12, 50, 26], [50, 78, 50, 92], [10, 52, 24, 52], [76, 52, 90, 52]]) line(c, [x0, y0, x1, y1], 4.5, YEL);
+    // Soap bubble: thin rim, highlight arc, glint.
+    ring(c, 44, 46, 17, 3, WHITE);
+    c.beginPath();
+    c.arc(44, 46, 11.5, Math.PI * 1.05, Math.PI * 1.45);
+    c.lineWidth = 3.4;
+    c.strokeStyle = WHITE;
+    c.lineCap = 'round';
+    c.stroke();
+    disc(c, 52, 38, 2.6, WHITE);
+    // Magic ring around it, with sparkles.
+    ring(c, 44, 46, 27, 5, YEL);
+    sparkle(c, 75, 20, 7, YEL);
+    sparkle(c, 15, 22, 5, WHITE);
+    sparkle(c, 86, 40, 4, WHITE);
+    // Press: hand on a button, bottom right.
+    button(c, 78, 86, 0.62, true);
+    hand(c, 78, 82, 0.5);
   },
   arches: (c) => {
     panelBg(c);
@@ -420,24 +429,24 @@ const DRAW: Record<GlassesPicto, (c: C2) => void> = {
   },
   halves: (c) => {
     panelBg(c);
-    // Left half of a star + right half = whole star.
+    // Top: left half of a star + right half of a star; bottom: = whole star.
     c.save();
     c.beginPath();
-    c.rect(4, 0, 18, 100);
+    c.rect(0, 0, 33, 100);
     c.clip();
-    star(c, 22, 50, 15, WHITE, 0.5);
+    star(c, 33, 34, 21, WHITE, 0.5);
     c.restore();
-    line(c, [32, 50, 40, 50], 3.5, WHITE);
-    line(c, [36, 46, 36, 54], 3.5, WHITE);
+    line(c, [45, 34, 55, 34], 4.5, WHITE);
+    line(c, [50, 29, 50, 39], 4.5, WHITE);
     c.save();
     c.beginPath();
-    c.rect(46, 0, 30, 100);
+    c.rect(67, 0, 33, 100);
     c.clip();
-    star(c, 46, 50, 15, WHITE, 0.5);
+    star(c, 67, 34, 21, WHITE, 0.5);
     c.restore();
-    line(c, [60, 46, 66, 46], 3.5, WHITE);
-    line(c, [60, 54, 66, 54], 3.5, WHITE);
-    star(c, 81, 50, 13, YEL, 0.5);
+    line(c, [14, 68, 26, 68], 4.5, WHITE);
+    line(c, [14, 77, 26, 77], 4.5, WHITE);
+    star(c, 58, 72, 22, YEL, 0.5);
   },
   dots: (c) => {
     panelBg(c);
@@ -468,9 +477,24 @@ const DRAW: Record<GlassesPicto, (c: C2) => void> = {
     sparkle(c, 84, 20, 6, WHITE);
     sparkle(c, 82, 84, 4, YEL);
   },
-  arrows: (c) => {
+  pad: (c) => {
     panelBg(c);
-    arrow(c, 16, 50, 84, 50, 9, YEL);
+    // A bright ring on the ground (seen from the side) with two footprints standing on it.
+    c.beginPath();
+    c.ellipse(50, 66, 36, 15, 0, 0, Math.PI * 2);
+    c.fillStyle = DARK;
+    c.fill();
+    c.lineWidth = 6;
+    c.strokeStyle = WHITE;
+    c.stroke();
+    for (const x of [39, 61]) {
+      c.beginPath();
+      c.ellipse(x, 66, 6.5, 10, 0, 0, Math.PI * 2);
+      c.fillStyle = YEL;
+      c.fill();
+      disc(c, x, 52, 4.2, YEL);
+    }
+    arrow(c, 50, 14, 50, 36, 5, WHITE);
   },
   check: (c) => {
     panelBg(c);

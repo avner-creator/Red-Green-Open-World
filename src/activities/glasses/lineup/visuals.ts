@@ -1,39 +1,60 @@
 /**
- * Line-up visuals: the strong-eye bubbles (one quad batch, one draw call, with their pop effect
- * drawn in the same shader on the same layer) and the both-eye aim pad (one merged mesh).
+ * Line-up visuals: the strong-eye soap bubbles (one quad batch, one draw call, their sparkle pop
+ * drawn in the same shader on the same layer), the weak-eye magic ring (one quad) and the
+ * both-eye aim pad (one merged mesh).
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { applyFade, baseFragmentHead, baseUniforms } from '../../../vision/toolkit/common';
+import { applyFade, baseFragmentHead, baseUniforms, linearGrey } from '../../../vision/toolkit/common';
 import { createQuadBatch } from '../oddone/quadBatch';
 import { LINEUP } from './constants';
 
+/** Four-point sparkle (signed distance, approximate) of size `r` at the origin. */
+const sparkleLib = /* glsl */ `
+float diamondSdf(vec2 q, vec2 h) {
+  q = abs(q);
+  return (q.x / h.x + q.y / h.y - 1.0) * min(h.x, h.y) * 0.7;
+}
+float sparkleSdf(vec2 q, float r) {
+  return min(diamondSdf(q, vec2(r, r * 0.22)), diamondSdf(q, vec2(r * 0.22, r)));
+}
+const float TAU = 6.28318530718;
+`;
+
+/** Soap bubble in units of its radius (vP spans ±halfSize); the pop is a burst of sparkles. */
 const bubbleFragment = /* glsl */ `
 ${baseFragmentHead}
+${sparkleLib}
 varying vec2 vP;
-varying float vRadius;
 varying float vPop;
 varying float vAlpha;
-const float TAU = 6.28318530718;
 void main() {
-  float R = vRadius * (1.0 + 0.65 * vPop);
-  float d = length(vP);
-  float th = 0.13 * vRadius * (1.0 - 0.5 * vPop);
-  float s = abs(d - R) - th * 0.5;
-  if (vPop > 0.0) {
-    // The ring breaks into 8 dashes that shrink away.
-    float local = fract(atan(vP.y, vP.x) / TAU * 8.0);
-    s = max(s, (abs(local - 0.5) - 0.5 * (1.0 - vPop)) * (TAU * R / 8.0));
-  }
-  float a = aaFill(s);
+  vec2 p = vP;
+  float d = length(p);
+  float a;
   if (vPop <= 0.0) {
-    a = max(a, 0.2 * aaFill(d - R));
-    float h = length(vP - vec2(-0.38, 0.4) * vRadius) - 0.16 * vRadius;
-    a = max(a, 0.95 * aaFill(h));
-    float h2 = length(vP - vec2(-0.12, 0.6) * vRadius) - 0.07 * vRadius;
-    a = max(a, 0.8 * aaFill(h2));
+    // Thin rim, a faint film, a highlight arc and a glint.
+    a = aaFill(abs(d - 1.0) - 0.045);
+    a = max(a, 0.1 * aaFill(d - 1.0));
+    float ang = atan(p.y, p.x);
+    float arc = abs(d - 0.74) - 0.06;
+    float inArc = step(1.95, ang) * step(ang, 2.75);
+    a = max(a, 0.9 * aaFill(arc) * inArc);
+    a = max(a, 0.9 * aaFill(length(p - vec2(0.5, 0.5)) - 0.09));
+    a *= vAlpha;
+  } else {
+    // Pop: eight sparkles fly out and shrink, plus a quick soft flash.
+    a = 0.0;
+    float r = 1.0 + 0.9 * vPop;
+    float size = 0.32 * (1.0 - vPop);
+    for (int k = 0; k < 8; k++) {
+      float t = float(k) / 8.0 * TAU + 0.2;
+      vec2 c = vec2(cos(t), sin(t)) * r;
+      a = max(a, aaFill(sparkleSdf(p - c, size)));
+    }
+    a = max(a, 0.35 * (1.0 - vPop) * aaFill(d - 0.6 * (1.0 - vPop)));
   }
-  a *= vAlpha * (1.0 - vPop) * opacity * fade;
+  a *= opacity * fade;
   if (a <= 0.0) discard;
   gl_FragColor = vec4(color, a);
 }
@@ -48,18 +69,93 @@ export interface BubbleBatch {
 }
 
 export function createBubbles(count: number): BubbleBatch {
-  // One quad size for every bubble: big enough for the largest popped ring (1.65 R + stroke).
-  const u = { ...baseUniforms(1, 1), halfSize: { value: LINEUP.bubble.radius * 1.9 } };
-  const b = createQuadBatch({ name: 'LineUpBubbles', count, floats: ['Radius', 'Pop', 'Alpha'], fragmentShader: bubbleFragment, uniforms: u });
+  // Units of the bubble radius: the quad (±2.3 R) holds the popped sparkles (1.9 R + their size).
+  const u = { ...baseUniforms(1, 1), halfSize: { value: 2.3 } };
+  const b = createQuadBatch({ name: 'LineUpBubbles', count, floats: ['Pop', 'Alpha'], fragmentShader: bubbleFragment, uniforms: u });
   return {
     mesh: b.mesh,
     set(i, p, radius, pop, alpha) {
       b.setCenter(i, p.x, p.y, p.z);
-      b.set('Radius', i, radius);
+      b.set('Scale', i, radius);
       b.set('Pop', i, pop);
       b.set('Alpha', i, alpha);
     },
     setFade: (f) => applyFade(b.material, f),
+    commit: () => b.commit(),
+    dispose: () => b.dispose(),
+  };
+}
+
+/**
+ * The weak-eye magic ring: a sparkly hoop (no ticks, no centre dot) in units of its radius. While
+ * it recharges after a miss only an arc of it shows (the rest a faint track); a pop sends out a
+ * burst ring. One quad, one draw call.
+ */
+const hoopFragment = /* glsl */ `
+${baseFragmentHead}
+${sparkleLib}
+uniform float spin;
+varying vec2 vP;
+varying float vCharge;
+varying float vBurst;
+void main() {
+  vec2 p = vP;
+  float d = length(p);
+  float hoop = aaFill(abs(d - 1.0) - 0.09);
+  float ang = fract(atan(p.x, p.y) / TAU);
+  float on = vCharge >= 1.0 ? 1.0 : step(ang, vCharge);
+  float a = hoop * mix(0.22, 1.0, on);
+  if (vCharge >= 1.0) {
+    // Small twinkles riding along the outside of the hoop (never four ticks at the compass points).
+    for (int k = 0; k < 7; k++) {
+      float t = (float(k) / 7.0 + spin) * TAU;
+      vec2 c = vec2(sin(t), cos(t)) * 1.2;
+      float tw = 0.13 + 0.07 * sin(t * 3.0 + spin * 40.0);
+      a = max(a, aaFill(sparkleSdf(p - c, tw)));
+    }
+  }
+  if (vBurst > 0.0) {
+    float br = 1.0 + 0.8 * vBurst;
+    a = max(a, (1.0 - vBurst) * aaFill(abs(d - br) - 0.06 * (1.0 - vBurst)));
+  }
+  a *= opacity * fade;
+  if (a <= 0.0) discard;
+  gl_FragColor = vec4(color, a);
+}
+`;
+
+export interface Hoop {
+  readonly mesh: THREE.Mesh;
+  place(p: THREE.Vector3, radius: number): void;
+  setCharge(c: number): void;
+  setBurst(b: number): void;
+  setLook(level: number, opacity: number): void;
+  setFade(f: number): void;
+  update(dt: number): void;
+  commit(): void;
+  dispose(): void;
+}
+
+export function createHoop(): Hoop {
+  const u = { ...baseUniforms(1, 1), halfSize: { value: 1.95 }, spin: { value: 0 } };
+  const b = createQuadBatch({ name: 'LineUpHoop', count: 1, floats: ['Charge', 'Burst'], fragmentShader: hoopFragment, uniforms: u });
+  b.set('Charge', 0, 1);
+  return {
+    mesh: b.mesh,
+    place(p, radius) {
+      b.setCenter(0, p.x, p.y, p.z);
+      b.set('Scale', 0, radius);
+    },
+    setCharge: (c) => b.set('Charge', 0, Math.max(0, Math.min(1, c))),
+    setBurst: (v) => b.set('Burst', 0, Math.max(0, Math.min(1, v))),
+    setLook(level, opacity) {
+      u.color.value.copy(linearGrey(level));
+      u.opacity.value = Math.max(0, Math.min(1, opacity));
+    },
+    setFade: (f) => applyFade(b.material, f),
+    update(dt) {
+      u.spin.value = (u.spin.value + dt * 0.12) % 1;
+    },
     commit: () => b.commit(),
     dispose: () => b.dispose(),
   };

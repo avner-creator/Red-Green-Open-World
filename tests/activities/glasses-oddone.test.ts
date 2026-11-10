@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { ODD } from '../../src/activities/glasses/oddone/constants';
-import { detailForLevel, differs, gemsForTier, makeRound, nextLevel, shapesOf, tierForLevel, withAnswer } from '../../src/activities/glasses/oddone/logic';
+import {
+  detailForLevel,
+  differs,
+  gemsForTier,
+  makeRound,
+  napSeconds,
+  nextLevel,
+  OddOneGame,
+  payout,
+  shapesOf,
+  tierForLevel,
+  withAnswer,
+} from '../../src/activities/glasses/oddone/logic';
 import { mulberry32 } from '../../src/vision/toolkit/rng';
 
 describe('odd one out staircase', () => {
@@ -74,5 +86,50 @@ describe('odd one out staircase', () => {
     const a = mulberry32(5);
     const b = mulberry32(5);
     expect(makeRound(3, a)).toEqual(makeRound(3, b));
+  });
+});
+
+describe('odd one out: random pressing does not pay', () => {
+  const DT = 1 / 30;
+  /** Gems per minute for a bot that presses as soon as the buttons allow. */
+  function gemsPerMinute(seed: number, perfect: boolean, lock: number | null, minutes = 30): number {
+    const g = new OddOneGame(mulberry32(seed));
+    g.lockLevel = lock;
+    g.reset();
+    const bot = mulberry32(seed + 99);
+    for (let t = 0; t < minutes * 60; t += DT) {
+      g.step(DT);
+      if (g.canPress()) g.press(perfect ? g.round.answer : Math.floor(bot() * 3));
+    }
+    return g.gems / minutes;
+  }
+
+  it('naps 5 s after a miss, 8 s from the second miss in a row; the first hits after a miss pay 1', () => {
+    expect([napSeconds(0), napSeconds(1), napSeconds(2), napSeconds(5)]).toEqual([0, 5, 8, 8]);
+    expect(payout(3, 1)).toBe(1);
+    expect(payout(3, Infinity)).toBe(gemsForTier(3));
+    const g = new OddOneGame(mulberry32(1));
+    g.reset();
+    const wrong = (g.round.answer + 1) % 3;
+    expect(g.press(wrong)).toMatchObject({ hit: false });
+    expect(g.canPress()).toBe(false);
+    for (let t = 0; t < ODD.feedbackSeconds + 4.9; t += DT) g.step(DT);
+    expect(g.phase).toBe('ask');
+    expect(g.canPress()).toBe(false); // still napping
+    for (let t = 0; t < 0.2; t += DT) g.step(DT);
+    expect(g.canPress()).toBe(true);
+    expect(g.press(g.round.answer)).toMatchObject({ hit: true, gems: 1 });
+  });
+
+  it('a random-guess bot earns ≤ 6 gems per minute at any level', () => {
+    for (const lock of [null, 0, 1, 2, 3, 4, 5, 6, 7]) {
+      let sum = 0;
+      for (const s of [1, 2, 3]) sum += gemsPerMinute(s, false, lock);
+      expect(sum / 3, `level ${lock ?? 'staircase'}`).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('a perfect player earns ≥ 30 gems per minute at tier 1', () => {
+    expect(gemsPerMinute(1, true, 0, 10)).toBeGreaterThanOrEqual(30);
   });
 });
