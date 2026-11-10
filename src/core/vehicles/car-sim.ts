@@ -48,6 +48,22 @@ export interface CarControls {
 
 export const NO_CONTROLS: CarControls = { throttle: 0, steer: 0, handbrake: false, hop: false };
 
+/** Optional per-step modifiers (workshop upgrades, boost pads). All neutral by default. */
+export interface SimMods {
+  /** Extra top speed (m/s) on every surface while > 0 (boost). */
+  extraTop: number;
+  /** One-shot forward speed added this step (m/s). */
+  kick: number;
+  /** Hop height multiplier. */
+  hopScale: number;
+  /** Bump bounce multiplier. */
+  bounceScale: number;
+  /** Grass and dirt count as road for top speed. */
+  offroadAsRoad: boolean;
+}
+
+export const NO_MODS: SimMods = { extraTop: 0, kick: 0, hopScale: 1, bounceScale: 1, offroadAsRoad: false };
+
 export interface CarEnv {
   heightAt(x: number, z: number): number;
   waterLevel: number;
@@ -100,7 +116,7 @@ export interface CarSim {
   readonly velocity: THREE.Vector3;
   /** Heading (yaw of the nose around +Y; facing = (sin yaw, 0, cos yaw)). */
   yaw(): number;
-  update(dt: number, controls: CarControls, env: CarEnv): CarStepEvents;
+  update(dt: number, controls: CarControls, env: CarEnv, mods?: SimMods): CarStepEvents;
   /** Put the car upright at `pos` (wheels on the ground at pos.y) facing `yaw`, at rest. */
   place(pos: THREE.Vector3Like, yaw: number): void;
   dispose(): void;
@@ -246,7 +262,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     }
   }
 
-  function update(dt: number, c: CarControls, env: CarEnv): CarStepEvents {
+  function update(dt: number, c: CarControls, env: CarEnv, m: SimMods = NO_MODS): CarStepEvents {
     const ev: CarStepEvents = { bump: 0, landed: 0, righted: false, hopped: false, depth: 0 };
     if (dt <= 0) return ev;
     readState();
@@ -262,7 +278,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
         ev.bump = dv;
         bumpCooldown = 0.35;
         // A comic little hop off the bump (and never more than a hop).
-        velocity.y = Math.max(velocity.y, Math.min(4.5, 1.6 + dv * 0.22));
+        velocity.y = Math.max(velocity.y, Math.min(4.5, 1.6 + dv * 0.22) * m.bounceScale);
       }
     }
 
@@ -284,7 +300,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     onRoad = env.isPaved(position.x, position.z);
     const depth = env.waterLevel - env.heightAt(position.x, position.z);
     ev.depth = depth;
-    topSpeed = waterSpeedCap(onRoad ? DRIVE.topSpeedRoad : DRIVE.topSpeedOffroad, depth);
+    topSpeed = waterSpeedCap((onRoad || m.offroadAsRoad ? DRIVE.topSpeedRoad : DRIVE.topSpeedOffroad) + m.extraTop, depth);
 
     // Steering (smoothed) and drive.
     steer = smoothSteer(steer, clamp(c.steer, -1, 1), dt);
@@ -314,13 +330,17 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
       tmp.copy(up).multiplyScalar(omega.dot(up));
       const perp = omega.clone().sub(tmp);
       omega.addScaledVector(perp, -(1 - Math.exp(-2.5 * dt)) * gf);
+      // Boost: a strong extra push up to the raised top speed.
+      if (m.extraTop > 0 && forwardSpeed > -1 && forwardSpeed < topSpeed) velocity.addScaledVector(fwd, Math.min(topSpeed - forwardSpeed, 9 * dt) * gf);
       if (c.hop && hopCooldown <= 0 && contacts >= 2) {
-        velocity.y = Math.max(velocity.y, 0) + CAR.hopSpeed;
+        velocity.y = Math.max(velocity.y, 0) + CAR.hopSpeed * m.hopScale;
         omega.addScaledVector(right, 0.6); // nose up a touch
         hopCooldown = CAR.hopCooldown;
         ev.hopped = true;
       }
     }
+
+    if (m.kick !== 0) velocity.addScaledVector(fwd, m.kick);
 
     // Auto-righting: always lean back towards upright; stronger when tilted far or airborne.
     const tilt = Math.acos(clamp(up.y, -1, 1));
