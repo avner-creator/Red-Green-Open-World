@@ -30,10 +30,14 @@ export const TRAIL = {
   /** The hidden spot is this far past the last print. */
   endBeyond: 0.9,
   /** Prints that glow ahead of the player: nearest bright, farther fainter. */
-  glow: [1, 0.62, 0.34] as readonly number[],
+  glow: [1, 0.75, 0.5, 0.3] as readonly number[],
   /** Reaching a print (XZ distance); the last print needs `reachLast`. */
   reach: 2.0,
   reachLast: 1.5,
+  /** Soft glow over each print that is next: height, size, strength. */
+  puffHeight: 0.45,
+  puffSize: 1.5,
+  puffAlpha: 0.85,
   /** A passed print fades out over this long. */
   passFade: 0.7,
 } as const;

@@ -35,6 +35,26 @@ async function view(id: string): Promise<void> {
   }, id);
 }
 
+/** Stand at (fx, fz) facing (tx, tz) and render (the camera follows behind the hero). */
+async function look(fx: number, fz: number, tx: number, tz: number): Promise<void> {
+  await page.evaluate(
+    ([a, b, c, d]) => {
+      const rg = window.__rg!;
+      rg.teleport(a, rg.ctx.world.heightAt(a, b) + 0.05, b, Math.atan2(c - a, d - b));
+      rg.step(1 / 60, 3, false);
+      rg.step(1 / 60, 1);
+    },
+    [fx, fz, tx, tz],
+  );
+}
+
+/** Site-local → world XZ (as the framework's `siteToWorld`). */
+function local(s: GlassesSiteInfo, lx: number, lz: number): { x: number; z: number } {
+  const c = Math.cos(s.yaw);
+  const n = Math.sin(s.yaw);
+  return { x: s.x + lx * c + lz * n, z: s.z - lx * n + lz * c };
+}
+
 const logged = (): Promise<Logged> => page.evaluate(() => JSON.parse(JSON.stringify((window as W).__follow)) as Logged);
 const clearLog = (): Promise<void> =>
   page.evaluate(() => {
@@ -70,7 +90,10 @@ test('glow-flies: weak layer only, answer-blind, catch and fly-off, budget', asy
   await view(id);
   expect(await page.evaluate((i) => window.__rgGlasses!.active(i), id)).toBe(true);
   await page.evaluate((i) => window.__rgGlasses!.force(i, { seed: 101 }), id);
-  await page.evaluate(() => window.__rg!.render());
+  // Stand at the patch's edge on the approach side, looking in.
+  const site = sites.find((s) => s.id === id)!;
+  const from = local(site, 1, 7.5);
+  await look(from.x, from.z, site.x, site.z);
   await shots('flies', 'test-results/glasses/glowflies');
 
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: id });
@@ -130,9 +153,16 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
   await view(id);
   expect(await page.evaluate((i) => window.__rgGlasses!.active(i), id)).toBe(true);
   await page.evaluate((i) => window.__rgGlasses!.force(i, { seed: 7 }), id);
-  await page.evaluate(() => window.__rg!.render());
-  await shots('trail', 'test-results/glasses/toys');
   const d0 = await dbg(id);
+  // Follow it: stand on the second print, looking along the trail (the next prints glow ahead).
+  {
+    const [p1, p5] = [d0.prints[1], d0.prints[5]];
+    const len = Math.hypot(p5.x - p1.x, p5.z - p1.z);
+    const side = { x: ((p5.z - p1.z) / len) * 1.6, z: (-(p5.x - p1.x) / len) * 1.6 };
+    await look(p1.x + side.x, p1.z + side.z, p5.x + side.x * 0.5, p5.z + side.z * 0.5);
+  }
+  expect((await dbg(id)).next).toBeGreaterThanOrEqual(1);
+  await shots('trail', 'test-results/glasses/toys');
   expect(d0.valid, 'trail passes every ground rule').toBe(true);
   expect(d0.toysShown, 'no toy before the last print').toBe(0);
   expect(d0.toyVisible).toBe(false);
@@ -168,8 +198,10 @@ test("Pip's toys: weak prints only, answer-blind, found toy and time-out, budget
     const rg = window.__rg!;
     const pl = rg.ctx.player.position;
     const yaw = Math.atan2(p.x - pl.x, p.z - pl.z);
-    rg.teleport(pl.x - Math.sin(yaw) * 4, pl.y + 0.05, pl.z - Math.cos(yaw) * 4, yaw);
-    rg.step(1 / 60, 40, false);
+    const fx = p.x - Math.sin(yaw) * 2.6 + Math.cos(yaw) * 1.6;
+    const fz = p.z - Math.cos(yaw) * 2.6 - Math.sin(yaw) * 1.6;
+    rg.teleport(fx, rg.ctx.world.heightAt(fx, fz) + 0.05, fz, Math.atan2(p.x - fx, p.z - fz));
+    rg.step(1 / 60, 32, false);
     rg.step(1 / 60, 1);
   }, d.end);
   await shots('found', 'test-results/glasses/toys');

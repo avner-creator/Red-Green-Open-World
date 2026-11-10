@@ -64,7 +64,7 @@ export function create(env: MechanicEnv): Mechanic {
   env.add(sparkle.mesh, VisionLayer.Both);
 
   // ── weak eye: the paw prints ──
-  const prints = createGlowInstances(TRAIL.maxPrints, 'paw', 'toys-prints');
+  const prints = createGlowInstances(TRAIL.maxPrints * 2, 'paw', 'toys-prints');
   env.add(prints.mesh, VisionLayer.WeakOnly);
 
   const tmp = new THREE.Vector3();
@@ -213,9 +213,16 @@ export function create(env: MechanicEnv): Mechanic {
       const h = 0.3;
       n.set(ctx.world.heightAt(x - h, z) - ctx.world.heightAt(x + h, z), 2 * h, ctx.world.heightAt(x, z - h) - ctx.world.heightAt(x, z + h)).normalize();
       q.setFromUnitVectors(UP, n).multiply(qy.setFromAxisAngle(UP, pr.yaw + side * 0.12));
-      p.set(x, pr.y + 0.04, z);
+      p.set(x, pr.y + 0.07, z);
       m.compose(p, q, s.set(size * 0.85, 1, size));
       prints.set(count++, m, preset.level, glow * preset.opacity, i * 0.9);
+      // A soft glow hovering over each print that is next (same draw call).
+      const ahead = rounds.state === 'trail' ? printGlow(i, rounds.next) : 0;
+      if (ahead > 0) {
+        p.set(pr.x, pr.y + TRAIL.puffHeight * preset.size, pr.z);
+        m.compose(p, qy.identity(), s.setScalar(TRAIL.puffSize * preset.size));
+        prints.set(count++, m, preset.level, ahead * preset.opacity * TRAIL.puffAlpha, i * 0.9, true);
+      }
     });
     prints.commit(count);
   }

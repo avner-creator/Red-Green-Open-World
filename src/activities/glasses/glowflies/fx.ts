@@ -10,9 +10,9 @@ import * as THREE from 'three';
 export type GlowKind = 'fly' | 'spark' | 'paw';
 
 const vertex = /* glsl */ `
-attribute vec3 aGlow; // level, alpha, phase
+attribute vec4 aGlow; // level, alpha, phase, puff (1 = soft camera-facing glow)
 varying vec2 vUv;
-varying vec3 vGlow;
+varying vec4 vGlow;
 void main() {
   vUv = uv;
   vGlow = aGlow;
@@ -21,7 +21,15 @@ void main() {
   vec2 sc = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
   mv.xy += position.xy * sc;
 #else
-  vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  vec4 mv;
+  if (aGlow.w > 0.5) {
+    // Puff: the ground quad turned to face the camera (its XZ = the original quad's -X, Y).
+    mv = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    vec2 sc = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[2].xyz));
+    mv.xy += vec2(-position.x, position.z) * sc;
+  } else {
+    mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  }
 #endif
   gl_Position = projectionMatrix * mv;
 }
@@ -30,7 +38,7 @@ void main() {
 const fragment = /* glsl */ `
 uniform float time;
 varying vec2 vUv;
-varying vec3 vGlow;
+varying vec4 vGlow;
 float ell(vec2 p, vec2 c, vec2 r) { return length((p - c) / r); }
 void main() {
   vec2 p = (vUv - 0.5) * 2.0;
@@ -52,6 +60,11 @@ void main() {
   a = clamp(soft + rays * 0.8, 0.0, 1.0);
   g = 1.0;
 #else
+  if (vGlow.w > 0.5) {
+    // Soft glow hovering over a print that is next: makes it findable from a few metres away.
+    a = exp(-r * r * 4.0) * (1.0 - smoothstep(0.8, 1.0, r)) * (0.85 + 0.15 * sin(time * 3.0 + vGlow.z));
+    g = 0.9;
+  } else {
   // Puppy paw print: a big heel pad and four toes (local +Y = walking direction).
   float pad = ell(p, vec2(0.0, -0.28), vec2(0.42, 0.34));
   float t1 = ell(p, vec2(-0.5, 0.18), vec2(0.17, 0.21));
@@ -64,6 +77,7 @@ void main() {
   float glow = exp(-max(d - 1.0, 0.0) * 3.5) * 0.35 * (0.85 + 0.15 * sin(time * 3.0 + vGlow.z));
   a = max(ink, glow * step(r, 1.0));
   g = ink > 0.5 ? 1.0 : 0.8;
+  }
 #endif
   a *= vGlow.y;
   if (a < 0.004) discard;
@@ -74,8 +88,8 @@ void main() {
 
 export interface GlowInstances {
   readonly mesh: THREE.InstancedMesh;
-  /** Write instance `i`: matrix, grey level 0..1, alpha 0..1, phase. */
-  set(i: number, matrix: THREE.Matrix4, level: number, alpha: number, phase?: number): void;
+  /** Write instance `i`: matrix, grey level 0..1, alpha 0..1, phase, puff (paw quads only: a soft camera-facing glow). */
+  set(i: number, matrix: THREE.Matrix4, level: number, alpha: number, phase?: number, puff?: boolean): void;
   /** Number of instances drawn (0 = no draw call at all). */
   commit(count: number): void;
   setTime(t: number): void;
@@ -86,7 +100,7 @@ export interface GlowInstances {
 export function createGlowInstances(capacity: number, kind: GlowKind, name: string): GlowInstances {
   const geo = new THREE.PlaneGeometry(1, 1);
   if (kind === 'paw') geo.rotateX(-Math.PI / 2).rotateY(Math.PI); // uv +Y → local -Z… then flipped to +Z
-  const glow = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+  const glow = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
   glow.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute('aGlow', glow);
   const defines: Record<string, string> = { [`KIND_${kind.toUpperCase()}`]: '' };
@@ -112,9 +126,9 @@ export function createGlowInstances(capacity: number, kind: GlowKind, name: stri
   mesh.count = 0;
   return {
     mesh,
-    set(i, matrix, level, alpha, phase = 0) {
+    set(i, matrix, level, alpha, phase = 0, puff = false) {
       mesh.setMatrixAt(i, matrix);
-      glow.setXYZ(i, level, alpha, phase);
+      glow.setXYZW(i, level, alpha, phase, puff ? 1 : 0);
     },
     commit(count) {
       mesh.count = Math.max(0, Math.min(capacity, count));
