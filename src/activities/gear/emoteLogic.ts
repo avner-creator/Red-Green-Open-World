@@ -42,3 +42,17 @@ export function canStartEmote(c: EmoteContext): boolean {
 export function emoteCancelled(input: Pick<InputState, 'moveX' | 'moveY' | 'jump' | 'jumpPressed'>): boolean {
   return Math.abs(input.moveX) > 0.25 || Math.abs(input.moveY) > 0.25 || input.jump || input.jumpPressed;
 }
+
+/**
+ * Shop emotes a character has no good clip for (it plays its signature emote instead).
+ * Rex's `cheer` is its plain Jump clip, which looks like a stuck take-off on the ground.
+ */
+const NO_CLIP: Readonly<Record<string, readonly EmoteKind[]>> = {
+  rex: ['cheer'],
+};
+
+/** Animation to play for a shop emote on this character, or null to use its signature emote. */
+export function emoteAnimFor(characterId: string, kind: EmoteKind): PlayerAnim | null {
+  if (NO_CLIP[characterId]?.includes(kind)) return null;
+  return EMOTES[kind].anim;
+}

@@ -53,8 +53,6 @@ export interface NavHost {
   start(): void;
   /** Previous/next tab (gamepad LB/RB, keys Q/E or PageUp/PageDown). Optional. */
   tab?(dir: 1 | -1): void;
-  /** Gamepad D-pad Up while no menu is open (the game uses no D-pad button): play the emote. */
-  emote?(): void;
   root: HTMLElement;
 }
 
@@ -160,7 +158,6 @@ export function createNav(host: NavHost): Nav {
       const down = (i: number): boolean => !!pad.buttons[i]?.pressed;
       const edge = (i: number): boolean => down(i) && !prev[i];
       const layer = host.layer();
-      if (!layer && host.emote && edge(BTN.up)) host.emote();
       if (layer) {
         const ax = pad.axes[0] ?? 0;
         const ay = pad.axes[1] ?? 0;

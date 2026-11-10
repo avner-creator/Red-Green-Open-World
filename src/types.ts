@@ -367,6 +367,11 @@ export interface PlayerApi {
   readonly skill: PlayerSkillView;
   /** Play the character's signature emote (walk mode, on the ground; moving cancels it). */
   emote(): void;
+  /**
+   * Stream C: a handler `emote()` asks first (after its own walk/ground checks). Return true when it
+   * played its own emote (the equipped shop emote); false falls back to the signature emote.
+   */
+  setEmoteHandler?(handler: (() => boolean) | null): void;
 }
 
 export interface VehicleApi {

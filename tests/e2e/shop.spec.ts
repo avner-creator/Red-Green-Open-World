@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot } from './helpers';
+import { boot, startGame } from './helpers';
 
 const OUT = 'test-results/shop';
 mkdirSync(OUT, { recursive: true });
@@ -112,6 +112,7 @@ const hudOverlaps = (page: Page, at = 270): Promise<string[]> =>
       '[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]',
       '.wf-compass', '[data-testid="help"]', '[data-testid="touch-jump"]', '[data-testid="touch-use"]', '[data-testid="touch-sprint"]',
       '[data-testid="touch-flop"]', '[data-testid="touch-pause"]', '[data-testid="touch-emote"]', '[data-testid="touch-stick"]',
+      '[data-testid="touch-skill"]', '[data-testid="skill-chip"]',
     ];
     const rs: [string, DOMRect][] = [];
     for (const s of sel) {
@@ -144,7 +145,7 @@ test.describe('economy ui', () => {
     await step(page, 40);
     await expect(page.getByTestId('title-wallet')).toContainText('7');
 
-    await page.getByTestId('play').click();
+    await startGame(page);
     expect(await phase(page)).toBe('playing');
 
     // Fixture items with rendered pictures, in their own tab (the real catalog leaves 'character'
@@ -182,31 +183,42 @@ test.describe('economy ui', () => {
     await save(page, 'hud-combo-missions', 300);
     // HUD parts never overlap each other (pops and the x5 badge at their peak included).
     expect(await hudOverlaps(page)).toEqual([]); // 667x375 and tablet: see the touch test below
-    // The controls card lists the emote (G on the keyboard, D-pad Up on a gamepad).
+    // The controls card lists the emote (main's row: C on the keyboard, D-pad Up on a gamepad).
     await page.keyboard.press('KeyH');
     await expect(page.getByTestId('controls-card')).toHaveClass(/on/);
-    await expect(page.locator('[data-testid="controls-card"] [data-control="emote"]').first()).toContainText('G');
+    await expect(page.locator('[data-testid="controls-card"] [data-control="emote"]').first()).toContainText('C');
     await save(page, 'controls-card');
     await page.keyboard.press('KeyH');
-    // Gamepad D-pad Up plays the emote while playing (a fake pad; no core button uses the D-pad).
-    const padEmotes = await page.evaluate(() => {
+    // One emote input (C/G, D-pad Up, touch → InputState.emotePressed → player.emote()): the
+    // signature emote with no shop emote equipped, the equipped shop emote otherwise.
+    const emoteRuns = await page.evaluate(() => {
       const rg = window.__rg!;
-      let n = 0;
-      const off = rg.ctx.events.on('emote:play', () => n++);
-      let up = false;
-      const pad = () => ({ connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: up && i === 12, value: 0 })) });
-      Object.defineProperty(navigator, 'getGamepads', { value: () => [pad()], configurable: true });
-      rg.step(1 / 60, 2, false);
-      up = true;
-      rg.step(1 / 60, 2, false);
-      up = false;
-      rg.step(1 / 60, 2, false);
-      delete (navigator as unknown as Record<string, unknown>).getGamepads;
+      const gear = window.__rgGear!;
+      const sig: string[] = [];
+      const off = rg.ctx.events.on('player:emote', (e) => sig.push(e.id));
+      const press = (): void => {
+        rg.inject({ emotePressed: true });
+        rg.step(1 / 60, 1, false);
+        rg.inject(null);
+        rg.step(1 / 60, 2, false);
+      };
+      rg.ctx.economy.equip('emote', null);
+      press();
+      const first = { sig: sig.length, shop: gear.emote() };
+      rg.step(1 / 60, 30, false);
+      rg.inject({ moveY: 1 }); // moving cancels the signature emote
+      rg.step(1 / 60, 3, false);
+      rg.inject(null);
+      rg.step(1 / 60, 30, false);
+      rg.ctx.economy.equip('emote', 'emote-wave');
+      press();
+      const second = { sig: sig.length, shop: gear.emote() };
+      rg.step(1 / 60, 150, false); // let it finish
+      rg.ctx.economy.equip('emote', null);
       off();
-      rg.step(1 / 60, 150, false); // let the emote finish
-      return n;
+      return { first, second, after: gear.emote() };
     });
-    expect(padEmotes).toBe(1);
+    expect(emoteRuns).toEqual({ first: { sig: 1, shop: null }, second: { sig: 1, shop: 'wave' }, after: null });
 
     // Combo back to x1: the badge goes away. A denied ticket: a friendly toast with the price.
     await page.evaluate(() => {
@@ -392,7 +404,7 @@ test.describe('economy ui by touch', () => {
 
   test('touch HUD fits; kiosk by the use button; tap tab, tap-buy, tap close', async ({ page }) => {
     const { consoleErrors } = await boot(page);
-    await page.getByTestId('play').tap();
+    await startGame(page, true);
     await expect(page.getByTestId('touch-hud')).toBeVisible();
     await registerFixtures(page);
     await page.evaluate(() => {
@@ -413,16 +425,17 @@ test.describe('economy ui by touch', () => {
     // Next to the kiosk the use button shows the shop icon.
     await expect(page.getByTestId('touch-use')).toHaveClass(/ready/);
     await save(page, 'touch-hud', 270);
-    // The emote button (starter wave owned) plays the emote by tap.
+    // Main's touch emote button plays the emote by tap (no shop emote equipped: the signature one).
     await expect(page.getByTestId('touch-emote')).toBeVisible();
     const emotes = await page.evaluate(() => {
       const log: string[] = [];
-      window.__rg!.ctx.events.on('emote:play', () => log.push('play'));
+      window.__rg!.ctx.events.on('player:emote', () => log.push('play'));
       (window as unknown as { __emotes: string[] }).__emotes = log;
       return log.length;
     });
     expect(emotes).toBe(0);
     await page.getByTestId('touch-emote').tap();
+    await step(page, 2);
     expect(await page.evaluate(() => (window as unknown as { __emotes: string[] }).__emotes.length)).toBe(1);
     await step(page, 150); // the emote ends (2 s) before walking to the kiosk
     expect(await hudOverlaps(page)).toEqual([]);

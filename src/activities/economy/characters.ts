@@ -1,0 +1,84 @@
+/**
+ * Characters are bought with gems. The six heroes are shop items (`category: 'character'`,
+ * `slot: 'character'`, price from the character catalog; price 0 = starter). The character
+ * select talks to the same wallet through `setCharacterAccess`.
+ *
+ * Which hero plays: main's remembered pick (`savePick`/`loadPick`) plus `player.setCharacter`
+ * stay the source of truth for the game; `profile.equipped('character')` mirrors it:
+ * - equipping a character (shop, wardrobe, or the buy in the select screen) switches to it and
+ *   saves the pick;
+ * - a Go on the select screen saves the pick; it is copied into the profile when play starts or
+ *   resumes (the select only previews other heroes, so `player:character` is not mirrored);
+ * - after a profile reset, paid heroes are locked again and a hero that is no longer owned is
+ *   swapped for the default free one.
+ */
+import { CHARACTERS, DEFAULT_CHARACTER } from '../../core/characters/catalog';
+import { setCharacterAccess } from '../../ui/characterAccess';
+import { loadPick, savePick } from '../../ui/characterLogic';
+import type { EconomyApi, GameContext, ShopItem } from '../../types';
+
+export const CHARACTER_ITEMS: readonly ShopItem[] = CHARACTERS.map((c) => ({
+  id: c.id,
+  category: 'character',
+  slot: 'character',
+  name: c.name,
+  icon: 'character',
+  price: Math.max(0, c.price),
+  swatch: c.cardColors[0],
+}));
+
+const isCharacter = (id: string | null): id is string => !!id && CHARACTERS.some((c) => c.id === id);
+
+/** Register the heroes, plug in the wallet and keep pick, player and profile in step. Returns an unsubscriber. */
+export function wireCharacters(ctx: GameContext, economy: EconomyApi): () => void {
+  const { profile, events } = ctx;
+  economy.registerItems(CHARACTER_ITEMS);
+
+  setCharacterAccess({
+    owns: (id) => profile.owns(id),
+    canAfford: (id) => {
+      const it = economy.item(id);
+      return !!it && !profile.owns(id) && !it.chestOnly && profile.wallet >= it.price;
+    },
+    buy: (id) => economy.buy(id) === 'ok' || profile.owns(id),
+    wallet: () => profile.wallet,
+  });
+
+  /** Make the profile name an owned hero (the pick if owned, else the default). */
+  const ensureOwned = (preferred: string | null): void => {
+    const want = isCharacter(preferred) && profile.owns(preferred) ? preferred : DEFAULT_CHARACTER;
+    if (loadPick() !== want) savePick(want);
+    if (profile.equipped('character') !== want) profile.equip('character', want);
+  };
+
+  // At boot (before the UI puts the remembered hero in the world): never start as a locked hero.
+  const pick = loadPick();
+  ensureOwned(pick ?? profile.equipped('character'));
+
+  const offs = [
+    events.on('item:equipped', (e) => {
+      if (e.slot !== 'character') return;
+      if (e.itemId === null) {
+        // A hero cannot be taken off: keep the current one (or the default once it is not owned).
+        ensureOwned(ctx.player.characterId);
+        return;
+      }
+      if (!isCharacter(e.itemId)) return;
+      if (loadPick() !== e.itemId) savePick(e.itemId);
+      if (ctx.player.characterId !== e.itemId) void ctx.player.setCharacter(e.itemId);
+    }),
+    events.on('profile:reset', () => {
+      ensureOwned(ctx.player.characterId);
+      if (ctx.player.characterId !== profile.equipped('character')) void ctx.player.setCharacter(profile.equipped('character') ?? DEFAULT_CHARACTER);
+    }),
+    // A Go on the select screen saved a pick: mirror it into the profile when play (re)starts.
+    events.on('session:phase', (e) => {
+      if (e.phase !== 'playing') return;
+      const p = loadPick();
+      if (isCharacter(p) && profile.owns(p) && profile.equipped('character') !== p) profile.equip('character', p);
+    }),
+  ];
+  return () => {
+    for (const off of offs) off();
+  };
+}

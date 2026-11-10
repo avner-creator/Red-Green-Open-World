@@ -123,7 +123,7 @@ test('buy a hat, a paint and a trail: worn, painted, particles; persists; reset 
   expect(after.car).toBe(r.defaultColor);
 });
 
-test('emotes: G plays the equipped emote, moving cancels it, it ends by itself', async () => {
+test('emotes: the emote input plays the equipped emote, moving cancels it, it ends by itself', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -131,7 +131,9 @@ test('emotes: G plays the equipped emote, moving cancels it, it ends by itself',
     ctx.economy.buy('emote-dance');
     rg.step(1 / 60, 30, false);
     const g = window.__rgGear!;
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyG' }));
+    rg.inject({ emotePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
     const started = g.emote();
     rg.step(1 / 60, 30, false);
     const mid = g.emote();
@@ -152,6 +154,33 @@ test('emotes: G plays the equipped emote, moving cancels it, it ends by itself',
   expect(r.again).toBe('dance');
   expect(r.cancelled).toBeNull();
   expect(r.mode).toBe('walk');
+});
+
+test('emotes: a hero with no clip for the equipped emote does its signature emote', async () => {
+  const r = await page.evaluate(async () => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const g = window.__rgGear!;
+    const sig: string[] = [];
+    const off = ctx.events.on('player:emote', (e) => sig.push(e.id));
+    const prev = ctx.player.characterId;
+    await ctx.player.setCharacter('rex');
+    ctx.profile.earn(50, 'test');
+    ctx.economy.buy('emote-cheer');
+    rg.step(1 / 60, 30, false);
+    rg.inject({ emotePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    const res = { shop: g.emote(), sig: [...sig], equipped: ctx.profile.equipped('emote') };
+    rg.inject({ moveY: 1 });
+    rg.step(1 / 60, 4, false);
+    rg.inject(null);
+    ctx.economy.equip('emote', null);
+    await ctx.player.setCharacter(prev);
+    off();
+    return res;
+  });
+  expect(r).toEqual({ shop: null, sig: ['dance'], equipped: 'emote-cheer' });
 });
 
 test('screenshots: gear on the robot and every trail (full / R / G)', async () => {

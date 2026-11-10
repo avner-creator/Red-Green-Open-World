@@ -19,7 +19,6 @@ import { createSettings } from './settingsScreen';
 import { createShop } from './shop';
 import { createSkillChip } from './skillButton';
 import { createTouchUi } from './touch';
-import { createTouchEmote } from './touchEmote';
 import { createTutorial } from './tutorial';
 import { createWayfinding } from './wayfinding';
 
@@ -131,7 +130,6 @@ export function createUi(ctx: GameContext): UiApi {
   const skillChip = createSkillChip(ctx);
   const tutorial = createTutorial(ctx);
   const touch = createTouchUi(ctx);
-  const touchEmote = createTouchEmote(ctx);
 
   const phase = (): SessionPhase => ctx.session.state.phase;
   const base = (): Screen | null => {
@@ -177,9 +175,6 @@ export function createUi(ctx: GameContext): UiApi {
       else if (shopOpen) closeShop();
       else if (phase() === 'paused') resume();
     },
-    emote: () => {
-      if (phase() === 'playing' && !calibrating) ctx.events.emit('emote:play', {});
-    },
     tab: (dir) => {
       const t = top();
       if (t === shop) shop.tab(dir);
@@ -220,7 +215,6 @@ export function createUi(ctx: GameContext): UiApi {
       wayfinding.update(dt);
       tutorial.update(dt, phase() === 'playing');
       touch.update(dt, phase() === 'playing' && !calibrating);
-      touchEmote.update();
     },
     get menuOpen(): boolean {
       return menuOpen();

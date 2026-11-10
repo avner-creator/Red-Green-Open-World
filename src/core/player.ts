@@ -169,6 +169,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   /** Visual-only skill pose timers (spring flip after a super-bounce). */
   let springFlipT = -1;
   let emoting = false;
+  /** Stream C: the gear system's shop-emote handler (see `PlayerApi.setEmoteHandler`). */
+  let emoteHandler: (() => boolean) | null = null;
   let windOn = false;
   const tmpV = new THREE.Vector3();
   const skillView: PlayerSkillView = {
@@ -289,6 +291,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     },
     emote() {
       if (mode !== 'walk' || !grounded || skills.active || emoting) return;
+      if (emoteHandler?.()) return;
       emoting = true;
       const clip = getCharacter(characterId).emote.clip;
       ctx.audio.play('star', { volume: 0.6, pitch: 1.35 });
@@ -296,6 +299,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       sfx.sparkle(tmpV, 8, 1.6, 0.8);
       fx.kick(1.5);
       ctx.events.emit('player:emote', { id: clip.toLowerCase() });
+    },
+    setEmoteHandler(handler) {
+      emoteHandler = handler;
     },
     object,
     position,

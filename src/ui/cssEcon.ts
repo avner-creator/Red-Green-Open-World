@@ -23,17 +23,17 @@ export const ECON_CSS = `
 @keyframes rg-wbumpb{30%{transform:scale(1.34) rotate(-4deg)}60%{transform:scale(.95) rotate(2deg)}}
 @keyframes rg-wshake{15%{transform:translateX(calc(var(--u)*-1.4)) rotate(-3deg)}35%{transform:translateX(calc(var(--u)*1.4)) rotate(3deg)}55%{transform:translateX(calc(var(--u)*-1)) rotate(-2deg)}75%{transform:translateX(calc(var(--u)*.7))}}
 .rg .wallet .pops{position:absolute;left:calc(var(--u)*3.4);top:calc(100% + var(--u)*.5);width:0;height:0;pointer-events:none;z-index:3}
-.rg .pop{position:absolute;left:0;top:0;display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*3.9);
+.rg .pops .pop{position:absolute;left:0;top:0;display:flex;align-items:center;gap:calc(var(--u)*.5);white-space:nowrap;font-size:calc(var(--u)*3.9);
   transform-origin:15% 50%;animation:rg-popfly 1.3s cubic-bezier(.2,1.3,.4,1) both;isolation:isolate}
-.rg .pop .v{color:var(--y);font-size:1.05em}
-.rg .pop.neg .v{color:#fff}
-.rg .pop>.ic{font-size:1.2em;color:var(--y)}
-.rg .pop.neg>.ic{color:#fff}
-.rg .pop.k-mega{font-size:calc(var(--u)*4.4);animation-duration:1.7s}
-.rg .pop.k-bonus,.rg .pop.k-jackpot{font-size:calc(var(--u)*4.3);animation-duration:1.9s}
-.rg .pop.k-free>.ic:first-child{animation:rg-spin .5s ease-in-out infinite alternate}
-.rg .pop.again .v{animation:rg-wbump .3s cubic-bezier(.2,1.6,.4,1)}
-.rg .pop .rays{position:absolute;left:-40%;top:50%;width:calc(var(--u)*18);height:calc(var(--u)*18);margin-top:calc(var(--u)*-9);z-index:-1;border-radius:50%;
+.rg .pops .pop .v{color:var(--y);font-size:1.05em}
+.rg .pops .pop.neg .v{color:#fff}
+.rg .pops .pop>.ic{font-size:1.2em;color:var(--y)}
+.rg .pops .pop.neg>.ic{color:#fff}
+.rg .pops .pop.k-mega{font-size:calc(var(--u)*4.4);animation-duration:1.7s}
+.rg .pops .pop.k-bonus,.rg .pops .pop.k-jackpot{font-size:calc(var(--u)*4.3);animation-duration:1.9s}
+.rg .pops .pop.k-free>.ic:first-child{animation:rg-spin .5s ease-in-out infinite alternate}
+.rg .pops .pop.again .v{animation:rg-wbump .3s cubic-bezier(.2,1.6,.4,1)}
+.rg .pops .pop .rays{position:absolute;left:-40%;top:50%;width:calc(var(--u)*18);height:calc(var(--u)*18);margin-top:calc(var(--u)*-9);z-index:-1;border-radius:50%;
   background:repeating-conic-gradient(rgba(255,255,255,.8) 0 9deg,transparent 9deg 26deg);-webkit-mask:${RAYS_MASK};mask:${RAYS_MASK};animation:rg-raypop 1.4s ease-out both}
 @keyframes rg-popfly{0%{opacity:0;transform:translateY(calc(var(--u)*-1.5)) scale(.3)}14%{opacity:1;transform:translateY(0) scale(1.18)}26%{transform:scale(1)}80%{opacity:1;transform:translateY(calc(var(--u)*.4))}100%{opacity:0;transform:translateY(calc(var(--u)*.8)) scale(.92)}}
 @keyframes rg-raypop{0%{transform:scale(0) rotate(0);opacity:0}25%{opacity:1}100%{transform:scale(1.3) rotate(90deg);opacity:0}}
@@ -279,9 +279,4 @@ export const ECON_CSS = `
 /* the shop/wardrobe grid scrolls by finger drag inside the panel; the page never pans */
 .rg .sgrid{touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 @media (hover:none){.rg .card:hover .pv .ic,.rg .card:hover .pv .pic{transform:none}}
-/* touch emote button: centred above the joystick's resting ring (left edge) */
-.rg .tbtn.emote{--te:max(44px,calc(var(--tb)*.8));width:var(--te);height:var(--te);
-  left:calc(var(--sl) + 7vmin + var(--r,60px) - var(--te)/2);bottom:calc(var(--sb) + 7vmin + var(--r,60px)*1.9 + var(--tm)*.8)}
-.rg .tbtn.emote .ic{color:var(--y)}
-.rg .tbtn.emote.off{display:none}
 `;
