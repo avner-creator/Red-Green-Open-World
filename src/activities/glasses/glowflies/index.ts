@@ -88,7 +88,6 @@ export function create(env: MechanicEnv): Mechanic {
   let combo = 0;
   let sinceCatch = Infinity;
   let time = 0;
-  let nearCd = 0;
   let active = false;
   let havePrev = false;
   const prev = { x: 0, y: 0, z: 0 };
@@ -118,7 +117,6 @@ export function create(env: MechanicEnv): Mechanic {
     combo = 0;
     sinceCatch = Infinity;
     havePrev = false;
-    nearCd = 0;
   }
 
   function draw(): void {
@@ -162,7 +160,6 @@ export function create(env: MechanicEnv): Mechanic {
   function update(dt: number): void {
     time += dt;
     sinceCatch += dt;
-    nearCd -= dt;
     const pp = ctx.player.position;
     chest.x = pp.x;
     chest.y = pp.y + PLAYER.height / 2;
@@ -187,10 +184,6 @@ export function create(env: MechanicEnv): Mechanic {
     }
     for (const ev of swarm.update(dt, inside)) if (ev.type === 'miss') env.result(ev.tier, false);
 
-    if (inside && nearCd <= 0 && swarm.nearest(chest) < FLIES.nearRadius) {
-      ctx.audio.play('gemNear', { volume: 0.5 });
-      nearCd = FLIES.nearInterval;
-    }
     Object.assign(prev, chest);
     havePrev = true;
 

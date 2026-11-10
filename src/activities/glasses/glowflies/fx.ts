@@ -39,10 +39,10 @@ void main() {
   float g;
 #if defined(KIND_FLY)
   float pulse = 0.8 + 0.2 * sin(time * 4.0 + vGlow.z);
-  float core = smoothstep(0.3, 0.17, r);
-  float halo = exp(-r * r * 4.5) * 0.6 * pulse;
+  float core = smoothstep(0.4, 0.24, r);
+  float halo = exp(-r * r * 3.2) * 0.7 * pulse;
   float flap = 0.55 + 0.45 * sin(time * 21.0 + vGlow.z * 3.0);
-  float wl = smoothstep(1.0, 0.75, ell(vec2(abs(p.x), p.y), vec2(0.34, 0.2), vec2(0.27, 0.07 + 0.13 * flap)));
+  float wl = smoothstep(1.0, 0.75, ell(vec2(abs(p.x), p.y), vec2(0.46, 0.3), vec2(0.3, 0.08 + 0.16 * flap)));
   float wing = wl * 0.55;
   a = max(max(core, halo), wing);
   g = core > 0.01 ? mix(0.6, 1.0, core) : (wing > halo ? 0.55 : 0.85 * pulse);

@@ -29,7 +29,7 @@ export const FLIES = {
   /** Base angular speed of the paths (rad/s); multiplied by the tier speed. */
   baseSpeed: 0.42,
   /** Fly glow quad size (metres) before the tier size. */
-  size: 0.95,
+  size: 1.5,
   /** Quick catches within this many seconds raise the chime's pitch. */
   comboWindow: 4,
   /** Bursts kept at once and particles per burst. */
@@ -41,7 +41,4 @@ export const FLIES = {
   slack: 0.5,
   /** Glow beads in the jar (one notch per catch; full after this many). */
   jarNotches: 12,
-  /** Non-positional "something is near" chime: distance and minimum interval. */
-  nearRadius: 3.2,
-  nearInterval: 1.6,
 } as const;
