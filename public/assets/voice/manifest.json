@@ -20,17 +20,23 @@
    "spoken": "A mega gem! The spiky ones are worth five!",
    "dur": 2.57
   },
-  "a-secret-vault-magic-glasses-show-three-shapes-in-a-row": {
-   "file": "a-secret-vault-magic-glasses-show-three-shapes-in-a-row.mp3",
-   "text": "A secret vault! Magic glasses show three shapes in a row.",
-   "spoken": "A secret vault! Magic glasses show three shapes in a row.",
-   "dur": 3.46
+  "a-secret-path-stand-on-the-gold-ring-glasses-show-hidden-stones": {
+   "file": "a-secret-path-stand-on-the-gold-ring-glasses-show-hidden-stones.mp3",
+   "text": "A secret path! Stand on the gold ring. Glasses show hidden stones!",
+   "spoken": "A secret path! Stand on the gold ring. Glasses show hidden stones!",
+   "dur": 4.06
   },
-  "a-treasure-chest-magic-glasses-help-you-find-its-key": {
-   "file": "a-treasure-chest-magic-glasses-help-you-find-its-key.mp3",
-   "text": "A treasure chest! Magic glasses help you find its key.",
-   "spoken": "A treasure chest! Magic glasses help you find its key.",
-   "dur": 3.12
+  "a-secret-vault-look-at-its-three-round-windows-with-your-glasses": {
+   "file": "a-secret-vault-look-at-its-three-round-windows-with-your-glasses.mp3",
+   "text": "A secret vault! Look at its three round windows with your glasses.",
+   "spoken": "A secret vault! Look at its three round windows with your glasses.",
+   "dur": 3.43
+  },
+  "a-treasure-chest-its-hidden-key-is-inside-the-dotted-circle": {
+   "file": "a-treasure-chest-its-hidden-key-is-inside-the-dotted-circle.mp3",
+   "text": "A treasure chest! Its hidden key is inside the dotted circle.",
+   "spoken": "A treasure chest! Its hidden key is inside the dotted circle.",
+   "dur": 3.46
   },
   "again-again": {
    "file": "again-again.mp3",
@@ -128,11 +134,11 @@
    "spoken": "Bouncy flop!",
    "dur": 0.98
   },
-  "bring-the-key-back-and-step-on-the-matching-symbol": {
-   "file": "bring-the-key-back-and-step-on-the-matching-symbol.mp3",
-   "text": "Bring the key back and step on the matching symbol!",
-   "spoken": "Bring the key back and step on the matching symbol!",
-   "dur": 2.33
+  "bring-the-key-back-and-step-on-the-shape-the-chest-shows": {
+   "file": "bring-the-key-back-and-step-on-the-shape-the-chest-shows.mp3",
+   "text": "Bring the key back and step on the shape the chest shows!",
+   "spoken": "Bring the key back and step on the shape the chest shows!",
+   "dur": 2.71
   },
   "bubble-soccer-roll-the-big-ball-into-the-other-goal": {
    "file": "bubble-soccer-roll-the-big-ball-into-the-other-goal.mp3",
@@ -380,12 +386,6 @@
    "spoken": "Give the dragon a snack, then hop on and fly!",
    "dur": 2.52
   },
-  "glowing-arrows-on-the-ground-lead-to-secrets-follow-them": {
-   "file": "glowing-arrows-on-the-ground-lead-to-secrets-follow-them.mp3",
-   "text": "Glowing arrows on the ground lead to secrets. Follow them!",
-   "spoken": "Glowing arrows on the ground lead to secrets. Follow them!",
-   "dur": 3.19
-  },
   "goal-done-woohoo": {
    "file": "goal-done-woohoo.mp3",
    "text": "Goal done! Woohoo!",
@@ -469,6 +469,12 @@
    "text": "Hop on a pony and gallop around the island!",
    "spoken": "Hop on a pony and gallop around the island!",
    "dur": 2.4
+  },
+  "hop-up-the-stones-and-climb-to-win-the-star": {
+   "file": "hop-up-the-stones-and-climb-to-win-the-star.mp3",
+   "text": "Hop up the stones and climb to win the star!",
+   "spoken": "Hop up the stones and climb to win the star!",
+   "dur": 2.33
   },
   "hurry-it-is-so-fun": {
    "file": "hurry-it-is-so-fun.mp3",
@@ -908,12 +914,6 @@
    "spoken": "Prize time!",
    "dur": 0.89
   },
-  "push-the-door-buttons-in-that-same-order": {
-   "file": "push-the-door-buttons-in-that-same-order.mp3",
-   "text": "Push the door buttons in that same order!",
-   "spoken": "Push the door buttons in that same order!",
-   "dur": 2.09
-  },
   "race-a-friend-across-the-foam-on-floats-and-blocks": {
    "file": "race-a-friend-across-the-foam-on-floats-and-blocks.mp3",
    "text": "Race a friend across the foam on floats and blocks!",
@@ -998,12 +998,6 @@
    "spoken": "So stylish!",
    "dur": 0.96
   },
-  "some-stepping-stones-only-magic-glasses-see-hop-across": {
-   "file": "some-stepping-stones-only-magic-glasses-see-hop-across.mp3",
-   "text": "Some stepping stones only magic glasses see. Hop across!",
-   "spoken": "Some stepping stones only magic glasses see. Hop across!",
-   "dur": 3.58
-  },
   "sparkle-sparkle": {
    "file": "sparkle-sparkle.mp3",
    "text": "Sparkle, sparkle!",
@@ -1069,6 +1063,12 @@
    "text": "Step on a bounce pad. It throws you to the next one!",
    "spoken": "Step on a bounce pad. It throws you to the next one!",
    "dur": 2.78
+  },
+  "step-on-the-floor-pads-with-those-shapes-in-that-order": {
+   "file": "step-on-the-floor-pads-with-those-shapes-in-that-order.mp3",
+   "text": "Step on the floor pads with those shapes, in that order!",
+   "spoken": "Step on the floor pads with those shapes, in that order!",
+   "dur": 2.74
   },
   "step-on-the-matching-symbol": {
    "file": "step-on-the-matching-symbol.mp3",

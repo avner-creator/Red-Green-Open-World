@@ -80,9 +80,8 @@ export const TIPS = {
   help: { text: 'Lost? This button shows all the controls!', icon: 'question', mood: 'happy', callout: HUD.help },
   pip: { text: 'Need help? Use my button, and I explain things!', icon: 'pip', mood: 'happy', callout: HUD.pip },
   combo: { text: 'Grab gems fast for a combo! More gems!', icon: 'combo', mood: 'excited', callout: HUD.combo },
-  arrows: { text: 'Glowing arrows on the ground lead to secrets. Follow them!', icon: 'glasses', extra: 'trail', mood: 'curious' },
 } satisfies Record<string, ScriptLine>;
-export type TipId = keyof typeof TIPS | 'skill' | `visit:${Attraction}` | `howto:${string}` | `econ:${string}` | 'chute';
+export type TipId = keyof typeof TIPS | 'skill' | 'arrows' | `visit:${Attraction}` | `howto:${string}` | `econ:${string}` | 'chute';
 
 /** Skill tip: the key cap is filled in from the control map ("Q", "LB"). */
 export function skillTip(_key = ''): ScriptLine {
@@ -226,17 +225,17 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
   gates: [{ text: 'Each eye sees half a shape. Run through the matching arch!', icon: 'glasses', mood: 'curious' }],
   dotsigns: [{ text: 'Find the shape hidden in the dots. Push its button!', icon: 'glasses', action: 'use', mood: 'curious' }],
   vault: [
-    { text: 'A secret vault! Magic glasses show three shapes in a row.', icon: 'lock', extra: 'glasses', mood: 'curious' },
-    { text: 'Push the door buttons in that same order!', icon: 'lock', action: 'use', mood: 'excited' },
+    { text: 'A secret vault! Look at its three round windows with your glasses.', icon: 'lock', extra: 'glasses', mood: 'curious' },
+    { text: 'Step on the floor pads with those shapes, in that order!', icon: 'lock', action: 'move', mood: 'excited' },
   ],
   chest: [
-    { text: 'A treasure chest! Magic glasses help you find its key.', icon: 'chest', extra: 'key', mood: 'curious' },
-    { text: 'Bring the key back and step on the matching symbol!', icon: 'key', extra: 'lock', mood: 'excited' },
+    { text: 'A treasure chest! Its hidden key is inside the dotted circle.', icon: 'chest', extra: 'key', mood: 'curious' },
+    { text: 'Bring the key back and step on the shape the chest shows!', icon: 'key', extra: 'lock', mood: 'excited' },
   ],
   workshop: [{ text: 'Pick silly parts for your buggy! Gems pay for them.', icon: 'gear', action: 'use', extra: 'wCar', mood: 'happy' }],
   secrets: [
-    TIPS.arrows,
-    { text: 'Some stepping stones only magic glasses see. Hop across!', icon: 'glasses', action: 'jump', mood: 'excited' },
+    { text: 'A secret path! Stand on the gold ring. Glasses show hidden stones!', icon: 'glasses', extra: 'star', mood: 'curious' },
+    { text: 'Hop up the stones and climb to win the star!', icon: 'star', action: 'jump', mood: 'excited' },
   ],
 };
 
