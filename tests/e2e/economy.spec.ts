@@ -271,7 +271,7 @@ test('balloon: first ride free, then a ticket (denied with 0 gems, paid with 5)'
   expect(r.log).toEqual(['paid:0:true', 'denied:5', 'paid:5:false']);
 });
 
-test('rocket pad: 0 gems still flies a practice launch (no stunt prize), 3 gems pay and launch', async () => {
+test('rocket pad: first launch free, then 0 gems flies a practice launch (no stunt prize), 3 gems pay', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -292,17 +292,24 @@ test('rocket pad: 0 gems still flies a practice launch (no stunt prize), 3 gems 
     const info = th.rocket()!;
     const pad = info.pads[0];
     ctx.profile.spend(ctx.profile.wallet, 'test');
-    // Walk onto the pad with an empty wallet: it launches anyway (practice), one denial.
+    const fly = (): void => {
+      for (let i = 0; i < 60 * 15 && ctx.player.mode !== 'walk'; i++) rg.step(1 / 60, 1, false);
+      rg.step(1 / 60, 150, false); // cooldown
+    };
+    // Walk onto the pad with an empty wallet: the first launch is free.
     rg.teleport(pad.x, pad.y + 0.1, pad.z);
     rg.step(1 / 60, 10, false);
     const out: Record<string, unknown> = {};
+    out.modeFree = ctx.player.mode;
+    fly();
+    // Second launch with 0 gems: it flies anyway (practice), one denial, and no launch stunt.
+    const before = launches.length;
+    th.launchRocket(0);
+    rg.step(1 / 60, 3, false);
     out.modePractice = ctx.player.mode;
-    out.denials = log.filter((l) => l.startsWith('denied')).length;
-    // Fly it out and settle on the net: a practice landing gives no launch stunt.
-    for (let i = 0; i < 60 * 15 && ctx.player.mode !== 'walk'; i++) rg.step(1 / 60, 1, false);
-    out.practiceLaunches = launches.length;
+    fly();
+    out.practiceLaunches = launches.length - before;
     // With 3 gems the same pad launches and pays.
-    rg.step(1 / 60, 150, false); // cooldown
     ctx.profile.earn(3, 'test');
     th.launchRocket(0);
     rg.step(1 / 60, 3, false);
@@ -311,12 +318,12 @@ test('rocket pad: 0 gems still flies a practice launch (no stunt prize), 3 gems 
     out.log = log;
     return out;
   });
+  expect(r.modeFree).not.toBe('walk');
   expect(r.modePractice).not.toBe('walk');
-  expect(r.denials).toBe(1);
   expect(r.practiceLaunches).toBe(0);
   expect(r.modeLaunched).not.toBe('walk');
   expect(r.spent).toEqual([-3]);
-  expect(r.log).toEqual(['denied:3', 'paid:3']);
+  expect(r.log).toEqual(['paid:0', 'denied:3', 'paid:3']);
 });
 
 test('no console errors', async () => {
