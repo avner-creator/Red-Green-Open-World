@@ -340,3 +340,186 @@ test('phone viewport: the race podium/result camera and the plaza chevron walk k
   await ph.close();
   expect(bad).toEqual([]);
 });
+
+// ───────────── QA6 M2: scenery right behind the hero (Gear Shack board, kiosk and booth walls) ─────────────
+
+interface WallSpot {
+  name: string;
+  x: number;
+  z: number;
+  /** Look yaws to test (the camera sits behind the look direction). */
+  yaws: number[];
+}
+
+/**
+ * The QA6 spot beside the Gear Shack's dot-picture board (16, 0), 8 yaws; and the hero's back
+ * against three walls (the Gear Shack's back, the Scoops parlour's back, a carnival booth's back),
+ * found by a ray from outside towards each structure: hero 0.45 m off the wall, looking away from it
+ * (camera pushed into the wall) and ±0.7 rad either side.
+ */
+async function wallSpots(p: Page): Promise<WallSpot[]> {
+  return p.evaluate(() => {
+    const { world, physics } = window.__rg!.ctx;
+    const a = world.anchors as unknown as Record<string, { position: { x: number; z: number }; yaw: number }>;
+    const out: { name: string; x: number; z: number; yaws: number[] }[] = [];
+    out.push({ name: 'shack-board-16-0', x: 16, z: 0, yaws: Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2) });
+    const back = (name: string, cx: number, cz: number, dirYaw: number): void => {
+      const dx = Math.sin(dirYaw);
+      const dz = Math.cos(dirYaw);
+      const o = world.anchors.spawn.position.clone().set(cx + dx * 9, world.heightAt(cx, cz) + 1.0, cz + dz * 9);
+      const hit = physics.raycast(o, o.clone().set(-dx, 0, -dz), 9);
+      if (!hit) return;
+      const t = hit.distance - 0.45 - 0.35;
+      out.push({ name, x: o.x - dx * t, z: o.z - dz * t, yaws: [dirYaw, dirYaw + 0.7, dirYaw - 0.7] });
+    };
+    const gs = a.gearShack;
+    back('shack-back', gs.position.x, gs.position.z, gs.yaw + Math.PI);
+    const ic = a.iceCream;
+    back('scoops-back', ic.position.x, ic.position.z, ic.yaw + Math.PI);
+    const cr = a.carnivalRow;
+    back('carnival-back', cr.position.x, cr.position.z, cr.yaw + Math.PI);
+    return out;
+  });
+}
+
+/** Camera vs hero after a view settles (runs in the page). */
+function viewCheck(y: number): { near: number; inside: boolean; fade: number; onScreen: number; inFront: boolean; d: number; hits: string[] } {
+  const rg = window.__rg!;
+  const cam = window.__rgCamera!;
+  cam.setView(y, 0.38);
+  rg.step(1 / 60, 45, false);
+  const pr = cam.probe();
+  const st = cam.state();
+  const { camera, player } = rg.ctx;
+  camera.updateMatrixWorld();
+  // The hero's box (capsule bounds) projected to the screen: how much of it is inside the view.
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  let inFront = true;
+  for (const [ox, oy, oz] of [[-0.35, 0, -0.35], [0.35, 0, -0.35], [-0.35, 0, 0.35], [0.35, 0, 0.35], [-0.35, 1.7, -0.35], [0.35, 1.7, -0.35], [-0.35, 1.7, 0.35], [0.35, 1.7, 0.35]]) {
+    const v = player.position.clone().add(player.position.clone().set(ox, oy, oz)).project(camera);
+    if (v.z < -1 || v.z > 1) inFront = false;
+    x0 = Math.min(x0, v.x);
+    x1 = Math.max(x1, v.x);
+    y0 = Math.min(y0, v.y);
+    y1 = Math.max(y1, v.y);
+  }
+  const area = (x1 - x0) * (y1 - y0);
+  const vis = Math.max(0, Math.min(1, x1) - Math.max(-1, x0)) * Math.max(0, Math.min(1, y1) - Math.max(-1, y0));
+  return { near: pr.near, inside: pr.inside, fade: st.heroFade, onScreen: area > 0 ? vis / area : 0, inFront, d: st.distance, hits: pr.hits };
+}
+
+async function checkWallSpots(p: Page, label: string): Promise<string[]> {
+  const bad: string[] = [];
+  const list = await wallSpots(p);
+  expect(list.map((s) => s.name)).toEqual(['shack-board-16-0', 'shack-back', 'scoops-back', 'carnival-back']);
+  for (const s of list) {
+    await p.evaluate(({ x, z }) => {
+      const rg = window.__rg!;
+      rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, 0);
+      rg.step(1 / 60, 30, false);
+    }, s);
+    for (let i = 0; i < s.yaws.length; i++) {
+      const r = await p.evaluate(viewCheck, s.yaws[i]);
+      const msg = `${label} ${s.name} yaw ${s.yaws[i].toFixed(2)}: ${JSON.stringify(r)}`;
+      if (r.near <= 0.9 || r.inside || !r.inFront || r.onScreen < 0.6 || r.fade > 0.5) bad.push(msg);
+      if (SHOTS && i % 2 === 0) {
+        await p.evaluate(() => window.__rg!.render());
+        await canvasShot(p, `test-results/camera-wall-${label}-${s.name}-${i}.png`);
+      }
+    }
+  }
+  return bad;
+}
+
+test('QA6 M2 desktop: hero beside the Gear Shack board and with their back to walls: camera clear', async () => {
+  test.setTimeout(240_000);
+  expect(await checkWallSpots(page, 'desktop')).toEqual([]);
+});
+
+test('QA6 M2 phone (750×342 touch): hero beside the Gear Shack board and with their back to walls', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const ph = await browser.newPage({ viewport: { width: 750, height: 342 }, hasTouch: true });
+  const { consoleErrors: errs } = await boot(ph);
+  await ph.evaluate(() => {
+    const rg = window.__rg!;
+    rg.freeze(true);
+    rg.start();
+    rg.step(1 / 60, 20, false);
+  });
+  const bad = await checkWallSpots(ph, 'phone');
+  await ph.close();
+  expect(bad).toEqual([]);
+  expect(errs).toEqual([]);
+});
+
+test('QA6 M2: walking past the Gear Shack board from 8 directions never stalls for 3 s', async () => {
+  test.setTimeout(240_000);
+  const bad: string[] = [];
+  // Through the QA stall spot (16.4, 0.1), and out from (16, 0), like a child steering: head for the
+  // goal, veer off to one side for a moment when blocked.
+  const runs: { from: [number, number]; to: [number, number] }[] = [];
+  for (let i = 0; i < 8; i++) {
+    const t = (i / 8) * Math.PI * 2;
+    runs.push({ from: [16.4 + Math.sin(t) * 7, 0.1 + Math.cos(t) * 7], to: [16.4 - Math.sin(t) * 7, 0.1 - Math.cos(t) * 7] });
+    runs.push({ from: [16, 0], to: [16 + Math.sin(t) * 8, Math.cos(t) * 8] });
+  }
+  for (const run of runs) {
+    const r = await page.evaluate(({ from, to }) => {
+      const rg = window.__rg!;
+      const cam = window.__rgCamera!;
+      const p = rg.ctx.player.position;
+      rg.teleport(from[0], rg.ctx.world.heightAt(from[0], from[1]) + 0.1, from[1], Math.atan2(to[0] - from[0], to[1] - from[1]));
+      rg.step(1 / 60, 10, false);
+      const trail: [number, number][] = [];
+      let veer = 0;
+      let veerT = 0;
+      let side = 1;
+      let longest = 0;
+      let still = 0;
+      let mark: [number, number] = [p.x, p.z];
+      for (let f = 0; f < 60 * 20; f += 5) {
+        const dx = to[0] - p.x;
+        const dz = to[1] - p.z;
+        if (Math.hypot(dx, dz) < 1.2) {
+          rg.inject(null);
+          return { ok: true, t: f / 60, longest, at: [p.x, p.z] };
+        }
+        const h = Math.atan2(dx, dz) + veer;
+        if (veerT > 0) veerT -= 5 / 60;
+        else veer = 0;
+        const yaw = cam.state().yaw;
+        const s = Math.sin(yaw);
+        const c = Math.cos(yaw);
+        const wx = Math.sin(h);
+        const wz = Math.cos(h);
+        rg.inject({ moveY: s * wx + c * wz, moveX: -c * wx + s * wz });
+        rg.step(1 / 60, 5, false);
+        trail.push([p.x, p.z]);
+        // Blocked for half a second: veer 70° to one side (alternating) for a second.
+        if (trail.length >= 6) {
+          const q = trail[trail.length - 6];
+          if (Math.hypot(p.x - q[0], p.z - q[1]) < 0.3 && veerT <= 0) {
+            veer = side * 1.2;
+            veerT = 1;
+            side = -side;
+          }
+        }
+        // Longest time spent within 0.6 m of one point.
+        if (Math.hypot(p.x - mark[0], p.z - mark[1]) > 0.6) {
+          mark = [p.x, p.z];
+          still = 0;
+        } else {
+          still += 5 / 60;
+          longest = Math.max(longest, still);
+        }
+      }
+      rg.inject(null);
+      return { ok: false, t: 20, longest, at: [p.x, p.z] };
+    }, run);
+    if (!r.ok || r.longest >= 3) bad.push(`${JSON.stringify(run)}: ${JSON.stringify(r)}`);
+  }
+  expect(bad).toEqual([]);
+});
