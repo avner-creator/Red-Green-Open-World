@@ -12,7 +12,7 @@
 import type { PlayerAnim, SkillId } from '../../types';
 import { nativeSkillFor, type PowerId } from '../skills-powers';
 
-export type CharacterId = 'robot' | 'frog' | 'panda' | 'bee' | 'flamingo' | 'rex';
+export type CharacterId = 'robot' | 'frog' | 'panda' | 'bee' | 'flamingo' | 'rex' | 'fox' | 'pup' | 'alpaca' | 'trike';
 export type CharacterSkill = SkillId;
 export type AttachPart = 'head' | 'back' | 'face';
 
@@ -74,6 +74,8 @@ export interface FaceDef {
   readonly blushR?: number;
   readonly blushYaw?: number;
   readonly blushColor?: string;
+  /** Positions were measured on the first idle frame (not the rest pose). */
+  readonly inIdle?: boolean;
 }
 
 export interface CharacterDef {
@@ -126,6 +128,22 @@ export interface CharacterDef {
 
 /** The four space-suit characters share a skeleton; one scale keeps their proportions. */
 const ASTRO_SCALE = 0.6;
+
+/** Four-legged friends from the animal pack (procedural Dance/Wave/Cheer/Fall/Flop/Sit added). */
+function animalAnims(): Record<PlayerAnim, ClipRef> {
+  return {
+    idle: { clip: 'Idle', loop: true },
+    walk: { clip: 'Walk', loop: true, rate: 1.3 },
+    run: { clip: 'Gallop', loop: true },
+    jump: { clip: 'Gallop_Jump', loop: false },
+    fall: { clip: 'Fall', loop: true },
+    flop: { clip: 'Flop', loop: false },
+    dance: { clip: 'Dance', loop: true },
+    wave: { clip: 'Wave', loop: true },
+    cheer: { clip: 'Cheer', loop: false },
+    sit: { clip: 'Sit', loop: false },
+  };
+}
 
 const ASTRO_ANIMS: Record<PlayerAnim, ClipRef> = {
   idle: { clip: 'Idle', loop: true },
@@ -223,7 +241,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Dance', loop: true },
     attach: astroAttach(1.68, 0, 1.42, 0.4),
-    price: 25,
+    price: 0,
     signature: 'dash',
     freePowers: ['rainbowSlide', 'glide'],
     emoteName: 'dance',
@@ -241,7 +259,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Wave', loop: true },
     attach: astroAttach(1.55, 0, 1.36, 0.3),
-    price: 40,
+    price: 0,
     signature: 'glide',
     freePowers: ['bubbleShield', 'doubleJump'],
     emoteName: 'wave',
@@ -259,7 +277,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Spin', loop: true },
     attach: astroAttach(1.7, 0.08, 1.5, 0.3),
-    price: 60,
+    price: 15,
     signature: 'doubleJump',
     freePowers: ['glide', 'rainbowSlide'],
     emoteName: 'spin',
@@ -293,7 +311,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
       // A dinosaur's "back" is on top: backpacks and capes lie along the spine.
       back: { bone: 'Torso', offset: [0, 1.3, 0.3], rotation: [-Math.PI / 2, 0, 0], scale: 1.2 },
     },
-    price: 100,
+    price: 40,
     signature: 'groundPound',
     freePowers: ['giant', 'superBounce'],
     emoteName: 'dance',
@@ -306,6 +324,114 @@ export const CHARACTERS: readonly CharacterDef[] = [
     seat: {
       bones: { Tail1: [-0.5, 0, 0], Tail2: [-0.15, 0, 0], Tail3: [-0.1, 0, 0], Neck: [0.45, 0, 0] },
     },
+  }),
+  hero({
+    id: 'pup',
+    name: 'Biscuit',
+    backstory: 'Biscuit can sniff out treasure three hills away, and always shares the snacks.',
+    modelUrl: 'assets/characters/pup.glb',
+    scale: 0.42,
+    height: 1.3,
+    length: 1.66,
+    anims: animalAnims(),
+    emote: { clip: 'Wave', loop: true },
+    attach: {
+      head: { bone: 'Head', offset: [0, 1.22, 0.72], scale: 0.9 },
+      face: { bone: 'Head', offset: [0, 1.05, 0.98], scale: 0.85 },
+      back: { bone: 'Torso', offset: [0, 0.98, 0.0], rotation: [-Math.PI / 2, 0, 0], scale: 0.95 },
+    },
+    price: 0,
+    signature: 'superBounce',
+    freePowers: ['bubbleShield', 'dash'],
+    emoteName: 'wag',
+    cardColors: ['#fff0dc', '#3d2410'],
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.15, 0.9], eyeR: 0.085, eyeYaw: 0.35, lid: '#f2b066', iris: '#2a160c' },
+    springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
+    smooth: true,
+    steps: 2,
+  }),
+  hero({
+    id: 'fox',
+    name: 'Ziggy',
+    backstory: 'Ziggy zooms so fast that her fluffy tail arrives a second later.',
+    modelUrl: 'assets/characters/fox.glb',
+    scale: 0.5,
+    height: 1.4,
+    length: 2.9,
+    anims: animalAnims(),
+    emote: { clip: 'Dance', loop: true },
+    attach: {
+      head: { bone: 'Head', offset: [0, 1.25, 0.95], scale: 0.9 },
+      face: { bone: 'Head', offset: [0, 1.08, 1.2], scale: 0.85 },
+      back: { bone: 'Torso', offset: [0, 0.95, 0.1], rotation: [-Math.PI / 2, 0, 0], scale: 0.95 },
+    },
+    price: 20,
+    signature: 'dash',
+    freePowers: ['rainbowSlide', 'doubleJump'],
+    emoteName: 'dance',
+    cardColors: ['#ffe2c8', '#4a1f08'],
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c' },
+    springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
+    smooth: true,
+  }),
+  hero({
+    id: 'alpaca',
+    name: 'Fluff',
+    backstory: 'Fluff’s wool is so springy that clouds ask her for bouncing tips.',
+    modelUrl: 'assets/characters/alpaca.glb',
+    scale: 0.37,
+    height: 2.0,
+    length: 1.6,
+    anims: animalAnims(),
+    emote: { clip: 'Dance', loop: true },
+    attach: {
+      head: { bone: 'Head', offset: [0, 2.0, 0.62], scale: 0.85 },
+      face: { bone: 'Head', offset: [0, 1.8, 0.85], scale: 0.8 },
+      back: { bone: 'Torso', offset: [0, 1.15, -0.1], rotation: [-Math.PI / 2, 0, 0], scale: 1.0 },
+    },
+    price: 30,
+    signature: 'glide',
+    freePowers: ['giant', 'bounceBall'],
+    emoteName: 'dance',
+    cardColors: ['#fbe6f6', '#3e1d36'],
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.84, 0.79], eyeR: 0.085, eyeYaw: 0.5, lid: '#fff4fb', iris: '#2a160c' },
+    springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
+    smooth: true,
+  }),
+  hero({
+    id: 'trike',
+    name: 'Trixie',
+    backstory: 'Trixie has three horns and zero grumps. Her stomp makes the flowers dance.',
+    modelUrl: 'assets/characters/trike.glb',
+    scale: 0.16,
+    height: 1.5,
+    length: 3.25,
+    anims: {
+      idle: { clip: 'Idle', loop: true },
+      walk: { clip: 'Walk', loop: true },
+      run: { clip: 'Run', loop: true },
+      jump: { clip: 'Jump', loop: false },
+      fall: { clip: 'Fall', loop: true },
+      flop: { clip: 'Flop', loop: false },
+      dance: { clip: 'Dance', loop: true },
+      wave: { clip: 'Wave', loop: true },
+      cheer: { clip: 'Cheer', loop: false },
+      sit: { clip: 'Sit', loop: false },
+    },
+    emote: { clip: 'Dance', loop: true },
+    attach: {
+      head: { bone: 'Head', offset: [0, 1.35, 0.9], scale: 1.0 },
+      face: { bone: 'Head', offset: [0, 1.0, 1.35], scale: 0.9 },
+      back: { bone: 'Torso', offset: [0, 1.25, -0.2], rotation: [-Math.PI / 2, 0, 0], scale: 1.1 },
+    },
+    price: 50,
+    signature: 'groundPound',
+    freePowers: ['rocketBoots', 'bubbleShield'],
+    emoteName: 'dance',
+    cardColors: ['#dcf6ef', '#20283f'],
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.22, 1.0, 1.15], eyeR: 0.1, eyeYaw: 0.5, lid: '#86d8c6', iris: '#2a160c' },
+    smooth: true,
+    springs: ['Tail1'],
   }),
 ];
 

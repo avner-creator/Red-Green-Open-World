@@ -63,8 +63,27 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
   let face: FaceRig | null = null;
   const faceBone = def.face ? model.getObjectByName(def.face.bone) : undefined;
   if (def.face && faceBone) {
+    // Faces measured on the first idle frame are built in that pose (the rest pose can differ a lot).
+    const idleClip = def.face.inIdle ? gltf.animations.find((c) => c.name === def.anims.idle.clip) : undefined;
+    const poser = idleClip ? new THREE.AnimationMixer(model) : null;
+    const rest: [THREE.Object3D, THREE.Vector3, THREE.Quaternion, THREE.Vector3][] = [];
+    if (poser) model.traverse((o) => rest.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]));
+    if (poser && idleClip) {
+      poser.clipAction(idleClip).play();
+      poser.setTime(0);
+    }
     object.updateMatrixWorld(true);
     face = buildFace(def.face, object, faceBone);
+    if (poser) {
+      poser.stopAllAction();
+      poser.uncacheRoot(model);
+      for (const [o, p, q, s] of rest) {
+        o.position.copy(p);
+        o.quaternion.copy(q);
+        o.scale.copy(s);
+      }
+      object.updateMatrixWorld(true);
+    }
     mergeCharacterMeshes(model, gltf.animations, (m) => m.name === 'face-part');
     model.traverse((o) => {
       if ((o as THREE.Mesh).isMesh && o.name.startsWith('merged-hero-face')) {
