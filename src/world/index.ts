@@ -24,6 +24,7 @@ import { createBeacons } from './beacons';
 import { LAUNCH_NET } from './layout';
 import { installLife } from './life';
 import { createOuterLive } from './outer/live';
+import { updateFarLod } from './far-lod';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -110,6 +111,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       shack.update(dt);
       beacons.update(U.time.value, ctx.camera);
       outerLive.update(U.time.value);
+      updateFarLod(ctx.scene, ctx.camera, quality ?? 'medium');
     },
   };
   installLife(api, ctx, root);
