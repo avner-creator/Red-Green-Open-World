@@ -22,7 +22,7 @@ const SYMBOL_COLOR = 0x1c2a78;
 const LIGHT = new THREE.Vector3(0.4, 0.8, 0.45).normalize();
 
 function cushionGeometry(): THREE.BufferGeometry {
-  const g = new RoundedBoxGeometry(RING.size, CUSHION_H, RING.size, 3, 0.1);
+  const g = new RoundedBoxGeometry(RING.size, CUSHION_H, RING.size, 1, 0.1);
   const cream = new THREE.Color(CREAM);
   const navy = new THREE.Color(NAVY);
   return paint(g, (x, y, z, _nx, ny) => {

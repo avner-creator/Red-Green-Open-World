@@ -28,6 +28,19 @@ interface Entry {
   hidden: boolean;
   /** Local bounding sphere (geometry or instanced bounds). */
   sphere: THREE.Sphere;
+  /**
+   * Objects without usable bounds (`frustumCulled = false`: instanced crowds, skinned characters)
+   * are placed by their root's site: the bounds of the root's other meshes, in root space. Their
+   * size class still comes from their own geometry.
+   */
+  site: Site | null;
+}
+
+interface Site {
+  root: THREE.Object3D;
+  /** Centre in root-local space and radius (world units). */
+  center: THREE.Vector3;
+  r: number;
 }
 
 const extraRoots = new Set<THREE.Object3D>();
@@ -46,7 +59,11 @@ export function keepNear(obj: THREE.Object3D): void {
 
 function sphereOf(o: THREE.Object3D): THREE.Sphere | null {
   const m = o as THREE.Mesh;
-  if (!m.geometry || o.frustumCulled === false) return null;
+  if (!m.geometry) return null;
+  if (o.frustumCulled === false) {
+    if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+    return m.geometry.boundingSphere;
+  }
   const inst = o as THREE.InstancedMesh;
   if (inst.isInstancedMesh) {
     if (!inst.boundingSphere) inst.computeBoundingSphere();
@@ -56,19 +73,45 @@ function sphereOf(o: THREE.Object3D): THREE.Sphere | null {
   return m.geometry.boundingSphere;
 }
 
+const _box = new THREE.Box3();
+const _sb = new THREE.Box3();
+const _inv = new THREE.Matrix4();
+const _sp = new THREE.Sphere();
+
 function collect(root: THREE.Object3D, seen: Set<THREE.Object3D>): void {
+  root.updateWorldMatrix(false, true);
+  _box.makeEmpty();
+  const loose: Entry[] = [];
   const walk = (o: THREE.Object3D): void => {
     if (o.userData.farLodKeep) return;
     if ((o as THREE.Mesh).isMesh || (o as THREE.Line).isLine || (o as THREE.Points).isPoints) {
       seen.add(o);
-      if (!entries.has(o)) {
+      let e = entries.get(o);
+      if (!e) {
         const s = sphereOf(o);
-        if (s && Number.isFinite(s.radius)) entries.set(o, { obj: o, mask: o.layers.mask, hidden: false, sphere: s });
+        if (s && Number.isFinite(s.radius)) entries.set(o, (e = { obj: o, mask: o.layers.mask, hidden: false, sphere: s, site: null }));
+      }
+      if (e && o.frustumCulled === false) loose.push(e);
+      else if (e && o.visible) {
+        _sp.copy(e.sphere).applyMatrix4(o.matrixWorld);
+        _box.union(_sp.getBoundingBox(_sb));
       }
     }
     for (const c of o.children) walk(c);
   };
   walk(root);
+  if (!loose.length) return;
+  if (_box.isEmpty()) {
+    // No bounds to place them by: never hide them.
+    for (const e of loose) {
+      if (e.hidden) e.obj.layers.mask = e.mask;
+      entries.delete(e.obj);
+    }
+    return;
+  }
+  _box.getBoundingSphere(_sp);
+  const site: Site = { root, center: _sp.center.clone().applyMatrix4(_inv.copy(root.matrixWorld).invert()), r: _sp.radius };
+  for (const e of loose) e.site = site;
 }
 
 let frame = RESCAN;
@@ -98,11 +141,13 @@ export function updateFarLod(scene: THREE.Scene, camera: THREE.Camera, quality: 
   const maxD = STATIC_MAX_DIST[quality];
   for (const e of entries.values()) {
     const o = e.obj;
-    c.copy(e.sphere.center).applyMatrix4(o.matrixWorld);
     const r = e.sphere.radius * o.matrixWorld.getMaxScaleOnAxis();
     let cls = 0;
     while (cls < CLASS_R.length && r < CLASS_R[CLASS_R.length - 1 - cls]) cls++;
-    const far = c.distanceTo(cam) - r > maxD[cls];
+    let d: number;
+    if (e.site) d = c.copy(e.site.center).applyMatrix4(e.site.root.matrixWorld).distanceTo(cam) - e.site.r;
+    else d = c.copy(e.sphere.center).applyMatrix4(o.matrixWorld).distanceTo(cam) - r;
+    const far = d > maxD[cls];
     if (far === e.hidden) continue;
     if (far) {
       e.mask = o.layers.mask;

@@ -31,7 +31,7 @@ try {
     await page.goto(`http://localhost:${port}/?test=1&quality=${quality}`);
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 180000 });
     const result = await page.evaluate(
-      ([groups, wantDetail, onlyViews]) => {
+      ([groups, wantDetail, onlyViews, all]) => {
         const rg = window.__rg;
         const ctx = rg.ctx;
         const r = ctx.renderer;
@@ -73,7 +73,7 @@ try {
           const isVision = nm(top).startsWith('Vision.');
           if (isVision) visionRoots.add(top);
           const owner = isVision && second !== top ? `${nm(top)}:${nm(second)}` : nm(top);
-          const key = owner + (top !== object && second !== object ? ' > ' + nm(object) : '');
+          const key = owner + (second !== top ? ' > ' + nm(second) : '') + (object !== second && object !== top ? ' > ' + nm(object) : '') + (object.frustumCulled ? '' : ' [nofc]') + ` r${(object.geometry?.boundingSphere?.radius ?? 0).toFixed(1)}`;
           const topKey = owner;
           for (const k of [topKey + ' (all)', key]) {
             let o = owners.get(k);
@@ -178,7 +178,7 @@ try {
             const att = attribute();
             row.top = att.filter((o) => o.name.endsWith(' (all)') && o.main + o.shadow >= 2).sort((a, b) => b.main - a.main || b.mainTris - a.mainTris);
             row.topTris = att.filter((o) => o.name.endsWith(' (all)')).sort((a, b) => b.mainTris - a.mainTris).slice(0, 10);
-            row.meshes = att.filter((o) => !o.name.endsWith(' (all)')).sort((a, b) => b.mainTris - a.mainTris).slice(0, 15);
+            row.meshes = att.filter((o) => !o.name.endsWith(' (all)')).sort((a, b) => b.mainTris - a.mainTris).slice(0, all ? 400 : 15);
           }
           out.push(row);
         }
@@ -201,7 +201,7 @@ try {
         r.info.autoReset = true;
         return { out, meshes };
       },
-      [GROUPS, detail, onlyViews],
+      [GROUPS, detail, onlyViews, !!process.env.RG_ALL],
     );
     if (errors.length) console.log(`[${quality}] page errors:`, errors.slice(0, 3));
     for (const row of result.out) rows.push({ quality, ...row });
