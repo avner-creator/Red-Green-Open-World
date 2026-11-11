@@ -2,17 +2,119 @@
  "recipe": "kokoro-q8/af_heart/v2:speed0.92+asetrate1.12+rb1.09+comp+mp3-32k",
  "voice": "Kokoro-82M af_heart",
  "clips": {
-  "a-key-nice-find": {
-   "file": "a-key-nice-find.mp3",
-   "text": "A key! Nice find!",
-   "spoken": "A key! Nice find!",
+  "a-fun-pass-stamp-fill-the-card-for-giant-prizes": {
+   "file": "a-fun-pass-stamp-fill-the-card-for-giant-prizes.mp3",
+   "text": "A Fun Pass stamp! Fill the card for giant prizes!",
+   "spoken": "A Fun Pass stamp! Fill the card for giant prizes!",
+   "dur": 3.17
+  },
+  "a-gem-gems-are-money-for-rides-hats-and-gear": {
+   "file": "a-gem-gems-are-money-for-rides-hats-and-gear.mp3",
+   "text": "A gem! Gems are money for rides, hats and gear!",
+   "spoken": "A gem! Gems are money for rides, hats and gear!",
+   "dur": 2.86
+  },
+  "a-mega-gem-the-spiky-ones-are-worth-five": {
+   "file": "a-mega-gem-the-spiky-ones-are-worth-five.mp3",
+   "text": "A mega gem! The spiky ones are worth five!",
+   "spoken": "A mega gem! The spiky ones are worth five!",
+   "dur": 2.57
+  },
+  "a-secret-vault-magic-glasses-show-three-shapes-in-a-row": {
+   "file": "a-secret-vault-magic-glasses-show-three-shapes-in-a-row.mp3",
+   "text": "A secret vault! Magic glasses show three shapes in a row.",
+   "spoken": "A secret vault! Magic glasses show three shapes in a row.",
+   "dur": 3.46
+  },
+  "a-treasure-chest-magic-glasses-help-you-find-its-key": {
+   "file": "a-treasure-chest-magic-glasses-help-you-find-its-key.mp3",
+   "text": "A treasure chest! Magic glasses help you find its key.",
+   "spoken": "A treasure chest! Magic glasses help you find its key.",
+   "dur": 3.12
+  },
+  "again-again": {
+   "file": "again-again.mp3",
+   "text": "Again, again!",
+   "spoken": "Again, again!",
+   "dur": 0.96
+  },
+  "aim-the-net-over-a-duck-and-scoop-it-up": {
+   "file": "aim-the-net-over-a-duck-and-scoop-it-up.mp3",
+   "text": "Aim the net over a duck and scoop it up!",
+   "spoken": "Aim the net over a duck and scoop it up!",
+   "dur": 1.94
+  },
+  "almost-there-follow-me": {
+   "file": "almost-there-follow-me.mp3",
+   "text": "Almost there! Follow me!",
+   "spoken": "Almost there! Follow me!",
+   "dur": 1.42
+  },
+  "amazing-flip": {
+   "file": "amazing-flip.mp3",
+   "text": "Amazing flip!",
+   "spoken": "Amazing flip!",
+   "dur": 1.01
+  },
+  "another-one-yip-yip": {
+   "file": "another-one-yip-yip.mp3",
+   "text": "Another one! Yip yip!",
+   "spoken": "Another one! Yip yip!",
+   "dur": 1.37
+  },
+  "another-stamp": {
+   "file": "another-stamp.mp3",
+   "text": "Another stamp!",
+   "spoken": "Another stamp!",
+   "dur": 0.94
+  },
+  "at-the-top-jump-out-and-fly-through-the-gems": {
+   "file": "at-the-top-jump-out-and-fly-through-the-gems.mp3",
+   "text": "At the top, jump out and fly through the gems!",
+   "spoken": "At the top, jump out and fly through the gems!",
+   "dur": 2.45
+  },
+  "back-on-the-ground": {
+   "file": "back-on-the-ground.mp3",
+   "text": "Back on the ground!",
+   "spoken": "Back on the ground!",
+   "dur": 1.08
+  },
+  "beat-your-friends-to-win-prizes-and-gems": {
+   "file": "beat-your-friends-to-win-prizes-and-gems.mp3",
+   "text": "Beat your friends to win prizes and gems!",
+   "spoken": "Beat your friends to win prizes and gems!",
+   "dur": 2.16
+  },
+  "best-day-ever": {
+   "file": "best-day-ever.mp3",
+   "text": "Best day ever!",
+   "spoken": "Best day ever!",
+   "dur": 0.98
+  },
+  "best-team-ever": {
+   "file": "best-team-ever.mp3",
+   "text": "Best team ever!",
+   "spoken": "Best team ever!",
+   "dur": 1.03
+  },
+  "big-gem-big-smile": {
+   "file": "big-gem-big-smile.mp3",
+   "text": "Big gem, big smile!",
+   "spoken": "Big gem, big smile!",
    "dur": 1.27
   },
-  "all-the-buttons-live-here": {
-   "file": "all-the-buttons-live-here.mp3",
-   "text": "All the buttons live here!",
-   "spoken": "All the buttons live here!",
-   "dur": 1.3
+  "big-prize": {
+   "file": "big-prize.mp3",
+   "text": "Big prize!",
+   "spoken": "Big prize!",
+   "dur": 0.94
+  },
+  "bigger-combo": {
+   "file": "bigger-combo.mp3",
+   "text": "Bigger combo!",
+   "spoken": "Bigger combo!",
+   "dur": 0.96
   },
   "bounce-30-meters-high": {
    "file": "bounce-30-meters-high.mp3",
@@ -20,17 +122,47 @@
    "spoken": "Bounce 30 meters high!",
    "dur": 1.39
   },
-  "bounce-bounce-bounce": {
-   "file": "bounce-bounce-bounce.mp3",
-   "text": "Bounce, bounce, bounce!",
-   "spoken": "Bounce, bounce, bounce!",
-   "dur": 1.34
+  "bouncy-flop": {
+   "file": "bouncy-flop.mp3",
+   "text": "Bouncy flop!",
+   "spoken": "Bouncy flop!",
+   "dur": 0.98
   },
-  "catch-the-glow-flies": {
-   "file": "catch-the-glow-flies.mp3",
-   "text": "Catch the glow-flies!",
-   "spoken": "Catch the glow-flies!",
-   "dur": 1.25
+  "bring-the-key-back-and-step-on-the-matching-symbol": {
+   "file": "bring-the-key-back-and-step-on-the-matching-symbol.mp3",
+   "text": "Bring the key back and step on the matching symbol!",
+   "spoken": "Bring the key back and step on the matching symbol!",
+   "dur": 2.33
+  },
+  "bubble-soccer-roll-the-big-ball-into-the-other-goal": {
+   "file": "bubble-soccer-roll-the-big-ball-into-the-other-goal.mp3",
+   "text": "Bubble soccer! Roll the big ball into the other goal!",
+   "spoken": "Bubble soccer! Roll the big ball into the other goal!",
+   "dur": 2.69
+  },
+  "build-your-own-ice-cream-pick-with-left-and-right": {
+   "file": "build-your-own-ice-cream-pick-with-left-and-right.mp3",
+   "text": "Build your own ice cream! Pick with left and right!",
+   "spoken": "Build your own ice cream! Pick with left and right!",
+   "dur": 2.64
+  },
+  "bump-every-tube-person-with-an-arrow-before-time-runs-out": {
+   "file": "bump-every-tube-person-with-an-arrow-before-time-runs-out.mp3",
+   "text": "Bump every tube person with an arrow before time runs out!",
+   "spoken": "Bump every tube person with an arrow before time runs out!",
+   "dur": 3.5
+  },
+  "catch-the-glow-flies-run-or-jump-right-through-them": {
+   "file": "catch-the-glow-flies-run-or-jump-right-through-them.mp3",
+   "text": "Catch the glow-flies! Run or jump right through them!",
+   "spoken": "Catch the glow-flies! Run or jump right through them!",
+   "dur": 2.95
+  },
+  "clip-in-at-the-bridge-then-dive-off-the-springboard": {
+   "file": "clip-in-at-the-bridge-then-dive-off-the-springboard.mp3",
+   "text": "Clip in at the bridge, then dive off the springboard!",
+   "spoken": "Clip in at the bridge, then dive off the springboard!",
+   "dur": 2.45
   },
   "collect-10-glow-gems": {
    "file": "collect-10-glow-gems.mp3",
@@ -38,41 +170,77 @@
    "spoken": "Collect 10 Glow Gems!",
    "dur": 1.46
   },
+  "collect-them-all": {
+   "file": "collect-them-all.mp3",
+   "text": "Collect them all!",
+   "spoken": "Collect them all!",
+   "dur": 0.96
+  },
   "combo-keep-going": {
    "file": "combo-keep-going.mp3",
    "text": "Combo! Keep going!",
    "spoken": "Combo! Keep going!",
    "dur": 1.27
   },
-  "compass-shows-fun-places": {
-   "file": "compass-shows-fun-places.mp3",
-   "text": "Compass shows fun places!",
-   "spoken": "Compass shows fun places!",
-   "dur": 1.56
+  "combo-time": {
+   "file": "combo-time.mp3",
+   "text": "Combo time!",
+   "spoken": "Combo time!",
+   "dur": 0.94
   },
-  "cool-power": {
-   "file": "cool-power.mp3",
-   "text": "Cool power!",
-   "spoken": "Cool power!",
+  "come-on-over-here": {
+   "file": "come-on-over-here.mp3",
+   "text": "Come on, over here!",
+   "spoken": "Come on, over here!",
+   "dur": 1.13
+  },
+  "cool-trick": {
+   "file": "cool-trick.mp3",
+   "text": "Cool trick!",
+   "spoken": "Cool trick!",
+   "dur": 0.86
+  },
+  "cool-tricks-earn-stars": {
+   "file": "cool-tricks-earn-stars.mp3",
+   "text": "Cool tricks earn stars!",
+   "spoken": "Cool tricks earn stars!",
+   "dur": 1.46
+  },
+  "did-you-see-that": {
+   "file": "did-you-see-that.mp3",
+   "text": "Did you see that?",
+   "spoken": "Did you see that?",
+   "dur": 0.98
+  },
+  "dino-sumo-bump-the-other-dinos-out-of-the-ring": {
+   "file": "dino-sumo-bump-the-other-dinos-out-of-the-ring.mp3",
+   "text": "Dino sumo! Bump the other dinos out of the ring!",
+   "spoken": "Dino sumo! Bump the other dinos out of the ring!",
+   "dur": 2.71
+  },
+  "done-and-done": {
+   "file": "done-and-done.mp3",
+   "text": "Done and done!",
+   "spoken": "Done and done!",
    "dur": 0.89
   },
-  "dance-party": {
-   "file": "dance-party.mp3",
-   "text": "Dance party!",
-   "spoken": "Dance party!",
-   "dur": 0.91
+  "dont-stop-now": {
+   "file": "dont-stop-now.mp3",
+   "text": "Don't stop now!",
+   "spoken": "Don't stop now!",
+   "dur": 1.08
   },
-  "dont-fall-in-the-foam": {
-   "file": "dont-fall-in-the-foam.mp3",
-   "text": "Don't fall in the foam!",
-   "spoken": "Don't fall in the foam!",
-   "dur": 1.18
+  "each-eye-sees-half-a-shape-run-through-the-matching-arch": {
+   "file": "each-eye-sees-half-a-shape-run-through-the-matching-arch.mp3",
+   "text": "Each eye sees half a shape. Run through the matching arch!",
+   "spoken": "Each eye sees half a shape. Run through the matching arch!",
+   "dur": 3
   },
-  "drive": {
-   "file": "drive.mp3",
-   "text": "Drive!",
-   "spoken": "Drive!",
-   "dur": 0.72
+  "each-new-ride-earns-a-stamp-full-fun-pass-giant-prize": {
+   "file": "each-new-ride-earns-a-stamp-full-fun-pass-giant-prize.mp3",
+   "text": "Each new ride earns a stamp. Full Fun Pass, giant prize!",
+   "spoken": "Each new ride earns a stamp. Full Fun Pass, giant prize!",
+   "dur": 3.6
   },
   "earn-20-gems-today": {
    "file": "earn-20-gems-today.mp3",
@@ -86,17 +254,23 @@
    "spoken": "Earn 3 stars!",
    "dur": 1.13
   },
-  "eight": {
-   "file": "eight.mp3",
-   "text": "Eight!",
-   "spoken": "Eight!",
-   "dur": 0.62
+  "ears-flapping": {
+   "file": "ears-flapping.mp3",
+   "text": "Ears flapping!",
+   "spoken": "Ears flapping!",
+   "dur": 0.96
   },
-  "everything-is-wobbly-here": {
-   "file": "everything-is-wobbly-here.mp3",
-   "text": "Everything is wobbly here!",
-   "spoken": "Everything is wobbly here!",
-   "dur": 1.46
+  "easy-peasy": {
+   "file": "easy-peasy.mp3",
+   "text": "Easy peasy!",
+   "spoken": "Easy peasy!",
+   "dur": 0.91
+  },
+  "fashion-star": {
+   "file": "fashion-star.mp3",
+   "text": "Fashion star!",
+   "spoken": "Fashion star!",
+   "dur": 0.91
   },
   "find-2-mega-gems": {
    "file": "find-2-mega-gems.mp3",
@@ -104,17 +278,17 @@
    "spoken": "Find 2 mega gems!",
    "dur": 1.27
   },
-  "find-the-hidden-shape": {
-   "file": "find-the-hidden-shape.mp3",
-   "text": "Find the hidden shape!",
-   "spoken": "Find the hidden shape!",
-   "dur": 1.15
+  "find-the-key-with-your-magic-glasses": {
+   "file": "find-the-key-with-your-magic-glasses.mp3",
+   "text": "Find the key with your magic glasses!",
+   "spoken": "Find the key with your magic glasses!",
+   "dur": 1.99
   },
-  "find-the-key": {
-   "file": "find-the-key.mp3",
-   "text": "Find the key!",
-   "spoken": "Find the key!",
-   "dur": 0.91
+  "find-the-shape-hidden-in-the-dots-push-its-button": {
+   "file": "find-the-shape-hidden-in-the-dots-push-its-button.mp3",
+   "text": "Find the shape hidden in the dots. Push its button!",
+   "spoken": "Find the shape hidden in the dots. Push its button!",
+   "dur": 2.71
   },
   "five": {
    "file": "five.mp3",
@@ -122,17 +296,35 @@
    "spoken": "Five!",
    "dur": 0.67
   },
-  "fly": {
-   "file": "fly.mp3",
-   "text": "Fly!",
-   "spoken": "Fly!",
-   "dur": 0.65
+  "five-carnival-games-walk-up-to-a-booth-to-play": {
+   "file": "five-carnival-games-walk-up-to-a-booth-to-play.mp3",
+   "text": "Five carnival games! Walk up to a booth to play!",
+   "spoken": "Five carnival games! Walk up to a booth to play!",
+   "dur": 2.69
   },
-  "fly-the-dragon": {
-   "file": "fly-the-dragon.mp3",
-   "text": "Fly the dragon!",
-   "spoken": "Fly the dragon!",
-   "dur": 1.03
+  "floppy-hero": {
+   "file": "floppy-hero.mp3",
+   "text": "Floppy hero!",
+   "spoken": "Floppy hero!",
+   "dur": 0.96
+  },
+  "fly-fly-fly": {
+   "file": "fly-fly-fly.mp3",
+   "text": "Fly, fly, fly!",
+   "spoken": "Fly, fly, fly!",
+   "dur": 1.22
+  },
+  "fly-the-stunt-plane-zoom-through-hoops-and-pop-cloud-balloons": {
+   "file": "fly-the-stunt-plane-zoom-through-hoops-and-pop-cloud-balloons.mp3",
+   "text": "Fly the stunt plane! Zoom through hoops and pop cloud balloons!",
+   "spoken": "Fly the stunt plane! Zoom through hoops and pop cloud balloons!",
+   "dur": 3.48
+  },
+  "foam-balls-roll-at-you-jump-over-or-step-aside": {
+   "file": "foam-balls-roll-at-you-jump-over-or-step-aside.mp3",
+   "text": "Foam balls roll at you! Jump over, or step aside!",
+   "spoken": "Foam balls roll at you! Jump over, or step aside!",
+   "dur": 2.9
   },
   "follow-me": {
    "file": "follow-me.mp3",
@@ -140,35 +332,41 @@
    "spoken": "Follow me!",
    "dur": 0.82
   },
-  "follow-my-paw-prints": {
-   "file": "follow-my-paw-prints.mp3",
-   "text": "Follow my paw prints!",
-   "spoken": "Follow my paw prints!",
-   "dur": 1.3
-  },
   "four": {
    "file": "four.mp3",
    "text": "Four!",
    "spoken": "Four!",
    "dur": 0.65
   },
-  "gems-are-money": {
-   "file": "gems-are-money.mp3",
-   "text": "Gems are money!",
-   "spoken": "Gems are money!",
-   "dur": 0.96
+  "fun-pass-power": {
+   "file": "fun-pass-power.mp3",
+   "text": "Fun Pass power!",
+   "spoken": "Fun Pass power!",
+   "dur": 1.06
   },
-  "gems-are-money-spend-them": {
-   "file": "gems-are-money-spend-them.mp3",
-   "text": "Gems are money! Spend them!",
-   "spoken": "Gems are money! Spend them!",
-   "dur": 1.61
+  "gem-streak": {
+   "file": "gem-streak.mp3",
+   "text": "Gem streak!",
+   "spoken": "Gem streak!",
+   "dur": 0.89
   },
-  "get-a-cone": {
-   "file": "get-a-cone.mp3",
-   "text": "Get a cone!",
-   "spoken": "Get a cone!",
-   "dur": 0.79
+  "gem-tastic": {
+   "file": "gem-tastic.mp3",
+   "text": "Gem-tastic!",
+   "spoken": "Gem-tastic!",
+   "dur": 0.98
+  },
+  "gems-buy-rides-goofy-hats-and-cool-gear": {
+   "file": "gems-buy-rides-goofy-hats-and-cool-gear.mp3",
+   "text": "Gems buy rides, goofy hats and cool gear!",
+   "spoken": "Gems buy rides, goofy hats and cool gear!",
+   "dur": 2.52
+  },
+  "gems-gems-gems": {
+   "file": "gems-gems-gems.mp3",
+   "text": "Gems, gems, gems!",
+   "spoken": "Gems, gems, gems!",
+   "dur": 1.49
   },
   "get-a-x3-combo": {
    "file": "get-a-x3-combo.mp3",
@@ -176,17 +374,41 @@
    "spoken": "Get a 3 gem combo!",
    "dur": 1.44
   },
+  "give-the-dragon-a-snack-then-hop-on-and-fly": {
+   "file": "give-the-dragon-a-snack-then-hop-on-and-fly.mp3",
+   "text": "Give the dragon a snack, then hop on and fly!",
+   "spoken": "Give the dragon a snack, then hop on and fly!",
+   "dur": 2.52
+  },
+  "glowing-arrows-on-the-ground-lead-to-secrets-follow-them": {
+   "file": "glowing-arrows-on-the-ground-lead-to-secrets-follow-them.mp3",
+   "text": "Glowing arrows on the ground lead to secrets. Follow them!",
+   "spoken": "Glowing arrows on the ground lead to secrets. Follow them!",
+   "dur": 3.19
+  },
   "goal-done-woohoo": {
    "file": "goal-done-woohoo.mp3",
    "text": "Goal done! Woohoo!",
    "spoken": "Goal done! Woohoo!",
    "dur": 1.2
   },
-  "goals-finish-them-for-gems": {
-   "file": "goals-finish-them-for-gems.mp3",
-   "text": "Goals! Finish them for gems!",
-   "spoken": "Goals! Finish them for gems!",
-   "dur": 1.7
+  "goal-smashed": {
+   "file": "goal-smashed.mp3",
+   "text": "Goal smashed!",
+   "spoken": "Goal smashed!",
+   "dur": 0.96
+  },
+  "good-sniffing-buddy": {
+   "file": "good-sniffing-buddy.mp3",
+   "text": "Good sniffing, buddy!",
+   "spoken": "Good sniffing, buddy!",
+   "dur": 1.2
+  },
+  "got-the-key": {
+   "file": "got-the-key.mp3",
+   "text": "Got the key!",
+   "spoken": "Got the key!",
+   "dur": 0.86
   },
   "grab-5-gems-while-driving": {
    "file": "grab-5-gems-while-driving.mp3",
@@ -194,17 +416,35 @@
    "spoken": "Grab 5 gems while driving!",
    "dur": 1.63
   },
-  "grab-gems-fast-for-combos": {
-   "file": "grab-gems-fast-for-combos.mp3",
-   "text": "Grab gems fast for combos!",
-   "spoken": "Grab gems fast for combos!",
-   "dur": 1.75
+  "grab-gems-fast-for-a-combo-more-gems": {
+   "file": "grab-gems-fast-for-a-combo-more-gems.mp3",
+   "text": "Grab gems fast for a combo! More gems!",
+   "spoken": "Grab gems fast for a combo! More gems!",
+   "dur": 2.66
   },
-  "hi-i-am-pip": {
-   "file": "hi-i-am-pip.mp3",
-   "text": "Hi! I am Pip!",
-   "spoken": "Hi! I am Pip!",
-   "dur": 1.08
+  "grab-grab-grab": {
+   "file": "grab-grab-grab.mp3",
+   "text": "Grab, grab, grab!",
+   "spoken": "Grab, grab, grab!",
+   "dur": 1.22
+  },
+  "hehe-that-was-funny": {
+   "file": "hehe-that-was-funny.mp3",
+   "text": "Hehe, that was funny!",
+   "spoken": "Hehe, that was funny!",
+   "dur": 1.25
+  },
+  "hi-im-pip-welcome-to-carnival-island-a-giant-fun-park": {
+   "file": "hi-im-pip-welcome-to-carnival-island-a-giant-fun-park.mp3",
+   "text": "Hi, I'm Pip! Welcome to Carnival Island, a giant fun park!",
+   "spoken": "Hi, I'm Pip! Welcome to Carnival Island, a giant fun park!",
+   "dur": 3.89
+  },
+  "high-paw": {
+   "file": "high-paw.mp3",
+   "text": "High paw!",
+   "spoken": "High paw!",
+   "dur": 0.74
   },
   "hmm-where-next": {
    "file": "hmm-where-next.mp3",
@@ -212,11 +452,29 @@
    "spoken": "Hmm, where next?",
    "dur": 0.98
   },
-  "hop-in-first-ride-free": {
-   "file": "hop-in-first-ride-free.mp3",
-   "text": "Hop in! First ride free!",
-   "spoken": "Hop in! First ride free!",
-   "dur": 1.51
+  "hold-to-power-up-let-go-to-toss-the-ring": {
+   "file": "hold-to-power-up-let-go-to-toss-the-ring.mp3",
+   "text": "Hold to power up, let go to toss the ring!",
+   "spoken": "Hold to power up, let go to toss the ring!",
+   "dur": 2.26
+  },
+  "hop-in-the-buggy-and-drive-bumps-are-bouncy-and-fun": {
+   "file": "hop-in-the-buggy-and-drive-bumps-are-bouncy-and-fun.mp3",
+   "text": "Hop in the buggy and drive! Bumps are bouncy and fun!",
+   "spoken": "Hop in the buggy and drive! Bumps are bouncy and fun!",
+   "dur": 3.02
+  },
+  "hop-on-a-pony-and-gallop-around-the-island": {
+   "file": "hop-on-a-pony-and-gallop-around-the-island.mp3",
+   "text": "Hop on a pony and gallop around the island!",
+   "spoken": "Hop on a pony and gallop around the island!",
+   "dur": 2.4
+  },
+  "hurry-it-is-so-fun": {
+   "file": "hurry-it-is-so-fun.mp3",
+   "text": "Hurry, it is so fun!",
+   "spoken": "Hurry, it is so fun!",
+   "dur": 1.3
   },
   "hurry-sunset-is-coming": {
    "file": "hurry-sunset-is-coming.mp3",
@@ -224,11 +482,29 @@
    "spoken": "Hurry! Sunset is coming!",
    "dur": 1.56
   },
+  "i-hear-the-carnival-music": {
+   "file": "i-hear-the-carnival-music.mp3",
+   "text": "I hear the carnival music!",
+   "spoken": "I hear the carnival music!",
+   "dur": 1.54
+  },
+  "i-lost-my-toys-follow-the-glowing-paw-prints-to-find-them": {
+   "file": "i-lost-my-toys-follow-the-glowing-paw-prints-to-find-them.mp3",
+   "text": "I lost my toys! Follow the glowing paw prints to find them!",
+   "spoken": "I lost my toys! Follow the glowing paw prints to find them!",
+   "dur": 3.43
+  },
   "i-smell-adventure": {
    "file": "i-smell-adventure.mp3",
    "text": "I smell adventure!",
    "spoken": "I smell adventure!",
    "dur": 1.13
+  },
+  "in-the-dark-magic-glasses-show-the-glowing-balls": {
+   "file": "in-the-dark-magic-glasses-show-the-glowing-balls.mp3",
+   "text": "In the dark, magic glasses show the glowing balls!",
+   "spoken": "In the dark, magic glasses show the glowing balls!",
+   "dur": 2.83
   },
   "is-it-snack-time": {
    "file": "is-it-snack-time.mp3",
@@ -236,23 +512,95 @@
    "spoken": "Is it snack time?",
    "dur": 1.06
   },
+  "it-opened-yay": {
+   "file": "it-opened-yay.mp3",
+   "text": "It opened! Yay!",
+   "spoken": "It opened! Yay!",
+   "dur": 1.32
+  },
   "jackpot-we-are-rich": {
    "file": "jackpot-we-are-rich.mp3",
    "text": "Jackpot! We are rich!",
    "spoken": "Jackpot! We are rich!",
    "dur": 1.42
   },
-  "jump-hold-to-go-higher": {
-   "file": "jump-hold-to-go-higher.mp3",
-   "text": "Jump! Hold to go higher!",
-   "spoken": "Jump! Hold to go higher!",
-   "dur": 1.46
+  "jackpot-yip-yip": {
+   "file": "jackpot-yip-yip.mp3",
+   "text": "Jackpot! Yip yip!",
+   "spoken": "Jackpot! Yip yip!",
+   "dur": 1.32
   },
-  "jump-off-boing-boing": {
-   "file": "jump-off-boing-boing.mp3",
-   "text": "Jump off! Boing boing!",
-   "spoken": "Jump off! Boing boing!",
-   "dur": 1.42
+  "jingle-jangle": {
+   "file": "jingle-jangle.mp3",
+   "text": "Jingle jangle!",
+   "spoken": "Jingle jangle!",
+   "dur": 1.06
+  },
+  "jump-adds-it-then-eat-it-for-a-silly-power": {
+   "file": "jump-adds-it-then-eat-it-for-a-silly-power.mp3",
+   "text": "Jump adds it. Then eat it for a silly power!",
+   "spoken": "Jump adds it. Then eat it for a silly power!",
+   "dur": 2.52
+  },
+  "jump-again-to-open-your-parachute-land-on-the-rings": {
+   "file": "jump-again-to-open-your-parachute-land-on-the-rings.mp3",
+   "text": "Jump again to open your parachute. Land on the rings!",
+   "spoken": "Jump again to open your parachute. Land on the rings!",
+   "dur": 2.93
+  },
+  "jump-flaps-the-wings-your-power-button-blows-bubbles": {
+   "file": "jump-flaps-the-wings-your-power-button-blows-bubbles.mp3",
+   "text": "Jump flaps the wings. Your power button blows bubbles!",
+   "spoken": "Jump flaps the wings. Your power button blows bubbles!",
+   "dur": 3.14
+  },
+  "jump-for-a-big-belly-charge-boing": {
+   "file": "jump-for-a-big-belly-charge-boing.mp3",
+   "text": "Jump for a big belly charge! Boing!",
+   "spoken": "Jump for a big belly charge! Boing!",
+   "dur": 2.35
+  },
+  "jump-on-the-trampoline-hold-jump-to-bounce-higher": {
+   "file": "jump-on-the-trampoline-hold-jump-to-bounce-higher.mp3",
+   "text": "Jump on the trampoline! Hold jump to bounce higher!",
+   "spoken": "Jump on the trampoline! Hold jump to bounce higher!",
+   "dur": 2.86
+  },
+  "jump-the-gaps-if-you-fall-in-try-again-from-the-checkpoint": {
+   "file": "jump-the-gaps-if-you-fall-in-try-again-from-the-checkpoint.mp3",
+   "text": "Jump the gaps! If you fall in, try again from the checkpoint.",
+   "spoken": "Jump the gaps! If you fall in, try again from the checkpoint.",
+   "dur": 3.24
+  },
+  "jump-to-dash-and-kick-the-ball-super-hard": {
+   "file": "jump-to-dash-and-kick-the-ball-super-hard.mp3",
+   "text": "Jump to dash and kick the ball super hard!",
+   "spoken": "Jump to dash and kick the ball super hard!",
+   "dur": 2.35
+  },
+  "jump-when-the-board-bounces-up-for-a-deeper-dive": {
+   "file": "jump-when-the-board-bounces-up-for-a-deeper-dive.mp3",
+   "text": "Jump when the board bounces up for a deeper dive!",
+   "spoken": "Jump when the board bounces up for a deeper dive!",
+   "dur": 2.38
+  },
+  "ka-ching": {
+   "file": "ka-ching.mp3",
+   "text": "Ka-ching!",
+   "spoken": "Ka-ching!",
+   "dur": 0.77
+  },
+  "key-key-hooray": {
+   "file": "key-key-hooray.mp3",
+   "text": "Key, key, hooray!",
+   "spoken": "Key, key, hooray!",
+   "dur": 1.03
+  },
+  "key-time": {
+   "file": "key-time.mp3",
+   "text": "Key time!",
+   "spoken": "Key time!",
+   "dur": 0.77
   },
   "land-in-3-rings": {
    "file": "land-in-3-rings.mp3",
@@ -260,16 +608,34 @@
    "spoken": "Land in 3 rings!",
    "dur": 1.25
   },
-  "line-up-the-sparkly-ring": {
-   "file": "line-up-the-sparkly-ring.mp3",
-   "text": "Line up the sparkly ring!",
-   "spoken": "Line up the sparkly ring!",
-   "dur": 1.39
+  "let-us-find-more-gems": {
+   "file": "let-us-find-more-gems.mp3",
+   "text": "Let us find more gems!",
+   "spoken": "Let us find more gems!",
+   "dur": 1.34
   },
-  "look-around": {
-   "file": "look-around.mp3",
-   "text": "Look around!",
-   "spoken": "Look around!",
+  "lets-fill-it-before-sunset-follow-me-to-the-first-one": {
+   "file": "lets-fill-it-before-sunset-follow-me-to-the-first-one.mp3",
+   "text": "Let's fill it before sunset! Follow me to the first one!",
+   "spoken": "Let's fill it before sunset! Follow me to the first one!",
+   "dur": 2.98
+  },
+  "lets-go-its-this-way": {
+   "file": "lets-go-its-this-way.mp3",
+   "text": "Let's go! It's this way!",
+   "spoken": "Let's go! It's this way!",
+   "dur": 1.49
+  },
+  "look-whats-inside": {
+   "file": "look-whats-inside.mp3",
+   "text": "Look what's inside!",
+   "spoken": "Look what's inside!",
+   "dur": 1.15
+  },
+  "looking-good": {
+   "file": "looking-good.mp3",
+   "text": "Looking good!",
+   "spoken": "Looking good!",
    "dur": 0.86
   },
   "looking-sharp": {
@@ -278,29 +644,83 @@
    "spoken": "Looking sharp!",
    "dur": 0.94
   },
-  "lost-this-button-helps": {
-   "file": "lost-this-button-helps.mp3",
-   "text": "Lost? This button helps!",
-   "spoken": "Lost? This button helps!",
-   "dur": 1.51
+  "lost-this-button-shows-all-the-controls": {
+   "file": "lost-this-button-shows-all-the-controls.mp3",
+   "text": "Lost? This button shows all the controls!",
+   "spoken": "Lost? This button shows all the controls!",
+   "dur": 2.26
   },
-  "magic-glasses-find-hidden-gems": {
-   "file": "magic-glasses-find-hidden-gems.mp3",
-   "text": "Magic glasses find hidden gems!",
-   "spoken": "Magic glasses find hidden gems!",
-   "dur": 1.99
+  "love-it": {
+   "file": "love-it.mp3",
+   "text": "Love it!",
+   "spoken": "Love it!",
+   "dur": 0.7
   },
-  "magic-glasses-great-job": {
-   "file": "magic-glasses-great-job.mp3",
-   "text": "Magic glasses! Great job!",
-   "spoken": "Magic glasses! Great job!",
-   "dur": 1.9
+  "magic": {
+   "file": "magic.mp3",
+   "text": "Magic!",
+   "spoken": "Magic!",
+   "dur": 0.77
   },
-  "mega-gem-wowee": {
-   "file": "mega-gem-wowee.mp3",
-   "text": "MEGA gem! Wowee!",
-   "spoken": "Mega gem! Wowee!",
-   "dur": 1.32
+  "magic-glasses-show-a-gold-star-peg-it-counts-double": {
+   "file": "magic-glasses-show-a-gold-star-peg-it-counts-double.mp3",
+   "text": "Magic glasses show a gold star peg. It counts double!",
+   "spoken": "Magic glasses show a gold star peg. It counts double!",
+   "dur": 3.19
+  },
+  "magic-glasses-show-boost-pads-three-in-a-row-go-zoom": {
+   "file": "magic-glasses-show-boost-pads-three-in-a-row-go-zoom.mp3",
+   "text": "Magic glasses show boost pads. Three in a row go zoom!",
+   "spoken": "Magic glasses show boost pads. Three in a row go zoom!",
+   "dur": 3.34
+  },
+  "magic-glasses-show-lucky-ducks-with-stars-worth-three": {
+   "file": "magic-glasses-show-lucky-ducks-with-stars-worth-three.mp3",
+   "text": "Magic glasses show lucky ducks with stars. Worth three!",
+   "spoken": "Magic glasses show lucky ducks with stars. Worth three!",
+   "dur": 3.31
+  },
+  "magic-glasses-show-prize-balloons-theyre-worth-triple": {
+   "file": "magic-glasses-show-prize-balloons-theyre-worth-triple.mp3",
+   "text": "Magic glasses show prize balloons. They're worth triple!",
+   "spoken": "Magic glasses show prize balloons. They're worth triple!",
+   "dur": 3.12
+  },
+  "magic-glasses-show-the-perfect-spot-on-the-dial": {
+   "file": "magic-glasses-show-the-perfect-spot-on-the-dial.mp3",
+   "text": "Magic glasses show the perfect spot on the dial!",
+   "spoken": "Magic glasses show the perfect spot on the dial!",
+   "dur": 2.66
+  },
+  "mega-sparkle": {
+   "file": "mega-sparkle.mp3",
+   "text": "Mega sparkle!",
+   "spoken": "Mega sparkle!",
+   "dur": 1.01
+  },
+  "more-gems-more-fun": {
+   "file": "more-gems-more-fun.mp3",
+   "text": "More gems, more fun!",
+   "spoken": "More gems, more fun!",
+   "dur": 1.25
+  },
+  "move-the-magic-ring-onto-a-bubble-then-pop-it": {
+   "file": "move-the-magic-ring-onto-a-bubble-then-pop-it.mp3",
+   "text": "Move the magic ring onto a bubble, then pop it!",
+   "spoken": "Move the magic ring onto a bubble, then pop it!",
+   "dur": 2.64
+  },
+  "my-tail-cant-stop-wagging": {
+   "file": "my-tail-cant-stop-wagging.mp3",
+   "text": "My tail can't stop wagging!",
+   "spoken": "My tail can't stop wagging!",
+   "dur": 1.61
+  },
+  "nailed-it": {
+   "file": "nailed-it.mp3",
+   "text": "Nailed it!",
+   "spoken": "Nailed it!",
+   "dur": 0.79
   },
   "need-1-more-gems": {
    "file": "need-1-more-gems.mp3",
@@ -326,125 +746,17 @@
    "spoken": "Need 12 more gems!",
    "dur": 1.42
   },
-  "need-13-more-gems": {
-   "file": "need-13-more-gems.mp3",
-   "text": "Need 13 more gems!",
-   "spoken": "Need 13 more gems!",
-   "dur": 1.49
-  },
-  "need-14-more-gems": {
-   "file": "need-14-more-gems.mp3",
-   "text": "Need 14 more gems!",
-   "spoken": "Need 14 more gems!",
-   "dur": 1.51
-  },
-  "need-15-more-gems": {
-   "file": "need-15-more-gems.mp3",
-   "text": "Need 15 more gems!",
-   "spoken": "Need 15 more gems!",
-   "dur": 1.44
-  },
-  "need-16-more-gems": {
-   "file": "need-16-more-gems.mp3",
-   "text": "Need 16 more gems!",
-   "spoken": "Need 16 more gems!",
-   "dur": 1.39
-  },
-  "need-17-more-gems": {
-   "file": "need-17-more-gems.mp3",
-   "text": "Need 17 more gems!",
-   "spoken": "Need 17 more gems!",
-   "dur": 1.56
-  },
-  "need-18-more-gems": {
-   "file": "need-18-more-gems.mp3",
-   "text": "Need 18 more gems!",
-   "spoken": "Need 18 more gems!",
-   "dur": 1.46
-  },
-  "need-19-more-gems": {
-   "file": "need-19-more-gems.mp3",
-   "text": "Need 19 more gems!",
-   "spoken": "Need 19 more gems!",
-   "dur": 1.51
-  },
   "need-2-more-gems": {
    "file": "need-2-more-gems.mp3",
    "text": "Need 2 more gems!",
    "spoken": "Need 2 more gems!",
    "dur": 1.25
   },
-  "need-20-more-gems": {
-   "file": "need-20-more-gems.mp3",
-   "text": "Need 20 more gems!",
-   "spoken": "Need 20 more gems!",
-   "dur": 1.44
-  },
-  "need-21-more-gems": {
-   "file": "need-21-more-gems.mp3",
-   "text": "Need 21 more gems!",
-   "spoken": "Need 21 more gems!",
-   "dur": 1.54
-  },
-  "need-22-more-gems": {
-   "file": "need-22-more-gems.mp3",
-   "text": "Need 22 more gems!",
-   "spoken": "Need 22 more gems!",
-   "dur": 1.51
-  },
-  "need-23-more-gems": {
-   "file": "need-23-more-gems.mp3",
-   "text": "Need 23 more gems!",
-   "spoken": "Need 23 more gems!",
-   "dur": 1.56
-  },
-  "need-24-more-gems": {
-   "file": "need-24-more-gems.mp3",
-   "text": "Need 24 more gems!",
-   "spoken": "Need 24 more gems!",
-   "dur": 1.58
-  },
-  "need-25-more-gems": {
-   "file": "need-25-more-gems.mp3",
-   "text": "Need 25 more gems!",
-   "spoken": "Need 25 more gems!",
-   "dur": 1.63
-  },
-  "need-26-more-gems": {
-   "file": "need-26-more-gems.mp3",
-   "text": "Need 26 more gems!",
-   "spoken": "Need 26 more gems!",
-   "dur": 1.61
-  },
-  "need-27-more-gems": {
-   "file": "need-27-more-gems.mp3",
-   "text": "Need 27 more gems!",
-   "spoken": "Need 27 more gems!",
-   "dur": 1.7
-  },
-  "need-28-more-gems": {
-   "file": "need-28-more-gems.mp3",
-   "text": "Need 28 more gems!",
-   "spoken": "Need 28 more gems!",
-   "dur": 1.46
-  },
-  "need-29-more-gems": {
-   "file": "need-29-more-gems.mp3",
-   "text": "Need 29 more gems!",
-   "spoken": "Need 29 more gems!",
-   "dur": 1.61
-  },
   "need-3-more-gems": {
    "file": "need-3-more-gems.mp3",
    "text": "Need 3 more gems!",
    "spoken": "Need 3 more gems!",
    "dur": 1.34
-  },
-  "need-30-more-gems": {
-   "file": "need-30-more-gems.mp3",
-   "text": "Need 30 more gems!",
-   "spoken": "Need 30 more gems!",
-   "dur": 1.37
   },
   "need-4-more-gems": {
    "file": "need-4-more-gems.mp3",
@@ -482,23 +794,41 @@
    "spoken": "Need 9 more gems!",
    "dur": 1.34
   },
-  "need-me-use-my-button": {
-   "file": "need-me-use-my-button.mp3",
-   "text": "Need me? Use my button!",
-   "spoken": "Need me? Use my button!",
-   "dur": 1.56
+  "need-help-use-my-button-and-i-explain-things": {
+   "file": "need-help-use-my-button-and-i-explain-things.mp3",
+   "text": "Need help? Use my button, and I explain things!",
+   "spoken": "Need help? Use my button, and I explain things!",
+   "dur": 2.64
   },
-  "nine": {
-   "file": "nine.mp3",
-   "text": "Nine!",
-   "spoken": "Nine!",
-   "dur": 0.67
+  "new-stuff-for-you": {
+   "file": "new-stuff-for-you.mp3",
+   "text": "New stuff for you!",
+   "spoken": "New stuff for you!",
+   "dur": 1.08
   },
-  "now-you-choose": {
-   "file": "now-you-choose.mp3",
-   "text": "Now you choose!",
-   "spoken": "Now you choose!",
-   "dur": 1.01
+  "nice-landing": {
+   "file": "nice-landing.mp3",
+   "text": "Nice landing!",
+   "spoken": "Nice landing!",
+   "dur": 0.94
+  },
+  "now-find-its-chest": {
+   "file": "now-find-its-chest.mp3",
+   "text": "Now find its chest!",
+   "spoken": "Now find its chest!",
+   "dur": 1.25
+  },
+  "now-thats-a-gem": {
+   "file": "now-thats-a-gem.mp3",
+   "text": "Now that's a gem!",
+   "spoken": "Now that's a gem!",
+   "dur": 1.08
+  },
+  "now-you-choose-the-compass-shows-fun-places": {
+   "file": "now-you-choose-the-compass-shows-fun-places.mp3",
+   "text": "Now you choose! The compass shows fun places.",
+   "spoken": "Now you choose! The compass shows fun places.",
+   "dur": 2.64
   },
   "okay-have-fun": {
    "file": "okay-have-fun.mp3",
@@ -512,11 +842,35 @@
    "spoken": "One!",
    "dur": 0.55
   },
-  "ooh-new-stuff": {
-   "file": "ooh-new-stuff.mp3",
-   "text": "Ooh, new stuff!",
-   "spoken": "Ooh, new stuff!",
+  "one-more-stamp": {
+   "file": "one-more-stamp.mp3",
+   "text": "One more stamp!",
+   "spoken": "One more stamp!",
+   "dur": 0.96
+  },
+  "ooh-a-key": {
+   "file": "ooh-a-key.mp3",
+   "text": "Ooh, a key!",
+   "spoken": "Ooh, a key!",
+   "dur": 0.82
+  },
+  "ooh-fancy": {
+   "file": "ooh-fancy.mp3",
+   "text": "Ooh, fancy!",
+   "spoken": "Ooh, fancy!",
+   "dur": 0.91
+  },
+  "ooh-sparkly": {
+   "file": "ooh-sparkly.mp3",
+   "text": "Ooh, sparkly!",
+   "spoken": "Ooh, sparkly!",
    "dur": 0.94
+  },
+  "oopsie-daisy": {
+   "file": "oopsie-daisy.mp3",
+   "text": "Oopsie daisy!",
+   "spoken": "Oopsie daisy!",
+   "dur": 0.98
   },
   "open-a-treasure-chest": {
    "file": "open-a-treasure-chest.mp3",
@@ -524,35 +878,65 @@
    "spoken": "Open a treasure chest!",
    "dur": 1.34
   },
+  "over-here-woof": {
+   "file": "over-here-woof.mp3",
+   "text": "Over here! Woof!",
+   "spoken": "Over here! Woof!",
+   "dur": 1.27
+  },
   "parachute-now": {
    "file": "parachute-now.mp3",
    "text": "Parachute now!",
    "spoken": "Parachute now!",
    "dur": 0.96
   },
-  "play": {
-   "file": "play.mp3",
-   "text": "Play!",
-   "spoken": "Play!",
-   "dur": 0.62
+  "pick-silly-parts-for-your-buggy-gems-pay-for-them": {
+   "file": "pick-silly-parts-for-your-buggy-gems-pay-for-them.mp3",
+   "text": "Pick silly parts for your buggy! Gems pay for them.",
+   "spoken": "Pick silly parts for your buggy! Gems pay for them.",
+   "dur": 2.76
   },
-  "put-the-halves-together": {
-   "file": "put-the-halves-together.mp3",
-   "text": "Put the halves together!",
-   "spoken": "Put the halves together!",
-   "dur": 1.15
+  "pick-something-cool-your-gems-pay-for-it": {
+   "file": "pick-something-cool-your-gems-pay-for-it.mp3",
+   "text": "Pick something cool! Your gems pay for it.",
+   "spoken": "Pick something cool! Your gems pay for it.",
+   "dur": 2.28
   },
-  "race": {
-   "file": "race.mp3",
-   "text": "Race!",
-   "spoken": "Race!",
-   "dur": 0.7
+  "prize-time": {
+   "file": "prize-time.mp3",
+   "text": "Prize time!",
+   "spoken": "Prize time!",
+   "dur": 0.89
   },
-  "ride": {
-   "file": "ride.mp3",
-   "text": "Ride!",
-   "spoken": "Ride!",
-   "dur": 0.67
+  "push-the-door-buttons-in-that-same-order": {
+   "file": "push-the-door-buttons-in-that-same-order.mp3",
+   "text": "Push the door buttons in that same order!",
+   "spoken": "Push the door buttons in that same order!",
+   "dur": 2.09
+  },
+  "race-a-friend-across-the-foam-on-floats-and-blocks": {
+   "file": "race-a-friend-across-the-foam-on-floats-and-blocks.mp3",
+   "text": "Race a friend across the foam on floats and blocks!",
+   "spoken": "Race a friend across the foam on floats and blocks!",
+   "dur": 2.71
+  },
+  "race-two-friends-three-laps-around-the-roads": {
+   "file": "race-two-friends-three-laps-around-the-roads.mp3",
+   "text": "Race two friends, three laps around the roads!",
+   "spoken": "Race two friends, three laps around the roads!",
+   "dur": 2.54
+  },
+  "rich-puppy": {
+   "file": "rich-puppy.mp3",
+   "text": "Rich puppy!",
+   "spoken": "Rich puppy!",
+   "dur": 0.91
+  },
+  "rides-and-games-everywhere-fly-a-balloon-bounce-race-and-play": {
+   "file": "rides-and-games-everywhere-fly-a-balloon-bounce-race-and-play.mp3",
+   "text": "Rides and games everywhere! Fly a balloon, bounce, race and play!",
+   "spoken": "Rides and games everywhere! Fly a balloon, bounce, race and play!",
+   "dur": 3.91
   },
   "scratch-my-ears-hehe": {
    "file": "scratch-my-ears-hehe.mp3",
@@ -560,23 +944,17 @@
    "spoken": "Scratch my ears? Hehe!",
    "dur": 1.58
   },
-  "seven": {
-   "file": "seven.mp3",
-   "text": "Seven!",
-   "spoken": "Seven!",
-   "dur": 0.65
+  "sharp-eyes": {
+   "file": "sharp-eyes.mp3",
+   "text": "Sharp eyes!",
+   "spoken": "Sharp eyes!",
+   "dur": 0.91
   },
-  "shiny-yip-yip": {
-   "file": "shiny-yip-yip.mp3",
-   "text": "Shiny! Yip yip!",
-   "spoken": "Shiny! Yip yip!",
-   "dur": 1.18
-  },
-  "shop": {
-   "file": "shop.mp3",
-   "text": "Shop!",
-   "spoken": "Shop!",
-   "dur": 0.65
+  "shiny-keep-them-coming": {
+   "file": "shiny-keep-them-coming.mp3",
+   "text": "Shiny! Keep them coming!",
+   "spoken": "Shiny! Keep them coming!",
+   "dur": 1.37
   },
   "silly-flop-boing": {
    "file": "silly-flop-boing.mp3",
@@ -584,59 +962,227 @@
    "spoken": "Silly flop! Boing!",
    "dur": 1.3
   },
-  "six": {
-   "file": "six.mp3",
-   "text": "Six!",
-   "spoken": "Six!",
-   "dur": 0.67
+  "sky-high": {
+   "file": "sky-high.mp3",
+   "text": "Sky high!",
+   "spoken": "Sky high!",
+   "dur": 0.79
   },
-  "so-high-eek": {
-   "file": "so-high-eek.mp3",
-   "text": "So high! Eek!",
-   "spoken": "So high! Eek!",
-   "dur": 1.18
+  "smooth-landing": {
+   "file": "smooth-landing.mp3",
+   "text": "Smooth landing!",
+   "spoken": "Smooth landing!",
+   "dur": 1.01
   },
-  "stars-for-cool-tricks": {
-   "file": "stars-for-cool-tricks.mp3",
-   "text": "Stars for cool tricks!",
-   "spoken": "Stars for cool tricks!",
+  "snazzy": {
+   "file": "snazzy.mp3",
+   "text": "Snazzy!",
+   "spoken": "Snazzy!",
+   "dur": 0.74
+  },
+  "so-fast": {
+   "file": "so-fast.mp3",
+   "text": "So fast!",
+   "spoken": "So fast!",
+   "dur": 0.89
+  },
+  "so-speedy": {
+   "file": "so-speedy.mp3",
+   "text": "So speedy!",
+   "spoken": "So speedy!",
+   "dur": 0.89
+  },
+  "so-stylish": {
+   "file": "so-stylish.mp3",
+   "text": "So stylish!",
+   "spoken": "So stylish!",
+   "dur": 0.96
+  },
+  "some-stepping-stones-only-magic-glasses-see-hop-across": {
+   "file": "some-stepping-stones-only-magic-glasses-see-hop-across.mp3",
+   "text": "Some stepping stones only magic glasses see. Hop across!",
+   "spoken": "Some stepping stones only magic glasses see. Hop across!",
+   "dur": 3.58
+  },
+  "sparkle-sparkle": {
+   "file": "sparkle-sparkle.mp3",
+   "text": "Sparkle, sparkle!",
+   "spoken": "Sparkle, sparkle!",
+   "dur": 1.15
+  },
+  "sparkly-gems-hide-all-over-your-magic-glasses-find-them": {
+   "file": "sparkly-gems-hide-all-over-your-magic-glasses-find-them.mp3",
+   "text": "Sparkly gems hide all over. Your magic glasses find them!",
+   "spoken": "Sparkly gems hide all over. Your magic glasses find them!",
+   "dur": 3.53
+  },
+  "spin-tastic": {
+   "file": "spin-tastic.mp3",
+   "text": "Spin-tastic!",
+   "spoken": "Spin-tastic!",
+   "dur": 1.01
+  },
+  "splat-hehe": {
+   "file": "splat-hehe.mp3",
+   "text": "Splat! Hehe!",
+   "spoken": "Splat! Hehe!",
+   "dur": 0.98
+  },
+  "spot-on": {
+   "file": "spot-on.mp3",
+   "text": "Spot on!",
+   "spoken": "Spot on!",
+   "dur": 0.79
+  },
+  "stamp-time": {
+   "file": "stamp-time.mp3",
+   "text": "Stamp time!",
+   "spoken": "Stamp time!",
+   "dur": 0.91
+  },
+  "stamp-woohoo": {
+   "file": "stamp-woohoo.mp3",
+   "text": "Stamp! Woohoo!",
+   "spoken": "Stamp! Woohoo!",
+   "dur": 1.06
+  },
+  "stamped-next-ride": {
+   "file": "stamped-next-ride.mp3",
+   "text": "Stamped! Next ride?",
+   "spoken": "Stamped! Next ride?",
+   "dur": 1.27
+  },
+  "stand-on-a-rocket-pad-and-blast-up-onto-the-big-net": {
+   "file": "stand-on-a-rocket-pad-and-blast-up-onto-the-big-net.mp3",
+   "text": "Stand on a rocket pad and blast up onto the big net!",
+   "spoken": "Stand on a rocket pad and blast up onto the big net!",
+   "dur": 3.02
+  },
+  "steer-where-you-look-your-power-button-does-loops": {
+   "file": "steer-where-you-look-your-power-button-does-loops.mp3",
+   "text": "Steer where you look. Your power button does loops!",
+   "spoken": "Steer where you look. Your power button does loops!",
+   "dur": 2.5
+  },
+  "step-on-a-bounce-pad-it-throws-you-to-the-next-one": {
+   "file": "step-on-a-bounce-pad-it-throws-you-to-the-next-one.mp3",
+   "text": "Step on a bounce pad. It throws you to the next one!",
+   "spoken": "Step on a bounce pad. It throws you to the next one!",
+   "dur": 2.78
+  },
+  "step-on-the-matching-symbol": {
+   "file": "step-on-the-matching-symbol.mp3",
+   "text": "Step on the matching symbol!",
+   "spoken": "Step on the matching symbol!",
    "dur": 1.39
   },
-  "step-on-blast-off": {
-   "file": "step-on-blast-off.mp3",
-   "text": "Step on! Blast off!",
-   "spoken": "Step on! Blast off!",
-   "dur": 1.37
+  "super-job": {
+   "file": "super-job.mp3",
+   "text": "Super job!",
+   "spoken": "Super job!",
+   "dur": 0.96
   },
-  "step-on-the-right-shape": {
-   "file": "step-on-the-right-shape.mp3",
-   "text": "Step on the right shape!",
-   "spoken": "Step on the right shape!",
-   "dur": 1.25
+  "super-sharp": {
+   "file": "super-sharp.mp3",
+   "text": "Super sharp!",
+   "spoken": "Super sharp!",
+   "dur": 0.91
   },
-  "suit-up": {
-   "file": "suit-up.mp3",
-   "text": "Suit up!",
-   "spoken": "Suit up!",
+  "super-shiny-mega-gem": {
+   "file": "super-shiny-mega-gem.mp3",
+   "text": "Super shiny mega gem!",
+   "spoken": "Super shiny mega gem!",
+   "dur": 1.44
+  },
+  "super-spotter": {
+   "file": "super-spotter.mp3",
+   "text": "Super spotter!",
+   "spoken": "Super spotter!",
+   "dur": 0.96
+  },
+  "ta-da": {
+   "file": "ta-da.mp3",
+   "text": "Ta-da!",
+   "spoken": "Ta-da!",
    "dur": 0.7
   },
-  "sunset-means-closing-time": {
-   "file": "sunset-means-closing-time.mp3",
-   "text": "Sunset means closing time!",
-   "spoken": "Sunset means closing time!",
-   "dur": 1.66
+  "ten-out-of-ten": {
+   "file": "ten-out-of-ten.mp3",
+   "text": "Ten out of ten!",
+   "spoken": "Ten out of ten!",
+   "dur": 0.96
   },
-  "ten": {
-   "file": "ten.mp3",
-   "text": "Ten!",
-   "spoken": "Ten!",
-   "dur": 0.6
+  "that-key-looks-fancy": {
+   "file": "that-key-looks-fancy.mp3",
+   "text": "That key looks fancy!",
+   "spoken": "That key looks fancy!",
+   "dur": 1.32
+  },
+  "that-ones-huge": {
+   "file": "that-ones-huge.mp3",
+   "text": "That one's huge!",
+   "spoken": "That one's huge!",
+   "dur": 1.06
+  },
+  "that-was-awesome": {
+   "file": "that-was-awesome.mp3",
+   "text": "That was awesome!",
+   "spoken": "That was awesome!",
+   "dur": 0.98
+  },
+  "thats-a-win": {
+   "file": "thats-a-win.mp3",
+   "text": "That's a win!",
+   "spoken": "That's a win!",
+   "dur": 0.82
   },
   "thats-me-woof": {
    "file": "thats-me-woof.mp3",
    "text": "That's me! Woof!",
    "spoken": "That's me! Woof!",
    "dur": 1.3
+  },
+  "the-compass-knows-fun-places": {
+   "file": "the-compass-knows-fun-places.mp3",
+   "text": "The compass knows fun places!",
+   "spoken": "The compass knows fun places!",
+   "dur": 1.7
+  },
+  "the-compass-shows-fun-places": {
+   "file": "the-compass-shows-fun-places.mp3",
+   "text": "The compass shows fun places!",
+   "spoken": "The compass shows fun places!",
+   "dur": 1.61
+  },
+  "the-first-ride-is-free-after-that-rides-cost-gems": {
+   "file": "the-first-ride-is-free-after-that-rides-cost-gems.mp3",
+   "text": "The first ride is free. After that, rides cost gems!",
+   "spoken": "The first ride is free. After that, rides cost gems!",
+   "dur": 3.31
+  },
+  "the-gear-shack-spend-gems-on-hats-capes-and-cool-gear": {
+   "file": "the-gear-shack-spend-gems-on-hats-capes-and-cool-gear.mp3",
+   "text": "The Gear Shack! Spend gems on hats, capes and cool gear!",
+   "spoken": "The Gear Shack! Spend gems on hats, capes and cool gear!",
+   "dur": 3.07
+  },
+  "the-tool-cart-gives-your-buggy-silly-new-parts": {
+   "file": "the-tool-cart-gives-your-buggy-silly-new-parts.mp3",
+   "text": "The tool cart gives your buggy silly new parts!",
+   "spoken": "The tool cart gives your buggy silly new parts!",
+   "dur": 2.57
+  },
+  "this-balloon-flies-you-sky-high-walk-into-the-basket-and-wait": {
+   "file": "this-balloon-flies-you-sky-high-walk-into-the-basket-and-wait.mp3",
+   "text": "This balloon flies you sky-high! Walk into the basket and wait.",
+   "spoken": "This balloon flies you sky-high! Walk into the basket and wait.",
+   "dur": 3.48
+  },
+  "this-way-buddy": {
+   "file": "this-way-buddy.mp3",
+   "text": "This way, buddy!",
+   "spoken": "This way, buddy!",
+   "dur": 0.98
   },
   "this-way-come-on": {
    "file": "this-way-come-on.mp3",
@@ -650,11 +1196,35 @@
    "spoken": "Three!",
    "dur": 0.67
   },
+  "three-shapes-one-is-different-push-that-ones-button": {
+   "file": "three-shapes-one-is-different-push-that-ones-button.mp3",
+   "text": "Three shapes, one is different. Push that one's button!",
+   "spoken": "Three shapes, one is different. Push that one's button!",
+   "dur": 2.76
+  },
+  "throw-beanbags-at-the-balloons-look-around-to-aim": {
+   "file": "throw-beanbags-at-the-balloons-look-around-to-aim.mp3",
+   "text": "Throw beanbags at the balloons! Look around to aim.",
+   "spoken": "Throw beanbags at the balloons! Look around to aim.",
+   "dur": 2.78
+  },
+  "treasure-hunter": {
+   "file": "treasure-hunter.mp3",
+   "text": "Treasure hunter!",
+   "spoken": "Treasure hunter!",
+   "dur": 0.98
+  },
   "treasure-ooh-shiny": {
    "file": "treasure-ooh-shiny.mp3",
    "text": "Treasure! Ooh, shiny!",
    "spoken": "Treasure! Ooh, shiny!",
    "dur": 1.27
+  },
+  "treasure-time": {
+   "file": "treasure-time.mp3",
+   "text": "Treasure time!",
+   "spoken": "Treasure time!",
+   "dur": 0.91
   },
   "try-the-balloon-ride": {
    "file": "try-the-balloon-ride.mp3",
@@ -674,11 +1244,11 @@
    "spoken": "Try the bounce pads!",
    "dur": 1.25
   },
-  "try-the-bubble-ball": {
-   "file": "try-the-bubble-ball.mp3",
-   "text": "Try the bubble ball!",
-   "spoken": "Try the bubble ball!",
-   "dur": 1.2
+  "try-the-bubble-soccer": {
+   "file": "try-the-bubble-soccer.mp3",
+   "text": "Try the bubble soccer!",
+   "spoken": "Try the bubble soccer!",
+   "dur": 1.34
   },
   "try-the-buggy": {
    "file": "try-the-buggy.mp3",
@@ -692,11 +1262,11 @@
    "spoken": "Try the buggy race!",
    "dur": 1.22
   },
-  "try-the-bungee-tower": {
-   "file": "try-the-bungee-tower.mp3",
-   "text": "Try the bungee tower!",
-   "spoken": "Try the bungee tower!",
-   "dur": 1.3
+  "try-the-bungee-bridge": {
+   "file": "try-the-bungee-bridge.mp3",
+   "text": "Try the bungee bridge!",
+   "spoken": "Try the bungee bridge!",
+   "dur": 1.34
   },
   "try-the-carnival-games": {
    "file": "try-the-carnival-games.mp3",
@@ -800,11 +1370,29 @@
    "spoken": "Two!",
    "dur": 0.6
   },
-  "walk-with-me": {
-   "file": "walk-with-me.mp3",
-   "text": "Walk with me!",
-   "spoken": "Walk with me!",
+  "up-high-steer-with-the-stick-for-flips-and-tricks": {
+   "file": "up-high-steer-with-the-stick-for-flips-and-tricks.mp3",
+   "text": "Up high, steer with the stick for flips and tricks!",
+   "spoken": "Up high, steer with the stick for flips and tricks!",
+   "dur": 2.45
+  },
+  "up-in-the-clouds": {
+   "file": "up-in-the-clouds.mp3",
+   "text": "Up in the clouds!",
+   "spoken": "Up in the clouds!",
+   "dur": 1.03
+  },
+  "up-you-get": {
+   "file": "up-you-get.mp3",
+   "text": "Up you get!",
+   "spoken": "Up you get!",
    "dur": 0.86
+  },
+  "very-cool": {
+   "file": "very-cool.mp3",
+   "text": "Very cool!",
+   "spoken": "Very cool!",
+   "dur": 0.89
   },
   "wanna-race-go-go-go": {
    "file": "wanna-race-go-go-go.mp3",
@@ -812,11 +1400,35 @@
    "spoken": "Wanna race? Go go go!",
    "dur": 1.58
   },
-  "welcome-back-buddy": {
-   "file": "welcome-back-buddy.mp3",
-   "text": "Welcome back, buddy!",
-   "spoken": "Welcome back, buddy!",
-   "dur": 1.22
+  "watch-the-swinging-needle-and-stomp-to-ring-the-bell": {
+   "file": "watch-the-swinging-needle-and-stomp-to-ring-the-bell.mp3",
+   "text": "Watch the swinging needle and stomp to ring the bell!",
+   "spoken": "Watch the swinging needle and stomp to ring the bell!",
+   "dur": 2.64
+  },
+  "we-cracked-it": {
+   "file": "we-cracked-it.mp3",
+   "text": "We cracked it!",
+   "spoken": "We cracked it!",
+   "dur": 0.86
+  },
+  "weeeee": {
+   "file": "weeeee.mp3",
+   "text": "Weeeee!",
+   "spoken": "Weeeee!",
+   "dur": 0.65
+  },
+  "welcome-back-buddy-ready-for-more-fun": {
+   "file": "welcome-back-buddy-ready-for-more-fun.mp3",
+   "text": "Welcome back, buddy! Ready for more fun?",
+   "spoken": "Welcome back, buddy! Ready for more fun?",
+   "dur": 2.26
+  },
+  "what-a-ride": {
+   "file": "what-a-ride.mp3",
+   "text": "What a ride!",
+   "spoken": "What a ride!",
+   "dur": 0.82
   },
   "wheee": {
    "file": "wheee.mp3",
@@ -824,17 +1436,17 @@
    "spoken": "Wheee!",
    "dur": 0.6
   },
-  "wheee-here-we-go": {
-   "file": "wheee-here-we-go.mp3",
-   "text": "Wheee! Here we go!",
-   "spoken": "Wheee! Here we go!",
-   "dur": 1.03
+  "when-the-sun-sets-the-park-closes": {
+   "file": "when-the-sun-sets-the-park-closes.mp3",
+   "text": "When the sun sets, the park closes!",
+   "spoken": "When the sun sets, the park closes!",
+   "dur": 1.92
   },
-  "which-one-is-different": {
-   "file": "which-one-is-different.mp3",
-   "text": "Which one is different?",
-   "spoken": "Which one is different?",
-   "dur": 1.2
+  "whoa-a-mega-gem": {
+   "file": "whoa-a-mega-gem.mp3",
+   "text": "Whoa, a mega gem!",
+   "spoken": "Whoa, a mega gem!",
+   "dur": 1.32
   },
   "whoa-so-high": {
    "file": "whoa-so-high.mp3",
@@ -842,11 +1454,53 @@
    "spoken": "Whoa! So high!",
    "dur": 0.96
   },
-  "wobble": {
-   "file": "wobble.mp3",
-   "text": "Wobble!",
-   "spoken": "Wobble!",
-   "dur": 0.67
+  "wibble-wobble": {
+   "file": "wibble-wobble.mp3",
+   "text": "Wibble wobble!",
+   "spoken": "Wibble wobble!",
+   "dur": 0.94
+  },
+  "wobble-park-stand-on-the-glowing-pad-to-start": {
+   "file": "wobble-park-stand-on-the-glowing-pad-to-start.mp3",
+   "text": "Wobble Park! Stand on the glowing pad to start!",
+   "spoken": "Wobble Park! Stand on the glowing pad to start!",
+   "dur": 2.69
+  },
+  "woo-hoo": {
+   "file": "woo-hoo.mp3",
+   "text": "Woo-hoo!",
+   "spoken": "Woo-hoo!",
+   "dur": 0.72
+  },
+  "woohoo-treasure": {
+   "file": "woohoo-treasure.mp3",
+   "text": "Woohoo, treasure!",
+   "spoken": "Woohoo, treasure!",
+   "dur": 0.98
+  },
+  "wow-so-many-gems": {
+   "file": "wow-so-many-gems.mp3",
+   "text": "Wow, so many gems!",
+   "spoken": "Wow, so many gems!",
+   "dur": 1.27
+  },
+  "wow-what-a-trip": {
+   "file": "wow-what-a-trip.mp3",
+   "text": "Wow, what a trip!",
+   "spoken": "Wow, what a trip!",
+   "dur": 1.03
+  },
+  "you-are-on-fire": {
+   "file": "you-are-on-fire.mp3",
+   "text": "You are on fire!",
+   "spoken": "You are on fire!",
+   "dur": 0.98
+  },
+  "you-did-it": {
+   "file": "you-did-it.mp3",
+   "text": "You did it!",
+   "spoken": "You did it!",
+   "dur": 0.82
   },
   "you-did-it-yay": {
    "file": "you-did-it-yay.mp3",
@@ -854,11 +1508,53 @@
    "spoken": "You did it! Yay!",
    "dur": 1.18
   },
+  "you-fly-like-a-bird": {
+   "file": "you-fly-like-a-bird.mp3",
+   "text": "You fly like a bird!",
+   "spoken": "You fly like a bird!",
+   "dur": 1.22
+  },
+  "you-found-a-key-bring-it-back-to-its-chest": {
+   "file": "you-found-a-key-bring-it-back-to-its-chest.mp3",
+   "text": "You found a key! Bring it back to its chest!",
+   "spoken": "You found a key! Bring it back to its chest!",
+   "dur": 2.28
+  },
+  "you-found-it": {
+   "file": "you-found-it.mp3",
+   "text": "You found it!",
+   "spoken": "You found it!",
+   "dur": 0.91
+  },
   "you-rock-play-anything": {
    "file": "you-rock-play-anything.mp3",
    "text": "You rock! Play anything!",
    "spoken": "You rock! Play anything!",
    "dur": 1.3
+  },
+  "your-fun-pass-loves-that": {
+   "file": "your-fun-pass-loves-that.mp3",
+   "text": "Your Fun Pass loves that!",
+   "spoken": "Your Fun Pass loves that!",
+   "dur": 1.49
+  },
+  "your-fun-pass-new-rides-and-games-fill-it-with-stamps": {
+   "file": "your-fun-pass-new-rides-and-games-fill-it-with-stamps.mp3",
+   "text": "Your Fun Pass! New rides and games fill it with stamps.",
+   "spoken": "Your Fun Pass! New rides and games fill it with stamps.",
+   "dur": 2.93
+  },
+  "your-gem-pile-is-growing": {
+   "file": "your-gem-pile-is-growing.mp3",
+   "text": "Your gem pile is growing!",
+   "spoken": "Your gem pile is growing!",
+   "dur": 1.46
+  },
+  "your-gems-spend-them-on-rides-hats-and-gear": {
+   "file": "your-gems-spend-them-on-rides-hats-and-gear.mp3",
+   "text": "Your gems! Spend them on rides, hats and gear.",
+   "spoken": "Your gems! Spend them on rides, hats and gear.",
+   "dur": 2.66
   },
   "your-glasses-look-super-cool": {
    "file": "your-glasses-look-super-cool.mp3",
@@ -866,11 +1562,29 @@
    "spoken": "Your glasses look super cool!",
    "dur": 1.61
   },
-  "your-super-power": {
-   "file": "your-super-power.mp3",
-   "text": "Your super power!",
-   "spoken": "Your super power!",
+  "your-glasses-rock": {
+   "file": "your-glasses-rock.mp3",
+   "text": "Your glasses rock!",
+   "spoken": "Your glasses rock!",
+   "dur": 1.13
+  },
+  "your-hero-has-a-super-power-try-it": {
+   "file": "your-hero-has-a-super-power-try-it.mp3",
+   "text": "Your hero has a super power! Try it!",
+   "spoken": "Your hero has a super power! Try it!",
+   "dur": 2.23
+  },
+  "youre-a-gem-finder": {
+   "file": "youre-a-gem-finder.mp3",
+   "text": "You're a gem finder!",
+   "spoken": "You're a gem finder!",
    "dur": 1.1
+  },
+  "zoom": {
+   "file": "zoom.mp3",
+   "text": "Zoom!",
+   "spoken": "Zoom!",
+   "dur": 0.65
   }
  }
 }
