@@ -182,15 +182,20 @@ test('Bubble Ball: E at the booth, friends join, a full match (first to 3 or 75 
     (window as unknown as { __bbChase: (i: number) => void }).__bbChase = chase;
     const home0 = bb.match()?.home ?? 0;
     let i = 0;
+    const dbg: string[] = [];
     for (; i < 1600 && bb.phase() === 'match' && (bb.match()?.home ?? 0) === home0; i++) {
       chase(i);
       rg.step(1 / 30, 1, false);
+      const mm = bb.match();
+      if (i % 90 === 0 && mm) dbg.push(`${i} p(${mm.px.toFixed(1)},${mm.pz.toFixed(1)}) b(${mm.bx.toFixed(1)},${mm.bz.toFixed(1)}) ${mm.phase} ${mm.home}-${mm.away} yaw ${ctx.cameraRig.yaw.toFixed(2)}`);
     }
+
     rg.inject(null);
     rg.step(1 / 60, 8, false);
     rg.step(1 / 60, 1);
-    return { scored: (bb.match()?.home ?? 0) > home0, frames: i };
+    return { scored: (bb.match()?.home ?? 0) > home0, frames: i, dbg };
   });
+  if (!goal.scored) console.log(goal.dbg.join('\n'));
   if (goal.scored) saveChannels(await canvasShot(page), 'e2e-bubble-goal');
   const r2 = await page.evaluate(() => {
     const rg = window.__rg!;
@@ -346,7 +351,7 @@ test('Dino Sumo: the magic water balloons touch only the weak channel (all 4 com
   });
 });
 
-test('Dino Sumo: a full round (first to 5 or 60 s) to the result card; E plays again (beat ring + balloons weak-only, 4 combos); R leaves', async () => {
+test('Dino Sumo: a full round (best of 5 bouts, 75 s clock) lasts 30 s or more for a child who tries, to an honest result card; E plays again (beat ring + balloons weak-only, 4 combos); R leaves', async () => {
   const r = await page.evaluate(async () => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -391,6 +396,7 @@ test('Dino Sumo: a full round (first to 5 or 60 s) to the result card; E plays a
     rg.teleport(bx, ctx.world.heightAt(bx, bz) + 0.1, bz);
     rg.step(1 / 60, 10, false);
     const focus = ctx.interactions.focused?.id ?? null;
+    (window as unknown as { __dsWallet: number }).__dsWallet = ctx.profile.wallet;
     rg.inject({ usePressed: true });
     rg.step(1 / 60, 1, false);
     rg.inject(null);
@@ -428,7 +434,16 @@ test('Dino Sumo: a full round (first to 5 or 60 s) to the result card; E plays a
     rg.step(1 / 60, 1);
     const st = ds.state();
     (window as unknown as { __dsOff: () => void }).__dsOff();
+    const num = (sel: string): number => {
+      const e = document.querySelector<HTMLElement>(sel);
+      return e && e.offsetParent !== null && e.style.display !== 'none' ? Number((e.textContent ?? '').replace(/[^0-9]/g, '') || 0) : 0;
+    };
+    const card = num('[data-testid="dinosumo-hud-prize"] span') + num('[data-testid="dinosumo-hud-bonus"] span');
     return {
+      played: st?.played ?? 0,
+      bouts: st?.bouts ?? 0,
+      walletDelta: ctx.profile.wallet - (window as unknown as { __dsWallet: number }).__dsWallet,
+      cardGems: card,
       phaseEnd: ds.phase(),
       clock: st?.clock ?? -1,
       points: st?.points ?? [],
@@ -439,10 +454,12 @@ test('Dino Sumo: a full round (first to 5 or 60 s) to the result card; E plays a
     };
   });
   saveChannels(await canvasShot(page), 'e2e-sumo-result');
-  console.log(`dino sumo: first KO after ${r.koFrames} frames (${r.ko}), final ${JSON.stringify(r2.points)} clock ${r2.clock.toFixed(1)}`);
+  console.log(
+    `dino sumo: first KO after ${r.koFrames} frames (${r.ko}), final ${JSON.stringify(r2.points)} clock ${r2.clock.toFixed(1)} played ${r2.played.toFixed(1)} s in ${r2.bouts} bouts; card +${r2.cardGems}, wallet +${r2.walletDelta}`,
+  );
   expect(r.focus).toBe('dinosumo');
   expect(r.phaseAfterLoad).toBe('round');
-  expect(r.startClock).toBe(60);
+  expect(r.startClock).toBe(75);
   expect(r.ko).toBe(true);
   expect(r2.phaseEnd).toBe('result');
   expect(r2.clock).toBeGreaterThanOrEqual(0);
@@ -450,6 +467,11 @@ test('Dino Sumo: a full round (first to 5 or 60 s) to the result card; E plays a
   expect(r2.stamps).toContain('dinoRing');
   expect(r2.mode).toBe('external');
   expect(r2.card).toBe(true);
+  // A real contest: a scripted child who tries plays 30 s or more (QA: was over in 6.5 s).
+  expect(r2.played).toBeGreaterThanOrEqual(30);
+  expect(r2.bouts).toBeGreaterThanOrEqual(3);
+  // The card shows exactly what the wallet gained (prize + bonus line).
+  expect(r2.cardGems).toBe(r2.walletDelta);
 
   const again = await page.evaluate(() => {
     const rg = window.__rg!;
@@ -467,7 +489,7 @@ test('Dino Sumo: a full round (first to 5 or 60 s) to the result card; E plays a
   saveChannels(await canvasShot(page), 'e2e-sumo-round');
   // Replays cost a ticket only when the economy is present; without it the game is free.
   expect(again.phase).toBe('round');
-  expect(again.clock).toBe(60);
+  expect(again.clock).toBe(75);
   // Live round: the weak-eye beat ring round the hero and the magic balloons, all 4 combos.
   expect(await page.evaluate(() => window.__rg!.ctx.vision.channels().weak)).toBe('r');
   for (const combo of COMBOS) {
