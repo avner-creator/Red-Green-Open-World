@@ -25,7 +25,7 @@ import { ThrillConfetti } from '../thrillConfetti';
 import { createBalloons } from './balloons';
 import { SET, createRingModel } from './ring';
 import { createSuits } from './suits';
-import { OUT, SUMO, TAIL, beatPhase, createSumo, isPerfect, playerRank, stepSumo, sumoPrize, sumoStars } from './sumo';
+import { OUT, SUMO, beatPhase, createSumo, isPerfect, playerRank, stepSumo, sumoPrize, sumoStars } from './sumo';
 import type { SumoEvent, SumoInput, SumoState } from './sumo';
 
 const FRIEND_SCALE = 0.9;
@@ -37,7 +37,7 @@ type Phase = 'idle' | 'loading' | 'round' | 'result';
 
 export interface DinoSumoTestApi {
   phase(): Phase;
-  state(): { points: number[]; clock: number; phase: string; weakPops: number; px: number; pz: number } | null;
+  state(): { points: number[]; clock: number; phase: string; weakPops: number; px: number; pz: number; dinos: [number, number, string][] } | null;
   booth(): [number, number, number];
   start(): void;
   setClock(seconds: number): void;
@@ -119,6 +119,10 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
   let wasTumbling = false;
   let camYaw = 0;
   const drip = [0, 0, 0, 0];
+  /** Wobble: the suit's top lags behind (a tilt spring per dino, ring space). */
+  const wob = [0, 1, 2, 3].map(() => ({ x: 0, z: 0, vx: 0, vz: 0, pvx: 0, pvz: 0 }));
+  /** Seconds left of a giggle (after popping back up, and at the end). */
+  const laugh = [0, 0, 0, 0];
   const events: SumoEvent[] = [];
   const human: SumoInput = { x: 0, z: 0, sprint: false, swing: false };
   const tmpV = new THREE.Vector3();
@@ -133,10 +137,34 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     return out.set(site.x + w.x, site.deckY + y, site.z + w.z);
   };
 
-  const spinOf = (swing: number): number => {
-    if (swing <= 0) return 0;
-    const k = 1 - swing / TAIL.seconds;
-    return (1 - Math.pow(1 - k, 2.2)) * Math.PI * 2;
+  /** Advance the wobble springs from each dino's change in speed (the top lags, then boings). */
+  function updateWobble(dt: number): void {
+    if (!round || dt <= 0) return;
+    round.dinos.forEach((d, i) => {
+      const w = wob[i];
+      const b = d.body;
+      const ax = (b.vx - w.pvx) / dt;
+      const az = (b.vz - w.pvz) / dt;
+      w.pvx = b.vx;
+      w.pvz = b.vz;
+      // Lean into a charge, lag behind any other push; clamp the kick so hits wobble, not spin.
+      const lead = d.swing > 0 ? 0.45 : 0;
+      const tx = Math.max(-0.6, Math.min(0.6, -ax * 0.035)) + d.dashX * lead;
+      const tz = Math.max(-0.6, Math.min(0.6, -az * 0.035)) + d.dashZ * lead;
+      w.vx += ((tx - w.x) * 140 - w.vx * 7) * dt;
+      w.vz += ((tz - w.z) * 140 - w.vz * 7) * dt;
+      w.x = Math.max(-0.7, Math.min(0.7, w.x + w.vx * dt));
+      w.z = Math.max(-0.7, Math.min(0.7, w.z + w.vz * dt));
+      laugh[i] = Math.max(0, laugh[i] - dt);
+    });
+  }
+
+  /** Wobble tilt (ring space) as a quaternion: the top leans toward (w.x, w.z). */
+  const tiltQ = (i: number, out: THREE.Quaternion): THREE.Quaternion => {
+    const w = wob[i];
+    const a = Math.hypot(w.x, w.z);
+    if (a < 1e-4) return out.identity();
+    return out.setFromAxisAngle(tmpV.set(w.z / a, 0, -w.x / a), a);
   };
   const rollOf = (state: string, stateT: number): number => (state === 'rolling' ? Math.min(1, stateT / OUT.roll) * Math.PI * 3 : 0);
 
@@ -152,28 +180,39 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     if (!round) return;
     round.dinos.forEach((d, i) => {
       const b = d.body;
-      const roll = rollOf(d.state, d.stateT);
+      const tumble = rollOf(d.state, d.stateT);
       const l = Math.hypot(b.x, b.z) || 1;
-      suits.set(
-        i,
-        { x: b.x, y: b.y, z: b.z, yaw: d.yaw, spin: spinOf(d.swing), roll, rollX: b.x / l, rollZ: b.z / l, squash: d.squash },
-        dt,
-        time,
-      );
+      const w = wob[i];
+      const wa = Math.hypot(w.x, w.z);
+      // Either the tumble (rolling out) or the wobble tilt (same pose fields).
+      const roll = tumble !== 0 ? tumble : wa;
+      const rx = tumble !== 0 ? b.x / l : wa > 1e-4 ? w.x / wa : 1;
+      const rz = tumble !== 0 ? b.z / l : wa > 1e-4 ? w.z / wa : 0;
+      suits.set(i, { x: b.x, y: b.y, z: b.z, yaw: d.yaw, spin: 0, roll, rollX: rx, rollZ: rz, squash: d.squash }, dt, time);
       if (i === 0) return;
       const f = friends[i - 1];
       if (!f) return;
       const o = f.object;
-      tmpQ.setFromAxisAngle(upY, d.yaw + spinOf(d.swing));
-      if (roll !== 0) {
-        tmpQ2.setFromAxisAngle(tmpV.set(b.z / l, 0, -b.x / l), roll);
+      tmpQ.setFromAxisAngle(upY, d.yaw);
+      if (tumble !== 0) {
+        tmpQ2.setFromAxisAngle(tmpV.set(b.z / l, 0, -b.x / l), tumble);
         tmpQ.premultiply(tmpQ2);
-      }
+      } else tmpQ.premultiply(tiltQ(i, tmpQ2));
       o.quaternion.copy(tmpQ);
       tmpV.set(0, -SUIT_CY, 0).applyQuaternion(tmpQ);
       o.position.set(b.x + tmpV.x, b.y + SUIT_CY + tmpV.y, b.z + tmpV.z);
       const speed = Math.hypot(b.vx, b.vz);
-      f.play(d.state === 'rolling' ? 'fall' : d.state === 'waddle' ? 'walk' : phase === 'result' && playerRank(round as SumoState) !== 1 && i === bestFriend() ? 'cheer' : speed > 0.6 ? 'run' : 'idle');
+      f.play(
+        d.state === 'rolling'
+          ? 'fall'
+          : d.state === 'waddle'
+            ? 'walk'
+            : laugh[i] > 0 || (phase === 'result' && playerRank(round as SumoState) !== 1 && i === bestFriend())
+              ? 'cheer'
+              : speed > 0.6
+                ? 'run'
+                : 'idle',
+      );
     });
   }
 
@@ -202,9 +241,19 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
         player.setVisualRotation(null);
         wasTumbling = false;
       }
-      player.yaw = site.yaw + d.yaw + spinOf(d.swing);
+      player.yaw = site.yaw + d.yaw;
+      // Wobble with the suit: the tilt in the hero's own frame (pitch forward, roll sideways).
+      const w = wob[0];
+      const fx = Math.sin(d.yaw);
+      const fz = Math.cos(d.yaw);
+      player.setTilt(w.x * fx + w.z * fz, -(w.x * fz - w.z * fx));
       const speed = Math.hypot(b.vx, b.vz);
       player.setAnimation(phase === 'result' ? (playerRank(round) === 1 ? 'cheer' : 'wave') : d.state === 'waddle' ? 'walk' : speed > 0.6 ? 'run' : 'idle');
+    }
+    if (phase === 'result') {
+      // Celebration: the camera swings round in front of the hero.
+      ctx.cameraRig.setOverride({ distance: 6, height: 2.8, fov: CAMERA.fov, lookAhead: 0, yawOffset: Math.PI });
+      return;
     }
     // Camera behind the hero, looking across the ring through its centre.
     const l = Math.hypot(b.x, b.z);
@@ -223,46 +272,54 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           if (e.a === 0 || e.b === 0) ctx.cameraRig.shake(Math.min(0.4, e.speed / 14));
           break;
         case 'swing':
+          // Belly charge: a whoosh and a springy stretch.
           ctx.audio.play('whoosh', { pitch: 1.2 + rand() * 0.2, volume: e.dino === 0 ? 0.9 : 0.4 });
           break;
         case 'tailHit':
-          ctx.audio.play('bigBoing', { pitch: 1 + rand() * 0.3, volume: 0.8 });
-          if (e.from === 0 || e.to === 0) ctx.cameraRig.shake(0.3);
+          ctx.audio.play('bigBoing', { pitch: 0.8 + rand() * 0.3, volume: 0.9 });
+          ctx.audio.play('bump', { pitch: 0.7, volume: 0.6 });
+          if (e.from === 0 || e.to === 0) ctx.cameraRig.shake(e.from === 0 ? 0.35 : 0.25);
+          break;
+        case 'bonk':
+          ctx.audio.play('bigBoing', { pitch: 0.65, volume: 1 });
+          ctx.audio.play('boing', { pitch: 1.4, volume: 0.7 });
+          if (e.a === 0 || e.b === 0) ctx.cameraRig.shake(0.4);
           break;
         case 'out': {
           const b = round.dinos[e.dino].body;
           ctx.audio.play('boing', { pitch: 1.5, volume: 0.9 });
           ctx.audio.play('whoosh', { pitch: 0.8, volume: 0.6 });
-          confetti.burst(toWorld(b.x, 1.2, b.z, tmpV), e.by === 0 ? 70 : 25);
+          // Ring-out = a point: the crowd horn toots for it.
+          if (e.by >= 0) ctx.audio.play('horn', { pitch: e.by === 0 ? 1.1 : 0.85, volume: e.by === 0 ? 0.8 : 0.4 });
+          confetti.burst(toWorld(b.x, 1.2, b.z, tmpV), e.by === 0 ? 90 : 25);
           if (e.by === 0) {
-            hud.splash('dino', 2);
-            ctx.events.emit('stunt', { kind: 'bumper', value: 2, stars: 1 });
+            hud.splash('dino', 1);
+            ctx.events.emit('stunt', { kind: 'bumper', value: 1, stars: 1 });
           }
           if (e.dino === 0) ctx.cameraRig.shake(0.45);
           break;
         }
         case 'back':
+          // Pops back up laughing.
+          laugh[e.dino] = 1.1;
+          ctx.audio.play('squeak', { pitch: 1.4 + rand() * 0.3, volume: 0.5 });
           break;
         case 'pop': {
           const slot = round.balloons[e.slot];
           balloons.pop(slot, e.weak);
           ctx.audio.play('splash', { pitch: e.weak ? 0.8 : 1.2, volume: e.weak ? 1 : 0.7 });
-          if (e.weak) {
-            // Soak everybody else (both-eye splashes on the dinos, after the pop).
-            round.dinos.forEach((d, j) => {
-              if (j !== e.dino) {
-                balloons.splash.burst(d.body.x, 2.1, d.body.z, 22, 2.6, 0.08);
-                drip[j] = 1.4;
-              }
-            });
-            ctx.audio.play('star', { pitch: 1.3 });
-          } else {
-            const d = round.dinos[e.dino];
-            balloons.splash.burst(d.body.x, 2.2, d.body.z, 18, 2.2, 0.07);
-            drip[e.dino] = 0.8;
-          }
+          // Splash every dino it soaked (both-eye splashes on the dinos, after the pop). A weak
+          // balloon's own burst is drawn on the layer by `balloons.pop`.
+          if (!e.weak) balloons.splash.burst(slot.x, slot.y, slot.z, 18, 2.2, 0.07);
+          round.dinos.forEach((d, j) => {
+            if (j !== e.dino && d.wet > 0 && drip[j] <= 0.2) {
+              balloons.splash.burst(d.body.x, 2.1, d.body.z, e.weak ? 22 : 12, 2.4, 0.08);
+              drip[j] = e.weak ? 1.6 : 1;
+            }
+          });
+          if (e.weak) ctx.audio.play('star', { pitch: 1.3 });
           if (e.dino === 0) {
-            hud.splash('splash', e.weak ? 3 : 1);
+            hud.splash('splash', 0);
             ctx.events.emit('stunt', { kind: 'bumper', value: e.weak ? 3 : 1, stars: e.weak ? 2 : 1 });
             ctx.cameraRig.shake(e.weak ? 0.3 : 0.15);
             if (e.weak) ctx.events.emit('glasses:result', { mechanic: 'sumoBalloon', kind: 'find', tier: 1, hit: true });
@@ -270,7 +327,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           break;
         }
         case 'perfect':
-          hud.splash('tail', 1);
+          hud.splash('charge', 0);
           ctx.audio.play('star', { pitch: 1.6 });
           ctx.cameraRig.shake(0.25);
           ctx.events.emit('glasses:result', { mechanic: 'sumoBeat', kind: 'timeIt', tier: 2, hit: true });
@@ -302,7 +359,14 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     ctx.events.emit('stamp:earned', { id: 'dinoRing' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${me}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
-    if (stars >= 3) confetti.burst(toWorld(0, 3, 0, tmpV), 180);
+    ctx.audio.play('horn', { pitch: stars >= 3 ? 1.15 : 0.9 });
+    if (stars >= 3) {
+      const p = round.dinos[0].body;
+      confetti.burst(toWorld(0, 3, 0, tmpV), 180);
+      confetti.burst(toWorld(p.x, 2.4, p.z, tmpV), 120);
+    }
+    // Everybody pops up laughing at the end.
+    laugh.fill(3);
     hud.chip(null, false);
     hud.result(stars, paid, ctx.input.state.device);
   }
@@ -314,6 +378,8 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     lastCount = -1;
     camYaw = 0;
     drip.fill(0);
+    laugh.fill(0);
+    for (const w of wob) w.x = w.z = w.vx = w.vz = w.pvx = w.pvz = 0;
     hud.hideResult();
     suits.setVisible(true);
     balloons.splash.clear();
@@ -407,7 +473,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     id: 'dinosumo',
     position: () => model.booth,
     radius: 3,
-    icon: 'hand',
+    icon: 'dragon',
     enabled: () => phase === 'idle' && player.mode === 'walk',
     onUse() {
       if (phase !== 'idle' || player.mode !== 'walk') return;
@@ -435,6 +501,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           weakPops: round.weakPops,
           px: round.dinos[0].body.x,
           pz: round.dinos[0].body.z,
+          dinos: round.dinos.map((d) => [d.body.x, d.body.z, d.state] as [number, number, string]),
         },
       booth: () => [model.booth.x, model.booth.y, model.booth.z],
       start: () => {
@@ -482,6 +549,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
       if (phase === 'idle') return;
       placeBeat();
       if (round) {
+        updateWobble(dt);
         placeSuitsAndFriends(dt);
         // Drips while wet.
         round.dinos.forEach((d, j) => {
@@ -492,7 +560,8 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
         const me = round.dinos[0].points;
         const best = round.dinos[bestFriend()]?.points ?? 0;
         hud.board({ icon: 'dino', value: me }, { icon: 'crown', value: best }, round.clock, SUMO.seconds);
-        if (phase === 'round') hud.chip(round.phase === 'play' && round.clock > SUMO.seconds - 8 ? 'tail' : null, ctx.input.state.device === 'gamepad');
+        // The charge key stays on screen all round (pictogram + key), dimmed while recharging.
+        if (phase === 'round') hud.chip(round.phase === 'play' ? 'charge' : null, ctx.input.state.device === 'gamepad', round.dinos[0].swingCd > 0);
       }
       for (const f of friends) f.update(dt);
     },

@@ -1,9 +1,15 @@
 /**
- * Dino Sumo round logic (pure, no three.js). Four wobbly inflatable dinosaurs on a round mat bump
- * each other out of a pool-noodle ring. Out means a giggly roll to the mat edge and a waddle back;
- * nobody is ever hurt. Space swings your tail: it bumps dinos near you and pops the water balloons
- * hanging overhead. Ordinary balloons splash the popper (+1); the weak-eye-only balloons (only the
- * player's tail can pop them: the friends can't see them) soak everybody else (+3). Knocking a friend out of the ring scores +2 for whoever bumped them last.
+ * Dino Sumo round logic (pure, no three.js). Four wobbly inflatable dinosaurs on a round mat try to
+ * bump each other out of a pool-noodle ring. Space = belly charge: a bouncy lunge; whoever it hits
+ * goes flying (the charger belly-bounces back). Bumped out of the ring = a silly tumble to the mat
+ * edge and a giggly waddle back; the last dino who bumped them scores a point. First to 5 wins
+ * (or the most points when the minute is up). Nobody is ever hurt.
+ *
+ * Water balloons hang over the ring: charging under one boinks it with your belly. Plain ones
+ * splash the dinos near you (soaked dinos are slow and slippery: easy to bump out). The weak-eye
+ * balloons (only the player can see them, so only the player's charge pops them) soak everybody
+ * else. And a weak-eye beat ring pulses round your dino: charge while it hugs the dino for a super
+ * charge (a much bigger shove).
  * Ring space: origin at the ring centre, metres, x/z on the mat (+Z = the booth side's far end).
  */
 import { collideBodies, integrate, makeBody, steerToward } from '../bubbleball/bodies';
@@ -11,19 +17,28 @@ import type { Body, Contact } from '../bubbleball/bodies';
 
 export const RING = { r: 4.4, mat: 5.7 } as const;
 export const DINO = { r: 0.72, m: 1, playerM: 1.25, bounce: 0.75, drag: 2.2, h: 2 } as const;
-export const SUMO = { seconds: 45, countdown: 3, endPause: 1.6 } as const;
+/** 60-second round; the first dino to `target` ring-outs wins at once. */
+export const SUMO = { seconds: 60, countdown: 3, endPause: 2.2, target: 5 } as const;
 export const MOVE = { speed: 4.3, sprint: 5.6, accel: 13 } as const;
-export const AI = { speed: 3.5, accel: 9, think: [0.35, 0.8] as const } as const;
-export const TAIL = { seconds: 0.5, cooldown: 0.85, reach: 2.05, push: 6.2, popReach: 2.15 } as const;
-export const OUT = { roll: 1.1, back: 1.6, points: 2 } as const;
-export const BALLOON = { respawn: 3.5, weakMax: 2, splashSlow: 0.8, soakSlow: 1.4 } as const;
-export const POINTS = { out: 2, balloon: 1, weakBalloon: 3 } as const;
+export const AI = { speed: 3.6, accel: 9, think: [0.3, 0.7] as const } as const;
+/**
+ * Belly charge: lunge speed and time, cooldown, the shove given to whoever it hits, the charger's
+ * belly bounce back, how close a balloon must hang over the charge path to be popped, and the
+ * friends' share of the player's shove.
+ */
+export const DASH = { speed: 9.5, seconds: 0.32, cooldown: 0.9, vy: 2.4, shove: 5.8, bounceBack: 3, popReach: 1.15, aiShove: 0.72 } as const;
+/** Kept for the visuals (the tail flick during a charge). */
+export const TAIL = { seconds: DASH.seconds } as const;
+export const OUT = { roll: 1.1, back: 1.6 } as const;
+/** Soaked dinos are slower and get shoved further. */
+export const BALLOON = { respawn: 3.5, weakMax: 2, splashSlow: 1.4, soakSlow: 2.6, splashReach: 2.4, wetShove: 1.35 } as const;
+export const POINTS = { out: 1 } as const;
 /**
  * Glasses "time it": a weak-eye ring pulses round the player's dino, shrinking in to the dino once
- * per `period`. A tail swing in the last `window` seconds (when the ring hugs the dino) is a super
- * swing: a bigger shove and +1. With the weak eye shut the beat is invisible.
+ * per `period`. A charge in the last `window` seconds (when the ring hugs the dino) is a super
+ * charge: a much bigger shove. With the weak eye shut the beat is invisible.
  */
-export const BEAT = { period: 1.5, window: 0.32, push: 1.6, reach: 1.15, points: 1 } as const;
+export const BEAT = { period: 1.5, window: 0.32, push: 1.6 } as const;
 
 /** 0 → 1 through each beat (the ring shrinks as it goes). */
 export function beatPhase(t: number): number {
@@ -44,14 +59,18 @@ export interface Dino {
   stateT: number;
   /** Facing (ring-space yaw, atan2(x, z)). */
   yaw: number;
-  /** Tail swing: seconds left (> 0 while spinning) and cooldown. */
+  /** Belly charge: seconds left (> 0 while lunging), cooldown, direction, super (on the beat). */
   swing: number;
   swingCd: number;
+  dashX: number;
+  dashZ: number;
+  superDash: boolean;
+  /** Ring-outs credited to this dino (the score). */
   points: number;
-  /** Who bumped this dino last and how long ago (for knock-out credit). */
+  /** Who bumped this dino last and how long ago (for ring-out credit). */
   lastHitBy: number;
   lastHitT: number;
-  /** Slowed by a splash / soak (seconds left). */
+  /** Slowed and slippery from a splash / soak (seconds left). */
   wet: number;
   /** AI wish. */
   think: number;
@@ -87,15 +106,19 @@ export interface SumoState {
   weakPops: number;
   /** Seconds of play (drives the weak-eye beat ring). */
   beat: number;
-  /** Super swings the player timed on the beat. */
+  /** Super charges the player timed on the beat. */
   perfects: number;
 }
 
 export type SumoEvent =
   | { kind: 'bump'; a: number; b: number; speed: number }
+  /** A belly charge starts. */
   | { kind: 'swing'; dino: number }
   | { kind: 'perfect' }
+  /** A charge hit someone (big shove). */
   | { kind: 'tailHit'; from: number; to: number }
+  /** Two charges met head on: both bounce back. */
+  | { kind: 'bonk'; a: number; b: number }
   | { kind: 'out'; dino: number; by: number }
   | { kind: 'back'; dino: number }
   | { kind: 'pop'; dino: number; slot: number; weak: boolean }
@@ -106,6 +129,7 @@ export interface SumoInput {
   x: number;
   z: number;
   sprint: boolean;
+  /** Charge pressed this frame. */
   swing: boolean;
 }
 
@@ -132,7 +156,7 @@ export function startSpots(): [number, number][] {
   ];
 }
 
-export function createSumo(seconds: number = SUMO.seconds, skills: readonly number[] = [0.74, 0.68, 0.62]): SumoState {
+export function createSumo(seconds: number = SUMO.seconds, skills: readonly number[] = [0.8, 0.74, 0.68]): SumoState {
   const dinos: Dino[] = startSpots().map(([x, z], i) => ({
     body: makeBody({ x, z, r: DINO.r, m: i === 0 ? DINO.playerM : DINO.m, bounce: DINO.bounce, drag: DINO.drag, h: DINO.h }),
     human: i === 0,
@@ -141,6 +165,9 @@ export function createSumo(seconds: number = SUMO.seconds, skills: readonly numb
     yaw: Math.atan2(-x, -z),
     swing: 0,
     swingCd: 0,
+    dashX: 0,
+    dashZ: 1,
+    superDash: false,
     points: 0,
     lastHitBy: -1,
     lastHitT: 99,
@@ -180,14 +207,15 @@ export function sumoStars(rank: number): number {
   return rank <= 1 ? 3 : rank === 2 ? 2 : 1;
 }
 
-export function sumoPrize(stars: number, weakPops: number): number {
-  return 2 * stars + Math.min(3, weakPops);
+/** Gems: 2 / 4 / 6 by stars, plus one per magic balloon or super charge (max 3). */
+export function sumoPrize(stars: number, bonus: number): number {
+  return 2 * stars + Math.min(3, bonus);
 }
 
 /** Rubber band: friends ease off while they are ahead of the player. */
 export function friendSkillScale(friendPoints: number, playerPoints: number): number {
   const lead = friendPoints - playerPoints;
-  return lead > 2 ? Math.max(0.55, 1 - 0.08 * (lead - 2)) : 1;
+  return lead > 0 ? Math.max(0.6, 1 - 0.15 * lead) : 1;
 }
 
 /** Is a dino (centre) outside the noodle ring? */
@@ -206,8 +234,24 @@ export interface SumoStepOptions {
 }
 
 const contacts: Contact[] = [];
+const SUB_DT = 1 / 120;
+const subOut: SumoEvent[] = [];
 
+/** Advance the round by dt (sub-stepped, so a fast charge never tunnels). `out` is cleared first. */
 export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: SumoEvent[]): void {
+  out.length = 0;
+  const n = Math.max(1, Math.ceil(dt / SUB_DT - 1e-9));
+  const h = dt / n;
+  const press = o.input.swing;
+  for (let k = 0; k < n; k++) {
+    const sub: SumoStepOptions = k === 0 || !press ? o : { ...o, input: { ...o.input, swing: false } };
+    stepOnce(s, h, sub, subOut);
+    for (const e of subOut) out.push(e);
+    if (s.phase === 'over') break;
+  }
+}
+
+function stepOnce(s: SumoState, dt: number, o: SumoStepOptions, out: SumoEvent[]): void {
   out.length = 0;
   s.phaseT += dt;
   for (const d of s.dinos) {
@@ -244,9 +288,6 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
     d.lastHitT += dt;
     d.swingCd = Math.max(0, d.swingCd - dt);
     d.wet = Math.max(0, d.wet - dt);
-    if (d.swing > 0) {
-      d.swing = Math.max(0, d.swing - dt);
-    }
     if (d.state === 'rolling') {
       // Roll out to the mat edge, giggling, then waddle back in.
       if (d.stateT >= OUT.roll) {
@@ -267,11 +308,20 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
       }
       return;
     }
-    const slow = d.wet > 0 ? 0.55 : 1;
+    if (d.swing > 0) {
+      // Charging: a fast lunge, no steering; boink any balloon hanging over the path.
+      d.swing = Math.max(0, d.swing - dt);
+      const sp = DASH.speed * (d.human ? 1 : 0.75 + 0.2 * d.skill) * (d.wet > 0 ? 0.8 : 1);
+      steerToward(b, d.dashX * sp, d.dashZ * sp, 80, dt);
+      d.yaw = Math.atan2(d.dashX, d.dashZ);
+      if (live) popUnder(s, i, out);
+      return;
+    }
+    const slow = d.wet > 0 ? 0.6 : 1;
     if (d.human) {
       const sp = (o.input.sprint ? MOVE.sprint : MOVE.speed) * slow;
-      steerToward(b, o.input.x * sp, o.input.z * sp, MOVE.accel, dt);
-      if (o.input.swing && live) startSwing(s, i, out);
+      steerToward(b, o.input.x * sp, o.input.z * sp, MOVE.accel * (d.wet > 0 ? 0.6 : 1), dt);
+      if (o.input.swing && live) startCharge(s, i, o.input.x, o.input.z, out);
     } else {
       d.think -= dt;
       if (d.think <= 0 && live) {
@@ -285,12 +335,12 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
       const sp = AI.speed * d.skill * scale * slow * Math.min(1, dist / 0.8);
       steerToward(b, dist > 0.01 ? (dx / dist) * sp : 0, dist > 0.01 ? (dz / dist) * sp : 0, AI.accel * d.skill, dt);
       if (d.wantSwing && live) {
-        startSwing(s, i, out);
+        startCharge(s, i, dx, dz, out);
         d.wantSwing = false;
       }
     }
     const v = Math.hypot(b.vx, b.vz);
-    if (v > 0.4 && d.swing <= 0) {
+    if (v > 0.4) {
       const want = Math.atan2(b.vx, b.vz);
       let dy = want - d.yaw;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -304,13 +354,51 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
   for (const c of contacts) {
     const a = s.dinos[c.a];
     const b = s.dinos[c.b];
-    a.squashV -= c.impulse * 1.6;
-    b.squashV -= c.impulse * 1.6;
-    // Credit: the one moving harder into the contact is the bumper.
+    a.squashV -= c.impulse * 2;
+    b.squashV -= c.impulse * 2;
     a.lastHitBy = c.b;
     a.lastHitT = 0;
     b.lastHitBy = c.a;
     b.lastHitT = 0;
+    const da = a.swing > 0;
+    const db = b.swing > 0;
+    if (da && db) {
+      // Head-on belly bonk: both bounce back, boing.
+      for (const [d, sgn] of [
+        [a, -1],
+        [b, 1],
+      ] as const) {
+        d.swing = 0;
+        d.body.vx += sgn * c.nx * DASH.bounceBack * 1.5;
+        d.body.vz += sgn * c.nz * DASH.bounceBack * 1.5;
+        d.body.vy = Math.max(d.body.vy, DASH.vy);
+        d.squashV -= 6;
+      }
+      out.push({ kind: 'bonk', a: c.a, b: c.b });
+      continue;
+    }
+    if (da || db) {
+      const from = da ? c.a : c.b;
+      const to = da ? c.b : c.a;
+      const hitter = s.dinos[from];
+      const hit = s.dinos[to];
+      const sgn = da ? 1 : -1; // normal points from a to b
+      const k = DASH.shove * (hitter.human ? 1 : DASH.aiShove) * (hitter.superDash ? BEAT.push : 1) * (hit.wet > 0 ? BALLOON.wetShove : 1);
+      hit.body.vx += sgn * c.nx * k;
+      hit.body.vz += sgn * c.nz * k;
+      hit.body.vy = Math.max(hit.body.vy, 2.6);
+      hit.squashV -= 8;
+      hit.lastHitBy = from;
+      hit.lastHitT = 0;
+      // The charger belly-bounces back.
+      hitter.swing = 0;
+      hitter.body.vx -= sgn * c.nx * DASH.bounceBack;
+      hitter.body.vz -= sgn * c.nz * DASH.bounceBack;
+      hitter.body.vy = Math.max(hitter.body.vy, DASH.vy);
+      hitter.squashV -= 6;
+      out.push({ kind: 'tailHit', from, to });
+      continue;
+    }
     if (c.speed > 1.2) out.push({ kind: 'bump', a: c.a, b: c.b, speed: c.speed });
   }
   // The mat edge is a soft round wall.
@@ -337,16 +425,22 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
     if (!isOut(b.x, b.z)) return;
     d.state = 'rolling';
     d.stateT = 0;
+    d.swing = 0;
     d.outs++;
     b.ghost = 99; // no bumping while rolling and waddling back
     const l = Math.hypot(b.x, b.z) || 1;
     b.vx = (b.x / l) * 2.2;
     b.vz = (b.z / l) * 2.2;
     b.vy = 3;
-    const by = d.lastHitT < 2.5 ? d.lastHitBy : -1;
-    if (by >= 0 && by !== i) s.dinos[by].points += POINTS.out;
+    const by = d.lastHitT < 2.5 && d.lastHitBy !== i ? d.lastHitBy : -1;
+    if (by >= 0) s.dinos[by].points += POINTS.out;
     out.push({ kind: 'out', dino: i, by });
   });
+  // First to the target wins at once (a short pause for the tumble, then the result).
+  if (live && s.dinos.some((d) => d.points >= SUMO.target)) {
+    s.phase = 'end';
+    s.phaseT = 0;
+  }
 
   // Balloons refill.
   for (const bl of s.balloons) {
@@ -360,57 +454,54 @@ export function stepSumo(s: SumoState, dt: number, o: SumoStepOptions, out: Sumo
   }
 }
 
-function startSwing(s: SumoState, i: number, out: SumoEvent[]): void {
+/** Start a belly charge toward (dx, dz) (falls back to the facing direction). */
+function startCharge(s: SumoState, i: number, dx: number, dz: number, out: SumoEvent[]): void {
   const d = s.dinos[i];
-  if (d.swingCd > 0 || d.swing > 0) return;
-  d.swing = TAIL.seconds;
-  d.swingCd = TAIL.cooldown;
+  if (d.swingCd > 0 || d.swing > 0 || d.state !== 'ok') return;
+  let l = Math.hypot(dx, dz);
+  if (l < 0.2) {
+    dx = Math.sin(d.yaw);
+    dz = Math.cos(d.yaw);
+    l = 1;
+  }
+  d.dashX = dx / l;
+  d.dashZ = dz / l;
+  d.swing = DASH.seconds;
+  d.swingCd = DASH.cooldown;
+  d.body.vy = Math.max(d.body.vy, DASH.vy * 0.6);
+  d.squashV += 5; // stretch as it springs off
+  d.superDash = d.human && isPerfect(s.beat);
   out.push({ kind: 'swing', dino: i });
-  const b = d.body;
-  const perfect = d.human && isPerfect(s.beat);
-  if (perfect) {
-    d.points += BEAT.points;
+  if (d.superDash) {
     s.perfects++;
     out.push({ kind: 'perfect' });
   }
-  const reach = TAIL.reach * (perfect ? BEAT.reach : 1);
-  // The tail sweeps a full circle: bump everyone close, pop every balloon in reach.
-  s.dinos.forEach((o, j) => {
-    if (j === i || o.state !== 'ok') return;
-    const dx = o.body.x - b.x;
-    const dz = o.body.z - b.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > reach + o.body.r * 0.5 || dist < 1e-6) return;
-    const k = TAIL.push * (d.human ? 1 : 0.8) * (perfect ? BEAT.push : 1);
-    o.body.vx += (dx / dist) * k;
-    o.body.vz += (dz / dist) * k;
-    o.body.vy = Math.max(o.body.vy, 2.2);
-    o.squashV -= 4;
-    o.lastHitBy = i;
-    o.lastHitT = 0;
-    out.push({ kind: 'tailHit', from: i, to: j });
-  });
+}
+
+/** A charging dino boinks the balloons hanging over it. */
+function popUnder(s: SumoState, i: number, out: SumoEvent[]): void {
+  const d = s.dinos[i];
+  const b = d.body;
   s.balloons.forEach((bl, k) => {
     if (bl.kind === 'none' || bl.grow < 0.6) return;
-    // The friends can't see the magic (weak-eye) balloons, so their tails swish right past them.
+    // The friends can't see the magic (weak-eye) balloons, so they charge right past them.
     if (bl.kind === 'weak' && !d.human) return;
-    if (Math.hypot(bl.x - b.x, bl.z - b.z) > TAIL.popReach) return;
+    if (Math.hypot(bl.x - b.x, bl.z - b.z) > DASH.popReach) return;
     const weak = bl.kind === 'weak';
     bl.kind = 'none';
     bl.refill = 2.5 + ((k * 7) % 5) * 0.4;
-    if (weak) {
-      d.points += POINTS.weakBalloon;
-      if (d.human) s.weakPops++;
-      // Soak everybody else, and a little whoosh outward.
-      s.dinos.forEach((o, j) => {
-        if (j === i) return;
+    s.dinos.forEach((o, j) => {
+      if (j === i) return;
+      if (weak) {
+        // Magic balloon: soak everybody else.
         o.wet = Math.max(o.wet, BALLOON.soakSlow);
         o.squashV -= 3;
-      });
-    } else {
-      d.points += POINTS.balloon;
-      d.wet = Math.max(d.wet, BALLOON.splashSlow);
-    }
+      } else if (Math.hypot(o.body.x - b.x, o.body.z - b.z) < BALLOON.splashReach) {
+        o.wet = Math.max(o.wet, BALLOON.splashSlow);
+        o.squashV -= 2;
+      }
+    });
+    if (weak && d.human) s.weakPops++;
     out.push({ kind: 'pop', dino: i, slot: k, weak });
   });
 }
@@ -424,7 +515,9 @@ function aiThink(s: SumoState, i: number, rand: () => number): void {
   s.dinos.forEach((o, j) => {
     if (j === i || o.state !== 'ok') return;
     const dist = Math.hypot(o.body.x - b.x, o.body.z - b.z);
-    const score = dist - (o.human ? 0.8 : 0) + rand() * 1.5;
+    // Prefer a target near the edge (easier to bump out), and the player a little.
+    const edge = Math.hypot(o.body.x, o.body.z) / RING.r;
+    const score = dist - (o.human ? 0.8 : 0) - edge * 1.2 + rand() * 1.5;
     if (score < bestScore) {
       bestScore = score;
       best = j;
@@ -434,21 +527,20 @@ function aiThink(s: SumoState, i: number, rand: () => number): void {
     .map((bl, k) => ({ bl, k, dist: Math.hypot(bl.x - b.x, bl.z - b.z) }))
     .filter((e) => e.bl.kind === 'plain' && e.bl.grow >= 1)
     .sort((a, c) => a.dist - c.dist)[0];
-  if (plain && (best < 0 || rand() < 0.3)) {
+  if (plain && (best < 0 || rand() < 0.2)) {
     d.tx = plain.bl.x;
     d.tz = plain.bl.z;
-    d.wantSwing = plain.dist < TAIL.popReach * 0.8 && rand() < 0.7;
-    return;
-  }
-  if (best >= 0) {
+    d.wantSwing = plain.dist < 2.2 && rand() < 0.6;
+  } else if (best >= 0) {
     const t = s.dinos[best].body;
-    // Aim a bit past the target (a shove), wobbling off line.
+    // Aim a bit past the target (a shove), wobbling off line; charge when close.
     const dx = t.x - b.x;
     const dz = t.z - b.z;
     const dist = Math.hypot(dx, dz) || 1;
-    d.tx = t.x + (dx / dist) * 0.8 + (rand() - 0.5) * 1.4;
-    d.tz = t.z + (dz / dist) * 0.8 + (rand() - 0.5) * 1.4;
-    d.wantSwing = dist < TAIL.reach * 0.9 && rand() < 0.35;
+    d.tx = t.x + (dx / dist) * 0.8 + (rand() - 0.5) * 1.2;
+    d.tz = t.z + (dz / dist) * 0.8 + (rand() - 0.5) * 1.2;
+    d.wantSwing = dist < 2.6 && rand() < 0.15 + 0.2 * d.skill;
+    return; // chasing: may follow the target close to the edge
   } else {
     d.tx = (rand() - 0.5) * 2;
     d.tz = (rand() - 0.5) * 2;
