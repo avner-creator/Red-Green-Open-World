@@ -1,5 +1,7 @@
 /**
- * Pure "Auto challenge" staircase (no three.js, no DOM): 3 hits in a row → one step harder,
+ * Pure "Auto challenge" staircase (no three.js, no DOM, no clocks: the caller passes playing
+ * time in): 3 counted hits in a row → one step harder, where a hit counts only when at least
+ * `hitSpacingSeconds` of playing time passed since the last counted hit (bursts are paced),
  * 1 miss → one step easier (streak resets), no hit for `droughtSeconds` of playing time → one
  * step easier (counted as a step down, not as a miss). Level is clamped to 0..maxLevel.
  */
@@ -9,8 +11,10 @@ import type { ChallengeModifiers } from '../../types';
 export interface StaircaseState {
   level: number;
   maxLevel: number;
-  /** Hits in a row since the last step or miss. */
+  /** Counted hits in a row since the last step or miss. */
   streak: number;
+  /** Playing time (caller's clock) of the last hit that counted toward the streak; null = none yet. */
+  lastCountedHit: number | null;
   /** Playing seconds since the last hit (or the last drought step). */
   sinceHit: number;
   stepsUp: number;
@@ -25,7 +29,7 @@ export type ForcedPatch = Partial<Pick<ChallengeModifiers, 'level' | 'weakScale'
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 export function createStaircase(): StaircaseState {
-  return { level: 0, maxLevel: CHALLENGE.maxLevel, streak: 0, sinceHit: 0, stepsUp: 0, stepsDown: 0 };
+  return { level: 0, maxLevel: CHALLENGE.maxLevel, streak: 0, lastCountedHit: null, sinceHit: 0, stepsUp: 0, stepsDown: 0 };
 }
 
 export function resetStaircase(s: StaircaseState): void {
@@ -41,13 +45,19 @@ function step(s: StaircaseState, dir: -1 | 1): StepDir {
   return dir;
 }
 
-/** A hit or a miss. Returns the level change (−1, 0, +1). */
-export function staircaseResult(s: StaircaseState, hit: boolean): StepDir {
+/**
+ * A hit or a miss at playing time `now` (seconds, monotonic within a session). Returns the level
+ * change (−1, 0, +1). A miss always counts at once. Every hit ends a drought, but only a hit at
+ * least `hitSpacingSeconds` after the last counted one adds to the streak.
+ */
+export function staircaseResult(s: StaircaseState, hit: boolean, now: number): StepDir {
   if (!hit) {
     s.streak = 0;
     return step(s, -1);
   }
   s.sinceHit = 0;
+  if (s.lastCountedHit !== null && now - s.lastCountedHit < CHALLENGE.hitSpacingSeconds) return 0;
+  s.lastCountedHit = now;
   s.streak += 1;
   if (s.streak < CHALLENGE.hitsToStepUp) return 0;
   s.streak = 0;

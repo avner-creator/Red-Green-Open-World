@@ -13,16 +13,22 @@ import {
 import { LayerFade } from '../../src/vision/challenge/fade';
 import { SessionTally } from '../../src/vision/challenge/tally';
 
-const hits = (s: ReturnType<typeof createStaircase>, n: number): void => {
-  for (let i = 0; i < n; i++) staircaseResult(s, true);
+type Stair = ReturnType<typeof createStaircase>;
+const GAP = CHALLENGE.hitSpacingSeconds;
+/** Playing-time clock for the tests: every hit through `hits` is spaced so it counts. */
+let now = 0;
+const hit = (s: Stair, t = (now += GAP)): ReturnType<typeof staircaseResult> => staircaseResult(s, true, t);
+const miss = (s: Stair): ReturnType<typeof staircaseResult> => staircaseResult(s, false, now);
+const hits = (s: Stair, n: number): void => {
+  for (let i = 0; i < n; i++) hit(s);
 };
 
 describe('staircase rules', () => {
   it('3 hits in a row → one step harder', () => {
     const s = createStaircase();
-    expect(staircaseResult(s, true)).toBe(0);
-    expect(staircaseResult(s, true)).toBe(0);
-    expect(staircaseResult(s, true)).toBe(1);
+    expect(hit(s)).toBe(0);
+    expect(hit(s)).toBe(0);
+    expect(hit(s)).toBe(1);
     expect(s.level).toBe(1);
     expect(s.stepsUp).toBe(1);
     expect(s.streak).toBe(0);
@@ -32,7 +38,7 @@ describe('staircase rules', () => {
     hits(s, 6);
     expect(s.level).toBe(2);
     hits(s, 2);
-    expect(staircaseResult(s, false)).toBe(-1);
+    expect(miss(s)).toBe(-1);
     expect(s.level).toBe(1);
     expect(s.streak).toBe(0);
     expect(s.stepsDown).toBe(1);
@@ -41,7 +47,7 @@ describe('staircase rules', () => {
   });
   it('clamps at both ends and only counts real steps', () => {
     const s = createStaircase();
-    expect(staircaseResult(s, false)).toBe(0);
+    expect(miss(s)).toBe(0);
     expect(s.level).toBe(0);
     expect(s.stepsDown).toBe(0);
     hits(s, 3 * 20);
@@ -56,7 +62,7 @@ describe('staircase rules', () => {
     expect(s.level).toBe(1);
     expect(s.sinceHit).toBe(0);
     expect(staircaseElapse(s, 39)).toBe(0);
-    staircaseResult(s, true); // a hit restarts the clock
+    hit(s); // a hit restarts the clock
     expect(staircaseElapse(s, 39)).toBe(0);
     expect(staircaseElapse(s, 1)).toBe(-1);
     expect(s.level).toBe(0);
@@ -66,9 +72,85 @@ describe('staircase rules', () => {
   it('reset returns to level 0 with zero counters', () => {
     const s = createStaircase();
     hits(s, 7);
-    staircaseResult(s, false);
+    miss(s);
     resetStaircase(s);
     expect(s).toEqual(createStaircase());
+  });
+});
+
+describe('hit pacing (bursts)', () => {
+  it(`counts a hit only ${CHALLENGE.hitSpacingSeconds} s of play after the last counted one`, () => {
+    expect(CHALLENGE.hitSpacingSeconds).toBe(4);
+  });
+  it('a burst of 14 hits in 2 s moves the staircase by at most one counted hit', () => {
+    const s = createStaircase();
+    for (let i = 0; i < 14; i++) expect(staircaseResult(s, true, 10 + (2 * i) / 13)).toBe(0);
+    expect(s.streak).toBe(1);
+    expect(s.level).toBe(0);
+    // Even mid-streak a burst adds only one.
+    const t = createStaircase();
+    staircaseResult(t, true, 0);
+    staircaseResult(t, true, 4);
+    for (let i = 0; i < 14; i++) staircaseResult(t, true, 8 + (2 * i) / 13);
+    expect(t.level).toBe(1);
+    expect(t.stepsUp).toBe(1);
+    expect(t.streak).toBe(0);
+  });
+  it('three hits spaced 4 s apart step one level; 3.9 s is too soon', () => {
+    const s = createStaircase();
+    expect(staircaseResult(s, true, 100)).toBe(0);
+    expect(staircaseResult(s, true, 103.9)).toBe(0);
+    expect(staircaseResult(s, true, 104)).toBe(0);
+    expect(staircaseResult(s, true, 107.95)).toBe(0);
+    expect(staircaseResult(s, true, 108)).toBe(1);
+    expect(s.level).toBe(1);
+  });
+  it('the fastest climb is one level per 8 s, six levels in no less than 48 s', () => {
+    const s = createStaircase();
+    let t = 0;
+    while (s.level < CHALLENGE.maxLevel) {
+      t += 0.5; // a hit every half second
+      staircaseResult(s, true, t);
+    }
+    expect(t).toBeGreaterThanOrEqual(2 * CHALLENGE.hitSpacingSeconds * CHALLENGE.maxLevel);
+  });
+  it('a miss inside a burst still steps down at once and resets the streak', () => {
+    const s = createStaircase();
+    for (let i = 0; i < 6; i++) staircaseResult(s, true, i * 4);
+    expect(s.level).toBe(2);
+    staircaseResult(s, true, 24);
+    staircaseResult(s, true, 24.1);
+    expect(staircaseResult(s, false, 24.2)).toBe(-1);
+    expect(s.level).toBe(1);
+    expect(s.streak).toBe(0);
+    staircaseResult(s, true, 24.3); // still inside the spacing: not counted
+    expect(s.streak).toBe(0);
+    staircaseResult(s, true, 28);
+    expect(s.streak).toBe(1);
+  });
+  it('an ignored hit still resets the drought timer', () => {
+    const s = createStaircase();
+    for (let i = 0; i < 3; i++) staircaseResult(s, true, i * 4); // counted at 0, 4, 8
+    expect(s.level).toBe(1);
+    expect(staircaseElapse(s, 3)).toBe(0); // t = 11
+    expect(staircaseResult(s, true, 11)).toBe(0); // ignored: 3 s after the counted hit at 8
+    expect(s.streak).toBe(0);
+    expect(s.lastCountedHit).toBe(8);
+    expect(s.sinceHit).toBe(0); // the child is succeeding: not a drought
+    expect(staircaseElapse(s, 39)).toBe(0); // 42 s after the last counted hit, 39 s after any hit
+    expect(s.level).toBe(1);
+    expect(staircaseElapse(s, 1)).toBe(-1);
+    expect(s.level).toBe(0);
+  });
+  it('the tally still counts every hit of a burst', () => {
+    const s = createStaircase();
+    const tally = new SessionTally();
+    for (let i = 0; i < 14; i++) {
+      tally.record({ mechanic: 'foamSecret', kind: 'find', tier: 2, hit: true });
+      staircaseResult(s, true, (2 * i) / 13);
+    }
+    expect(tally.rows()).toEqual([{ mechanic: 'foamSecret', kind: 'find', tier: 2, hits: 14, misses: 0 }]);
+    expect(s.streak).toBe(1);
   });
 });
 

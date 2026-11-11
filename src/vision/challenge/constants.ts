@@ -8,6 +8,14 @@ export const CHALLENGE = {
   maxLevel: 6,
   /** Hits in a row that make it one step harder. */
   hitsToStepUp: 3,
+  /**
+   * Playing seconds that must pass since the last hit that counted before another hit counts
+   * toward the streak (any source). Attractions report in bursts (a gem trail, ~14 foam-tile
+   * landings, carnival prizes); without this one burst could climb several levels in seconds.
+   * Hits inside the spacing still go in the session tally and still end a drought; misses always
+   * count at once. Fastest climb: one level per ~8 s, all six levels in ≥ ~48 s of steady success.
+   */
+  hitSpacingSeconds: 4,
   /** Playing seconds without a hit before it quietly steps one easier. */
   droughtSeconds: 40,
   /** Per level: weakScale = 1 − weakPerLevel·level (floor 0.58 at level 6). */
