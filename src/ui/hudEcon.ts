@@ -76,7 +76,7 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
   const top = h('div', 'econtop', {}, wallet.el, row2);
 
   // ── mission cards ──
-  const missions = h('div', 'missions', { 'data-testid': 'missions' });
+  const missions = h('div', 'missions', { 'data-testid': 'pass-goals' });
   let cards: HTMLElement[] = [];
   const cardFor = (m: MissionState, i: number): HTMLElement => {
     const bar = h('i', '', { style: `--p:${missionFraction(m.progress, m.target) * 100}%` });
@@ -180,7 +180,7 @@ export function createHudEcon(ctx: GameContext, tracker: EconTracker, toast: Toa
       updateCard(e.index, tracker.missions[e.index] ?? { ...e.mission, done: true }, true);
       ctx.audio.play('star');
       const c = cards[e.index];
-      if (c) window.setTimeout(() => c.isConnected && fly(c, 4), 350);
+      if (c) window.setTimeout(() => c.isConnected && c.getClientRects().length > 0 && fly(c, 4), 350);
     }),
     ctx.events.on('mission:jackpot', (e) => {
       ctx.audio.play('fanfare');

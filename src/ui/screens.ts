@@ -3,8 +3,6 @@ import type { GameContext, StuntKind } from '../types';
 import type { EconTracker } from './econState';
 import { itemIcon } from './hudEcon';
 import { createPictureQueue, itemPicture, picturePending, swapInPicture } from './itemArt';
-import { createWalletChip } from './wallet';
-import type { WalletChip } from './wallet';
 import { CREDITS } from './credits';
 import { h } from './dom';
 import { counterText } from './format';
@@ -26,47 +24,18 @@ export interface Actions {
   openGate(): void;
   openCredits(): void;
   openWardrobe(): void;
-  /** Title Play: open the character select (falls back to `play`). */
+  /** Open the character select (falls back to `play`). */
   choose?(): void;
+  /** Open the controls card (title Help tile). */
+  openHelp?(): void;
 }
 
 function btn(cls: string, label: string, testid: string, ...kids: (HTMLElement | string | null)[]): HTMLButtonElement {
   return h('button', cls, { type: 'button', 'aria-label': label, 'data-testid': testid }, ...kids);
 }
 
-export interface TitleScreen extends Screen {
-  wallet: WalletChip;
-}
-
-export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
-  const logo = h(
-    'div',
-    'logo',
-    {},
-    h('span', 'l1', {}, 'RED-GREEN'),
-    h('span', 'l2', {}, icon('gem', 'y'), 'OPEN WORLD', icon('gem', 'y')),
-  );
-  const play = btn('b play', 'Play', 'play', h('span', 'glow'), icon('play'), 'PLAY');
-  play.addEventListener('click', a.choose ?? a.play);
-  const grown = btn('b d corner l', 'Grown-ups', 'grownups', icon('gear'), icon('grownup'));
-  grown.addEventListener('click', a.openGate);
-  const cred = btn('b d corner r', 'Credits', 'credits', icon('credits'));
-  cred.addEventListener('click', a.openCredits);
-  // Wardrobe one click away (Play itself opens the hero select).
-  const wardrobe = btn('b d wardrobe', 'Wardrobe', 'title-wardrobe', icon('backpack'), icon('hat'));
-  wardrobe.addEventListener('click', a.openWardrobe);
-  // A returning child sees their gems right away.
-  const wallet = createWalletChip(ctx, 'titlew', 'title-wallet');
-  const el = h('div', 'screen title shade', { 'data-screen': 'title' }, logo, h('div', 'center', {}, play, wardrobe), h('div'), grown, cred, wallet.el);
-  return {
-    el,
-    wallet,
-    onShow: () => {
-      wallet.snap();
-      return play;
-    },
-  };
-}
+export { createTitle } from './titleScreen';
+export type { TitleScreen } from './titleScreen';
 
 function tile(cls: string, label: string, testid: string, ic: UiIconName, ic2?: UiIconName): HTMLButtonElement {
   return btn(
@@ -126,7 +95,8 @@ export interface EndScreen extends Screen {
   fill(): void;
 }
 
-export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): EndScreen {
+/** `passCard` builds the Fun Pass card for the end screen (replaces the small sticker row). */
+export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker, passCard?: () => HTMLElement): EndScreen {
   const header = h('div', 'burst t', { 'data-testid': 'end-stars' });
   const stickers = h('div', 'stickers', { 'data-testid': 'stickers' });
   const econRow = h('div', 'stickers econ', { 'data-testid': 'end-econ' });
@@ -233,13 +203,17 @@ export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): E
         econRow.append(group);
       }
       econRow.classList.toggle('on', econRow.childElementCount > 0);
-      for (const k of STUNT_ORDER) {
-        const v = s.bestStunts[k];
-        smalls.append(sticker(stuntIcon(k), v && v > 0 ? String(Math.round(v)) : '', i++, !!v && v > 0));
+      if (passCard) {
+        smalls.append(passCard());
+      } else {
+        for (const k of STUNT_ORDER) {
+          const v = s.bestStunts[k];
+          smalls.append(sticker(stuntIcon(k), v && v > 0 ? String(Math.round(v)) : '', i++, !!v && v > 0));
+        }
+        for (const k of ATTRACTION_ORDER) if (s.bestStunts[k] !== undefined) smalls.append(sticker(stuntIcon(k), '', i++, true));
+        const have = outfitSlotsFilled([...s.outfits, ...outfitIds]);
+        for (const slot of OUTFIT_SLOTS) smalls.append(sticker(slot, '', i++, have.has(slot), 'outfit'));
       }
-      for (const k of ATTRACTION_ORDER) if (s.bestStunts[k] !== undefined) smalls.append(sticker(stuntIcon(k), '', i++, true));
-      const have = outfitSlotsFilled([...s.outfits, ...outfitIds]);
-      for (const slot of OUTFIT_SLOTS) smalls.append(sticker(slot, '', i++, have.has(slot), 'outfit'));
       confetti.replaceChildren();
       for (let n = 0; n < 46; n++) {
         const c = h('i', '', { style: `--x:${(n * 37) % 100}%;--c:${CONFETTI[n % CONFETTI.length]};--t:${3.2 + (n % 5) * 0.5}s;--dl:${-((n * 0.37) % 4)}s` });

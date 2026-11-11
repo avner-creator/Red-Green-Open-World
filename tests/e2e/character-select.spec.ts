@@ -73,8 +73,8 @@ test.describe('character select', () => {
     await page.close();
   });
 
-  test('Play opens the select; browsing shows each character live; locked ones cannot start', async () => {
-    await page.getByTestId('play').click();
+  test('the change-hero button opens the select; browsing shows each character live; locked ones cannot start', async () => {
+    await page.getByTestId('title-hero').click();
     await expect(page.getByTestId('csel-go')).toBeVisible();
     expect(await phase(page)).toBe('title');
     // A new profile starts with the frog (the first-run default).
@@ -107,7 +107,7 @@ test.describe('character select', () => {
   });
 
   test('choosing the robot starts the session as the robot, and a reload preselects it', async () => {
-    await page.getByTestId('play').click();
+    await page.getByTestId('title-hero').click();
     await page.getByTestId('csel-robot').click();
     await settle(page, 'robot');
     await page.getByTestId('csel-go').click();
@@ -123,10 +123,10 @@ test.describe('character select', () => {
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
     await page.evaluate(() => window.__rg!.freeze(true));
     await settle(page, 'robot');
-    await page.getByTestId('play').click();
+    await page.getByTestId('title-hero').click();
     await expect(page.getByTestId('csel-robot')).toHaveClass(/sel/);
     await expect(page.getByTestId('csel-name')).toHaveText('BOLT');
-    // Play, Go: two clicks for a returning player.
+    // Change hero, Go (Play alone starts with the saved hero).
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
     expect(await charId(page)).toBe('robot');
@@ -141,7 +141,7 @@ test.describe('character select', () => {
       p.reset();
       p.earn(30, 'test');
     });
-    await page.getByTestId('play').click();
+    await page.getByTestId('title-hero').click();
     await page.getByTestId('csel-panda').click();
     await settle(page, 'panda');
     await expect(page.getByTestId('csel-buy')).toBeVisible();

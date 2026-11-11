@@ -94,8 +94,8 @@ export function lumaStdDev(img: PNG): number {
 }
 
 /**
- * Title -> character select -> playing: Play, then Go (the remembered or default hero). Pass
- * `tap: true` on touch pages.
+ * Title -> playing: one Play press starts with the remembered (or default) hero. Pass `tap: true`
+ * on touch pages. The hero select is reached from the title's change-hero button (`title-hero`).
  */
 export async function startGame(page: Page, tap = false): Promise<void> {
   // A running real-time render loop makes every click wait seconds on SwiftShader (the tap on Go
@@ -104,10 +104,9 @@ export async function startGame(page: Page, tap = false): Promise<void> {
   const play = page.getByTestId('play');
   if (tap) await play.tap();
   else await play.click();
-  const go = page.getByTestId('csel-go');
-  await go.waitFor({ state: 'visible' });
-  if (tap) await go.tap();
-  else await go.click();
+  // Frozen: one frame lets the phase change land.
+  await page.evaluate(() => window.__rg?.step(1 / 60, 1, false));
+  await page.waitForFunction(() => window.__rg?.state().phase === 'playing');
   // Let UI that follows the loop (touch HUD, phase classes) catch up with the new phase.
   if (tap) await page.evaluate(() => window.__rg?.step(1 / 60, 3, false));
 }

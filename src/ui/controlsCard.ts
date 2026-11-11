@@ -1,6 +1,7 @@
 /** Controls card: pictograms + key caps / gamepad glyphs by mode. HUD overlay (H, "?") and pause screen. */
 import type { GameContext } from '../types';
 import { controlRow } from './controlGlyphs';
+import { cap, padButton } from './glyphs';
 import type { ControlId, Device } from './controlGlyphs';
 import { clear, h } from './dom';
 import { icon } from './icons';
@@ -43,14 +44,38 @@ function closeButton(onClick: () => void): HTMLButtonElement {
   return b;
 }
 
-function panel(device: Device, onClose: () => void): { panel: HTMLElement; body: HTMLElement; close: HTMLButtonElement } {
+const DEVICE_ICON: Record<Device, UiIconName> = { keyboard: 'mouse', gamepad: 'stick', touch: 'hand' };
+
+/** Device picker on the card: keyboard, gamepad, touch (the active device is preselected). */
+function deviceTabs(pick: (d: Device) => void): { el: HTMLElement; set(d: Device): void } {
+  const btns = (['keyboard', 'gamepad', 'touch'] as Device[]).map((d) => {
+    const b = h('button', 'b d sm wf-dev', { type: 'button', 'aria-label': d, 'aria-pressed': 'false', 'data-testid': `controls-${d}` }, d === 'keyboard' ? cap('W') : d === 'gamepad' ? padButton('A') : null, icon(DEVICE_ICON[d]));
+    b.addEventListener('click', () => pick(d));
+    return b;
+  });
+  return {
+    el: h('div', 'wf-devs', {}, ...btns),
+    set(d) {
+      btns.forEach((b, i) => b.setAttribute('aria-pressed', String(['keyboard', 'gamepad', 'touch'][i] === d)));
+    },
+  };
+}
+
+function panel(
+  device: Device,
+  onClose: () => void,
+  pick: (d: Device) => void,
+): { panel: HTMLElement; body: HTMLElement; close: HTMLButtonElement; tabs: { set(d: Device): void } } {
   const body = h('div', 'wf-body');
   body.append(buildCard(device));
   const close = closeButton(onClose);
+  const tabs = deviceTabs(pick);
+  tabs.set(device);
   return {
-    panel: h('div', 'wf-panel', {}, body, close),
+    panel: h('div', 'wf-panel', {}, body, h('div', 'wf-foot', {}, tabs.el, close)),
     body,
     close,
+    tabs,
   };
 }
 
@@ -68,8 +93,24 @@ export interface ControlsOverlay {
 export function createControlsOverlay(ctx: GameContext): ControlsOverlay {
   let open = false;
   let device: Device = 'keyboard';
-  const button = h('button', 'wf-help', { type: 'button', 'aria-label': 'Controls', 'aria-pressed': 'false', 'data-testid': 'help' }, '?');
-  const { panel: p, body, close } = panel(device, () => api.close());
+  const keySlot = h('span', 'hk');
+  const button = h('button', 'wf-help', { type: 'button', 'aria-label': 'Controls', 'aria-pressed': 'false', 'data-testid': 'help' }, h('span', 'q', {}, '?'), keySlot);
+  let keyDevice: Device | null = null;
+  const showKey = (d: Device): void => {
+    if (d === keyDevice) return;
+    keyDevice = d;
+    clear(keySlot);
+    if (d === 'keyboard') keySlot.append(cap('H'));
+    else if (d === 'gamepad') keySlot.append(padButton('BACK'));
+  };
+  showKey(ctx.input.state.device);
+  /** A device picked on the card sticks until the card closes. */
+  let picked: Device | null = null;
+  const { panel: p, body, close, tabs } = panel(device, () => api.close(), (d) => {
+    picked = d;
+    device = d;
+    render();
+  });
   const card = h('div', 'wf-card', { 'data-testid': 'controls-card' }, p);
   // The button must not keep keyboard focus (Space would re-click it while playing).
   button.addEventListener('click', () => {
@@ -81,11 +122,13 @@ export function createControlsOverlay(ctx: GameContext): ControlsOverlay {
   const render = (): void => {
     clear(body);
     body.append(buildCard(device));
+    tabs.set(device);
   };
   const set = (on: boolean): void => {
     open = on;
     card.classList.toggle('on', on);
     button.setAttribute('aria-pressed', String(on));
+    picked = null;
     if (on) {
       device = ctx.input.state.device;
       render();
@@ -98,7 +141,7 @@ export function createControlsOverlay(ctx: GameContext): ControlsOverlay {
   };
   window.addEventListener('keydown', (e) => {
     if (ctx.session.state.phase !== 'playing' || typing(e.target)) return;
-    if (e.code === 'KeyH') {
+    if (e.code === 'KeyH' || e.code === 'F1') {
       if (!e.repeat) api.toggle();
       e.preventDefault();
     } else if (e.code === 'Escape' && open) {
@@ -129,7 +172,8 @@ export function createControlsOverlay(ctx: GameContext): ControlsOverlay {
       const back = !!pad?.buttons[8]?.pressed;
       if (back && !backPrev) api.toggle();
       backPrev = back;
-      if (open && ctx.input.state.device !== device) {
+      showKey(ctx.input.state.device);
+      if (open && !picked && ctx.input.state.device !== device) {
         device = ctx.input.state.device;
         render();
       }
@@ -141,14 +185,18 @@ export function createControlsOverlay(ctx: GameContext): ControlsOverlay {
 /** Pause-menu version: a stack screen with a back button. */
 export function createControlsScreen(ctx: GameContext, onBack: () => void): Screen {
   let device: Device = 'keyboard';
-  const { panel: p, body, close } = panel(device, onBack);
+  const show = (d: Device): void => {
+    device = d;
+    clear(body);
+    body.append(buildCard(device));
+    tabs.set(device);
+  };
+  const { panel: p, body, close, tabs } = panel(device, onBack, show);
   const el = h('div', 'screen dim', { 'data-screen': 'controls' }, p);
   return {
     el,
     onShow(): HTMLElement {
-      device = ctx.input.state.device;
-      clear(body);
-      body.append(buildCard(device));
+      show(ctx.input.state.device);
       return close;
     },
   };

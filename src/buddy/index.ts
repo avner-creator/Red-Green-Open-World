@@ -40,7 +40,7 @@ import { createVoice } from './voice';
 /** Keys that play the game: they never skip the intro (moving must not skip the tour). */
 const GAME_KEYS = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight',
-  'KeyE', 'KeyF', 'KeyR', 'KeyQ', 'KeyC', 'KeyG', 'KeyH', 'KeyT', 'Escape', 'Tab', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight',
+  'KeyE', 'KeyF', 'KeyR', 'KeyQ', 'KeyC', 'KeyG', 'KeyH', 'KeyT', 'Escape', 'F1', 'Tab', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight',
 ]);
 
 /** Where each attraction "is" for first-visit tips and suggestions (radius in metres, horizontal). */

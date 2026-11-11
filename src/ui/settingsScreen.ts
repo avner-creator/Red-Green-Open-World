@@ -28,7 +28,7 @@ interface SliderOpts {
   fmt(v: number): string;
 }
 
-export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibrate(): void; onSummary?(): void }): SettingsScreen {
+export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibrate(): void; onSummary?(): void; onCredits?(): void }): SettingsScreen {
   const refreshers: (() => void)[] = [];
   const S = (): ReturnType<typeof ctx.settings.get> => ctx.settings.get();
 
@@ -194,11 +194,17 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
 
   const done = h('button', 'b', { type: 'button', 'aria-label': 'Done', 'data-testid': 'settings-done' }, icon('check'), 'Done');
   done.addEventListener('click', o.onClose);
+  // Credits live here (grown-ups), not on the title: one less unexplained button for a child.
+  let cred: HTMLElement | null = null;
+  if (o.onCredits) {
+    cred = h('button', 'b d sm', { type: 'button', 'aria-label': 'Credits', 'data-testid': 'credits' }, icon('credits'));
+    cred.addEventListener('click', o.onCredits);
+  }
   const panel = h(
     'div',
     'panel settings',
     { 'data-testid': 'settings' },
-    h('div', 'bar', {}, h('div', 'head t', {}, icon('grownup')), h('div', 'tabs', { role: 'tablist' }, tabs.glasses, tabs.game), done),
+    h('div', 'bar', {}, h('div', 'head t', {}, icon('grownup')), h('div', 'tabs', { role: 'tablist' }, tabs.glasses, tabs.game), cred, done),
     h('div', 'panes', {}, panes.glasses, panes.game),
   );
   const el = h('div', 'screen dim', { 'data-screen': 'settings' }, panel);

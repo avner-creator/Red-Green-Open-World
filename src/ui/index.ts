@@ -23,6 +23,9 @@ import { createTouchUi } from './touch';
 import { createTutorial } from './tutorial';
 import { createWayfinding } from './wayfinding';
 
+/** Title camera: close and low, the hero fills the middle of the screen. */
+const TITLE_CAMERA = { distance: 6.4, height: 0.9, fov: 46 };
+
 export function createUi(ctx: GameContext): UiApi {
   injectCss();
   const root = ctx.uiRoot;
@@ -35,6 +38,8 @@ export function createUi(ctx: GameContext): UiApi {
   const stack: Screen[] = [];
   let shown: Screen | null = null;
   let wasMenu = false;
+  /** The title's close-up camera override is on. */
+  let titleCam = false;
 
   const play = (): void => {
     ctx.audio.unlock();
@@ -85,6 +90,10 @@ export function createUi(ctx: GameContext): UiApi {
       stack.push(wardrobe);
       render();
     },
+    openHelp: () => {
+      stack.push(wayfinding.screen);
+      render();
+    },
   };
 
   const openSelect = (): void => {
@@ -93,12 +102,16 @@ export function createUi(ctx: GameContext): UiApi {
   };
   const title = createTitle(ctx, actions);
   const pause = createPause(actions);
-  const end = createEnd(ctx, actions, tracker);
+  const end = createEnd(ctx, actions, tracker, () => hud.pass.card());
   const shop = createShop(ctx, 'shop', closeShop);
   const wardrobe = createShop(ctx, 'wardrobe', pop);
   const credits = createCredits({ back: pop });
   const settings = createSettings(ctx, {
     onClose: pop,
+    onCredits: () => {
+      stack.push(credits);
+      render();
+    },
     onSummary: () => (stack.push(glassesSummary), render()),
     onCalibrate: () => {
       calibrating = true;
@@ -166,6 +179,14 @@ export function createUi(ctx: GameContext): UiApi {
     }
     wasMenu = open;
     if (shown === select && t !== select) select.leave();
+    // Title: the camera comes close so the hero stands big in the middle (the select does the same).
+    if (t === title && !titleCam) {
+      titleCam = true;
+      ctx.cameraRig.setOverride(TITLE_CAMERA);
+    } else if (t !== title && titleCam) {
+      titleCam = false;
+      if (t !== select) ctx.cameraRig.setOverride(null);
+    }
     if (t && t !== shown) t.onShow()?.focus({ preventScroll: true });
     shown = t;
   }
@@ -188,6 +209,23 @@ export function createUi(ctx: GameContext): UiApi {
       if (t === shop) shop.tab(dir);
     },
   });
+
+  // Help is one key away on the title and in the pause menu too (H / F1 / gamepad Back).
+  const helpHere = (): boolean => !calibrating && stack.length === 0 && (top() === title || top() === pause);
+  window.addEventListener('keydown', (e) => {
+    if ((e.code === 'KeyH' || e.code === 'F1') && !e.repeat && helpHere()) {
+      e.preventDefault();
+      actions.openHelp?.();
+    }
+  });
+  let backPrev = false;
+  const pollHelpPad = (): void => {
+    const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+    const pad = [...pads].find((x) => x && x.connected);
+    const back = !!pad?.buttons[8]?.pressed;
+    if (back && !backPrev && helpHere()) actions.openHelp?.();
+    backPrev = back;
+  };
 
   ctx.events.on('shop:open', () => {
     if (phase() !== 'playing' || calibrating) return;
@@ -212,11 +250,12 @@ export function createUi(ctx: GameContext): UiApi {
   return {
     update(dt: number): void {
       const pad = nav.poll(dt);
+      pollHelpPad();
       if (shown === gate) gate.update(dt, pad.aHeld);
       if (shown === settings) settings.update(dt, pad.aHeld);
       if (shown === shop) shop.update(dt);
       if (shown === wardrobe) wardrobe.update(dt);
-      if (shown === title) title.wallet.update(dt);
+      if (shown === title) title.update(dt);
       if (shown === glassesSummary) glassesSummary.update(dt);
       hud.update(dt);
       skillChip.update();
