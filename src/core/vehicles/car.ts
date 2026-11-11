@@ -32,7 +32,7 @@ class Spring {
   }
 }
 
-export function createCar(ctx: GameContext, id: string, getCamera: () => CameraApi): VehicleInternal {
+export function createCar(ctx: GameContext, id: string, getCamera: () => CameraApi, snapCamera?: (yaw: number) => void): VehicleInternal {
   const anchor = ctx.world.anchors.garage;
   const sim = createCarSim(ctx.physics, anchor.position, anchor.yaw);
   const model = createCarModel();
@@ -134,7 +134,27 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     },
     heading: () => sim.yaw(),
     hold: false,
+    onRescue: null,
+    popTo(p, yaw, ghostSeconds) {
+      const y = groundAt(p.x, p.z, p.y + 4);
+      placeAt(tmp.set(p.x, y, p.z), yaw);
+      // A cartoon pop: up and a little forward, so it lands rolling the right way.
+      sim.body.setLinvel({ x: Math.sin(yaw) * 3, y: 5, z: Math.cos(yaw) * 3 }, true);
+      heave.v += 1.2;
+      ghostLeft = ghostSeconds;
+      sim.collider.setEnabled(ghostSeconds <= 0);
+      pendingSnap = yaw;
+      ctx.audio.play('boing', { pitch: 1.1 });
+      ctx.events.emit('vehicle:bump', { speed: 2 });
+    },
+    autoUnstick: true,
   };
+  /** Seconds of ghost (no chassis collisions, blinking) left after a pop. */
+  let ghostLeft = 0;
+  /** Seconds the throttle has been held with the car not going anywhere (free-drive unstick). */
+  let wedgedFor = 0;
+  /** Camera cut behind the car after a pop (done once the rider sits at the new spot). */
+  let pendingSnap: number | null = null;
 
   const stepHooks = fixedStepHooks(ctx.physics);
   /** Render pose (interpolated between physics steps): the model, rider, camera and prompt use it. */
@@ -266,6 +286,24 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     mods.bounceScale = tuning.bounceScale;
     mods.offroadAsRoad = tuning.offroadAsRoad;
 
+    if (ghostLeft > 0) {
+      ghostLeft = Math.max(0, ghostLeft - dt);
+      // Ghost after a pop: a quick blink says "you can drive through things for a moment".
+      model.root.visible = ghostLeft === 0 || Math.floor(ghostLeft * 12) % 2 === 0;
+      if (ghostLeft === 0) sim.collider.setEnabled(true);
+    }
+    // Free driving: pressing on against something with nothing happening → a hop backwards.
+    wedgedFor = driven && hooks.autoUnstick && !hooks.hold && controls.throttle > 0.5 && Math.abs(sim.forwardSpeed) < 0.6 ? wedgedFor + dt : 0;
+    if (wedgedFor > 2.5) {
+      wedgedFor = 0;
+      const h = sim.yaw();
+      const v = sim.body.linvel();
+      sim.body.setLinvel({ x: v.x - Math.sin(h) * 3, y: Math.max(v.y, 0) + 5, z: v.z - Math.cos(h) * 3 }, true);
+      heave.v += 1;
+      ctx.audio.play('boing');
+      getCamera().shake(0.2);
+    }
+
     sync();
     const vp = sim.visualPosition;
     kickDust(dt, landedThisFrame);
@@ -341,22 +379,34 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       speed: () => sim.forwardSpeed,
       topSpeed: DRIVE.topSpeedRoad,
       yawRate: () => sim.visualYawRate,
-      distance: 4.6,
-      height: 2.0,
+      // High enough to look over the seat back and Pip on the rear deck onto the driver's head
+      // and shoulders (QA5 M2: the hero was hidden in every driving frame).
+      distance: 4.8,
+      height: 3.0,
+      lookDrop: 0.05,
     },
     promptPosition: () => prompt.copy(sim.visualPosition).setY(sim.visualPosition.y + 0.9),
     update,
     onEnter() {
       driven = true;
+      sim.setBlocker(false);
     },
     onExit() {
       driven = false;
+      sim.setBlocker(true);
       Object.assign(controls, NO_CONTROLS);
     },
     exitSpot,
     rescue,
+    lateUpdate(_dt, riding) {
+      if (pendingSnap !== null && riding) snapCamera?.(pendingSnap);
+      pendingSnap = null;
+    },
     park() {
       hooks.hold = false;
+      ghostLeft = 0;
+      sim.collider.setEnabled(true);
+      model.root.visible = true;
       boostLeft = 0;
       pendingKick = 0;
       safe.pos.copy(anchor.position);

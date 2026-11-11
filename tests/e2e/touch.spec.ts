@@ -269,3 +269,46 @@ test.describe('touch tablet', () => {
     expect(errs).toEqual([]);
   });
 });
+
+for (const [w, h] of [[667, 375], [750, 342], [844, 390], [915, 412]] as const) {
+  test.describe(`phone ${w}x${h}`, () => {
+    test.use({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+    test(`no touch/HUD buttons overlap and every touch target is >= 44 px (${w}x${h})`, async ({ page }) => {
+      await boot(page);
+      await startByTouch(page);
+      await step(page, 30, true);
+      const r = await page.evaluate(() => {
+        const shown = (e: HTMLElement): boolean => {
+          for (let a: HTMLElement | null = e; a; a = a.parentElement) {
+            const cs = getComputedStyle(a);
+            if (cs.display === 'none' || +cs.opacity < 0.1) return false;
+          }
+          return getComputedStyle(e).visibility !== 'hidden';
+        };
+        const els = [...document.querySelectorAll<HTMLElement>('.touch .tbtn, [data-testid="hud-wardrobe"], [data-testid="hud-wardrobe-new"], [data-testid="pip-button"], [data-testid="help"], .rg button')].filter((e) => {
+          const q = e.getBoundingClientRect();
+          return q.width > 6 && q.height > 6 && shown(e) && e.closest('[data-screen]') === null;
+        });
+        const name = (e: HTMLElement): string => e.dataset.testid ?? `${e.tagName.toLowerCase()}.${e.className.toString().split(' ').join('.')}`;
+        const overlaps: string[] = [];
+        const small: string[] = [];
+        for (let i = 0; i < els.length; i++) {
+          const a = els[i].getBoundingClientRect();
+          if (els[i].dataset.testid !== 'hud-wardrobe-new' && Math.min(a.width, a.height) < 43.5) small.push(`${name(els[i])} ${Math.round(a.width)}x${Math.round(a.height)}`);
+          for (let j = i + 1; j < els.length; j++) {
+            if (els[i].contains(els[j]) || els[j].contains(els[i])) continue;
+            const b = els[j].getBoundingClientRect();
+            const ow = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+            const oh = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            if (ow > 2 && oh > 2) overlaps.push(`${name(els[i])} x ${name(els[j])} (${Math.round(ow)}x${Math.round(oh)})`);
+          }
+        }
+        return { ids: els.map((e) => `${name(e)}@${((q) => [q.left, q.top, q.width, q.height].map(Math.round).join(','))(e.getBoundingClientRect())}`), overlaps, small };
+      });
+      console.log(`${w}x${h}`, JSON.stringify(r));
+      expect(r.ids.length).toBeGreaterThan(5);
+      expect(r.overlaps).toEqual([]);
+      expect(r.small).toEqual([]);
+    });
+  });
+}

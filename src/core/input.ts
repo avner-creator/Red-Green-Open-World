@@ -52,6 +52,27 @@ export function lookHintWanted(api: InputApi): boolean {
   return lookHintByApi.get(api)?.() ?? false;
 }
 /** How long after a lock loss we wait for an Esc / blur to explain it (ms). */
+/**
+ * Esc closes the top open overlay before it may pause (QA5 m3: Esc in the workshop opened the
+ * pause menu over it). Overlays that are not menu-stack layers (activity screens such as the
+ * workshop, the shop or the radio) push a handler while open: it returns true when it closed
+ * something. Esc / Start / the touch pause button / an Esc that broke pointer lock all ask the
+ * newest handler first; only when nothing takes it does the game pause.
+ */
+const escHandlers: (() => boolean)[] = [];
+export function pushEscHandler(close: () => boolean): () => void {
+  escHandlers.push(close);
+  return () => {
+    const i = escHandlers.lastIndexOf(close);
+    if (i >= 0) escHandlers.splice(i, 1);
+  };
+}
+/** Offer a pause press to the open overlays (newest first); true = one of them took it. */
+export function closeTopOverlay(): boolean {
+  for (let i = escHandlers.length - 1; i >= 0; i--) if (escHandlers[i]()) return true;
+  return false;
+}
+
 const LOCK_LOSS_SETTLE_MS = 180;
 /** An Esc or a window blur this close to a lock loss explains it (ms). */
 const LOCK_LOSS_WINDOW_MS = 600;
@@ -123,7 +144,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       const action = KEY_ACTIONS[e.code];
       // Some browsers deliver Esc after it already broke pointer lock: the lock-loss classifier
       // pauses for it, so don't queue a second pause.
-      const echo = action === 'pause' && lockLossPending !== null;
+      // An Esc a menu layer or card already handled (preventDefault) only meant "close that".
+      const echo = action === 'pause' && (lockLossPending !== null || (e.code === 'Escape' && e.defaultPrevented));
       if (action && !echo) {
         queued.add(action);
         if (action === 'pause') queuedPauseDetail = e.code;
@@ -305,7 +327,12 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
         pauseInfo.source = 'lock-esc';
         pressed.add('pause');
       }
-      const pausePressed = pressed.has('pause');
+      let pausePressed = pressed.has('pause');
+      if (pausePressed && closeTopOverlay()) {
+        pausePressed = false;
+        pauseInfo.source = null;
+        pauseInfo.detail = 'closed an overlay';
+      }
 
       Object.assign(state, NEUTRAL);
       // The touch HUD is up while touch is the active device (a key, mouse or pad turns it off).
@@ -381,6 +408,18 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
   triggersByApi.set(api, triggers);
   pauseSourceByApi.set(api, pauseInfo);
   if (ctx.testMode) (window as unknown as { __rgLockRequests?: () => number }).__rgLockRequests = () => lockRequests;
+  // Test hook: open a stand-in overlay that closes on Esc; returns "is it still open?".
+  if (ctx.testMode) {
+    (window as unknown as { __rgEscOverlay?: () => () => boolean }).__rgEscOverlay = () => {
+      let open = true;
+      const off = pushEscHandler(() => {
+        open = false;
+        off();
+        return true;
+      });
+      return () => open;
+    };
+  }
   lookHintByApi.set(api, () => gameplay && wantLock && !locked() && !touch.controls.active && device === 'keyboard');
   registerTouchControls(api, touch.controls);
   return api;

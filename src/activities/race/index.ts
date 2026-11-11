@@ -22,6 +22,8 @@ import { createRivalCar, pickFriends, placeRival, type RivalCar } from './rivals
 import { createRaceSite } from './site';
 import { Progress, boostPadDistances, buildTrack, checkpointDistances, leftOf, racingLine } from './track';
 import { flashPractice } from '../../ui/practiceMark';
+import { driveTriggers } from '../../core/input';
+import { StuckWatch, UNSTICK, rPressAction, type StuckReason } from './unstick';
 
 export type RacePhase = 'idle' | 'countdown' | 'racing' | 'finishing' | 'podium' | 'result';
 
@@ -56,6 +58,10 @@ export interface RaceTestApi {
     padsHit: number;
     prize: boolean;
     result: { place: number; stars: number; gems: number } | null;
+    /** Times the buggy was popped back onto the track (auto or R). */
+    resets: number;
+    /** Why and when (latest few). */
+    resetLog: string[];
   };
   /** Pad centres for channel tests. */
   pads(): { x: number; y: number; z: number; dx: number; dz: number }[];
@@ -192,6 +198,43 @@ export function createRace(ctx: GameContext): Race {
   let autopilot = false;
   let gridStill = 0;
   let lastRivalFinish: number | null = null;
+  // Unstick (QA5 M3): auto-reset to the last checkpoint, R = reset (twice quickly = leave).
+  const stuck = new StuckWatch();
+  let lastReset: number | null = null;
+  let resets = 0;
+  const resetLog: string[] = [];
+  const upTmp = new THREE.Vector3();
+
+  /** Pop the buggy back onto the track just past the last checkpoint, facing down the lap. */
+  function resetToTrack(why: StuckReason | 'button'): void {
+    if (!car || !hooks || phase !== 'racing') return;
+    const C = cps.length;
+    const lapBase = Math.floor(Math.max(0, cpPassed) / C) * L;
+    const s = cps[cpPassed % C] + 3;
+    const p = track.at(s);
+    const lf = leftOf(p.dx, p.dz);
+    const lat = safeAt(s);
+    const x = p.x + lf.x * lat;
+    const z = p.z + lf.z * lat;
+    hooks.popTo(new THREE.Vector3(x, heightAt(x, z), z), Math.atan2(p.dx, p.dz), UNSTICK.ghostSeconds);
+    // Progress restarts at the checkpoint (whatever was gained off the track is not kept).
+    progress.value = Math.min(progress.value, lapBase + cps[cpPassed % C] + 3);
+    progress.reset(((s % L) + L) % L);
+    playerProg = progress.value;
+    stuck.reset(playerProg);
+    lastReset = raceT;
+    resets++;
+    resetLog.push(`${why}@${Math.round(raceT)}s s=${Math.round(playerProg)}`);
+    confetti.burst(new THREE.Vector3(x, heightAt(x, z) + 1, z), 24);
+    hud.resetFlash();
+  }
+  /** R / the reset button while racing: reset first, a second press within 2 s leaves. */
+  function onRacePressR(): boolean {
+    if (phase !== 'racing') return phase === 'finishing'; // countdown: R leaves as always
+    if (rPressAction(raceT, lastReset) === 'leave') return false;
+    resetToTrack('button');
+    return true;
+  }
 
   // ── Podium controller (player stands on their step; result card input) ──
   const podiumCtl: ExternalController = {
@@ -241,7 +284,11 @@ export function createRace(ctx: GameContext): Race {
     hud.lost(null);
     site.setLamps(0);
     site.showPodium(false);
-    if (hooks) hooks.hold = false;
+    if (hooks) {
+      hooks.hold = false;
+      hooks.onRescue = null;
+      hooks.autoUnstick = true;
+    }
     if (autopilot) ctx.input.inject(null);
     if (phase === 'countdown') ctx.cameraRig.setOverride(null);
     phase = 'idle';
@@ -285,6 +332,12 @@ export function createRace(ctx: GameContext): Race {
     car.teleport(g.pos, g.yaw);
     if (!driving && !vehicles.board?.(car.id)) return false;
     hooks.hold = true;
+    hooks.onRescue = onRacePressR;
+    hooks.autoUnstick = false;
+    lastReset = null;
+    resets = 0;
+    resetLog.length = 0;
+    stuck.reset(GRID[0][0]);
     const friends = pickFriends(ctx.player.characterId);
     rivals = RIVALS.map((t, i) => createRivalCar(ctx, track, t, GRID[i + 1][0], GRID[i + 1][1], friends[i % friends.length]));
     progress = new Progress(L, GRID[0][0]);
@@ -303,6 +356,7 @@ export function createRace(ctx: GameContext): Race {
     raceT = 0;
     lastLamp = 0;
     hud.show(true);
+    hud.resetKey(ctx.input.state.device === 'gamepad' ? 'Y' : ctx.input.state.device === 'touch' ? '' : 'R');
     hud.chain(0);
     hud.status(1, laps, 1);
     glow?.setVisible(true);
@@ -373,7 +427,9 @@ export function createRace(ctx: GameContext): Race {
       d.play(placeIdx === 0 ? 'cheer' : 'wave', 1, 0.2);
     });
     for (const s of site.podiumSteps) confetti.burst(s.clone().setY(s.y + 2.2), 60);
-    ctx.cameraRig.setOverride({ distance: 7.5, height: 1.6, fov: 52, orbitRate: 0.25, lookAhead: 0 });
+    // A safe scripted spot: in front of the podium looking at the winners (an orbit swung the
+    // camera through the podium and the roadside bushes: QA5 m5).
+    ctx.cameraRig.setOverride({ distance: 7.5, height: 1.6, fov: 52, yawOffset: Math.PI, lookAhead: 0 });
     ctx.audio.play('fanfare');
   }
 
@@ -388,6 +444,15 @@ export function createRace(ctx: GameContext): Race {
     const pr = track.project(car.position.x, car.position.z);
     playerProg = progress.update(pr.s, pr.dist);
     pace += (car.speed - pace) * (1 - Math.exp(-dt / 2.5));
+    // Stuck? (wedged, on its side, or lost off the track): pop back at the last checkpoint.
+    upTmp.set(0, 1, 0).applyQuaternion(car.object.quaternion);
+    const inp = ctx.input.state;
+    const throttle = Math.max(0, inp.moveY + driveTriggers(ctx.input).accelerate);
+    const why = stuck.update({ dt, speed: car.speed, throttle, upY: upTmp.y, offTrack: pr.dist, progress: playerProg });
+    if (why) {
+      resetToTrack(why);
+      return;
+    }
     const view = { length: L, laps, playerProgress: playerProg, playerLateral: pr.lateral, playerSpeed: pace, time: raceT, curvature: (s: number) => track.curvatureNear(s, 4) };
     for (const r of rivals) {
       stepRival(r.state, r.tuning, view, dt);
@@ -496,6 +561,9 @@ export function createRace(ctx: GameContext): Race {
   hud.onExit = () => {
     if (phase === 'result') exitRace = true;
   };
+  hud.onReset = () => {
+    if (phase === 'racing' && !onRacePressR()) abort();
+  };
 
   if (ctx.testMode) {
     window.__rgRace = {
@@ -528,6 +596,8 @@ export function createRace(ctx: GameContext): Race {
         padsHit,
         prize,
         result,
+        resets,
+        resetLog: resetLog.slice(-6),
       }),
       pads: () => (glow?.pads ?? []).map((p) => ({ x: p.x, y: p.y, z: p.z, dx: p.dx, dz: p.dz })),
       lineInfo(s) {

@@ -248,3 +248,58 @@ test('no sparkle shards over the hero right after Play (a title-screen pick land
   expect(counts.id).toBe(counts.next);
   expect(counts.out.every((n) => n === 0)).toBe(true);
 });
+
+test('phone viewport: the race podium/result camera and the plaza chevron walk keep the hero in view (QA5 m5/m9)', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const ph = await browser.newPage({ viewport: { width: 750, height: 342 } });
+  await boot(ph);
+  const probe = (): Promise<{ inside: boolean; near: number; headHidden: boolean; hits: string[] }> =>
+    ph.evaluate(() => {
+      const p = window.__rgCamera!.probe();
+      return { inside: p.inside, near: p.near, headHidden: p.headHidden, hits: p.hits };
+    });
+  await ph.evaluate(() => {
+    const rg = window.__rg!;
+    rg.freeze(true);
+    rg.start();
+    rg.step(1 / 60, 20, false);
+    // Walking east from the spawn past the plaza chevron sign.
+    rg.teleport(0, rg.ctx.world.heightAt(0, 9) + 0.2, 9, 1.75);
+    rg.step(1 / 60, 30, false);
+  });
+  const bad: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    await ph.evaluate(() => {
+      const rg = window.__rg!;
+      rg.inject({ moveY: 1 });
+      rg.step(1 / 60, 15, false);
+      rg.inject(null);
+    });
+    const r = await probe();
+    if (r.inside || r.near <= 0.9 || r.headHidden) bad.push(`chevron walk ${i}: ${JSON.stringify(r)}`);
+  }
+  // Race one lap on autopilot, then watch the podium and the result card camera orbit.
+  const ok = await ph.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    race.setLaps(1);
+    const g = race.gridView();
+    rg.teleport(g[0] + 5, g[1] + 0.3, g[2] - 7);
+    rg.step(1 / 60, 10, false);
+    if (!race.start()) return 'no start';
+    race.autopilot(true);
+    for (let i = 0; i < 80 && race.phase !== 'podium' && race.phase !== 'result'; i++) rg.step(1 / 30, 30, false);
+    return race.phase;
+  });
+  expect(['podium', 'result']).toContain(ok);
+  for (let i = 0; i < 10; i++) {
+    await ph.evaluate(() => window.__rg!.step(1 / 30, 15, false));
+    const r = await probe();
+    if (r.inside || r.near <= 0.9 || r.headHidden) bad.push(`podium ${i}: ${JSON.stringify(r)}`);
+  }
+  await ph.evaluate(() => window.__rg!.render());
+  await canvasShot(ph, 'test-results/camera-clear-race-result-phone.png');
+  await ph.evaluate(() => window.__rgRace!.exit());
+  await ph.close();
+  expect(bad).toEqual([]);
+});

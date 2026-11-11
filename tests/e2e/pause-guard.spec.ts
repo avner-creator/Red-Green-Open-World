@@ -128,6 +128,31 @@ test('Esc that the browser swallows while the Fun Pass is open closes the card, 
   expect(await log()).toEqual([]);
 });
 
+test('Esc with an overlay open (workshop, shop, radio…) closes that overlay first; only a bare Esc pauses', async () => {
+  type W = Window & { __rgEscOverlay?: () => () => boolean; __rgEsc?: () => boolean };
+  // Key path: the Esc key-down reaches the page.
+  await page.evaluate(() => ((window as unknown as W).__rgEsc = (window as unknown as W).__rgEscOverlay!()));
+  await page.keyboard.press('Escape');
+  await step(3);
+  expect(await page.evaluate(() => (window as unknown as W).__rgEsc!())).toBe(false);
+  expect(await phase()).toBe('playing');
+  // Lock path: Chrome swallows the Esc that exits pointer lock.
+  await page.evaluate(() => ((window as unknown as W).__rgEsc = (window as unknown as W).__rgEscOverlay!()));
+  await loseLock(false);
+  await settle();
+  expect(await page.evaluate(() => (window as unknown as W).__rgEsc!())).toBe(false);
+  expect(await phase()).toBe('playing');
+  // The Fun Pass card takes a plain (non-swallowed) Esc too.
+  await page.keyboard.press('Tab');
+  await step(3);
+  await expect(page.getByTestId('funpass')).toHaveClass(/\bon\b/);
+  await page.keyboard.press('Escape');
+  await step(3);
+  await expect(page.getByTestId('funpass')).not.toHaveClass(/\bon\b/);
+  expect(await phase()).toBe('playing');
+  expect(await log()).toEqual([]);
+});
+
 test('explicit pauses are logged with their reason', async () => {
   await loseLock(false); // Esc swallowed by the browser, no card open: pause
   await settle();

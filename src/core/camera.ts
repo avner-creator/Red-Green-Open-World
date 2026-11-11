@@ -39,6 +39,11 @@ export interface ChaseSource {
   /** Base follow distance and FOV for this vehicle. */
   readonly distance: number;
   readonly height: number;
+  /**
+   * How far below the rider's head the camera aims (m; default 0.35 frames the whole vehicle).
+   * Lower = the driver's head and shoulders stay in the picture (QA5 M2).
+   */
+  readonly lookDrop?: number;
 }
 
 const BASE_PITCH = Math.atan2(CAMERA.height, CAMERA.distance);
@@ -120,6 +125,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   let first = true;
   /** Pitch added by the spring arm to swing over / under an obstacle right behind the hero. */
   let lift = 0;
+  /** Scripted-camera unblock: next scan countdown and the clear yaw being swung to (or null). */
+  let scanT = 0;
+  let swingTo: number | null = null;
   const occluders = createCameraOccluders(ctx.scene);
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
@@ -298,6 +306,32 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         liftTarget = Math.min(ARM.seeOver, CAM.maxPitch - pitch);
       }
     }
+    // Scripted cameras (celebrations, results, countdowns: an override without a fixed yaw) may
+    // not end in a bush, a sign or the hero's head (QA5 m5/m9): when the arm is cut short, swing
+    // round to the clearest of 8 directions instead of sitting at the obstacle.
+    if (phase !== 'title' && !chase && override && override.yawOffset === undefined) {
+      scanT -= dt;
+      if (scanT <= 0) {
+        scanT = 0.25;
+        swingTo = null;
+        armDir(pitch, probeDir);
+        const here = clearAlong(pivot, probeDir, reach, ARM.hardRadius, ballHard) ?? reach;
+        if (here < wantDistance * 0.7) {
+          const keep = yaw;
+          let best = here;
+          for (let i = 1; i < 8; i++) {
+            yaw = keep + (i * Math.PI) / 4;
+            const d = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+            if (d > best + 0.5) {
+              best = d;
+              swingTo = yaw;
+            }
+          }
+          yaw = keep;
+        }
+      }
+      if (swingTo !== null) yaw += angleDelta(yaw, swingTo) * damp(4, dt);
+    } else swingTo = null;
     lift += (liftTarget - lift) * damp(ARM.liftRate, dt);
     armDir(clamp(pitch + lift, CAM.minPitch, CAM.maxPitch), dir);
     const hardHit = clearAlong(pivot, dir, reach, ARM.hardRadius, ballHard);
@@ -318,7 +352,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       if (tmp.length() > 20) tmp.setLength(20);
       lookAt.addScaledVector(tmp, lookAhead * 0.1);
     }
-    if (chaseK > 0.001) lookAt.y -= 0.35 * chaseK; // frame the whole vehicle, not just the driver
+    if (chaseK > 0.001) lookAt.y -= (chase?.lookDrop ?? 0.35) * chaseK; // frame the vehicle and its driver
     camera.lookAt(lookAt);
 
     if (trauma > 0) {
