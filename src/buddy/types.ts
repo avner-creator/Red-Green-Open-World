@@ -4,6 +4,9 @@ import type { PictoName } from '../ui/wayIcons';
 /** Small extra pictograms only Pip uses (drawn in src/ui/buddy/picto.ts). */
 export type BuddyExtraIcon = 'paw' | 'wave' | 'question' | 'pip' | 'nose' | 'party';
 
+/** Actions a bubble can show as a key cap / pad button / touch gesture for the active device. */
+export type ActionGlyph = 'move' | 'look' | 'jump' | 'use' | 'skill';
+
 export type BuddyPicto = PictoName | BuddyExtraIcon;
 
 /** The six magic-glasses mini-games (world ids from COMPASS_ATTRACTIONS / `world.anchors`). */

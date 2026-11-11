@@ -2,7 +2,7 @@
  * Pip's dialogue queue (pure, no DOM). Never more than one line on screen; a higher-priority line
  * interrupts a lower one; lower lines wait in a short queue and expire if they get stale.
  */
-import type { BuddyPicto } from './types';
+import type { ActionGlyph, BuddyPicto } from './types';
 
 export const PRIORITY = { idle: 0, react: 1, tip: 2, story: 3 } as const;
 export type Priority = (typeof PRIORITY)[keyof typeof PRIORITY];
@@ -12,6 +12,10 @@ export type Mood = 'happy' | 'excited' | 'curious' | 'worried' | 'proud' | 'sill
 export interface Line {
   text: string;
   icon: BuddyPicto;
+  /** The button/stick/gesture to use, drawn for the active input device (key cap, pad button, touch). */
+  action?: ActionGlyph;
+  /** A second pictogram after the action (the thing: trampoline, gem...). */
+  extra?: BuddyPicto;
   priority: Priority;
   mood?: Mood;
   /** CSS selector of a HUD element Pip points at while saying this line. */

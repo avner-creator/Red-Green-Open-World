@@ -121,14 +121,3 @@ export function turnTowards(yaw: number, target: number, rate: number, dt: numbe
 export function yawTo(a: V2, b: V2): number {
   return Math.atan2(b.x - a.x, b.z - a.z);
 }
-
-/**
- * The intro's "general way" to the nearest gem spot: the direction snapped to one of 8 compass
- * sectors, and a stop point only `dist` metres from the hero (never the spot itself).
- */
-export function generalWay(hero: V2, spot: V2, dist: number): V2 {
-  const yaw = yawTo(hero, spot);
-  const snapped = Math.round(yaw / (Math.PI / 4)) * (Math.PI / 4);
-  const f = forward(snapped);
-  return { x: hero.x + f.x * dist, z: hero.z + f.z * dist };
-}

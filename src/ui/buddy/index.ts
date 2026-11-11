@@ -9,6 +9,7 @@ import { HUD } from '../../buddy/script';
 import type { HudKey } from '../../buddy/script';
 import { clear, h, retrigger } from '../dom';
 import { cap, padButton } from '../glyphs';
+import { actionGlyph } from './action';
 import { injectBuddyCss } from './css';
 import { buddyPicto } from './picto';
 import { placeBubble } from './place';
@@ -23,7 +24,7 @@ export interface BuddyUi {
    * Per frame: typewriter fraction, Pip's head on screen (px in uiRoot space, null = off screen:
    * the bubble docks next to the Pip button) and the hero's screen box to keep clear.
    */
-  update(reveal: number, pip: { x: number; y: number } | null, hero: Rect | null): void;
+  update(reveal: number, pip: { x: number; y: number; on?: boolean } | null, hero: Rect | null): void;
   setDevice(device: 'keyboard' | 'gamepad' | 'touch'): void;
   /** HUD element under the last mouse position, if Pip can explain it. */
   hovered(): HudKey | null;
@@ -38,10 +39,12 @@ const ARROW =
 export function createBuddyUi(root: HTMLElement): BuddyUi {
   injectBuddyCss();
   const pic = h('span', 'pic');
+  const act = h('span', 'act');
+  const extra = h('span', 'pic2');
   const shown = h('span', '');
   const hidden = h('span', 'hide');
   const say = h('span', 'say t', {}, shown, hidden);
-  const bubble = h('div', 'pipb', { 'data-testid': 'pip-bubble', role: 'status', 'aria-live': 'polite' }, pic, say);
+  const bubble = h('div', 'pipb', { 'data-testid': 'pip-bubble', role: 'status', 'aria-live': 'polite' }, pic, act, extra, say);
   const ring = h('div', 'pipring', { 'data-testid': 'pip-callout' });
   const arrow = h('div', 'piparrow');
   arrow.innerHTML = ARROW;
@@ -53,6 +56,14 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   let revealed = -1;
   let callout: string | null = null;
   let device: 'keyboard' | 'gamepad' | 'touch' | null = null;
+  /** Draw the action glyph (key cap / pad button / touch gesture) for the current device. */
+  const drawAction = (): void => {
+    clear(act);
+    const a = active?.line.action;
+    act.classList.toggle('on', !!a);
+    bubble.dataset.action = a ?? '';
+    if (a) act.append(actionGlyph(a, device ?? 'keyboard'));
+  };
   let mouse: { x: number; y: number } | null = null;
   let askFn: () => void = () => {};
   let tapFn: () => void = () => {};
@@ -154,6 +165,11 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       }
       clear(pic);
       pic.append(buddyPicto(a.line.icon));
+      clear(extra);
+      extra.classList.toggle('on', !!a.line.extra);
+      if (a.line.extra) extra.append(buddyPicto(a.line.extra));
+      bubble.dataset.extra = a.line.extra ?? '';
+      drawAction();
       shown.textContent = '';
       hidden.textContent = a.line.text;
       bubble.dataset.text = a.line.text;
@@ -177,7 +193,8 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       const w = bubble.offsetWidth;
       const hh = bubble.offsetHeight;
       const u = Math.max(5, Math.min(22, Math.min(host.width, host.height) * 0.01));
-      let anchor = pip;
+      let anchor: { x: number; y: number } | null = pip;
+      bubble.classList.toggle('edge', !!pip && pip.on === false);
       if (!anchor) {
         // Pip is off screen: dock beside the Pip button, tail towards it.
         const b = button.getBoundingClientRect();
@@ -193,6 +210,7 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
     setDevice(d) {
       if (d === device) return;
       device = d;
+      if (active) drawAction();
       clear(keySlot);
       if (d === 'keyboard') keySlot.append(cap('T'));
       else if (d === 'gamepad') keySlot.append(padButton('↓'));

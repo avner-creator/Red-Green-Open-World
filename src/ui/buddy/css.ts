@@ -16,7 +16,7 @@ const CSS = `
   background:#2b2418;border-radius:50%;box-shadow:inset 0 0 0 calc(var(--u)*.35) #ffd93b}
 .rg .pipb .pic .ic{width:84%;height:84%;color:#ffd93b}
 .rg .pipb.pop .pic .ic{animation:pip-pop .5s cubic-bezier(.3,1.8,.5,1)}
-.rg .pipb .say{font-size:calc(var(--u)*3.6);line-height:1.12;letter-spacing:.01em;color:#fff;white-space:normal;overflow-wrap:normal}
+.rg .pipb .say{font-size:calc(var(--u)*2.7);line-height:1.12;letter-spacing:.01em;color:#fff;white-space:normal;overflow-wrap:normal}
 .rg .pipb .say .hide{color:transparent;-webkit-text-stroke:0;text-shadow:none}
 .rg .pipb .say .hot{color:#ffd93b}
 /* the tail: a black-outlined white triangle with a dark core, pointing at Pip */
@@ -28,6 +28,20 @@ const CSS = `
 .rg .pipb.story{border-color:#ffd93b}
 .rg .pipb.story::before{border-top-color:#ffd93b}
 .rg .pipb.story.below::before{border-color:transparent transparent #ffd93b}
+/* pictogram-first: big icon, the button to press (per device), the thing; text is secondary */
+.rg .pipb .act,.rg .pipb .pic2{display:none;flex:none;align-items:center;justify-content:center}
+.rg .pipb .act.on,.rg .pipb .pic2.on{display:flex}
+.rg .pipb .pic2{width:calc(var(--u)*6.4);height:calc(var(--u)*6.4)}
+.rg .pipb .pic2 .ic{width:100%;height:100%;color:#fff}
+.rg .pipb .pipact{display:flex;align-items:center;gap:calc(var(--u)*.6);font-size:calc(var(--u)*3.4)}
+.rg .pipb .pipact .ic.tch{width:calc(var(--u)*6);height:calc(var(--u)*6);color:#fff}
+.rg .pipb .pipact .cap{animation:rg-key 1.1s ease-in-out infinite}
+.rg .pipb .pipact .cap.space{min-width:4.6em}
+.rg .pipb .pipact .gp{font-size:calc(var(--u)*3.2)}
+.rg .pipb .wasd{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.35);font-size:calc(var(--u)*2.4)}
+.rg .pipb .wasd .row{display:flex;gap:calc(var(--u)*.35)}
+.rg .pipb .wasd .cap:first-child{animation:rg-key 1.1s ease-in-out infinite}
+.rg .pipb .wasd .row+.row .cap{animation:none}
 @keyframes pip-pop{0%{transform:scale(.3) rotate(-20deg)}100%{transform:scale(1) rotate(0)}}
 
 /* callout: ring + wobbling arrow around a HUD element */

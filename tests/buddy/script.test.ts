@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { wordCount } from '../../src/buddy/dialogue';
 import { currentGoal, missionGoal } from '../../src/buddy/goals';
-import { ATTRACTIONS, CHEST, CHUTE, COUNT, EXPLAIN, IDLE, INTRO, REACT, RETURNING, TIPS, needGems, skillTip, suggest } from '../../src/buddy/script';
+import { ATTRACTIONS, CHEST, CHUTE, COUNT, EXPLAIN, IDLE, INTRO, REACT, RESCUE, RETURNING, TIPS, follow, needGems, skillTip, suggest } from '../../src/buddy/script';
 import type { ScriptLine } from '../../src/buddy/script';
 import type { MissionKind, MissionState } from '../../src/types';
 
@@ -14,6 +14,8 @@ const all: ScriptLine[] = [
   ...Object.values(ATTRACTIONS).map((a) => a.howTo(keys)),
   ...Object.keys(ATTRACTIONS).map((a) => suggest(a as keyof typeof ATTRACTIONS)),
   ...Object.values(CHEST),
+  RESCUE,
+  ...Object.keys(ATTRACTIONS).map((a) => follow(a as keyof typeof ATTRACTIONS)),
   CHUTE(keys),
   needGems(12),
   skillTip('LB'),
@@ -38,6 +40,17 @@ describe("Pip's script", () => {
 
   it('every line has a pictogram', () => {
     for (const l of all) expect(l.icon).toBeTruthy();
+  });
+
+  it('no reading needed: the text never names a key; button lines carry an action glyph', () => {
+    for (const l of all) expect(/\bpress\b|\btap\b|\bspace\b|\bhold the button/i.test(l.text), l.text).toBe(false);
+    for (const l of [INTRO.move, INTRO.look, INTRO.jump, CHUTE(keys), skillTip('Q'), ATTRACTIONS.garage.howTo(keys), ATTRACTIONS.ranch.howTo(keys)]) {
+      expect(l.action, l.text).toBeTruthy();
+    }
+  });
+
+  it('the chest hint shows the key first', () => {
+    expect(CHEST.findKey.icon).toBe('key');
   });
 });
 
