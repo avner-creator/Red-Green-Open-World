@@ -423,7 +423,7 @@ ground reach (a catch needs a jump) and only during a round.
 | `dotsigns` | Press the pad → 3-2-1 → 5 pictures; prize from 3 right | "Stand on the glowing pad and press the button, then five times look at the dots and push the button with the shape that pops out." |
 | `lineup` | Step on the pad → 3-2-1 → 5 bubbles, one tap each; prize from 3 pops | "Step on the glowing pad, slide the magic ring over the bubble and press the button to pop it!" |
 | `glowflies` | Step on the pad → 3-2-1 → 35 s to catch 5 flies (lamps blink faster as time runs out); prize from 3 catches | "Step on the pad, then jump right through the glow-flies to catch five before the lamps stop blinking!" |
-| `toys` | Press the pad → 3-2-1 → one paw trail per round, three toys per session (then free-play trails) | "Press the glowing pad by Pip's basket, then follow the glowing paw prints to find each lost toy and bring all three home!" |
+| `toys` | Press the pad → 3-2-1 → one paw trail per round, three toys per session (then free-play trails) | "Press the glowing pad by Pip's basket, then follow the glowing paw prints to find his lost toys — there are three!" |
 
 Guessing does not pay under the round rules (unit-tested bots against the real rounds, gems per
 minute): gates random 4.9 vs seeing 30; odd one out and dot signs random 3.8–4.8 vs seeing 28;
@@ -460,6 +460,28 @@ rounds with lamps (win from 2 of 3 or 3 of 5); glow-flies is timed.
 | toys | stepping stones (about 0.7 m, every 1.6 m, 2 m corridor) and a signpost arm pointing west | from the south/loop road junction (7, 74) to (−23.5, 69.0) |
 | toys | keep the meadow the paw trails cross walkable (no new fences, walls or solid props) | x −65…−12, z 29…109 |
 | gates | (to be listed by QA) | pad near (48, 104) |
+
+### Phase 3 QA (independent, against the 5-second target; before the fix round)
+
+No blockers; no both-eye difference between answers over time (odd one out, dot signs checked
+frame by frame); each booth is one draw; draws in play 4–5 (budget 6); mini-game layer draws
+1 at spawn and 3 at the Gear Shack (limit 5 / 5); pad to first try about 3 s; rounds 25–40 s.
+
+| Game | Reads as a game from 30 m | Start obvious in 5 s | Demo understood | One clear prompt | Feedback | Celebration visible |
+|---|---|---|---|---|---|---|
+| gates | partly (trees, leans away) | no (pad in grass) | partly | partly (off screen) | yes | no (behind the camera) |
+| toys | partly (behind a crest) | yes | yes | yes | yes | partly |
+| glowflies | yes | yes | yes | yes | yes | yes |
+| oddone | yes (from 15 m) | yes | yes | yes | yes | yes |
+| lineup | partly (cliff) | yes | yes | partly (bubble at the top edge) | yes | yes |
+| dotsigns | partly (poles, back of the sign) | yes | yes | yes | yes | yes |
+
+Being fixed (kit level first, then per game): every start pad a raised glowing drum on the real
+surface; the camera turns back to the booth for the celebration; the play prompt where the child
+looks and clear of the HUD; bigger, simpler demos (gates: the halves joining first); booths
+facing where the child arrives; glow-flies and the line-up bubble inside the default view; the
+dot sign facing the approach (its blank back dominated the view); the toy's hiding spot clear
+of trees for the camera.
 
 ## Test results
 
