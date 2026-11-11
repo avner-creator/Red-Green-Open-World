@@ -16,7 +16,7 @@ export const KIND_LABEL: Record<GlassesKind, string> = {
 export const TIER_LABEL = ['Easy', 'Medium', 'Tricky'] as const;
 export const EMPTY_TEXT = 'Nothing to show yet — play a session first.';
 
-const KNOWN_NAMES: Record<string, string> = {
+export const KNOWN_NAMES: Record<string, string> = {
   gems: 'Glow gems',
   chestkeys: 'Chest keys',
   chests: 'Chests',
@@ -27,6 +27,30 @@ const KNOWN_NAMES: Record<string, string> = {
   lineup: 'Line-up bubbles',
   gates: 'Half-symbol gates',
   dotsigns: 'Dot pictures',
+  // Stream P weave parts.
+  bounce: 'Perfect bounce',
+  chute: 'Parachute ring and hoop',
+  hero: 'Hero sparkles',
+  boost: 'Turbo pads',
+  fakes: 'Real gem among fakes',
+  shack: 'Gear Shack prize',
+  // Glasses twists of the other attractions.
+  balloonprize: 'Prize balloons',
+  ringstar: 'Star peg',
+  bellsweet: 'Bell sweet spot',
+  luckyduck: 'Lucky ducks',
+  glowdodge: 'Glow dodge',
+  skybonushoop: 'Sky bonus hoops',
+  skygolden: 'Sky golden clouds',
+  dragontreasure: 'Dragon treasure trail',
+  dragongolden: 'Dragon golden clouds',
+  foamsecret: 'Foam secret stones',
+  scoopssecret: 'Secret topping',
+  bubblering: 'Bubble ball rings',
+  sumoballoon: 'Sumo water balloons',
+  sumobeat: 'Sumo beat ring',
+  secretpath: 'Secret paths',
+  vaultdoor: 'Two-eye vault doors',
 };
 
 /** `glowflies` -> "Glow-flies", `oddOneOut` -> "Odd one out", unknown `some_thing` -> "Some Thing". */
