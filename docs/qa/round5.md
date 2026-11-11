@@ -46,7 +46,7 @@ Scripts (all on `agent/qa5`):
 | Trampoline surprises | yes: kicks, bonus stars, up to 64 m | yes | 5 | — |
 | Toys (5 kinds) | solid, no pass-through, no launch out of world | — | 3 | — |
 | Map board | yes, visible from spawn (left edge) | yes | — | bench right in front of it (m6) |
-| Six mini-games, weak layer | strong channel unchanged at all six sites (diff R-only) | — | — | full rounds not played |
+| Six mini-games, weak layer | strong channel unchanged at all six sites (diff R-only); odd-one-out: shapes vanish with the weak layer hidden, walking onto the answer button + E = hit, +2 gems | board is pictures only | 3 | other five rounds not played |
 | Phase 2 `bounce` layer | ring R-only, a timed press scored "hit/perfect" | — | 4 | other five layers not played |
 
 ## Defects
