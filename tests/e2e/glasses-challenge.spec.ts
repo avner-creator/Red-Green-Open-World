@@ -333,7 +333,25 @@ test('debug view shows the layer mask; layerCoverage finds the test object', asy
   await frame();
   const sc = await page.evaluate((S) => window.__rgChallenge!.layerCoverage(S), VisionLayer.StrongOnly);
   expect(sc.pixels).toBeGreaterThan(1000);
-  expect((sc.bbox!.x0 + sc.bbox!.x1) / 2).toBeGreaterThan(mask.width / 2);
+  // Other strong-eye things (the plaza chest's lock) may be in view at the frame edge: locate the
+  // test object by the mask pixels that go away when it is hidden.
+  const sWith = await frame();
+  await page.evaluate((id) => window.__rgVision!.setTestVisible(id, false), strongId);
+  const sWithout = await frame();
+  await page.evaluate((id) => window.__rgVision!.setTestVisible(id, true), strongId);
+  let sx0 = sWith.width;
+  let sx1 = -1;
+  let sn = 0;
+  for (let i = 0; i < sWith.data.length; i += 4) {
+    if (sWith.data[i] > 0 && sWithout.data[i] === 0) {
+      const x = (i / 4) % sWith.width;
+      sx0 = Math.min(sx0, x);
+      sx1 = Math.max(sx1, x);
+      sn++;
+    }
+  }
+  expect(sn).toBeGreaterThan(1000);
+  expect((sx0 + sx1) / 2).toBeGreaterThan(mask.width / 2);
   await page.evaluate(() => window.__rgChallenge!.setDebugView('off'));
   const d = channelDiff(normal, await frame());
   expect([d.maxR, d.maxG, d.maxB]).toEqual([0, 0, 0]);
