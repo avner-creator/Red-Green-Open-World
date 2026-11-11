@@ -5,6 +5,8 @@
  *   `gem:collected`, `chest:key` (find, tier 1) and `chest:opened` (line it up, tier 1) as hits.
  * - Playing time comes from `session:tick` (total − remaining), so it is deterministic under
  *   `rg.step`; one tick never adds more than `maxTickDelta` (timer skips are not play).
+ * - Hits are paced for the staircase (`hitSpacingSeconds` of play between counted hits); the
+ *   tally still records every result.
  * - The staircase only moves while `settings.autoChallenge === true`; off → identity at once.
  * - Read-only on settings: never calls `settings.set`, never writes storage.
  */
@@ -53,6 +55,8 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
   let phase: SessionPhase = 'title';
   let seconds = 0;
   let lastElapsed = 0;
+  /** Playing time as the staircase sees it: sum of clamped tick deltas (skips don't count). */
+  let play = 0;
   let enabledDuring = false;
   let forced: ChallengeModifiers | null = null;
   let applied: ChallengeModifiers = { ...IDENTITY_MODIFIERS };
@@ -67,7 +71,7 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
   const onResult = (r: GlassesResult): void => {
     if (phase !== 'playing') return;
     tally.record(r);
-    if (enabled()) moved(staircaseResult(stair, r.hit));
+    if (enabled()) moved(staircaseResult(stair, r.hit, play));
   };
 
   const offs = [
@@ -82,6 +86,7 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
         resetStaircase(stair);
         seconds = 0;
         lastElapsed = 0;
+        play = 0;
         enabledDuring = enabled();
         if (!forced) applied = { ...IDENTITY_MODIFIERS };
         if (enabled()) announce();
@@ -93,6 +98,7 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
       lastElapsed = elapsed;
       if (phase !== 'playing') return;
       seconds = elapsed;
+      play += d;
       if (enabled()) moved(staircaseElapse(stair, d));
     }),
     ctx.events.on('settings:changed', () => {
