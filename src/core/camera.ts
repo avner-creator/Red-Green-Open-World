@@ -352,10 +352,16 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       if (scanT <= 0) {
         scanT = 0.15;
         const keep = yaw;
+        // While the hero is being steered the move basis is the camera's yaw: a swing would bend
+        // their path (and walking on clears the arm anyway), so it waits until they stop; the hero
+        // fade covers the moment in between.
+        const steering = Math.abs(input.moveX) + Math.abs(input.moveY) > 0.1;
         const need = Math.min(ARM.swingBelow, wantDistance * 0.5);
         const here = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
         // A swing under way runs to its end (it only stops early once the arm is all but clear).
-        if (here >= wantDistance * 0.9 || (swingTo === null && here >= need)) {
+        if (steering && swingTo === null) {
+          // (no new swing while steering)
+        } else if (here >= wantDistance * 0.9 || (swingTo === null && here >= need)) {
           swingTo = null;
           swingGood = false;
         } else if (swingTo === null) {
