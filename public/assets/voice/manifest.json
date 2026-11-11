@@ -170,11 +170,11 @@
    "spoken": "Bump every tube person with an arrow before time runs out!",
    "dur": 3.5
   },
-  "catch-the-glow-flies-run-or-jump-right-through-them": {
-   "file": "catch-the-glow-flies-run-or-jump-right-through-them.mp3",
-   "text": "Catch the glow-flies! Run or jump right through them!",
-   "spoken": "Catch the glow-flies! Run or jump right through them!",
-   "dur": 2.95
+  "catch-five-in-thirty-seconds": {
+   "file": "catch-five-in-thirty-seconds.mp3",
+   "text": "Catch five in thirty seconds!",
+   "spoken": "Catch five in thirty seconds!",
+   "dur": 1.58
   },
   "clip-in-at-the-bridge-then-dive-off-the-springboard": {
    "file": "clip-in-at-the-bridge-then-dive-off-the-springboard.mp3",
@@ -254,12 +254,6 @@
    "spoken": "Dress up time! Pick a goofy hat!",
    "dur": 2.02
   },
-  "each-eye-sees-half-a-shape-run-through-the-matching-arch": {
-   "file": "each-eye-sees-half-a-shape-run-through-the-matching-arch.mp3",
-   "text": "Each eye sees half a shape. Run through the matching arch!",
-   "spoken": "Each eye sees half a shape. Run through the matching arch!",
-   "dur": 3
-  },
   "each-new-ride-earns-a-stamp-full-fun-pass-giant-prize": {
    "file": "each-new-ride-earns-a-stamp-full-fun-pass-giant-prize.mp3",
    "text": "Each new ride earns a stamp. Full Fun Pass, giant prize!",
@@ -308,12 +302,6 @@
    "spoken": "Find the key with your magic glasses!",
    "dur": 1.99
   },
-  "find-the-shape-hidden-in-the-dots-push-its-button": {
-   "file": "find-the-shape-hidden-in-the-dots-push-its-button.mp3",
-   "text": "Find the shape hidden in the dots. Push its button!",
-   "spoken": "Find the shape hidden in the dots. Push its button!",
-   "dur": 2.71
-  },
   "five": {
    "file": "five.mp3",
    "text": "Five!",
@@ -325,6 +313,18 @@
    "text": "Five carnival games! Walk up to a booth to play!",
    "spoken": "Five carnival games! Walk up to a booth to play!",
    "dur": 2.69
+  },
+  "five-times-find-the-shape-that-pops-out-of-the-dots": {
+   "file": "five-times-find-the-shape-that-pops-out-of-the-dots.mp3",
+   "text": "Five times, find the shape that pops out of the dots!",
+   "spoken": "Five times, find the shape that pops out of the dots!",
+   "dur": 2.81
+  },
+  "five-times-pick-the-picture-that-is-different": {
+   "file": "five-times-pick-the-picture-that-is-different.mp3",
+   "text": "Five times, pick the picture that is different!",
+   "spoken": "Five times, pick the picture that is different!",
+   "dur": 2.42
   },
   "floppy-hero": {
    "file": "floppy-hero.mp3",
@@ -349,6 +349,12 @@
    "text": "Follow me!",
    "spoken": "Follow me!",
    "dur": 0.82
+  },
+  "follow-the-glowing-paw-prints-to-find-his-lost-toys": {
+   "file": "follow-the-glowing-paw-prints-to-find-his-lost-toys.mp3",
+   "text": "Follow the glowing paw prints to find his lost toys!",
+   "spoken": "Follow the glowing paw prints to find his lost toys!",
+   "dur": 2.95
   },
   "four": {
    "file": "four.mp3",
@@ -517,12 +523,6 @@
    "text": "I hear the carnival music!",
    "spoken": "I hear the carnival music!",
    "dur": 1.54
-  },
-  "i-lost-my-toys-follow-the-glowing-paw-prints-to-find-them": {
-   "file": "i-lost-my-toys-follow-the-glowing-paw-prints-to-find-them.mp3",
-   "text": "I lost my toys! Follow the glowing paw prints to find them!",
-   "spoken": "I lost my toys! Follow the glowing paw prints to find them!",
-   "dur": 3.43
   },
   "i-smell-adventure": {
    "file": "i-smell-adventure.mp3",
@@ -721,12 +721,6 @@
    "text": "More gems, more fun!",
    "spoken": "More gems, more fun!",
    "dur": 1.25
-  },
-  "move-the-magic-ring-onto-a-bubble-then-pop-it": {
-   "file": "move-the-magic-ring-onto-a-bubble-then-pop-it.mp3",
-   "text": "Move the magic ring onto a bubble, then pop it!",
-   "spoken": "Move the magic ring onto a bubble, then pop it!",
-   "dur": 2.64
   },
   "my-tail-cant-stop-wagging": {
    "file": "my-tail-cant-stop-wagging.mp3",
@@ -956,6 +950,12 @@
    "spoken": "Rides and games everywhere! Fly a balloon, bounce, race and play!",
    "dur": 3.91
   },
+  "run-through-the-arch-with-that-whole-shape": {
+   "file": "run-through-the-arch-with-that-whole-shape.mp3",
+   "text": "Run through the arch with that whole shape!",
+   "spoken": "Run through the arch with that whole shape!",
+   "dur": 1.87
+  },
   "scratch-my-ears-hehe": {
    "file": "scratch-my-ears-hehe.mp3",
    "text": "Scratch my ears? Hehe!",
@@ -985,6 +985,12 @@
    "text": "Sky high!",
    "spoken": "Sky high!",
    "dur": 0.79
+  },
+  "slide-the-magic-ring-over-the-bubble-then-pop-it": {
+   "file": "slide-the-magic-ring-over-the-bubble-then-pop-it.mp3",
+   "text": "Slide the magic ring over the bubble, then pop it!",
+   "spoken": "Slide the magic ring over the bubble, then pop it!",
+   "dur": 2.71
   },
   "smooth-landing": {
    "file": "smooth-landing.mp3",
@@ -1070,6 +1076,12 @@
    "spoken": "Stand on a rocket pad and blast up onto the big net!",
    "dur": 3.02
   },
+  "stand-on-the-glowing-pad-and-start-the-round": {
+   "file": "stand-on-the-glowing-pad-and-start-the-round.mp3",
+   "text": "Stand on the glowing pad and start the round!",
+   "spoken": "Stand on the glowing pad and start the round!",
+   "dur": 2.35
+  },
   "stand-on-the-glowing-ring-to-start-the-foam-race": {
    "file": "stand-on-the-glowing-ring-to-start-the-foam-race.mp3",
    "text": "Stand on the glowing ring to start the foam race!",
@@ -1094,11 +1106,35 @@
    "spoken": "Step on the floor pads with those shapes, in that order!",
    "dur": 2.74
   },
+  "step-on-the-glowing-pad": {
+   "file": "step-on-the-glowing-pad.mp3",
+   "text": "Step on the glowing pad.",
+   "spoken": "Step on the glowing pad.",
+   "dur": 1.37
+  },
+  "step-on-the-glowing-pad-by-pips-basket": {
+   "file": "step-on-the-glowing-pad-by-pips-basket.mp3",
+   "text": "Step on the glowing pad by Pip's basket.",
+   "spoken": "Step on the glowing pad by Pip's basket.",
+   "dur": 2.11
+  },
   "step-on-the-matching-symbol": {
    "file": "step-on-the-matching-symbol.mp3",
    "text": "Step on the matching symbol!",
    "spoken": "Step on the matching symbol!",
    "dur": 1.39
+  },
+  "step-on-the-pad-join-the-two-halves-with-both-eyes": {
+   "file": "step-on-the-pad-join-the-two-halves-with-both-eyes.mp3",
+   "text": "Step on the pad. Join the two halves with both eyes!",
+   "spoken": "Step on the pad. Join the two halves with both eyes!",
+   "dur": 3
+  },
+  "step-on-the-pad-then-jump-right-through-the-glow-flies": {
+   "file": "step-on-the-pad-then-jump-right-through-the-glow-flies.mp3",
+   "text": "Step on the pad, then jump right through the glow-flies!",
+   "spoken": "Step on the pad, then jump right through the glow-flies!",
+   "dur": 2.98
   },
   "stomp-when-the-needle-is-in-the-glowing-spot": {
    "file": "stomp-when-the-needle-is-in-the-glowing-spot.mp3",
@@ -1208,6 +1244,12 @@
    "spoken": "Then eat it for a silly power!",
    "dur": 1.68
   },
+  "there-are-three": {
+   "file": "there-are-three.mp3",
+   "text": "There are three!",
+   "spoken": "There are three!",
+   "dur": 0.94
+  },
   "this-balloon-flies-you-sky-high-walk-into-the-basket-and-wait": {
    "file": "this-balloon-flies-you-sky-high-walk-into-the-basket-and-wait.mp3",
    "text": "This balloon flies you sky-high! Walk into the basket and wait.",
@@ -1232,11 +1274,11 @@
    "spoken": "Three!",
    "dur": 0.67
   },
-  "three-shapes-one-is-different-push-that-ones-button": {
-   "file": "three-shapes-one-is-different-push-that-ones-button.mp3",
-   "text": "Three shapes, one is different. Push that one's button!",
-   "spoken": "Three shapes, one is different. Push that one's button!",
-   "dur": 2.76
+  "three-runs-get-two-right-to-win-gems": {
+   "file": "three-runs-get-two-right-to-win-gems.mp3",
+   "text": "Three runs. Get two right to win gems!",
+   "spoken": "Three runs. Get two right to win gems!",
+   "dur": 2.09
   },
   "treasure-hunter": {
    "file": "treasure-hunter.mp3",
