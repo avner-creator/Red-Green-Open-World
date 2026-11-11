@@ -171,6 +171,15 @@ export function create(env: WeaveEnv): WeavePart {
       const top = yc + D.frame / 2;
       const w = f.toWorld(x0 + 0.08, zc);
       colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, baseY + top / 2, w.z), new THREE.Vector3(0.09, top / 2, D.frame / 2), rot));
+      // The gap between the board and the gift boxes is narrower than the hero: fill it (box
+      // height) so nobody gets wedged in it, hero or camera (QA6 M2).
+      const gx0 = x0 + 0.17;
+      const gx1 = D.boxX - D.box / 2 - 0.04;
+      const gz0 = D.boxZ[0] - D.box / 2 - 0.04;
+      const gz1 = D.boxZ[D.boxZ.length - 1] + D.box / 2 + 0.04;
+      const hy = D.box / 2 + 0.07;
+      const g = f.toWorld((gx0 + gx1) / 2, (gz0 + gz1) / 2);
+      colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(g.x, baseY + hy, g.z), new THREE.Vector3((gx1 - gx0) / 2, hy, (gz1 - gz0) / 2), rot));
     }
     D.boxZ.forEach((z, i) => {
       const w = f.toWorld(D.boxX, z);

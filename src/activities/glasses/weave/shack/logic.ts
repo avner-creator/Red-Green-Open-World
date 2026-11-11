@@ -26,20 +26,16 @@ export const SHACK_WEAVE = {
   frame: 2.3,
   panel: 2.1,
   picture: 1.98,
-  /**
-   * Gift boxes: distance from the shack centre, positions along the wall, body edge. The walkway
-   * between the board and the boxes is 0.9 m (wider than the hero: QA6 M2, a 0.69 m slot trapped
-   * heroes and the camera there).
-   */
-  boxX: 3.4,
+  /** Gift boxes: distance from the shack centre, positions along the wall, body edge. */
+  boxX: 3.15,
   boxZ: [0.6, 1.5, 2.4] as const,
   box: 0.66,
   /** Prompt (box top) and where the hero stands to press (in front of each box). */
   promptY: 0.9,
-  standX: 4.3,
+  standX: 4.05,
   reach: 1.25,
   /** The play spot (hero, default camera) in front of the middle box, and the approach distance. */
-  viewX: 5.45,
+  viewX: 5.2,
   approach: 14,
   /** Active (attached) inside this radius around the anchor, off beyond `off` (hysteresis). */
   on: 25,

@@ -418,7 +418,7 @@ async function checkWallSpots(p: Page, label: string): Promise<string[]> {
   for (const s of list) {
     await p.evaluate(({ x, z }) => {
       const rg = window.__rg!;
-      rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, 0);
+      rg.teleport(x, rg.ctx.world.heightAt(x, z) + 1.0, z, 0); // dropped in: lands on whatever stands there
       rg.step(1 / 60, 30, false);
     }, s);
     for (let i = 0; i < s.yaws.length; i++) {
@@ -476,8 +476,8 @@ test('QA6 M2: walking past the Gear Shack board from 8 directions never stalls f
       const rg = window.__rg!;
       const cam = window.__rgCamera!;
       const p = rg.ctx.player.position;
-      rg.teleport(from[0], rg.ctx.world.heightAt(from[0], from[1]) + 0.1, from[1], Math.atan2(to[0] - from[0], to[1] - from[1]));
-      rg.step(1 / 60, 10, false);
+      rg.teleport(from[0], rg.ctx.world.heightAt(from[0], from[1]) + 1.0, from[1], Math.atan2(to[0] - from[0], to[1] - from[1]));
+      rg.step(1 / 60, 40, false);
       const trail: [number, number][] = [];
       let veer = 0;
       let veerT = 0;
