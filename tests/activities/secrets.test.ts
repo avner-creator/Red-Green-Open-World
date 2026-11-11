@@ -5,6 +5,9 @@ import type { Stone } from '../../src/activities/secrets/pathLogic';
 import { DOOR_RULES, DoorLock, buttonAt, fromDoorLocal, makeSequence, toDoorLocal } from '../../src/activities/secrets/doorLogic';
 import { buildRoutes, buildVaults } from '../../src/activities/secrets/routes';
 import { ARROWS, arrowTrail, nearestOnPolylines } from '../../src/activities/secrets/arrowLogic';
+import { ANCHORS, ROADS } from '../../src/world/layout';
+import { SITES, inZone } from '../../src/world/sites';
+import { LOTS } from '../../src/world/village-data';
 
 const terrain = buildTerrain();
 const height = (x: number, z: number): number => sampleHeight(terrain, x, z);
@@ -187,6 +190,87 @@ describe('vault doors', () => {
         }
       }
     }
+  });
+});
+
+describe('secret content keeps clear of the attractions, roads, houses and each other', () => {
+  // Read from the world's own data, so moving a site, road or house onto a secret fails here.
+  const routes = buildRoutes(height);
+  const vaults = buildVaults(height);
+  const roadGap = (x: number, z: number): number => {
+    let best = Infinity;
+    for (const r of ROADS) {
+      for (let i = 0; i + 1 < r.points.length; i++) {
+        const [ax, az] = r.points[i];
+        const [bx, bz] = r.points[i + 1];
+        const dx = bx - ax;
+        const dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+        best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t) - r.width / 2);
+      }
+    }
+    return best;
+  };
+  /** Inside a house footprint (+ margin)? Lots are rectangles w × d turned by their yaw. */
+  const inHouse = (x: number, z: number, m: number): string | null => {
+    for (const l of LOTS) {
+      const dx = x - l.x;
+      const dz = z - l.z;
+      const lx = Math.cos(l.yaw) * dx - Math.sin(l.yaw) * dz;
+      const lz = Math.sin(l.yaw) * dx + Math.cos(l.yaw) * dz;
+      if (Math.abs(lx) < l.w / 2 + m && Math.abs(lz) < l.d / 2 + m) return l.id;
+    }
+    return null;
+  };
+  const inSite = (x: number, z: number, m: number): string | null => SITES.find((s) => s.footprint.some((f) => inZone(f, x, z, m)))?.anchor ?? null;
+  /** Sample points over a vault's crag and the standing area in front of its door. */
+  const vaultPoints = (v: (typeof vaults)[number]): { x: number; z: number; crag: boolean }[] => {
+    const out: { x: number; z: number; crag: boolean }[] = [];
+    for (let lz = v.crag.back; lz <= 4; lz += 0.5) {
+      for (let lx = -v.crag.halfW; lx <= v.crag.halfW + 1e-6; lx += 0.5) {
+        const o = fromDoorLocal(v.yaw, lx, lz);
+        out.push({ x: v.x + o.x, z: v.z + o.z, crag: lz <= 0.3 });
+      }
+    }
+    return out;
+  };
+
+  test('path starts, stones and pedestals stay off the attraction sites', () => {
+    for (const r of routes) {
+      const pts = [r.start, ...r.stones, r.pedestal];
+      for (const p of pts) expect(inSite(p.x, p.z, 1.5), `${r.id} @${p.x.toFixed(1)},${p.z.toFixed(1)}`).toBeNull();
+    }
+  });
+
+  test('starts and low stones are off roads and outside houses', () => {
+    for (const r of routes) {
+      expect(roadGap(r.start.x, r.start.z), `${r.id} start`).toBeGreaterThan(0.5);
+      expect(inHouse(r.start.x, r.start.z, 0.5), `${r.id} start`).toBeNull();
+      for (const s of r.stones) {
+        // Stones a kid walks under (underside 2.2 m up or more) may pass over a road; lower ones may not.
+        if (s.y - STONE.thickness - floor(s.x, s.z) > 2.2) continue;
+        expect(roadGap(s.x, s.z) - s.r, `${r.id} stone @${s.x.toFixed(1)},${s.z.toFixed(1)}`).toBeGreaterThan(0);
+        expect(inHouse(s.x, s.z, s.r), `${r.id} stone`).toBeNull();
+      }
+    }
+  });
+
+  test('each vault crag and its doorstep is clear of sites, anchors, roads, houses and the paths', () => {
+    for (const v of vaults) {
+      for (const p of vaultPoints(v)) {
+        const at = `${v.id} @${p.x.toFixed(1)},${p.z.toFixed(1)}`;
+        expect(inSite(p.x, p.z, 1), at).toBeNull();
+        expect(roadGap(p.x, p.z), at).toBeGreaterThan(1.5);
+        expect(inHouse(p.x, p.z, 1), at).toBeNull();
+        // The rock itself stays out of every anchor's clear circle (its doorstep may reach into one).
+        if (p.crag) for (const [name, a] of Object.entries(ANCHORS)) expect(Math.hypot(p.x - a.x, p.z - a.z), `${at} × ${name}`).toBeGreaterThan(a.radius);
+        for (const r of routes) {
+          for (const s of [r.start, ...r.stones, r.pedestal]) expect(Math.hypot(p.x - s.x, p.z - s.z), `${at} × ${r.id}`).toBeGreaterThan(1.5);
+        }
+      }
+    }
+    // And the two vaults are far apart.
+    expect(Math.hypot(vaults[0].x - vaults[1].x, vaults[0].z - vaults[1].z)).toBeGreaterThan(30);
   });
 });
 

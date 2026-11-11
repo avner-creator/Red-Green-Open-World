@@ -10,18 +10,13 @@ const port = Number(process.env.RG_PORT ?? 4174);
 const args = process.argv.slice(2);
 const detail = args.includes('--detail');
 const qualities = (args.find((a) => !a.startsWith('--')) ?? 'low,medium,high').split(',');
+const viewArg = args.find((a) => a.startsWith('--views='));
+const onlyViews = viewArg ? viewArg.slice(8).split(',') : null;
 
 /** Groups of top-level scene objects (by name) whose cost is reported separately. */
 const GROUPS = {
-  buggy: ['buggy', 'buggy-blob', 'buggy-dust'],
-  balloon: ['balloon', 'balloonPad', 'canopy', 'landingRings'],
+  secrets: ['secret-*', 'vault-*'],
   player: ['player', 'skill-sparkles', 'skill-shockwave', 'skill-speedlines'],
-  thrills: ['trampoline', 'bouncePads', 'rocketPads'],
-  horse: ['horse'],
-  bungee: ['bungee-platform', 'bungee-landing', 'bungee-cord'],
-  silly: ['silly-zone'],
-  secrets: ['secret-pedestal', 'secret-vault'],
-  shack: ['gearShack'],
 };
 
 const server = await preview({ preview: { port, strictPort: true, open: false }, logLevel: 'warn' });
@@ -36,7 +31,7 @@ try {
     await page.goto(`http://localhost:${port}/?test=1&quality=${quality}`);
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 180000 });
     const result = await page.evaluate(
-      ([groups, wantDetail]) => {
+      ([groups, wantDetail, onlyViews, all]) => {
         const rg = window.__rg;
         const ctx = rg.ctx;
         const r = ctx.renderer;
@@ -51,9 +46,49 @@ try {
         sm.render = function (...a) {
           const c0 = r.info.render.calls;
           const t0 = r.info.render.triangles;
+          inShadow = true;
           origRender.apply(this, a);
+          inShadow = false;
           shadow.calls += r.info.render.calls - c0;
           shadow.tris += r.info.render.triangles - t0;
+        };
+        // Per-owner attribution: every draw is charged to the top-level scene object it belongs to.
+        const owners = new Map();
+        const visionRoots = new Set();
+        let inShadow = false;
+        let tally = false;
+        const origRBD = r.renderBufferDirect;
+        r.renderBufferDirect = function (camera, scene, geometry, material, object, group) {
+          if (!tally) return origRBD.call(this, camera, scene, geometry, material, object, group);
+          const t0 = r.info.render.triangles;
+          origRBD.call(this, camera, scene, geometry, material, object, group);
+          let top = object;
+          let second = object;
+          while (top.parent && top.parent.parent) {
+            second = top;
+            top = top.parent;
+          }
+          const nm = (o) => o.name || o.type;
+          // Vision layer groups hold every registered object: charge those to the registered object.
+          const isVision = nm(top).startsWith('Vision.');
+          if (isVision) visionRoots.add(top);
+          const owner = isVision && second !== top ? `${nm(top)}:${nm(second)}` : nm(top);
+          const key = owner + (second !== top ? ' > ' + nm(second) : '') + (object !== second && object !== top ? ' > ' + nm(object) : '') + (object.frustumCulled ? '' : ' [nofc]') + ` r${(object.geometry?.boundingSphere?.radius ?? 0).toFixed(1)}`;
+          const topKey = owner;
+          for (const k of [topKey + ' (all)', key]) {
+            let o = owners.get(k);
+            if (!o) owners.set(k, (o = { main: 0, mainTris: 0, shadow: 0, shadowTris: 0 }));
+            if (inShadow) { o.shadow++; o.shadowTris += r.info.render.triangles - t0; }
+            else { o.main++; o.mainTris += r.info.render.triangles - t0; }
+          }
+        };
+        const attribute = () => {
+          owners.clear();
+          tally = true;
+          r.info.reset();
+          rg.render();
+          tally = false;
+          return [...owners.entries()].map(([name, c]) => ({ name, ...c }));
         };
         const measure = () => {
           shadow.calls = 0;
@@ -64,7 +99,9 @@ try {
           const tris = r.info.render.triangles;
           return { main: calls - shadow.calls, mainTris: tris - shadow.tris, shadow: shadow.calls, shadowTris: shadow.tris };
         };
-        const byName = (names) => ctx.scene.children.filter((o) => names.includes(o.name));
+        attribute(); // finds the vision layer groups
+        const byName = (names) =>
+          [ctx.scene, ...visionRoots].flatMap((g) => g.children).filter((o) => names.some((n) => (n.endsWith('*') ? o.name.startsWith(n.slice(0, -1)) : o.name === n)));
         const cost = (objs) => {
           const vis = objs.map((o) => o.visible);
           const all = measure();
@@ -109,6 +146,13 @@ try {
           'road-west': () => at(-20, 9, -52, 30),
           lighthouse: () => at(-43, -127, -62, -134),
           'lh-top': () => at(-65.6, -134.6, -62, -134, ctx.world.heightAt(-62, -134) + 1.1 + 13.2 + 0.25 + 0.3),
+          // Carnival Island attractions.
+          carnival: () => lookAt(A.carnivalRow, A.spawn.position, 20),
+          arena: () => at(25, 38, 25, 58),
+          foam: () => at(-25.5, -10, -25.5, -40),
+          airstrip: () => at(-12, 20, -12, 46),
+          race: () => lookAt(A.raceStart, A.spawn.position, 12),
+          icecream: () => lookAt(A.iceCream, A.spawn.position, 12),
           vault: () => {
             const d = window.__rgSecrets?.info().doors[0];
             if (d) lookAt({ position: { x: d.x, z: d.z } }, { x: d.x + Math.sin(d.yaw) * 20, z: d.z + Math.cos(d.yaw) * 20 }, 12);
@@ -116,6 +160,7 @@ try {
         };
         const out = [];
         for (const [view, go] of Object.entries(views)) {
+          if (onlyViews && !onlyViews.includes(view)) continue;
           go();
           rg.step(1 / 60, 90, false);
           rg.render(); // compile anything new before measuring
@@ -130,11 +175,10 @@ try {
           for (const k of Object.keys(sum)) parts.world[k] = total[k] - sum[k];
           const row = { view, total, parts };
           if (wantDetail) {
-            row.top = ctx.scene.children
-              .filter((o) => o.visible)
-              .map((o) => ({ name: o.name || o.type, ...cost([o]) }))
-              .sort((a, b) => b.main + b.shadow - (a.main + a.shadow))
-              .slice(0, 12);
+            const att = attribute();
+            row.top = att.filter((o) => o.name.endsWith(' (all)') && o.main + o.shadow >= 2).sort((a, b) => b.main - a.main || b.mainTris - a.mainTris);
+            row.topTris = att.filter((o) => o.name.endsWith(' (all)')).sort((a, b) => b.mainTris - a.mainTris).slice(0, 10);
+            row.meshes = att.filter((o) => !o.name.endsWith(' (all)')).sort((a, b) => b.mainTris - a.mainTris).slice(0, all ? 400 : 15);
           }
           out.push(row);
         }
@@ -153,17 +197,23 @@ try {
           }
         }
         sm.render = origRender;
+        r.renderBufferDirect = origRBD;
         r.info.autoReset = true;
         return { out, meshes };
       },
-      [GROUPS, detail],
+      [GROUPS, detail, onlyViews, !!process.env.RG_ALL],
     );
     if (errors.length) console.log(`[${quality}] page errors:`, errors.slice(0, 3));
     for (const row of result.out) rows.push({ quality, ...row });
     if (detail) {
       for (const row of result.out) {
         console.log(`\n[${quality} / ${row.view}] costliest top-level objects (main draws/tris | shadow draws/tris)`);
-        for (const t of row.top) console.log(`  ${t.name.padEnd(28)} ${String(t.main).padStart(4)} / ${String(t.mainTris).padStart(7)} | ${String(t.shadow).padStart(4)} / ${String(t.shadowTris).padStart(7)}`);
+        const line = (t) => console.log(`  ${t.name.slice(0, 60).padEnd(60)} ${String(t.main).padStart(4)} / ${String(t.mainTris).padStart(7)} | ${String(t.shadow).padStart(4)} / ${String(t.shadowTris).padStart(7)}`);
+        row.top.forEach(line);
+        console.log('  -- by triangles');
+        row.topTris.forEach(line);
+        console.log('  -- heaviest single meshes');
+        row.meshes.forEach(line);
       }
       if (quality === qualities[0]) {
         console.log('\nHero meshes (static triangles, castShadow, material):');
@@ -184,5 +234,7 @@ try {
   }
 } finally {
   await browser?.close();
-  await server.close();
+  // vite's preview close can wait on keep-alive sockets; don't hang the report on it.
+  await Promise.race([server.close(), new Promise((r) => setTimeout(r, 2000))]);
 }
+process.exit(0);

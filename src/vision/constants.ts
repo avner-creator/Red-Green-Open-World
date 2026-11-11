@@ -15,6 +15,8 @@ export const COMPOSITE = {
   polarityBlurPx: 6,
   /** Strong-eye contrast is scaled around this level (display sRGB). */
   contrastMid: 0.5,
+  /** Runtime multipliers (Auto challenge) never take strong-eye contrast below this. */
+  contrastFloor: 0.4,
 } as const;
 
 /** Rec. 709 luminance weights (linear light). */

@@ -37,6 +37,12 @@ export interface RouteDef {
   walks: { hop: number; top: number; minX: number; maxX: number; minZ: number; maxZ: number }[];
 }
 
+/** Outer extents of a vault's crag (door-local): x ±halfW, z from `back` (negative) to 0.3. */
+export interface Crag {
+  halfW: number;
+  back: number;
+}
+
 export interface VaultDef {
   id: 'cliff' | 'village';
   /** Door base centre (on the ground); `yaw` faces out of the door like anchors (+Z of yaw). */
@@ -44,6 +50,7 @@ export interface VaultDef {
   y: number;
   z: number;
   yaw: number;
+  crag: Crag;
 }
 
 const PED_R = 1.6;
@@ -54,46 +61,52 @@ function lot(id: string): (typeof LOTS)[number] {
   return l;
 }
 
-/** Rooftops: climb the back of the flat-roofed house, cross its roof, then hop the street to the blue house. */
+/** Height of the village sidewalk slabs above the terrain (their colliders' top). */
+const SIDEWALK_TOP = 0.18;
+
+/**
+ * Rooftops: zig-zag up the street front of the flat-roofed house (over its sidewalk, between the
+ * bench and the planter), past its parapet, then hop the street to the blue house's roof peak.
+ * The house's back yard is the carnival boardwalk now, so the climb stays on the street side.
+ */
 function rooftops(h: HeightFn): RouteDef {
   const flat = lot('flat');
   const blue = lot('bluehouse');
-  const fd = lotDims(flat);
   const bd = lotDims(blue);
-  // The flat house faces −X: its back wall is at x + d/2, its front (street side) at x − d/2.
-  const back = flat.x + flat.d / 2;
+  // The flat house faces −X: its front (street side) wall is at x − d/2. Its width runs along Z.
   const front = flat.x - flat.d / 2;
-  const g = h(back + 1.8, flat.z + 5.5);
-  const parapetTop = fd.wallTop + 0.6;
-  // Leg A runs along the back wall going north, leg B doubles back further out and higher.
+  const north = flat.z - flat.w / 2;
+  const south = flat.z + flat.w / 2;
+  const xa = front - 1.25; // low leg, hugging the facade
+  const xb = front - 3.3; // high leg, over the kerb side of the sidewalk
+  const g = h(xa, flat.z) + SIDEWALK_TOP;
+  // Leg A runs south along the facade (low), leg B doubles back north (higher), up near the parapet.
   const climbA = stonesAlong(
     [
-      { x: back + 1.8, y: g + 0.55, z: flat.z + 5.6 },
-      { x: back + 1.8, y: g + 3.5, z: flat.z - 4.9 },
+      { x: xa, y: g + 0.55, z: north + 1.3 },
+      { x: xa, y: g + 3.4, z: south - 1.4 },
     ],
-    { jitter: 0.12, seed: 3 },
+    { jitter: 0.1, seed: 3 },
   );
   const climbB = stonesAlong(
     [
-      { x: back + 4.4, y: g + 4.25, z: flat.z - 4.9 },
-      { x: back + 4.4, y: g + 6.5, z: flat.z - 1.2 },
-      { x: back + 1.9, y: parapetTop + 0.25, z: flat.z + 1.0 },
+      { x: xb, y: g + 4.15, z: south - 1.6 },
+      { x: xb, y: g + 6.4, z: north + 1.2 },
     ],
-    { jitter: 0.12, seed: 5 },
+    { jitter: 0.1, seed: 5 },
   );
-  // Across the street, from the front parapet to the blue house's hip-roof peak.
+  // Across the street to the blue house's hip-roof peak.
   const ped: Pedestal = { x: blue.x, y: bd.roofTop + 1.15, z: blue.z, r: PED_R, floating: false, post: 1.15 };
+  const last = climbB[climbB.length - 1];
   const cross = stonesAlong(
     [
-      { x: front - 1.1, y: parapetTop + 0.3, z: flat.z },
+      { x: last.x, y: last.y, z: last.z },
       { x: ped.x + PED_R + STONE.radius + 0.9, y: ped.y + 0.15, z: ped.z + 0.3 },
     ],
     { arc: 0.5, jitter: 0.2, seed: 7 },
-  );
-  const hop = climbA.length + climbB.length - 1;
-  // The roof inside the parapet (the house is rotated: its width runs along Z).
-  const roof = { hop, top: fd.roofTop, minX: front + 0.25, maxX: back - 0.25, minZ: flat.z - flat.w / 2 + 0.25, maxZ: flat.z + flat.w / 2 - 0.25 };
-  return { id: 'rooftops', stones: [...climbA, ...climbB, ...cross], pedestal: ped, start: { x: back + 1.8, z: flat.z + 7.5 }, walks: [roof] };
+  ).slice(1);
+  // Start on the sidewalk beside the first stone (the planter is just north of it).
+  return { id: 'rooftops', stones: [...climbA, ...climbB, ...cross], pedestal: ped, start: { x: xa - 1.6, z: north + 1.0 }, walks: [] };
 }
 
 /** A spiral beside the giant trampoline to a floating pedestal 12 m up. */
@@ -157,15 +170,22 @@ export function buildRoutes(h: HeightFn): RouteDef[] {
   return [rooftops(h), trampoline(h), lake(h), lighthouse(h)];
 }
 
+/** The full-size crag (door-local half width and back), and a slimmer one for a tight spot. */
+export const CRAG_WIDE: Crag = { halfW: 6.4, back: -8.6 };
+export const CRAG_SLIM: Crag = { halfW: 4.6, back: -6.6 };
+
 /**
- * Vault doors in rock faces: one at the foot of the cliff under the rocket-pad plateau (facing the
- * landing rings), one in the hill at the north end of the village street.
+ * Vault doors in rock crags: one at the foot of the cliff under the rocket-pad plateau (facing the
+ * landing rings), one on the meadow between the south road and the garage (facing the road).
  */
 export function buildVaults(h: HeightFn): VaultDef[] {
-  const defs: { id: VaultDef['id']; x: number; z: number; yaw: number }[] = [
+  const defs: Omit<VaultDef, 'y'>[] = [
     // Cliff foot at (100, 21); the door stands 4.6 m out from it on the flat.
-    { id: 'cliff', x: 100 + Math.sin(1.6) * 4.6, z: 21 + Math.cos(1.6) * 4.6, yaw: 1.6 },
-    { id: 'village', x: -22, z: -64 + 4.6, yaw: 0 },
+    { id: 'cliff', x: 100 + Math.sin(1.6) * 4.6, z: 21 + Math.cos(1.6) * 4.6, yaw: 1.6, crag: CRAG_WIDE },
+    // Flat meadow west of the garage yard, door facing west to the south road (about 8 m away). A
+    // slim crag keeps it off the garage lamp (east), the race's grass cut (south-west) and the
+    // airstrip lights (west). It sat in the village's north hill until the foam course took that.
+    { id: 'village', x: 13.2, z: 27.4, yaw: -Math.PI / 2, crag: CRAG_SLIM },
   ];
   return defs.map((d) => ({ ...d, y: h(d.x, d.z) }));
 }
