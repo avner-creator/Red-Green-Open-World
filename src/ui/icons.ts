@@ -8,7 +8,7 @@ export type UiIconName =
   | IconName
   | 'play' | 'home' | 'gear' | 'grownup' | 'pause' | 'restart' | 'credits' | 'sun' | 'mouse'
   | 'target' | 'speaker' | 'note' | 'bolt' | 'close' | 'back' | 'sparkle' | 'bars1' | 'bars2' | 'bars3'
-  | 'stick' | 'heart' | 'pupVoice';
+  | 'stick' | 'heart' | 'pupVoice' | 'hanger' | 'turnL' | 'turnR';
 
 const S: Record<UiIconName, string> = {
   gem: '<path d="M6 3h12l4 6-10 12L2 9z"/><path class="l" d="M2 9h20M9 3l-2 6 5 12M15 3l2 6-5 12"/>',
@@ -90,6 +90,12 @@ const S: Record<UiIconName, string> = {
   stick: '<circle cx="12" cy="12" r="10.500"/><circle class="k" cx="12" cy="12" r="6.800"/><circle cx="12" cy="12" r="4.800"/>',
   // Puppy head (floppy ears, eyes, nose) with two sound waves: Pip's voice.
   pupVoice: '<path d="M3.500 6.500L1 13.500l3.200 1.200L5.600 9z"/><path d="M14.500 6.500L17 13.500l-3.200 1.200L12.400 9z"/><ellipse cx="9" cy="12" rx="5.600" ry="6.200"/><circle class="k" cx="6.900" cy="10.800" r="1"/><circle class="k" cx="11.100" cy="10.800" r="1"/><ellipse class="k" cx="9" cy="14.600" rx="1.600" ry="1.100"/><path class="o" d="M18.500 9a4 4 0 0 1 0 6M21 6.500a7.500 7.500 0 0 1 0 11"/><path class="w" d="M18.500 9a4 4 0 0 1 0 6M21 6.500a7.500 7.500 0 0 1 0 11"/>',
+  // Coat hanger with a little hat on the hook: the wardrobe / dress-up.
+  hanger:
+    '<path class="o" d="M12 9.200V7.600a2.300 2.300 0 1 0-2.300-2.300"/><path class="w" d="M12 9.200V7.600a2.300 2.300 0 1 0-2.300-2.300"/><path d="M12 8.600l10.100 9c.9.8.300 2.200-.9 2.200H2.800c-1.200 0-1.800-1.400-.9-2.200z"/><path class="k" d="M12 11.900l-6.300 5.600h12.600z"/>',
+  // Turn the hero on the stage (curved arrows).
+  turnL: '<path class="o" d="M19 15a7.500 5 0 0 1-14.500-1"/><path class="w" d="M19 15a7.500 5 0 0 1-14.500-1"/><path d="M1 15.500l3.300-6.200 4 5.400z"/><ellipse class="l" cx="12" cy="10" rx="3" ry="5"/>',
+  turnR: '<path class="o" d="M5 15a7.500 5 0 0 0 14.500-1"/><path class="w" d="M5 15a7.500 5 0 0 0 14.500-1"/><path d="M23 15.500l-3.300-6.200-4 5.400z"/><ellipse class="l" cx="12" cy="10" rx="3" ry="5"/>',
   heart: '<path d="M12 21.500C4 15.500 1.500 11.500 1.500 8a5.200 5.200 0 0 1 10.500-1.500A5.200 5.200 0 0 1 22.500 8c0 3.500-2.500 7.500-10.500 13.500z"/>',
 };
 

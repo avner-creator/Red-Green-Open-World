@@ -313,7 +313,11 @@ test('outfits stay on every hero in every ride pose, read between update and ren
     rg.freeze(true);
     rg.start();
     ctx.profile.earn(300, 'test');
-    ctx.economy.buy('hat-explorer');
+    // A wobbly goofy item in every slot (the wardrobe's own items, with springy moving parts).
+    for (const [slot, id] of [['head', 'hat-viking'], ['face', 'face-googly'], ['back', 'back-butterfly']] as const) {
+      ctx.profile.unlock(id, 'shop');
+      ctx.economy.equip(slot, id);
+    }
     rg.step(1 / 60, 30, false);
     type V3 = import('three').Vector3;
     type Quat = import('three').Quaternion;
@@ -367,14 +371,17 @@ test('outfits stay on every hero in every ride pose, read between update and ren
           rg.step(1 / 60, 1, false);
           // What gameplay code reads right after the update (no forced refresh)...
           const seen = holders.map((h) => new V().setFromMatrixPosition(h.matrixWorld));
-          const hat = holders[0].children[0] as Obj | undefined;
-          const hatSeen = hat ? new V().setFromMatrixPosition(hat.matrixWorld) : null;
+          const worn = holders.map((h) => h.children[0] as Obj | undefined);
+          const wornSeen = worn.map((o) => (o ? new V().setFromMatrixPosition(o.matrixWorld) : null));
           // ...against the truth: the rest offset carried by the bone's fresh pose.
           ctx.scene.updateMatrixWorld(true);
           holders.forEach((h, k) => {
             w = Math.max(w, seen[k].distanceTo(rest[k].clone().applyMatrix4(boneOf(h).matrixWorld)));
           });
-          if (hat && hatSeen) w = Math.max(w, hatSeen.distanceTo(new V().setFromMatrixPosition(hat.matrixWorld)));
+          worn.forEach((o, k) => {
+            const s = wornSeen[k];
+            if (o && s) w = Math.max(w, s.distanceTo(new V().setFromMatrixPosition(o.matrixWorld)));
+          });
         }
         p.setExternalController(null);
         worst[`${id}/${pose.name}`] = Number(w.toFixed(4));
@@ -382,9 +389,11 @@ test('outfits stay on every hero in every ride pose, read between update and ren
         rg.step(1 / 60, 2, false);
       }
     }
+    const wornNow = window.__rgGear!.attached();
     await p.setCharacter('frog');
-    return worst;
+    return { worst, worn: wornNow };
   });
-  expect(Object.keys(r).length).toBe(36);
-  for (const [k, v] of Object.entries(r)) expect(v, k).toBeLessThan(0.01);
+  expect(Object.keys(r.worst).length).toBe(36);
+  expect(r.worn).toEqual({ head: 'hat-viking', face: 'face-googly', back: 'back-butterfly' });
+  for (const [k, v] of Object.entries(r.worst)) expect(v, k).toBeLessThan(0.01);
 });
