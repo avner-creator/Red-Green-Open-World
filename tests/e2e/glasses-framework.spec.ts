@@ -154,6 +154,19 @@ test('proof helpers: channel isolation, answer blindness, on throwaway layer obj
   await page.evaluate(() => window.__rgVision!.removeTestObjects());
 });
 
+test('the weave boots with its six parts, all idle (zero draws)', async () => {
+  const w = await page.evaluate(() => {
+    const weave = window.__rgGlasses!.weave!;
+    window.__rg!.step(1 / 60, 2, false);
+    return weave.ids().map((id) => ({ id, draws: weave.draws(id), debug: weave.debug(id) }));
+  });
+  expect(w.map((p) => p.id)).toEqual(['bounce', 'chute', 'hero', 'boost', 'fakes', 'shack']);
+  for (const p of w) {
+    expect(p.draws, `${p.id} draws`).toBe(0);
+    expect(p.debug, `${p.id} debug`).toBeTruthy();
+  }
+});
+
 test('no errors', async () => {
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
