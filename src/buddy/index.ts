@@ -1024,6 +1024,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
           hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
           busy: queue.busy,
           inGame: ctx.player.mode === 'external',
+          // Only the balloon skydive has a parachute (a trampoline bounce or bungee fall does not).
+          chute: ctx.player.mode === 'external' && extKind === 'balloon',
         };
         director.update(dt, view);
         queue.update(dt);

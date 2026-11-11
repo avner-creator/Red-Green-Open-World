@@ -30,6 +30,17 @@ export interface Line {
   praise?: boolean;
   /** May cut a story line short (the child asked, or skipped). Other story lines wait their turn. */
   interrupt?: boolean;
+  /**
+   * One-shot line (a one-time tip, an economy first): never replayed after an interruption, so the
+   * child never hears it twice (QA6 m8: "A present for you!" at 25 s and again at 29.5 s).
+   */
+  once?: boolean;
+  /**
+   * Context check for a line that only makes sense in a certain state ("Parachute now!" only in
+   * freefall, a chest hint only at the chest): a waiting line that is no longer valid is dropped
+   * instead of shown late.
+   */
+  valid?: () => boolean;
 }
 
 /** A line whose clip is still playing is held at most this many seconds past its planned end. */
@@ -112,6 +123,7 @@ export class DialogueQueue {
    * Idle chatter is never queued (only said when Pip is free).
    */
   say(line: Line): 'now' | 'queued' | 'dropped' {
+    if (line.valid && !line.valid()) return 'dropped';
     const cur = this.current;
     if (!cur) {
       this.start(line);
@@ -123,7 +135,7 @@ export class DialogueQueue {
     const storyBeat = line.priority === PRIORITY.story && cur.line.priority === PRIORITY.story && !!line.interrupt;
     if (line.priority > cur.line.priority || storyBeat) {
       // A tip line that got interrupted goes back to the front of the queue.
-      if (!storyBeat && cur.line.priority >= PRIORITY.tip && cur.t < cur.reveal) this.enqueue(cur.line, true);
+      if (!storyBeat && cur.line.priority >= PRIORITY.tip && cur.t < cur.reveal && !cur.line.once) this.enqueue(cur.line, true);
       this.finish(true);
       this.start(line);
       return 'now';
@@ -204,7 +216,8 @@ export class DialogueQueue {
   }
 
   private next(): void {
-    const w = this.waiting.shift();
+    let w = this.waiting.shift();
+    while (w && w.line.valid && !w.line.valid()) w = this.waiting.shift();
     if (w) this.start(w.line);
   }
 }
