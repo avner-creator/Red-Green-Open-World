@@ -185,7 +185,7 @@ export function buildVaults(h: HeightFn): VaultDef[] {
     // Flat meadow west of the garage yard, door facing west to the south road (about 8 m away). A
     // slim crag keeps it off the garage lamp (east), the race's grass cut (south-west) and the
     // airstrip lights (west). It sat in the village's north hill until the foam course took that.
-    { id: 'village', x: 13.2, z: 29.6, yaw: -Math.PI / 2, crag: CRAG_SLIM },
+    { id: 'village', x: 13.2, z: 27.4, yaw: -Math.PI / 2, crag: CRAG_SLIM },
   ];
   return defs.map((d) => ({ ...d, y: h(d.x, d.z) }));
 }
