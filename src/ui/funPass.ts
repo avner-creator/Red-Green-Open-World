@@ -8,7 +8,7 @@
 import type { AnchorName, GameContext } from '../types';
 import { COMPASS_TARGETS, markerIcon } from './compass';
 import { h, retrigger } from './dom';
-import { CHEST_STAMP, EXPLICIT_STAMPS, StuntDeferral, derived, milestones, modeStamp, nextMilestone, prizeFor, stuntStamp, ticketStamp } from './funPassLogic';
+import { CHEST_STAMP, EXPLICIT_STAMPS, derived, milestones, modeStamp, nextMilestone, prizeFor, stuntStamp, ticketStamp } from './funPassLogic';
 import type { StampId } from './funPassLogic';
 import { icon } from './icons';
 import { injectFunPassCss } from './funPassCss';
@@ -199,16 +199,14 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
   };
 
   // Attractions that report a finished round themselves.
-  const deferral = new StuntDeferral();
-  ctx.events.on('stamp:earned', (e) => {
-    deferral.noteStamp();
-    stamp(e.id);
-  });
+  ctx.events.on('stamp:earned', (e) => stamp(e.id));
   // Fallback derivation for the rest (skips the ids above: those stamp on completion only).
   ctx.events.on('ticket:paid', (e) => stamp(derived(ticketStamp(e.kind))));
   ctx.events.on('stunt', (e) => {
-    const p = { x: ctx.player.position.x, z: ctx.player.position.z };
-    deferral.stunt(() => stamp(derived(stuntStamp(e.kind, p, where, (id) => onCard.has(id) && !EXPLICIT_STAMPS.has(id)))));
+    // A stunt that comes with its own stamp (secrets, Silly Zone, rocket) never stamps a neighbour.
+    if (e.stamped) return;
+    const p = ctx.player.position;
+    stamp(derived(stuntStamp(e.kind, { x: p.x, z: p.z }, where, (id) => onCard.has(id) && !EXPLICIT_STAMPS.has(id))));
   });
   ctx.events.on('player:mode', (e) => stamp(derived(modeStamp(e.mode))));
   ctx.events.on('glasses:result', (e) => {

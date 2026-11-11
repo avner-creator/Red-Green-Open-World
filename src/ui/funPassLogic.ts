@@ -48,7 +48,7 @@ export const TICKET_KINDS = Object.keys(TICKET_STAMP) as TicketKind[];
  * Candidate attractions per stunt kind; with more than one, the nearest to the player wins. Each
  * derived slot has exactly one way in: the balloon stamps on its ticket (not the glide after it),
  * the trampoline on a big bounce (not big air). A stunt that comes with its own `stamp:earned`
- * (Silly Zone, secrets pedestal and vault, rocket…) never stamps anything else (`StuntDeferral`).
+ * (Silly Zone, secrets pedestal and vault, rocket) is marked `stamped` and never stamps anything else.
  */
 export const STUNT_STAMP: Record<StuntKind, readonly AnchorName[]> = {
   bigBounce: ['trampoline'],
@@ -67,27 +67,6 @@ export const STUNT_STAMP: Record<StuntKind, readonly AnchorName[]> = {
 
 export function ticketStamp(kind: TicketKind): StampId {
   return TICKET_STAMP[kind];
-}
-
-/**
- * Stunts are derived one microtask late: an attraction that emits `stunt` and then its own
- * `stamp:earned` in the same call (secrets pedestal `bigAir`, vault `bullseye`, Silly Zone…) gets
- * only its own stamp, never a nearby trampoline or landing-rings stamp.
- */
-export class StuntDeferral {
-  private seq = 0;
-  constructor(private readonly schedule: (fn: () => void) => void = (fn) => queueMicrotask(fn)) {}
-  /** Call on every `stamp:earned`. */
-  noteStamp(): void {
-    this.seq++;
-  }
-  /** Call on every `stunt`: `apply` runs later unless a stamp was earned in between. */
-  stunt(apply: () => void): void {
-    const at = this.seq;
-    this.schedule(() => {
-      if (this.seq === at) apply();
-    });
-  }
 }
 
 /**

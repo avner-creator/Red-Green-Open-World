@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { derived, earnWays, EXPLICIT_STAMPS, StuntDeferral, TICKET_KINDS, GRAND_PRIZE, milestones, modeStamp, nextMilestone, PASS_PRIZES, prizeFor, stuntStamp, ticketStamp } from '../../src/ui/funPassLogic';
+import { derived, earnWays, EXPLICIT_STAMPS, TICKET_KINDS, GRAND_PRIZE, milestones, modeStamp, nextMilestone, PASS_PRIZES, prizeFor, stuntStamp, ticketStamp } from '../../src/ui/funPassLogic';
 
 describe('fun pass logic', () => {
   it('maps tickets and ride modes to attraction stamps', () => {
@@ -78,15 +78,10 @@ describe('fun pass: every slot has exactly one way to earn it', () => {
     }
     // Every ticket kind lands on a slot on the card.
     for (const k of TICKET_KINDS) expect(ids).toContain(ticketStamp(k));
-    // A stunt followed by its own stamp in the same call never derives another stamp.
-    const q: (() => void)[] = [];
-    const d = new StuntDeferral((fn) => q.push(fn));
-    let applied = 0;
-    d.stunt(() => applied++);
-    d.noteStamp();
-    d.stunt(() => applied++);
-    for (const fn of q) fn();
-    expect(applied).toBe(1);
+    // Stunts that come with their own stamp are marked, so they never stamp a neighbour.
+    for (const [file, n] of [['src/activities/secrets/index.ts', 2], ['src/activities/silly/index.ts', 1], ['src/activities/rocket.ts', 1]] as const) {
+      expect((readFileSync(file, 'utf8').match(/stamped: true/g) ?? []).length, file).toBe(n);
+    }
   });
 
   it('secrets big air and vault bullseye can only reach their own slot', () => {

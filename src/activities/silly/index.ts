@@ -396,7 +396,7 @@ export function createSilly(ctx: GameContext): Silly {
           hud.result(res);
           const prof = (ctx as Partial<GameContext>).profile;
           if (res.prize > 0 && prof) prof.earn(res.prize, 'mission');
-          if (res.stars > 0) ctx.events.emit('stunt', { kind: 'bigAir', value: res.booped, stars: res.stars });
+          if (res.stars > 0) ctx.events.emit('stunt', { kind: 'bigAir', value: res.booped, stars: res.stars, stamped: true });
           ctx.events.emit('stamp:earned', { id: 'sillyZone' });
           if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rg:attraction-done', { detail: { id: 'sillyZone', win: res.win, stars: res.stars, booped: res.booped } }));
           if (res.win) {

@@ -173,7 +173,8 @@ export interface GameEvents {
   'chest:opened': { chestId: string; outfitId: string };
   'outfit:unlocked': { outfitId: string };
   'outfit:equipped': { outfitId: string | null; slot: OutfitSlot };
-  stunt: { kind: StuntKind; value: number; stars: number };
+  /** `stamped`: the attraction also emits its own `stamp:earned`, so the Fun Pass derives nothing from this stunt. */
+  stunt: { kind: StuntKind; value: number; stars: number; stamped?: boolean };
   'interact:focus': { target: Interactable | null };
   'player:mode': { mode: PlayerMode; previous: PlayerMode };
   'player:jump': Record<string, never>;

@@ -71,6 +71,8 @@ test('60 s of busy play never opens the pause menu by itself', async () => {
       rg.step(1 / 60, 20, false);
       const hud = [...document.querySelectorAll<HTMLElement>('.rg [data-testid]')].filter((el) => {
         if (el.closest('.screen, [data-testid="touch-hud"]')) return false;
+        // The wardrobe hanger opens the dressing room on purpose (it pauses, like the kiosk).
+        if (el.closest('[data-testid="hud-wardrobe"]')) return false;
         const b = el.getBoundingClientRect();
         return b.width > 0 && b.height > 0 && getComputedStyle(el).visibility !== 'hidden';
       });
