@@ -47,6 +47,34 @@ export interface SeatPose {
   readonly offset?: readonly [number, number, number];
 }
 
+/**
+ * Big cartoon eyes (see ./face.ts). Positions are character space at the rest pose (metres,
+ * after `scale`): the LEFT eye (+X); the right one is mirrored.
+ */
+export interface FaceDef {
+  /** Bone the face follows. */
+  readonly bone: string;
+  readonly eyeAt: readonly [number, number, number];
+  /** Eyeball radius, metres. */
+  readonly eyeR: number;
+  /** Outward turn of each eye (radians) and upward tilt. */
+  readonly eyeYaw?: number;
+  readonly eyePitch?: number;
+  /** Lid colour (matches the skin around the eyes). */
+  readonly lid: string;
+  readonly sclera?: string;
+  /** Iris outer and inner colour (keep dark: the iris reads by brightness). */
+  readonly iris?: string;
+  readonly irisLight?: string;
+  /** Iris size multiplier (1 = 34° radius). */
+  readonly irisSize?: number;
+  /** Left cheek blush centre (mirrored), radius and outward turn. */
+  readonly blushAt?: readonly [number, number, number];
+  readonly blushR?: number;
+  readonly blushYaw?: number;
+  readonly blushColor?: string;
+}
+
 export interface CharacterDef {
   readonly id: CharacterId;
   /** Short display name (2–8 letters, shown big on the select carousel). */
@@ -73,6 +101,18 @@ export interface CharacterDef {
   readonly cardColors: readonly [string, string];
   /** Seated pose tweaks (only characters that need them). */
   readonly seat?: SeatPose;
+  /** Cartoon eyes and blush. */
+  readonly face?: FaceDef;
+  /** Springy bone chains (ears, tails, antennae): roots of each chain. */
+  readonly springs?: readonly string[];
+  /** Smooth the normals of a faceted source (rounder look). */
+  readonly smooth?: boolean;
+  /** Warm shading tweaks (see ./warm.ts). */
+  readonly warm?: { readonly fill?: number; readonly rim?: number };
+  /** Footsteps per walk/run clip cycle (2 for most; drives the step bounce). */
+  readonly steps?: number;
+  /** Signature emote id shown in the UI ('dance', 'hop', 'spin', 'wave'…). */
+  readonly emoteName?: string;
 }
 
 /** The four space-suit characters share a skeleton; one scale keeps their proportions. */
@@ -134,6 +174,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 0,
     skill: 'doubleJump',
     cardColors: ['#f2efe6', '#2b3038'],
+    face: { bone: 'Head', eyeAt: [0.17, 1.33, 0.5], eyeR: 0.11, eyeYaw: 0.12, lid: '#d9d4c8', iris: '#16324a', irisLight: '#3f86b8', irisSize: 1.05 },
   },
   {
     id: 'frog',
@@ -149,6 +190,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 0,
     skill: 'superBounce',
     cardColors: ['#e9f7d4', '#1f3a1c'],
+    face: { bone: 'Head', eyeAt: [0.27, 1.49, 0.25], eyeR: 0.125, eyeYaw: 0.5, eyePitch: 0.1, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
   },
   {
     id: 'panda',
@@ -164,6 +206,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 25,
     skill: 'dash',
     cardColors: ['#fbe9d6', '#3a1d10'],
+    face: { bone: 'Head', eyeAt: [0.2, 1.47, 0.34], eyeR: 0.085, eyeYaw: 0.35, lid: '#e0662a', iris: '#2a160c', blushAt: [0.18, 1.38, 0.36], blushR: 0.045 },
   },
   {
     id: 'bee',
@@ -179,6 +222,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 40,
     skill: 'glide',
     cardColors: ['#fff3b8', '#26200a'],
+    face: { bone: 'Head', eyeAt: [0.18, 1.34, 0.28], eyeR: 0.085, eyeYaw: 0.5, lid: '#2a2a2a', iris: '#2a160c', sclera: '#fffdf5', blushAt: [0.16, 1.24, 0.3], blushR: 0.045 },
   },
   {
     id: 'flamingo',
@@ -194,6 +238,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 60,
     skill: 'doubleJump',
     cardColors: ['#ffe3ee', '#3b1426'],
+    face: { bone: 'Head', eyeAt: [0.17, 1.6, 0.12], eyeR: 0.065, eyeYaw: 1.0, lid: '#f08ab0', iris: '#2a160c' },
   },
   {
     id: 'rex',
@@ -225,6 +270,9 @@ export const CHARACTERS: readonly CharacterDef[] = [
     price: 100,
     skill: 'groundPound',
     cardColors: ['#eef5c8', '#1d2a12'],
+    face: { bone: 'Head', eyeAt: [0.15, 1.62, 1.35], eyeR: 0.1, eyeYaw: 0.35, lid: '#bfe868', iris: '#2a160c', blushAt: [0.24, 1.42, 1.45], blushR: 0.06, blushYaw: 1.1 },
+    smooth: true,
+    springs: ['Tail1'],
     // Seated, the tail would curl up through the roll cage and hide his head from the chase
     // camera: lay it down along the rear deck instead.
     seat: {

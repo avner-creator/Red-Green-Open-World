@@ -143,6 +143,7 @@ const api: PreviewApi = {
   },
 };
 window.__preview = api;
+(window as unknown as { __previewScene: THREE.Scene }).__previewScene = scene;
 
 async function main(): Promise<void> {
   for (const def of defs) {
