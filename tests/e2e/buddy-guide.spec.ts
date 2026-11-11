@@ -171,6 +171,7 @@ test('following Pip: the trampoline, then a second and a third attraction within
   const { consoleErrors } = await boot(page, '&buddyIntro=1');
   await startFrozen(page);
   const reached: { a: string; t: number }[] = [];
+  const leadTo = new Set<string>();
   let last: { lead: unknown; pos: number[] } | null = null;
   for (let i = 0; i < 300 && reached.length < 3; i++) {
     const r = await page.evaluate(() => {
@@ -197,8 +198,10 @@ test('following Pip: the trampoline, then a second and a third attraction within
       return { lead: window.__rgBuddy!.lead(), pos: [p.x, p.y, p.z] };
     });
     last = r;
+    if (r.lead.to) leadTo.add(r.lead.to);
     const at = r.lead.at;
-    if (at && !reached.some((x) => x.a === at)) reached.push({ a: at, t: i * 0.5 });
+    // An attraction Pip led to (not one passed on the way), reached.
+    if (at && leadTo.has(at) && !reached.some((x) => x.a === at)) reached.push({ a: at, t: i * 0.5 });
   }
   const info = JSON.stringify({ reached, last });
   expect(reached.length, info).toBeGreaterThanOrEqual(3);
