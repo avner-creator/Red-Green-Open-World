@@ -110,6 +110,8 @@ const api: PreviewApi = {
       c.mixer.stopAllAction();
       c.play(anim, 1, 0);
       c.mixer.setTime(t);
+      // Layers on top of the clip (chibi stance, life) at their settled values.
+      c.update(0);
     }
     render();
   },

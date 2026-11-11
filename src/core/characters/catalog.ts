@@ -74,8 +74,42 @@ export interface FaceDef {
   readonly blushR?: number;
   readonly blushYaw?: number;
   readonly blushColor?: string;
+  /** Smile centre (character space, on the face's front), half-width, curve (height/width) and pitch. */
+  readonly mouthAt?: readonly [number, number, number];
+  readonly mouthW?: number;
+  readonly mouthCurve?: number;
+  readonly mouthPitch?: number;
+  readonly mouthColor?: string;
+  /** Eyebrow height above each eye centre, in eye radii (no brows when unset). */
+  readonly brow?: number;
+  /** Left brow centre (character space); derived from `brow` and the face surface when unset. */
+  readonly browAt?: readonly [number, number, number];
   /** Positions were measured on the first idle frame (not the rest pose). */
   readonly inIdle?: boolean;
+}
+
+/**
+ * Chibi look (see ./chibi.ts): bone scales, a relaxed stance and friendlier colours, layered on the
+ * CC0 model at load. Bone scales are multipliers on the rest scale (a number = uniform; a triple =
+ * the bone's local x, y, z: bones run along their local Y).
+ */
+export interface ChibiDef {
+  readonly bones?: Readonly<Record<string, number | readonly [number, number, number]>>;
+  /** Extra model lift after the automatic foot fix, metres in character space. */
+  readonly lift?: number;
+  /** Calm-pose aims: turn `bone` so `child` lies along `dir` (character space, +Z forward). */
+  readonly aim?: readonly { readonly bone: string; readonly child: string; readonly dir: readonly [number, number, number]; readonly w?: number }[];
+  /** Calm-pose extra local rotations (radians, XYZ Euler), e.g. a head tilt. */
+  readonly tilt?: Readonly<Record<string, readonly [number, number, number]>>;
+  /** Parts to tuck away: vertices of `material` skinned to `bone` (e.g. teeth). */
+  readonly hide?: readonly { readonly material: string; readonly bone: string }[];
+  /** Flat material recolours by material name (untextured models). */
+  readonly materials?: Readonly<Record<string, string>>;
+  /**
+   * Textured suits: near-black texels become `mitten` on the hands and `accent` elsewhere (never
+   * on the head); `sat` scales the suit's colour saturation (candy look).
+   */
+  readonly suit?: { readonly mitten: string; readonly accent: string; readonly sat?: number; readonly head?: string; readonly collar?: number };
 }
 
 export interface CharacterDef {
@@ -118,6 +152,8 @@ export interface CharacterDef {
   readonly springs?: readonly string[];
   /** Smooth the normals of a faceted source (rounder look). */
   readonly smooth?: boolean;
+  /** Chibi proportions, stance and colours (see ./chibi.ts). */
+  readonly chibi?: ChibiDef;
   /** Warm shading tweaks (see ./warm.ts). */
   readonly warm?: { readonly fill?: number; readonly rim?: number };
   /** Footsteps per walk/run clip cycle (2 for most; drives the step bounce). */
@@ -171,6 +207,66 @@ function astroAttach(headY: number, headZ: number, faceY: number, faceZ: number)
   };
 }
 
+/**
+ * Chibi look for the space-suit heroes: bigger head, stubby mitten hands, big boots, a round belly,
+ * arms hanging relaxed at the sides and a friendly head tilt when calm.
+ */
+function astroChibi(mitten: string, accent: string, head = 1.4, headTint?: string, collar = 0.3): ChibiDef {
+  const fingers = (side: 'L' | 'R'): Record<string, readonly [number, number, number]> => ({
+    [`Pinky1.${side}`]: [0.9, 0.42, 0.9],
+    [`Middle1.${side}`]: [0.9, 0.42, 0.9],
+    [`Index1.${side}`]: [0.9, 0.42, 0.9],
+    [`Thumb1.${side}`]: [0.85, 0.5, 0.85],
+  });
+  return {
+    bones: {
+      Head: head,
+      Abdomen: [1.12, 1, 1.12],
+      'Foot.L': 1.25,
+      'Foot.R': 1.25,
+      ...fingers('L'),
+      ...fingers('R'),
+    },
+    aim: [
+      { bone: 'Hips', child: 'Abdomen', dir: [0, 1, 0] },
+      { bone: 'Abdomen', child: 'Torso', dir: [0, 1, 0.05] },
+      { bone: 'Torso', child: 'Neck', dir: [0, 1, 0.08] },
+      { bone: 'Neck', child: 'Head', dir: [0, 1, 0.1] },
+      { bone: 'UpperArm.L', child: 'LowerArm.L', dir: [0.3, -1, 0.04] },
+      { bone: 'UpperArm.R', child: 'LowerArm.R', dir: [-0.3, -1, 0.04] },
+      { bone: 'LowerArm.L', child: 'Middle1.L', dir: [0.12, -1, 0.3] },
+      { bone: 'LowerArm.R', child: 'Middle1.R', dir: [-0.12, -1, 0.3] },
+    ],
+    tilt: { Head: [0, 0, 0.12] },
+    suit: { mitten, accent, sat: 1.35, head: headTint, collar },
+  };
+}
+
+/**
+ * Chibi look for the four-legged friends (same skeleton family): bigger head, short chunky legs,
+ * a round body and a shorter neck.
+ */
+function pawsChibi(head: number, legs: number, neck = 1, extra: ChibiDef['bones'] = {}): ChibiDef {
+  const leg = [1.3, legs, 1.3] as const;
+  const low = [1.15, 0.8, 1.15] as const;
+  return {
+    bones: {
+      Head: head,
+      Neck1: [1.1, neck, 1.1],
+      Torso2: [1.18, 0.9, 1.18],
+      'FrontUpperLeg.L': leg,
+      'FrontUpperLeg.R': leg,
+      'BackUpperLeg.L': leg,
+      'BackUpperLeg.R': leg,
+      'FrontLowerLeg.L': low,
+      'FrontLowerLeg.R': low,
+      'BackLowerLeg.L': low,
+      'BackLowerLeg.R': low,
+      ...extra,
+    },
+  };
+}
+
 /** A catalog entry whose `skill` follows the hero's chosen power. */
 function hero(d: Omit<CharacterDef, 'skill'>): CharacterDef {
   const def = { ...d } as CharacterDef;
@@ -210,7 +306,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['rocketBoots', 'dash'],
     emoteName: 'dance',
     cardColors: ['#f2efe6', '#2b3038'],
-    face: { bone: 'Head', eyeAt: [0.17, 1.33, 0.5], eyeR: 0.11, eyeYaw: 0.12, lid: '#d9d4c8', iris: '#16324a', irisLight: '#3f86b8', irisSize: 1.05 },
+    chibi: { bones: { Head: 1.12, 'Foot.L': 1.3, 'Foot.R': 1.3 }, materials: { Grey: '#f0923a', Black: '#2f6fa8' } },
+    face: { bone: 'Head', eyeAt: [0.17, 1.33, 0.5], eyeR: 0.11, eyeYaw: 0.12, lid: '#d9d4c8', iris: '#16324a', irisLight: '#3f86b8', irisSize: 1.05, mouthAt: [0, 1.2, 0.56], mouthW: 0.1, mouthColor: '#bff6ff' },
   }),
   hero({
     id: 'frog',
@@ -223,12 +320,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Hop', loop: true },
     attach: astroAttach(1.58, 0.15, 1.45, 0.45),
+    chibi: astroChibi('#ffd84a', '#ffb366'),
     price: 0,
     signature: 'superBounce',
     freePowers: ['bounceBall', 'doubleJump'],
     emoteName: 'hop',
     cardColors: ['#e9f7d4', '#1f3a1c'],
-    face: { bone: 'Head', eyeAt: [0.27, 1.49, 0.25], eyeR: 0.125, eyeYaw: 0.5, eyePitch: 0.1, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
+    face: { bone: 'Head', eyeAt: [0.25, 1.49, 0.27], eyeR: 0.12, eyeYaw: 0.32, eyePitch: 0.05, irisSize: 0.8, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
   }),
   hero({
     id: 'panda',
@@ -241,12 +339,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Dance', loop: true },
     attach: astroAttach(1.68, 0, 1.42, 0.4),
+    chibi: astroChibi('#ffb08a', '#d9733f'),
     price: 0,
     signature: 'dash',
     freePowers: ['rainbowSlide', 'glide'],
     emoteName: 'dance',
     cardColors: ['#fbe9d6', '#3a1d10'],
-    face: { bone: 'Head', eyeAt: [0.2, 1.47, 0.34], eyeR: 0.085, eyeYaw: 0.35, lid: '#e0662a', iris: '#2a160c', blushAt: [0.18, 1.38, 0.36], blushR: 0.045 },
+    face: { bone: 'Head', eyeAt: [0.2, 1.47, 0.34], eyeR: 0.085, eyeYaw: 0.35, lid: '#e0662a', iris: '#2a160c', blushAt: [0.18, 1.38, 0.36], blushR: 0.045 , mouthAt: [0, 1.37, 0.43], mouthW: 0.04 },
   }),
   hero({
     id: 'bee',
@@ -259,12 +358,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Wave', loop: true },
     attach: astroAttach(1.55, 0, 1.36, 0.3),
+    chibi: astroChibi('#ffa94d', '#9a6a3a', 1.4, '#7a5534'),
     price: 0,
     signature: 'glide',
     freePowers: ['bubbleShield', 'doubleJump'],
     emoteName: 'wave',
     cardColors: ['#fff3b8', '#26200a'],
-    face: { bone: 'Head', eyeAt: [0.18, 1.34, 0.28], eyeR: 0.085, eyeYaw: 0.5, lid: '#2a2a2a', iris: '#2a160c', sclera: '#fffdf5', blushAt: [0.16, 1.24, 0.3], blushR: 0.045 },
+    face: { bone: 'Head', eyeAt: [0.18, 1.34, 0.28], eyeR: 0.085, eyeYaw: 0.5, lid: '#2a2a2a', iris: '#2a160c', sclera: '#fffdf5', blushAt: [0.16, 1.24, 0.3], blushR: 0.045 , mouthAt: [0, 1.24, 0.34], mouthW: 0.06 },
   }),
   hero({
     id: 'pup',
@@ -286,7 +386,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['bubbleShield', 'dash'],
     emoteName: 'wag',
     cardColors: ['#fff0dc', '#3d2410'],
-    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.15, 0.9], eyeR: 0.085, eyeYaw: 0.35, lid: '#f2b066', iris: '#2a160c' },
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.115, 1.15, 0.93], eyeR: 0.075, eyeYaw: 0.25, lid: '#f2b066', iris: '#2a160c', mouthAt: [0, 0.99, 0.99], mouthW: 0.05, brow: 1.15 },
+    chibi: pawsChibi(1.4, 0.62, 0.8),
     springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
     smooth: true,
     steps: 2,
@@ -302,6 +403,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Spin', loop: true },
     attach: astroAttach(1.7, 0.08, 1.5, 0.3),
+    chibi: astroChibi('#fff1a8', '#e0609a', 1.4, undefined, 0.2),
     price: 15,
     signature: 'doubleJump',
     freePowers: ['glide', 'rainbowSlide'],
@@ -341,7 +443,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['giant', 'superBounce'],
     emoteName: 'dance',
     cardColors: ['#eef5c8', '#1d2a12'],
-    face: { bone: 'Head', eyeAt: [0.15, 1.62, 1.35], eyeR: 0.1, eyeYaw: 0.35, lid: '#bfe868', iris: '#2a160c', blushAt: [0.24, 1.42, 1.45], blushR: 0.06, blushYaw: 1.1 },
+    face: { bone: 'Head', eyeAt: [0.15, 1.62, 1.35], eyeR: 0.1, eyeYaw: 0.35, lid: '#bfe868', iris: '#2a160c', blushAt: [0.24, 1.42, 1.45], blushR: 0.06, blushYaw: 1.1, mouthAt: [0, 1.5, 1.7], mouthW: 0.12 },
+    chibi: { bones: { Head: 1.45, Neck: 1.05, 'BackUpLeg.L': [1.25, 0.72, 1.25], 'BackUpLeg.R': [1.25, 0.72, 1.25], 'FrontUpLeg.L': 1.5, 'FrontUpLeg.R': 1.5, Tail2: 0.8, Torso: [1.12, 1, 1.12] }, materials: { Black: '#5a3a2a', Red: '#9fd84a', LightGreen: '#4f9a2a' }, hide: [{ material: 'LightYellow', bone: 'Head' }] },
     smooth: true,
     springs: ['Tail1'],
     // Seated, the tail would curl up through the roll cage and hide his head from the chase
@@ -370,7 +473,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['rainbowSlide', 'doubleJump'],
     emoteName: 'dance',
     cardColors: ['#ffe2c8', '#4a1f08'],
-    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c' },
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c', mouthAt: [0, 0.95, 1.26], mouthW: 0.05, brow: 1.15 },
+    chibi: { ...pawsChibi(1.35, 0.62, 0.8), materials: { Grey: '#7a4a32' } },
     springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
     smooth: true,
   }),
@@ -394,7 +498,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['giant', 'bounceBall'],
     emoteName: 'dance',
     cardColors: ['#fbe6f6', '#3e1d36'],
-    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.84, 0.79], eyeR: 0.085, eyeYaw: 0.5, lid: '#fff4fb', iris: '#2a160c' },
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.105, 1.84, 0.83], eyeR: 0.072, eyeYaw: 0.35, lid: '#fff4fb', iris: '#2a160c', mouthAt: [0, 1.68, 0.9], mouthW: 0.045 },
+    chibi: { ...pawsChibi(1.35, 0.62, 0.6), materials: { Muzzle: '#6e4a5e' } },
     springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
     smooth: true,
   }),
@@ -429,7 +534,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['rocketBoots', 'bubbleShield'],
     emoteName: 'dance',
     cardColors: ['#dcf6ef', '#20283f'],
-    face: { bone: 'Head', inIdle: true, eyeAt: [0.22, 1.0, 1.15], eyeR: 0.1, eyeYaw: 0.5, lid: '#86d8c6', iris: '#2a160c' },
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.22, 1.0, 1.15], eyeR: 0.1, eyeYaw: 0.5, lid: '#86d8c6', iris: '#2a160c', mouthAt: [0, 0.9, 1.35], mouthW: 0.1 },
+    chibi: { bones: { Head: 1.35, 'FrontUpLeg.L': [1.25, 0.72, 1.25], 'FrontUpLeg.R': [1.25, 0.72, 1.25], 'BackUpLeg.L': [1.25, 0.72, 1.25], 'BackUpLeg.R': [1.25, 0.72, 1.25], Tail2: 0.8 } },
     smooth: true,
     springs: ['Tail1'],
   }),

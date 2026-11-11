@@ -18,6 +18,10 @@ import { installExtraPowers } from '../core/skills-extra';
 import { choosePower, chosenPower, getPower, powersFor, powerState } from '../core/skills-powers';
 import { powerPicto, powerTile } from './characterSelectPowers';
 import { skillPicto } from './skillPicto';
+import { holdShowcase } from '../core/characters/warm';
+
+/** Hero select camera: close and low so the hero stands about half the screen tall. */
+const SELECT_CAMERA = { distance: 4.4, height: 1.25, fov: 44 };
 
 /** The wardrobe ("dress up") entry, plugged in by the wardrobe system; null = not available yet. */
 let wardrobeHook: ((heroId: string) => void) | null = null;
@@ -320,7 +324,7 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     active = true;
     if (ctx.session.state.phase === 'title') {
       // Close and low: the hero fills the middle of the screen.
-      ctx.cameraRig.setOverride({ distance: 5.4, height: 1.6, fov: 46 });
+      ctx.cameraRig.setOverride(SELECT_CAMERA);
     }
     refresh(true);
     showInWorld(cur().id, true);
@@ -341,6 +345,8 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     el,
     leave,
     update() {
+      // Warm showcase light on the hero while the select is open.
+      if (active) holdShowcase();
       if (active && ctx.input.state.device !== device) {
         device = ctx.input.state.device;
         refresh(false);

@@ -9,11 +9,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { PlayerAnim } from '../../types';
-import type { AttachPart, CharacterDef, ClipRef } from './catalog';
+import type { AttachPart, CharacterDef, ClipRef, FaceDef } from './catalog';
+import { applyChibi, hideParts, recolourMaterials, surfaceZ, tagRegions } from './chibi';
 import { buildFace, type FaceRig, type FaceState } from './face';
 import { createLife, type Life } from './life';
 import { mergeCharacterMeshes } from './merge';
-import { smoothNormals, warmCharacter } from './warm';
+import { smoothNormals, tickShowcase, warmCharacter } from './warm';
 
 export interface LoadedCharacter {
   readonly def: CharacterDef;
@@ -51,7 +52,10 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
   // One skinned mesh per material (the robot: 19 meshes → 5 draws per pass).
   mergeCharacterMeshes(model, gltf.animations);
   if (def.smooth) smoothNormals(model);
-  warmCharacter(model, def.warm);
+  recolourMaterials(model, def.chibi?.materials);
+  hideParts(model, def.chibi?.hide);
+  if (def.chibi?.suit) tagRegions(model, /^(Pinky|Middle|Index|Thumb|Ring|Palm)/, def.face?.bone ?? 'Head', def.chibi.suit.collar);
+  warmCharacter(model, { ...def.warm, suit: def.chibi?.suit });
   model.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {
       o.castShadow = true;
@@ -73,7 +77,7 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       poser.setTime(0);
     }
     object.updateMatrixWorld(true);
-    face = buildFace(def.face, object, faceBone);
+    face = buildFace(snapFace(def.face, object), object, faceBone);
     if (poser) {
       poser.stopAllAction();
       poser.uncacheRoot(model);
@@ -111,6 +115,11 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
     if (bone) bone.attach(anchor);
     anchors[part] = anchor;
   }
+
+  // Chibi proportions (after the face and anchors, so they grow with the head) and calm stance.
+  const chibi = applyChibi(object, model, def.chibi, gltf.animations);
+  model.position.y = chibi.lift;
+  object.updateMatrixWorld(true);
 
   // Rest pose of every bone: each frame, before the mixer, bones go back to it, so a bone the
   // current clip does not key (e.g. the head after a flop clip that turned it) can never stay
@@ -192,6 +201,7 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       if (seatApplied) for (const s of seatBones) s.bone.quaternion.copy(s.saved);
       seatApplied = false;
       life.restore();
+      chibi.restore();
       // Idle fidget: a little dance when left alone, then back to idle.
       if (life.fidget && currentAnim === 'idle' && !fidgetAction && current) {
         const f = actions.get(fidgetRef.clip);
@@ -217,11 +227,14 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       mixer.update(dt);
       const act = fidgetAction ?? current;
       const dur = act ? act.getClip().duration : 1;
+      chibi.update(dt, fidgetAction ? 'emote' : currentAnim);
+      tickShowcase(dt);
       life.update(dt, fidgetAction ? 'emote' : currentAnim, act && dur > 0 ? (act.time / dur) % 1 : 0, currentRate);
       if (!def.seat) return;
       const target = currentAnim === 'sit' ? 1 : 0;
       seatW = target > seatW ? Math.min(1, seatW + dt / 0.3) : Math.max(0, seatW - dt / 0.2);
       model.position.copy(seatOffset).multiplyScalar(seatW);
+      model.position.y += chibi.lift;
       if (seatW <= 0) return;
       for (const s of seatBones) {
         s.saved.copy(s.bone.quaternion);
@@ -231,4 +244,22 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       seatApplied = true;
     },
   };
+}
+
+/** Sit the smile and brows on the face surface (the catalog gives their height; depth comes from a ray). */
+function snapFace(f: FaceDef, object: THREE.Object3D): FaceDef {
+  object.updateMatrixWorld(true);
+  let mouthAt = f.mouthAt;
+  if (mouthAt) {
+    const m = f.mouthW ?? f.eyeR * 0.8;
+    const z = surfaceZ(object, 0, mouthAt[1] - m * (f.mouthCurve ?? 0.7) * 0.8);
+    if (z !== null) mouthAt = [mouthAt[0], mouthAt[1], z + 0.004];
+  }
+  let browAt = f.browAt;
+  if (f.brow && !browAt) {
+    const y = f.eyeAt[1] + f.eyeR * f.brow;
+    const z = surfaceZ(object, f.eyeAt[0], y);
+    browAt = [f.eyeAt[0], y, z !== null ? Math.min(z + 0.006, f.eyeAt[2] + f.eyeR) : f.eyeAt[2]];
+  }
+  return { ...f, mouthAt, browAt };
 }

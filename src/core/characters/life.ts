@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import type { PlayerAnim } from '../../types';
+import { findNode } from './chibi';
 import type { FaceRig, FaceState } from './face';
 
 export type LifeAnim = PlayerAnim | 'emote';
@@ -67,7 +68,7 @@ export interface Life {
 export function createLife(model: THREE.Object3D, face: FaceRig | null, opt: LifeOptions): Life {
   const springs: SpringBone[] = [];
   for (const name of opt.springs ?? []) {
-    let b = model.getObjectByName(name);
+    let b = findNode(model, name);
     let depth = 0;
     // Walk down the chain (first child bone each step) so a tail swings as a whole.
     while (b && depth < 6) {
@@ -76,7 +77,7 @@ export function createLife(model: THREE.Object3D, face: FaceRig | null, opt: Lif
       depth++;
     }
   }
-  const head = opt.head ? model.getObjectByName(opt.head) ?? null : null;
+  const head = opt.head ? findNode(model, opt.head) ?? null : null;
   const headSaved = new THREE.Quaternion();
   let applied = false;
 
