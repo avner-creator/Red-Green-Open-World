@@ -76,6 +76,7 @@ interface DotsDebug {
   booth: P3;
   far: P3 & { yaw: number };
   celebrateView: P3 & { yaw: number };
+  behind: P3;
 }
 
 const debug = <T>(id: string): Promise<T> => page.evaluate((i) => window.__rgGlasses!.debug(i), id) as Promise<T>;
@@ -439,6 +440,26 @@ test('gates: leaving mid-round cancels it with no misses for the runs never play
 
 const SHAPES = ['star', 'heart', 'moon'];
 const dots = (): Promise<DotsDebug> => debug<DotsDebug>('dotsigns');
+/** A spot on the line from the site to its arrival (`dist` m from the site; 0 = the arrival itself, the stepping-stone trail's end), facing the booth. */
+async function dotArrivalSpot(id: string, dist: number): Promise<P3 & { yaw: number }> {
+  return page.evaluate(
+    ({ id, dist }) => {
+      const g = window.__rgGlasses!;
+      const w = window.__rg!.ctx.world;
+      const s = g.sites().find((x) => x.id === id)!;
+      const a = s.arrival ?? { x: s.x, z: s.z + 30 };
+      const l = Math.hypot(a.x - s.x, a.z - s.z) || 1;
+      const x = dist ? s.x + ((a.x - s.x) / l) * dist : a.x;
+      const z = dist ? s.z + ((a.z - s.z) / l) * dist : a.z;
+      const b = (g.debug(id) as { booth: { x: number; z: number } }).booth;
+      const tx = (b.x + s.x) / 2;
+      const tz = (b.z + s.z) / 2;
+      return { x, y: w.heightAt(x, z), z, yaw: Math.atan2(tx - x, tz - z) };
+    },
+    { id, dist },
+  );
+}
+
 
 /** Press Use once through the input system; returns the id of the prompt that was focused. */
 async function useOnce(): Promise<string | null> {
@@ -473,6 +494,15 @@ test('dot signs: a booth from 30 m, attract at the pad, Use on the pad → 3-2-1
   expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
   expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
   expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  // From the end of the stepping-stone trail (where children arrive) and from 12 m on that line.
+  for (const [tag, dist] of [['arrival', 0], ['12m', 12]] as const) {
+    const p = await dotArrivalSpot('dotsigns', dist);
+    await standAt(p, p.yaw);
+    await shots(BOOTH_OUT, `dotsigns-${tag}`, true);
+  }
+  // From behind the sign: its back is dressed (stripes and the mark), never a blank wall.
+  await standAt(d.behind, d.yaw, 30);
+  await shots(BOOTH_OUT, 'dotsigns-behind');
   // Behind the pad, facing the sign: attract (demo loops, the pad pulses, the device's button shows).
   await standAt(d.padBack, d.yaw + Math.PI);
   d = await dots();
@@ -497,7 +527,7 @@ test('dot signs: a booth from 30 m, attract at the pad, Use on the pad → 3-2-1
   await step(200);
   d = await dots();
   expect([d.phase, d.state, d.dotsShown]).toEqual(['play', 'open', true]);
-  expect(d.kit.booth.prompt).toBe('look');
+  expect(d.kit.booth.prompt).toBe('button');
 });
 
 test('dot signs: the picture and the buttons; each layer only touches its channel', async () => {

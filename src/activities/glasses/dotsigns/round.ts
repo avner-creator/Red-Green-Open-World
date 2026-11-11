@@ -8,6 +8,12 @@ import { SHAPE_IDS } from '../../../vision/toolkit';
 import type { ShapeId } from '../../../vision/toolkit';
 import { randInt } from '../gates/kit';
 
+/**
+ * The shapes a round uses. No circle: a filled disc on a round button face reads as a blank
+ * button ("nothing"), so it is left out of the button set.
+ */
+export const DOT_SHAPES: readonly ShapeId[] = SHAPE_IDS.filter((s) => s !== 'circle');
+
 export interface DotRound {
   /** Shapes on the three buttons, left to right. */
   shapes: ShapeId[];
@@ -18,7 +24,7 @@ export interface DotRound {
 }
 
 export function makeDotRound(rng: () => number): DotRound {
-  const pool = [...SHAPE_IDS];
+  const pool = [...DOT_SHAPES];
   const shapes: ShapeId[] = [];
   for (let k = 0; k < 3; k++) shapes.push(pool.splice(randInt(rng, pool.length), 1)[0]);
   const answer = randInt(rng, 3);
@@ -34,7 +40,7 @@ export function isDotRound(v: unknown): v is DotRound {
     !!r &&
     Array.isArray(r.shapes) &&
     r.shapes.length === 3 &&
-    r.shapes.every((s) => SHAPE_IDS.includes(s)) &&
+    r.shapes.every((s) => DOT_SHAPES.includes(s)) &&
     new Set(r.shapes).size === 3 &&
     typeof r.answer === 'number' &&
     r.answer >= 0 &&

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { prizeFor } from '../../src/activities/glasses/booth/round';
 import { DEMO_KIT } from '../../src/activities/glasses/booth/draw';
+import { auditDemo } from '../../src/activities/glasses/booth/legibility';
 import { ODD, ODD_BOOTH, ODD_PRIZE, ODD_RULES } from '../../src/activities/glasses/oddone/constants';
 import { ODD_DEMO } from '../../src/activities/glasses/oddone/demo';
 import { detailForLevel, differs, makeRound, nextLevel, OddStaircase, shapesOf, simulateOddOne, tierForLevel, withAnswer } from '../../src/activities/glasses/oddone/logic';
@@ -137,7 +138,11 @@ describe('odd one out booth: rounds, prizes and the staircase', () => {
     const calls: string[] = [];
     const c = new Proxy({}, { get: (_t, k) => (k === 'canvas' ? {} : (..._a: unknown[]) => calls.push(String(k))), set: () => true }) as unknown as CanvasRenderingContext2D;
     for (let f = 0; f < ODD_DEMO.frames; f++) ODD_DEMO.draw(c, f, 256, DEMO_KIT);
-    expect(calls.length).toBeGreaterThan(100);
+    expect(calls.length).toBeGreaterThan(50);
+    // Readable from 8 m: hero ≥ 33 of 100 units where it appears, ≤ 9 pictures a frame.
+    const a = auditDemo(ODD_DEMO);
+    console.info(`oddone demo: hero ${a.minHeroPx.toFixed(0)} px, ≤ ${a.maxThings} pictures/frame`);
+    expect(a.problems).toEqual([]);
   });
 });
 

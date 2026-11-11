@@ -15,22 +15,28 @@ export const DOTSIGNS = {
   legX: 1.5,
   /** The pedestal right in front of it: centre z, width, height, depth. */
   pedZ: 0.92,
-  pedW: 5.0,
+  pedW: 5.6,
   pedH: 0.8,
   pedD: 0.62,
   /** Button centres along X (wide, so they show left and right of the hero), radius, tilt. */
-  buttonX: [-1.75, 0, 1.75] as const,
+  buttonX: [-2.15, 0, 2.15] as const,
   buttonR: 0.44,
   tilt: 0.55,
   /** Where the hero stands to press (in front of the pedestal). */
   heroZ: 0.92 + 0.31 + 0.45,
   /** E prompt radius around each button. */
   reach: 1.25,
-  /** Start pad (a press pad: stand on it and press Use), a step behind the buttons. */
-  pad: { x: 0, z: 3.05, r: 0.85 },
+  /**
+   * Start pad (a press pad: stand on it and press Use), a step behind the buttons and off the
+   * centre line: from its camera the hero stands between the middle and the right button, so all
+   * three show beside the hero.
+   */
+  pad: { x: 1.1, z: 3.05, r: 0.85 },
   flourish: 1.0,
   press: 0.6,
   wobble: 0.8,
+  /** Edge of the play prompt (the device's Use button) floating beside the sign (m). */
+  promptSize: 1.1,
 } as const;
 
 /** Dot grid per tier (more cells and smaller dots = finer). Floor: 28 cells still resolves at 640×360 from the pedestal. */
@@ -70,12 +76,12 @@ export const DOT_BOOTH: BoothSpec = {
   marquee: { x: -4.0, z: -1.2, yaw: 0.5 },
   lamps: 5,
   pad: { x: DOTSIGNS.pad.x, z: DOTSIGNS.pad.z, r: DOTSIGNS.pad.r, walkIn: false },
-  playPrompt: 'look',
+  playPrompt: 'button',
   // 3-2-1-GO pops in front of the (still empty) dot sign.
   countdown: { x: 0, y: DOTSIGNS.signY, z: DOTSIGNS.signZ + 0.6 },
   decals: [
     // Chevrons from the pad to the two outer buttons.
-    { kind: 'chevron', x: -1.05, z: 2.25, size: 0.7, yaw: 0.75 },
-    { kind: 'chevron', x: 1.05, z: 2.25, size: 0.7, yaw: -0.75 },
+    { kind: 'chevron', x: 0.1, z: 2.3, size: 0.7, yaw: 0.9 },
+    { kind: 'chevron', x: 1.95, z: 2.3, size: 0.7, yaw: -0.5 },
   ],
 };

@@ -20,7 +20,8 @@
  * Draw calls: booth 1 + pedestals 1 + buttons 1 + shapes 1 (+ the kit's fx 2 during a round) ≤ 6.
  */
 import * as THREE from 'three';
-import { MARQUEE } from '../booth/geometry';
+import { MARQUEE, PAD_TOP } from '../booth/geometry';
+import { pickPromptSpot } from '../booth/view';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier, Interactable } from '../../../types';
 import { TIERS, withChallenge } from '../../../vision/toolkit';
@@ -74,6 +75,14 @@ export function create(env: MechanicEnv): Mechanic {
     // The approach (~6–7 m in front of the pad): the clearest of a few spots, kept in `lay.view`.
     views: [[0, 6.5], [-2.5, 6], [2.5, 6], [-4, 5.2], [4, 5.2]].map(([x, dz]) => ({ x: pad.x + x, z: pad.z + dz })),
     foreground: 1.5,
+    // The booth faces where children arrive (the end of the world's stepping-stone trail).
+    arrival: site.arrival,
+    arrivalTargets: [
+      { ...mqPt(0, 0.2), y: MARQUEE.lampY },
+      { ...mqPt(0, 0.2), y: MARQUEE.bannerY },
+      { ...mqPt(-0.8, 0.2), y: MARQUEE.boardY },
+      { x: pad.x, z: pad.z, y: 0.5 },
+    ],
   };
   const lay = chooseLayout(ctx, site, spec, { refreshDecor: true });
   const lf = siteFrame(lay);
@@ -180,9 +189,26 @@ export function create(env: MechanicEnv): Mechanic {
     applyShapes();
   }
 
+  // The play prompt (the Use button of the device in use) floats near the pedestals, in clear view
+  // from the pad's camera: in the central safe area (never under the HUD), off the hero and off
+  // the three panels. Picked once from the layout; it never depends on the answer.
+  const look = { x: P[1][0], z: P[1][1] };
+  const promptPick = (() => {
+    const padP = { x: pad.x, y: ground(pad.x, pad.z) + PAD_TOP, z: pad.z };
+    const keepClear = P.map(([x, z]) => ({ p: { x, y: ground(x, z) + ODD.shapeHeight, z }, size: ODD.rimRadius * 2 + 0.3 }));
+    const cands: { x: number; y: number; z: number }[] = [];
+    for (const z of [-2.6, -2.2, -3.0]) {
+      for (const x of [P[0][0] + 1.2, P[1][0] + 1.2, P[0][0] - 1.0, P[2][0] + 1.0, P[1][0] - 1.2]) {
+        for (const h of [1.6, 1.9, 1.3, 2.2, 2.6]) cands.push({ x, y: ground(x, z) + h, z });
+      }
+    }
+    return pickPromptSpot(cands, { pad: padP, look, size: ODD.promptSize + 0.3, keepClear });
+  })();
   // Booth spec heights are relative to the site's y: put the countdown on the middle panel's height.
   const boothSpec: BoothSpec = {
     ...ODD_BOOTH,
+    playPromptAt: promptPick.at,
+    playPromptSize: ODD.promptSize,
     countdown: ODD_BOOTH.countdown && { ...ODD_BOOTH.countdown, y: ODD_BOOTH.countdown.y + ground(P[1][0], P[1][1]) },
   };
   const kit = env.booth({
@@ -191,6 +217,7 @@ export function create(env: MechanicEnv): Mechanic {
     spec: boothSpec,
     demo: ODD_DEMO,
     rules: ODD_RULES,
+    look,
     hooks: {
       onTry() {
         ask();
@@ -218,11 +245,10 @@ export function create(env: MechanicEnv): Mechanic {
       misses++;
       wobble[i] = 1;
     }
-    // The try's tier follows the staircase: the round machine reports (and pays) at that tier.
-    kit.round.tier = round.tier;
+    // The try's result carries the staircase's tier; the round's prize uses the kit's round tier.
     stairs.answer(hit);
     const [lx, lz] = P[i];
-    kit.report(hit, { x: lx, y: ground(lx, lz) + ODD.capBottom + ODD.capHeight + 0.75, z: lz + 0.25 });
+    kit.report(hit, { x: lx, y: ground(lx, lz) + ODD.capBottom + ODD.capHeight + 0.75, z: lz + 0.25 }, round.tier);
   }
 
   const promptAt = base.map((b) => new THREE.Vector3(b.x, b.y + ODD.capBottom + ODD.capHeight + 0.1, b.z));
@@ -357,6 +383,8 @@ export function create(env: MechanicEnv): Mechanic {
           return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
         })(),
         layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes, ms: lay.ms },
+        promptFits: promptPick.fits,
+        promptAt: promptPick.at,
       };
     },
     force(params) {

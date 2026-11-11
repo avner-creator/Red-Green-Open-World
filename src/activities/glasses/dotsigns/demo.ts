@@ -1,21 +1,22 @@
 /**
  * The dot signs booth's demo flipbook (5 frames, generic: always a star, drawn once at boot, never
- * the current answer). The hero looks at a board full of dots → a star pops out of the dots → the
- * hero walks to the button with the star (the others show a circle and a triangle) → presses it →
- * ✓ and a cheer.
+ * the current answer). Close-ups, one idea per frame, big enough to read from 8 m (`auditDemo`:
+ * hero ≥ 33 units, ≤ 9 pictures a frame):
+ *   0  a board full of dots
+ *   1  a star pops out of the dots
+ *   2  three big buttons: triangle, square, star — the star one shines
+ *   3  the hero presses the star button
+ *   4  the hero cheers: ✓
  */
 import type { BoothDemo } from '../booth/types';
 import type { DemoKit } from '../booth/draw';
 
 type C2 = CanvasRenderingContext2D;
 
-const BOARD = { x: 22, y: 7, w: 56, h: 40 } as const;
-const BASE = 82;
-/** Button centres (x) on the counter; the star is on the right-hand one. */
-const BTN = [26, 50, 74] as const;
-const STAR_BTN = 2;
+const BOARD = { x: 10, y: 10, w: 80, h: 80 } as const;
+const GROUND = 95;
 
-/** Deterministic dot positions on the board. */
+/** Deterministic dot positions on the board (9 × 9, jittered). */
 const DOTS: readonly (readonly [number, number])[] = (() => {
   const out: [number, number][] = [];
   let s = 12345;
@@ -23,12 +24,12 @@ const DOTS: readonly (readonly [number, number])[] = (() => {
     s = (s * 1103515245 + 12345) & 0x7fffffff;
     return s / 0x7fffffff;
   };
-  for (let j = 0; j < 7; j++)
-    for (let i = 0; i < 10; i++) out.push([BOARD.x + 4 + i * 5.3 + (rnd() - 0.5) * 2.4, BOARD.y + 4.5 + j * 5.3 + (rnd() - 0.5) * 2.4]);
+  for (let j = 0; j < 9; j++)
+    for (let i = 0; i < 9; i++) out.push([BOARD.x + 6 + i * 8.5 + (rnd() - 0.5) * 3, BOARD.y + 6 + j * 8.5 + (rnd() - 0.5) * 3]);
   return out;
 })();
 
-/** Inside a 5-point star (centre cx, cy; outer r) — for which dots light up. */
+/** Inside a 5-point star (centre cx, cy; outer r) — which dots light up. */
 function inStar(x: number, y: number, cx: number, cy: number, r: number): boolean {
   const pts: [number, number][] = [];
   for (let i = 0; i < 10; i++) {
@@ -45,67 +46,69 @@ function inStar(x: number, y: number, cx: number, cy: number, r: number): boolea
   return inside;
 }
 
-function board(c: C2, k: DemoKit, pop: number): void {
-  k.roundRect(c, BOARD.x - 2.5, BOARD.y - 2.5, BOARD.w + 5, BOARD.h + 5, 4);
+function board(c: C2, k: DemoKit, pop: boolean): void {
+  k.roundRect(c, BOARD.x - 3, BOARD.y - 3, BOARD.w + 6, BOARD.h + 6, 5);
   c.fillStyle = k.colors.DARK;
   c.fill();
-  c.lineWidth = 2.6;
+  c.lineWidth = 3;
   c.strokeStyle = k.colors.WHITE;
   c.stroke();
-  const cx = BOARD.x + BOARD.w / 2;
-  const cy = BOARD.y + BOARD.h / 2 + 1;
   for (const [x, y] of DOTS) {
-    const lit = pop > 0 && inStar(x, y, cx, cy, 19);
-    k.disc(c, x, y, lit ? 2.1 + 0.4 * pop : 1.7, lit ? k.colors.YEL : k.colors.GREY);
+    const lit = pop && inStar(x, y, 50, 53, 40);
+    k.disc(c, x, y, lit ? 3.6 : 2.7, lit ? k.colors.YEL : k.colors.GREY);
   }
-  if (pop > 1) {
-    k.sparkle(c, cx + 22, cy - 13, 3.6, k.colors.YEL);
-    k.sparkle(c, cx - 23, cy + 12, 2.8, k.colors.WHITE);
+  if (pop) {
+    k.sparkle(c, 84, 18, 7, k.colors.WHITE);
+    k.sparkle(c, 16, 84, 5, k.colors.YEL);
   }
 }
 
-function counter(c: C2, k: DemoKit, pressed: boolean, lit: boolean): void {
-  k.roundRect(c, 12, BASE - 14, 76, 14, 3);
-  c.fillStyle = k.colors.DARK;
-  c.fill();
-  c.lineWidth = 2;
-  c.strokeStyle = k.colors.WHITE;
-  c.stroke();
-  BTN.forEach((x, i) => {
-    const on = lit && i === STAR_BTN;
-    k.disc(c, x, BASE - 19, 7.5, on ? k.colors.YEL : k.colors.WHITE);
-    k.disc(c, x, BASE - 19, 6, k.colors.INK);
-    const y = BASE - 19 + (pressed && i === STAR_BTN ? 1.2 : 0);
-    const col = on ? k.colors.YEL : k.colors.WHITE;
-    if (i === 0) k.disc(c, x, y, 3.4, col);
-    else if (i === 1) k.poly(c, [x, y - 3.8, x + 3.8, y + 2.8, x - 3.8, y + 2.8], col);
-    else k.star(c, x, y + 0.3, 4.3, col, 0.45);
-  });
+/** A big round button with a shape (0 triangle, 1 square, 2 star). */
+function shapeButton(c: C2, k: DemoKit, x: number, y: number, r: number, shape: 0 | 1 | 2, lit: boolean, pressed = false): void {
+  const yy = y + (pressed ? r * 0.12 : 0);
+  k.disc(c, x, y + r * 0.22, r, k.colors.GREY);
+  k.disc(c, x, yy, r, lit ? k.colors.YEL : k.colors.WHITE);
+  k.disc(c, x, yy, r * 0.84, k.colors.INK);
+  const col = lit ? k.colors.YEL : k.colors.WHITE;
+  const s = r * 0.5;
+  if (shape === 0) k.poly(c, [x, yy - s, x + s, yy + s * 0.75, x - s, yy + s * 0.75], col);
+  else if (shape === 1) k.poly(c, [x - s * 0.8, yy - s * 0.8, x + s * 0.8, yy - s * 0.8, x + s * 0.8, yy + s * 0.8, x - s * 0.8, yy + s * 0.8], col);
+  else k.star(c, x, yy + s * 0.05, s * 1.15, col, 0.45);
 }
 
 export const DOT_DEMO: BoothDemo = {
   frames: 5,
-  fps: 2.2,
-  hold: 1.0,
+  fps: 1.8,
+  hold: 1.2,
   draw(c, f, size, k) {
     k.units(c, size);
     k.panel(c);
-    board(c, k, f === 0 ? 0 : f === 1 ? 1 : 2);
-    counter(c, k, f >= 3, f >= 2);
-    k.line(c, [8, BASE + 8, 92, BASE + 8], 2.6, k.colors.GREY);
-    const S = 0.42;
     if (f <= 1) {
-      k.hero(c, 50, BASE + 9, S, 'look');
-      k.line(c, [46, 61, 40, 50], 2, k.colors.YEL);
-      k.line(c, [55, 61, 61, 50], 2, k.colors.YEL);
-    } else if (f === 2) {
-      k.hero(c, 60, BASE + 9, S, 'runA');
-      k.arrow(c, 66, 92, 80, 92, 3, k.colors.YEL);
-    } else if (f === 3) {
-      k.hero(c, 66, BASE + 9, S, 'press');
-    } else {
-      k.hero(c, 64, BASE + 9, S, 'cheer');
-      k.check(c, 86, 56, 7);
+      board(c, k, f === 1);
+      return;
+    }
+    if (f === 2) {
+      shapeButton(c, k, 21, 52, 14, 0, false);
+      shapeButton(c, k, 50, 52, 14, 1, false);
+      shapeButton(c, k, 79, 52, 14, 2, true);
+      k.arrow(c, 79, 90, 79, 72, 4.5, k.colors.YEL);
+      k.sparkle(c, 79, 26, 6, k.colors.YEL);
+      return;
+    }
+    k.line(c, [8, GROUND, 92, GROUND], 3, k.colors.GREY);
+    // Close-up: the star button on its console, right; the hero beside it.
+    k.roundRect(c, 64, 72, 26, GROUND - 72, 3);
+    c.fillStyle = k.colors.DARK;
+    c.fill();
+    c.lineWidth = 2.5;
+    c.strokeStyle = k.colors.WHITE;
+    c.stroke();
+    shapeButton(c, k, 77, 64, 11, 2, true, f === 3);
+    if (f === 3) k.hero(c, 55, GROUND, 0.76, 'press');
+    else {
+      k.hero(c, 42, GROUND, 0.78, 'cheer');
+      k.check(c, 22, 30, 12);
+      k.sparkle(c, 77, 40, 6, k.colors.YEL);
     }
   },
 };
