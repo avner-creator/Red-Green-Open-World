@@ -1,15 +1,15 @@
 /**
- * Pip's lost toys: pure logic (no three.js). Seeded paw-print trails from the basket to a hidden
- * spot (validated on an injected world), the "next few prints glow" rule, trail progress and the
- * round / tier progression of a session.
+ * Pip's lost toys: pure logic (no three.js). Seeded paw-print trails from the start pad to a hidden
+ * spot (validated on an injected world), the "next few prints glow" rule and trail progress. The
+ * session's rounds live in ./session.ts.
  */
 import type { GlassesTier } from '../../../types';
 import type { RoadDef } from '../../../world/layout';
-import { hashString, seededRng } from '../idle';
+import { seededRng } from '../idle';
 import { isReserved } from '../reserved';
 import { roadClearance } from '../sites';
 import type { SiteAnchor } from '../sites';
-import { TOYS, TRAIL } from './constants';
+import { TRAIL } from './constants';
 
 export interface XZ {
   x: number;
@@ -28,7 +28,7 @@ export interface TrailWorld {
   blockedBetween?(ax: number, az: number, bx: number, bz: number): boolean;
   /** True when the sky above (x, z) is open (no canopy or roof over the hidden spot). */
   openSky?(x: number, z: number): boolean;
-  /** Extra circles to keep clear of (the board, the basket). */
+  /** Extra circles to keep clear of (the booth, the basket, the bowl). */
   obstacles?: readonly { x: number; z: number; r: number }[];
 }
 
@@ -138,12 +138,12 @@ function walk(w: TrailWorld, start: XZ, angle: number, bend: number, freq: numbe
 }
 
 /**
- * A trail from `start` (the basket) for `tier`, deterministic per `seed`. Tries the candidate
+ * A trail from `start` (the start pad's centre) for `tier`, deterministic per `seed`. Tries the candidate
  * directions in a seeded order (each with a few bends) until every sample passes the rules.
  */
 export interface TrailOptions {
   /**
-   * The direction the child looks when standing at the basket (world yaw, atan2(dx, dz)). The
+   * The direction the child looks when standing on the start pad (world yaw, atan2(dx, dz)). The
    * trail starts off to the side of it (`TRAIL.startOff` band either side), so its first prints
    * are on screen and not under the hero. Directions outside the band are a last resort.
    */
@@ -205,127 +205,4 @@ export function advance(prints: readonly XZ[], next: number, x: number, z: numbe
     if (Math.hypot(prints[j].x - x, prints[j].z - z) <= r) out = j + 1;
   }
   return out;
-}
-
-export type RoundState = 'trail' | 'found' | 'pause' | 'done';
-
-export type RoundEvent =
-  | { type: 'start'; tier: GlassesTier }
-  | { type: 'print'; index: number }
-  | { type: 'found'; tier: GlassesTier; gems: number; toy: number }
-  | { type: 'landed'; toy: number }
-  | { type: 'miss'; tier: GlassesTier }
-  | { type: 'trail'; tier: GlassesTier; seed: number }
-  | { type: 'done' };
-
-/** Trail seed for a session seed and attempt number. */
-export function trailSeed(sessionSeed: number, attempt: number): number {
-  return hashString(`toys:${sessionSeed >>> 0}:${attempt}`);
-}
-
-/**
- * Rounds of a session: three toys, toy n on a tier-n trail. A trail times out `TOYS.timeout`
- * seconds after the player first reaches it (a miss, then a new trail of the same tier).
- */
-export class ToyRounds {
-  state: RoundState = 'trail';
-  /** Toys found this session (= index of the current toy). */
-  found = 0;
-  attempt = 0;
-  seed = 0;
-  next = 0;
-  started = false;
-  /** Seconds since the trail was started (player reached its first print). */
-  clock = 0;
-  /** Seconds in the current 'found' / 'pause' / 'done' state. */
-  t = 0;
-  private sessionSeed = 0;
-  private trailCache: Trail | null = null;
-  private readonly make: (seed: number, tier: GlassesTier) => Trail;
-
-  constructor(make: (seed: number, tier: GlassesTier) => Trail) {
-    this.make = make;
-  }
-
-  get tier(): GlassesTier {
-    return Math.min(3, this.found + 1) as GlassesTier;
-  }
-
-  /** The current trail (built lazily: generation probes the world). */
-  trail(): Trail {
-    if (!this.trailCache) this.trailCache = this.make(this.seed, this.tier);
-    return this.trailCache;
-  }
-
-  reset(sessionSeed: number): void {
-    this.sessionSeed = sessionSeed >>> 0;
-    this.found = 0;
-    this.attempt = 0;
-    this.newTrail();
-  }
-
-  /** Use this exact trail seed now (tests). */
-  setSeed(seed: number): void {
-    this.state = 'trail';
-    this.t = 0;
-    this.seed = seed >>> 0;
-    this.next = 0;
-    this.started = false;
-    this.clock = 0;
-    this.trailCache = null;
-  }
-
-  private newTrail(): void {
-    this.setSeed(trailSeed(this.sessionSeed, this.attempt));
-    this.attempt++;
-  }
-
-  update(dt: number, x: number, z: number): RoundEvent[] {
-    const ev: RoundEvent[] = [];
-    if (this.state === 'trail') {
-      const trail = this.trail();
-      const n = advance(trail.prints, this.next, x, z);
-      if (n > this.next) {
-        if (!this.started) {
-          this.started = true;
-          this.clock = 0;
-          ev.push({ type: 'start', tier: this.tier });
-        }
-        for (let i = this.next; i < n; i++) ev.push({ type: 'print', index: i });
-        this.next = n;
-      } else if (this.started) {
-        this.clock += dt;
-      }
-      if (this.next >= trail.prints.length) {
-        ev.push({ type: 'found', tier: this.tier, gems: TOYS.gems[this.tier], toy: this.found });
-        this.state = 'found';
-        this.t = 0;
-      } else if (this.started && this.clock >= TOYS.timeout) {
-        ev.push({ type: 'miss', tier: this.tier });
-        this.state = 'pause';
-        this.t = 0;
-      }
-      return ev;
-    }
-    this.t += dt;
-    if (this.state === 'found') {
-      const land = TOYS.popSeconds + TOYS.launchSeconds + TOYS.holdSeconds + TOYS.flightSeconds;
-      if (this.t - dt < land && this.t >= land) ev.push({ type: 'landed', toy: this.found });
-      if (this.t >= TOYS.nextAfterFind) {
-        this.found++;
-        if (this.found >= TOYS.perSession) {
-          this.state = 'done';
-          this.t = 0;
-          ev.push({ type: 'done' });
-        } else {
-          this.newTrail();
-          ev.push({ type: 'trail', tier: this.tier, seed: this.seed });
-        }
-      }
-    } else if (this.state === 'pause' && this.t >= TOYS.nextAfterMiss) {
-      this.newTrail();
-      ev.push({ type: 'trail', tier: this.tier, seed: this.seed });
-    }
-    return ev;
-  }
 }
