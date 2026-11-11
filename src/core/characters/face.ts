@@ -131,7 +131,17 @@ export function buildFace(def: FaceDef, object: THREE.Object3D, bone: THREE.Obje
   const map = faceTexture(def);
   const mat =
     material ??
-    new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : 0xf4f0e6, roughness: 0.32, metalness: 0, name: 'hero-face' });
+    new THREE.MeshStandardMaterial({
+      map,
+      color: map ? 0xffffff : 0xf4f0e6,
+      roughness: 0.32,
+      metalness: 0,
+      name: 'hero-face',
+      // A little self-light so eyes stay bright and friendly on a backlit hero (title, shade).
+      emissive: map ? 0xffffff : 0x000000,
+      emissiveMap: map,
+      emissiveIntensity: 0.3,
+    });
   const r = def.eyeR;
   const eyeGeo = new THREE.SphereGeometry(r, 22, 16);
   {
