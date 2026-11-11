@@ -95,7 +95,7 @@ try {
       await shot(`L${String(lines.length).padStart(2, '0')}-t${Math.round(gt)}`);
     }
     if (!res.on) lastId = '';
-    if (Math.abs(gt % 10) < 0.01) {
+    if (Math.abs(gt % 20) < 0.01) {
       await page.evaluate(() => window.__rg.render());
       await shot(`P-t${String(Math.round(gt)).padStart(3, '0')}`);
     }

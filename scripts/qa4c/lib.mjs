@@ -39,7 +39,7 @@ export async function open(dirName, { query = '', width = 1280, height = 720, de
   await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 240000 });
   await page.waitForSelector('#boot', { state: 'detached', timeout: 30000 }).catch(() => {});
   const shot = async (name, opts2 = {}) => {
-    const buf = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
+    const buf = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css', timeout: 150000 });
     writeFileSync(`${out}/${name}.png`, buf);
     if (opts2.channels) {
       const png = PNG.sync.read(buf);
