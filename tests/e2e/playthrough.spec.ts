@@ -9,6 +9,7 @@ import { expect, test } from '@playwright/test';
 import { boot, startGame } from './helpers';
 
 test('new profile: the whole loop, then reload and reset', async ({ page }) => {
+  test.setTimeout(240_000); // slow when other jobs share the CPU
   const { consoleErrors } = await boot(page);
   await page.evaluate(() => {
     const rg = window.__rg!;

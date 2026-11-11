@@ -16,6 +16,7 @@ export const SHOTS = process.env.RG_SHOTS === '1';
  */
 export async function boot(page: Page, query = ''): Promise<{ consoleErrors: string[]; ownWarnings: string[] }> {
   if (!query.includes('quality=')) query += '&quality=low';
+  if (!query.includes('freeze=')) query += '&freeze=1';
   const consoleErrors: string[] = [];
   /** Warnings from our own code or three.js (driver/GPU noise from the browser is ignored). */
   const ownWarnings: string[] = [];
