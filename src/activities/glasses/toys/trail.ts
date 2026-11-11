@@ -28,6 +28,12 @@ export interface TrailWorld {
   blockedBetween?(ax: number, az: number, bx: number, bz: number): boolean;
   /** True when the sky above (x, z) is open (no canopy or roof over the hidden spot). */
   openSky?(x: number, z: number): boolean;
+  /**
+   * True when the hidden spot `end` (beside the last print) is in clear view: the default camera
+   * behind a child walking `prev` → `last` sees the toy pop out (no trunk near either, nothing in
+   * between). Optional (the unit tests' fake worlds leave it out).
+   */
+  endView?(end: XZ, last: TrailPrint, prev: TrailPrint): boolean;
   /** Extra circles to keep clear of (the booth, the basket, the bowl). */
   obstacles?: readonly { x: number; z: number; r: number }[];
 }
@@ -121,18 +127,26 @@ function walk(w: TrailWorld, start: XZ, angle: number, bend: number, freq: numbe
     prevH = h;
   }
   if (prints.length !== count) return fail();
-  // The hidden spot is BESIDE the last print (so the toy pops up next to the hero, not behind them).
-  const last = prints[count - 1];
-  const sides = bend >= 0 ? [1, -1] : [-1, 1];
-  for (const side of sides) {
-    const ex = last.x + Math.cos(last.yaw) * side * TRAIL.endBeside;
-    const ez = last.z - Math.sin(last.yaw) * side * TRAIL.endBeside;
-    if (pointReject(w, ex, ez)) continue;
-    if (w.openSky && !w.openSky(ex, ez)) continue;
-    const ey = surface(w, ex, ez);
-    if (Math.abs(ey - last.y) > TRAIL.maxGrade * TRAIL.endBeside + 0.02) continue;
-    if (w.blockedBetween?.(last.x, last.z, ex, ez)) continue;
-    return { prints, end: { x: ex, y: ey, z: ez, yaw: last.yaw }, ok: true };
+  // The hidden spot is BESIDE the last print (so the toy pops up next to the hero, not behind them),
+  // or just ahead of it.
+  // If no spot beside the last print is fit (e.g. a tree would hide the pop), the trail may end a
+  // few prints earlier, as long as it keeps its minimum length.
+  const minKeep = Math.max(TRAIL.minPrints, Math.ceil(TRAIL.minLength / spacing - 1e-9) + 1);
+  for (let k = count; k >= Math.min(count, minKeep); k--) {
+    const last = prints[k - 1];
+    // Beside the last print (either side), else straight ahead of it.
+    const sides = bend >= 0 ? [1, -1, 0] : [-1, 1, 0];
+    for (const side of sides) {
+      const ex = side === 0 ? last.x + Math.sin(last.yaw) * TRAIL.endBeside : last.x + Math.cos(last.yaw) * side * TRAIL.endBeside;
+      const ez = side === 0 ? last.z + Math.cos(last.yaw) * TRAIL.endBeside : last.z - Math.sin(last.yaw) * side * TRAIL.endBeside;
+      if (pointReject(w, ex, ez)) continue;
+      if (w.openSky && !w.openSky(ex, ez)) continue;
+      const ey = surface(w, ex, ez);
+      if (Math.abs(ey - last.y) > TRAIL.maxGrade * TRAIL.endBeside + 0.02) continue;
+      if (w.blockedBetween?.(last.x, last.z, ex, ez)) continue;
+      if (w.endView && !w.endView({ x: ex, z: ez }, last, prints[k - 2] ?? last)) continue;
+      return { prints: prints.slice(0, k), end: { x: ex, y: ey, z: ez, yaw: last.yaw }, ok: true };
+    }
   }
   return fail();
 }
@@ -153,6 +167,23 @@ export interface TrailOptions {
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 
 export function makeTrail(w: TrailWorld, start: XZ, seed: number, tier: GlassesTier, opts: TrailOptions = {}): Trail {
+  let best: (Attempt & { candidate: number; angle: number }) | null = null;
+  let spacing: number = TRAIL.spacing[tier];
+  // A crowded world (trees, posts) may reject every candidate of a round: further rounds try new
+  // turns of the candidate fan and new bends, still deterministic per seed (round 0 = the seed).
+  for (let round = 0; round < TRAIL.rounds; round++) {
+    const r = tryRound(w, start, round === 0 ? seed : (seed ^ Math.imul(round, 0x9e3779b1)) >>> 0, tier, opts);
+    spacing = r.spacing;
+    if (r.trail) return r.trail;
+    if (r.best && (!best || r.best.prints.length > best.prints.length)) best = r.best;
+  }
+  // Fallback (crowded spot): the longest valid start of a trail, at least two prints.
+  const prints = best && best.prints.length >= 2 ? best.prints : [{ x: start.x + 1.5, y: surface(w, start.x + 1.5, start.z), z: start.z, yaw: Math.PI / 2 }, { x: start.x + 3, y: surface(w, start.x + 3, start.z), z: start.z, yaw: Math.PI / 2 }];
+  const last = prints[prints.length - 1];
+  return { prints, end: { ...last }, spacing, length: spacing * (prints.length - 1), candidate: best?.candidate ?? 0, angle: best?.angle ?? 0, valid: false };
+}
+
+function tryRound(w: TrailWorld, start: XZ, seed: number, tier: GlassesTier, opts: TrailOptions): { trail: Trail | null; best: (Attempt & { candidate: number; angle: number }) | null; spacing: number } {
   const rng = seededRng(seed);
   const K = TRAIL.directions;
   const rot = rng() * ((Math.PI * 2) / K);
@@ -174,21 +205,19 @@ export function makeTrail(w: TrailWorld, start: XZ, seed: number, tier: GlassesT
     const from = { x: start.x + Math.sin(angle) * TRAIL.startOffset, z: start.z + Math.cos(angle) * TRAIL.startOffset };
     for (let v = 0; v < TRAIL.variants; v++) {
       // v 0, 1: a full-length bend either way; v 2, 3: the shortest trail, a gentle bend either way.
-      const bend = (0.22 + rng() * 0.33) * (v % 2 === 1 ? -1 : 1) * (v >= 2 ? 0.4 : 1);
+      // v 4+: stronger bends (the path swings round trees to an open spot).
+      const bend = (0.22 + rng() * 0.33) * (v % 2 === 1 ? -1 : 1) * (v === 2 || v === 3 ? 0.4 : v >= 4 ? 1.6 : 1);
       const freq = 0.6 + rng() * 0.6;
       const phase = rng() * Math.PI * 2;
-      const count = v >= 2 ? trailShape(tier, 0).count : shape.count;
+      const count = v === 2 || v === 3 ? trailShape(tier, 0).count : shape.count;
       const a = walk(w, from, angle, bend, freq, phase, count, shape.spacing);
       if (a.ok && a.end) {
-        return { prints: a.prints, end: a.end, spacing: shape.spacing, length: shape.spacing * (count - 1), candidate: c, angle, valid: true };
+        return { trail: { prints: a.prints, end: a.end, spacing: shape.spacing, length: shape.spacing * (a.prints.length - 1), candidate: c, angle, valid: true }, best: null, spacing: shape.spacing };
       }
       if (!best || a.prints.length > best.prints.length) best = { ...a, candidate: c, angle };
     }
   }
-  // Fallback (crowded spot): the longest valid start of a trail, at least two prints.
-  const prints = best && best.prints.length >= 2 ? best.prints : [{ x: start.x + 1.5, y: surface(w, start.x + 1.5, start.z), z: start.z, yaw: Math.PI / 2 }, { x: start.x + 3, y: surface(w, start.x + 3, start.z), z: start.z, yaw: Math.PI / 2 }];
-  const last = prints[prints.length - 1];
-  return { prints, end: { ...last }, spacing: shape.spacing, length: shape.spacing * (prints.length - 1), candidate: best?.candidate ?? 0, angle: best?.angle ?? 0, valid: false };
+  return { trail: null, best, spacing: shape.spacing };
 }
 
 /** Glow (0..1) of print `i` when `next` is the first print not reached yet. */

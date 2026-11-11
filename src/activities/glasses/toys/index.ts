@@ -22,6 +22,10 @@ import { ROADS } from '../../../world/layout'; // read-only pure data: keeps the
 import { withChallenge } from '../../../vision/toolkit/tiers';
 import { createGlowInstances } from '../glowflies/fx';
 import type { Mechanic, MechanicEnv } from '../types';
+import { MARQUEE } from '../booth/geometry';
+import { siteFrame } from '../gates/kit';
+import { CAM_BACK, CAM_UP, CANOPY_R, chooseLayout } from '../gates/layout';
+import type { LayoutSpec } from '../gates/layout';
 import { BASKET, LAND_AT, livePrize, SPOT, TOY_BOOTH, TOYS, toyRules, TRAIL } from './constants';
 import { TOYS_DEMO } from './demo';
 import { appendToBooth, basketGeometry, buildToys, poseRange } from './models';
@@ -38,8 +42,39 @@ const TOY_YAW = [0.4, 0.15, -Math.PI / 2 + 0.55, 0.9] as const;
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
+  // ── the layout: the booth, basket and pad turned to face where children arrive ──
+  const mq = TOY_BOOTH.marquee;
+  const mqPt = (lx: number, lz: number): { x: number; z: number } => ({
+    x: mq.x + lx * Math.cos(mq.yaw) + lz * Math.sin(mq.yaw),
+    z: mq.z - lx * Math.sin(mq.yaw) + lz * Math.cos(mq.yaw),
+  });
+  const layoutSpec: LayoutSpec = {
+    hero: { x: SPOT.pad.x, z: SPOT.pad.z },
+    targets: [
+      ...[-0.5, 0.5].map((lx) => ({ ...mqPt(lx, 0), y: MARQUEE.lampY })),
+      { x: SPOT.basket.x, z: SPOT.basket.z, y: 0.8 },
+    ],
+    footprint: [
+      ...[-1.6, 1.6].flatMap((lx) => [0.1, -0.5].map((lz) => mqPt(lx, lz))),
+      { x: SPOT.pad.x, z: SPOT.pad.z + SPOT.pad.r },
+      { x: SPOT.basket.x - 1, z: SPOT.basket.z },
+      { x: SPOT.basket.x + 1, z: SPOT.basket.z },
+      { x: SPOT.bowl.x, z: SPOT.bowl.z },
+    ],
+    radius: site.radius + 0.4,
+    arrival: site.arrival,
+    arrivalTargets: [
+      { ...mqPt(0, 0.2), y: MARQUEE.lampY },
+      { ...mqPt(0, 0.2), y: MARQUEE.bannerY },
+      { ...mqPt(0, 0.2), y: MARQUEE.boardY },
+      { x: SPOT.pad.x, z: SPOT.pad.z, y: 0.5 },
+      { x: SPOT.basket.x, z: SPOT.basket.z, y: 0.6 },
+    ],
+  };
+  const lay = chooseLayout(ctx, site, layoutSpec, { refreshDecor: true });
+  const frame = siteFrame(lay);
   const ground = (lx: number, lz: number): number => {
-    const w = env.local(lx, lz);
+    const w = frame.toWorld(lx, lz);
     return env.groundAt(w.x, w.z) - site.y;
   };
 
@@ -48,7 +83,16 @@ export function create(env: MechanicEnv): Mechanic {
   const prize = livePrize(() => session?.prize ?? 0);
   let trailShown = false;
   const kit = env.booth({
+    frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
     ground,
+    // From the pad the child looks over the basket towards the open side where trails start.
+    look: { x: SPOT.pad.x, z: SPOT.pad.z - 6 },
+    // The big moment happens where the toy pops out, far from the booth: turn the camera there.
+    celebrateAt: () => {
+      const e = session?.trail().end;
+      if (!e) return { x: SPOT.pad.x, y: 2, z: SPOT.pad.z - 4 };
+      return kit.toLocal(new THREE.Vector3(e.x, e.y + 2, e.z));
+    },
     spec: TOY_BOOTH,
     demo: TOYS_DEMO,
     rules: toyRules(prize),
@@ -109,6 +153,35 @@ export function create(env: MechanicEnv): Mechanic {
   const marquee = toWorld((mqBox.min.x + mqBox.max.x) / 2, 0, (mqBox.min.z + mqBox.max.z) / 2);
   const tmp = new THREE.Vector3();
   const sky = new THREE.Vector3();
+  const east = new THREE.Vector3(1, 0, 0);
+  /** No trunk, wall, post or bumpable toy inside the disc (parallel scanlines 0.4 m apart, at 0.5 and 1.4 m). */
+  const side = new THREE.Vector3();
+  const along = new THREE.Vector3();
+  /** No trunk or wall within `half` m of the ground line a → b (parallel rays 0.4 m apart, at 1.2 m). */
+  const corridorClear = (ax: number, az: number, bx: number, bz: number, half: number): boolean => {
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 1e-3) return true;
+    along.set((bx - ax) / len, 0, (bz - az) / len);
+    side.set(-along.z, 0, along.x);
+    for (let o = -half; o <= half; o += 0.4) {
+      const sx = ax + side.x * o;
+      const sz = az + side.z * o;
+      const hit = ctx.physics.raycast(tmp.set(sx, ctx.world.heightAt(sx, sz) + 1.2, sz), along, len);
+      if (hit && Math.abs(hit.normal.y) < 0.7) return false;
+    }
+    return true;
+  };
+  const discClear = (x: number, z: number, r: number): boolean => {
+    const gy = ctx.world.heightAt(x, z);
+    for (const h of [0.5, 1.4]) {
+      for (let o = -r + 0.2; o < r; o += 0.4) {
+        const half = Math.sqrt(Math.max(0, r * r - o * o));
+        const hit = ctx.physics.raycast(tmp.set(x - half, gy + h, z + o), east, 2 * half);
+        if (hit && Math.abs(hit.normal.y) < 0.7) return false;
+      }
+    }
+    return true;
+  };
   const world: TrailWorld = {
     heightAt: (x, z) => ctx.world.heightAt(x, z),
     isLand: (x, z) => ctx.world.isLand(x, z),
@@ -137,6 +210,40 @@ export function create(env: MechanicEnv): Mechanic {
       }
       return true;
     },
+    endView(end, last, prev) {
+      // The pop must be in clear view of the DEFAULT camera behind a child arriving along the last
+      // stretch: no trunk, wall or post near the spot or near that camera (canopies have no
+      // colliders, so the clearance is generous), and nothing between the camera and the toy.
+      const yaw = Math.atan2(last.x - prev.x, last.z - prev.z);
+      const cx = last.x - Math.sin(yaw) * CAM_BACK;
+      const cz = last.z - Math.cos(yaw) * CAM_BACK;
+      if (!ctx.world.isLand(cx, cz)) return false;
+      if (!discClear(end.x, end.z, TRAIL.endClear) || !discClear(cx, cz, TRAIL.camClear)) return false;
+      // A canopy reaches ~3.5 m from its trunk: no trunk that close to the camera → spot line.
+      if (!corridorClear(cx, cz, end.x, end.z, CANOPY_R + 0.5)) return false;
+      const camY = Math.max(ctx.world.heightAt(cx, cz), last.y) + CAM_UP;
+      const hero = { x: last.x, y: last.y + 1.5, z: last.z };
+      const ey = ctx.world.heightAt(end.x, end.z);
+      // On screen: the spot and the top of the pop stay well inside the default camera's view
+      // (it looks at the hero's pivot): ≤ 24° above/below and ≤ 30° beside that line.
+      const elev = (dx: number, dy: number, dz: number): number => Math.atan2(dy, Math.hypot(dx, dz));
+      const pv = { x: last.x - cx, y: last.y + 1.45 - camY, z: last.z - cz };
+      const fwdYaw = Math.atan2(pv.x, pv.z);
+      const fwdElev = elev(pv.x, pv.y, pv.z);
+      for (const h of [0.6, 0.6 + TOYS.launchHeight + 0.6]) {
+        const tx = end.x - cx;
+        const ty = ey + h - camY;
+        const tz = end.z - cz;
+        const dYaw = Math.atan2(Math.sin(Math.atan2(tx, tz) - fwdYaw), Math.cos(Math.atan2(tx, tz) - fwdYaw));
+        if (Math.abs(dYaw) > 0.52 || Math.abs(elev(tx, ty, tz) - fwdElev) > 0.42) return false;
+      }
+      for (const t of [hero, { x: end.x, y: ey + 0.6, z: end.z }, { x: end.x, y: ey + 0.6 + TOYS.launchHeight, z: end.z }]) {
+        sky.set(t.x - cx, t.y - camY, t.z - cz);
+        const len = sky.length();
+        if (ctx.physics.raycast(tmp.set(cx, camY, cz), sky.normalize(), len - 0.3)) return false;
+      }
+      return true;
+    },
     blockedBetween(ax, az, bx, bz) {
       const dx = bx - ax;
       const dz = bz - az;
@@ -152,7 +259,7 @@ export function create(env: MechanicEnv): Mechanic {
     },
   };
   // On the pad the child looks along site −Z (over the basket, towards the booth's side).
-  const forward = site.yaw + Math.PI;
+  const forward = lay.yaw + Math.PI;
   const s = new ToySession((seed, tier) => makeTrail(world, pad, seed, tier, { forward }));
   session = s;
 
@@ -219,7 +326,7 @@ export function create(env: MechanicEnv): Mechanic {
       sy = 1 - Math.sin(k * Math.PI) * 0.25;
       sx = 1 + Math.sin(k * Math.PI) * 0.15;
     }
-    m.compose(p, q.setFromEuler(e.set(0, site.yaw + basketYaw + TOY_YAW[Math.min(kind, 3)], 0)), sc.set(sx, sy, sx));
+    m.compose(p, q.setFromEuler(e.set(0, lay.yaw + basketYaw + TOY_YAW[Math.min(kind, 3)], 0)), sc.set(sx, sy, sx));
     toys.set(count, m, kind);
     return count + 1;
   }
@@ -273,7 +380,7 @@ export function create(env: MechanicEnv): Mechanic {
         size = S + (1 - S) * ke;
         spin = Math.PI * 3.25 + k * Math.PI * 4;
       }
-      m.compose(p, q.setFromEuler(e.set(tumble, site.yaw + spin + s.toy * 1.9, 0)), sc.set(sx * size, sy * size, sx * size));
+      m.compose(p, q.setFromEuler(e.set(tumble, lay.yaw + spin + s.toy * 1.9, 0)), sc.set(sx * size, sy * size, sx * size));
       toys.set(count++, m, s.toy);
     }
     toys.commit(count);
@@ -448,7 +555,7 @@ export function create(env: MechanicEnv): Mechanic {
       const trail = s.trail();
       const k = kit.debug();
       const pt = (lx: number, lz: number): { x: number; y: number; z: number } => {
-        const w = env.local(lx, lz);
+        const w = frame.toWorld(lx, lz);
         return { x: w.x, y: env.groundAt(w.x, w.z), z: w.z };
       };
       return {
@@ -496,7 +603,8 @@ export function create(env: MechanicEnv): Mechanic {
           const b = pt(-1.2, 0);
           return { ...a, yaw: Math.atan2(b.x - a.x, b.z - a.z) };
         })(),
-        yaw: site.yaw,
+        yaw: lay.yaw,
+        layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes },
       };
     },
     force(params) {
