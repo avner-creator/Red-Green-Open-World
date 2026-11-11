@@ -296,7 +296,7 @@ test('nothing of the world stands in front of a booth, seen from the arrival', a
  * of every HUD element). The others are measured and logged; their builders add their id here
  * when they place their prompt with `booth/view.ts` (see the booth README).
  */
-const PROMPT_ENFORCED = new Set(['gates', 'glowflies', 'lineup']);
+const PROMPT_ENFORCED = new Set(['gates', 'toys', 'glowflies', 'lineup']);
 
 test('the play prompt is in clear view from the pad: central safe area, never under the HUD', async () => {
   test.setTimeout(180_000);

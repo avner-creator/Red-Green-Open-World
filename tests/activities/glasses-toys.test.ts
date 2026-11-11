@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { buildBoothGeometry } from '../../src/activities/glasses/booth/geometry';
+import { auditDemo } from '../../src/activities/glasses/booth/legibility';
 import { RoundMachine } from '../../src/activities/glasses/booth/round';
 import { LAND_AT, livePrize, SPOT, TOY_BOOTH, toyPrize, toyRules, TOYS, TRAIL } from '../../src/activities/glasses/toys/constants';
 import { TOYS_DEMO } from '../../src/activities/glasses/toys/demo';
@@ -157,6 +158,24 @@ describe('paw-print trails', () => {
       const last = t.prints[t.prints.length - 1];
       expect(Math.hypot(t.end.x - last.x, t.end.z - last.z)).toBeCloseTo(TRAIL.endBeside, 5);
     }
+  });
+
+  it('hides the toy only where the end view says the pop is in clear view', () => {
+    const calls: number[] = [];
+    const w: TrailWorld = {
+      ...fakeWorld(),
+      endView: (end, last, prev) => {
+        calls.push(1);
+        expect(Math.hypot(end.x - last.x, end.z - last.z)).toBeCloseTo(TRAIL.endBeside, 5);
+        expect(prev).not.toBe(last);
+        return end.x > 0;
+      },
+    };
+    for (let seed = 1; seed <= 30; seed++) {
+      const t = makeTrail(w, START, seed, 1);
+      if (t.valid) expect(t.end.x).toBeGreaterThan(0);
+    }
+    expect(calls.length).toBeGreaterThan(0);
   });
 
   it('falls back to a short, flagged trail when nothing fits', () => {
@@ -340,6 +359,7 @@ describe('booth: rules, prizes, demo, basket', () => {
   it('the demo is a 4–6 frame flipbook; the booth has three lamps and a press pad', () => {
     expect(TOYS_DEMO.frames).toBeGreaterThanOrEqual(4);
     expect(TOYS_DEMO.frames).toBeLessThanOrEqual(6);
+    expect(auditDemo(TOYS_DEMO).problems, 'demo legible at 8 m').toEqual([]);
     expect(TOY_BOOTH.lamps).toBe(TOYS.perSession);
     expect(TOY_BOOTH.pad.walkIn).toBe(false);
     expect(TOY_BOOTH.playPrompt).toBe('follow');

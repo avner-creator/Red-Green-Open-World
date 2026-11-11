@@ -408,31 +408,24 @@ async function walkTrail(): Promise<boolean[]> {
   }, d.prints);
 }
 
-/** A spot ~30 m out on the approach with a clear sight of the booth and the pad, facing them. */
-async function farSpot(d: { pad: P3; booth: P3; far: Yawed; yaw: number }): Promise<Yawed> {
-  return page.evaluate((d) => {
+/** Where children arrive (the road end of the stepping-stone trail) and a spot `dist` m from the site on that line, facing the booth. */
+async function arrivalSpot(dist: number | null): Promise<Yawed> {
+  return page.evaluate((dist) => {
     const w = window.__rg!.ctx.world;
     const g = window.__rgGlasses!;
-    const by = w.heightAt(d.booth.x, d.booth.z) + 3.8;
-    for (const dist of [30, 28, 32, 26]) {
-      for (const off of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
-        const a = d.yaw + off;
-        const x = d.pad.x + Math.sin(a) * dist;
-        const z = d.pad.z + Math.cos(a) * dist;
-        const y = w.heightAt(x, z);
-        if (!w.isLand(x, z) || y < w.waterLevel + 0.5) continue;
-        if (g.sight({ x, y: y + 2.6, z }, { x: d.booth.x, y: by, z: d.booth.z }) !== null) continue;
-        if (g.sight({ x, y: y + 1.5, z }, { x: d.pad.x, y: d.pad.y + 1.2, z: d.pad.z }) !== null) continue;
-        const bx = d.booth.x * 0.55 + d.pad.x * 0.45;
-        const bz = d.booth.z * 0.55 + d.pad.z * 0.45;
-        return { x, y, z, yaw: Math.atan2(bx - x, bz - z) };
-      }
-    }
-    return d.far;
-  }, d);
+    const s = g.sites().find((x) => x.id === 'toys')!;
+    const d = g.debug('toys') as { booth: P3; pad: P3 };
+    const a = s.arrival!;
+    const l = Math.hypot(a.x - s.x, a.z - s.z) || 1;
+    const x = dist === null ? a.x : s.x + ((a.x - s.x) / l) * dist;
+    const z = dist === null ? a.z : s.z + ((a.z - s.z) / l) * dist;
+    const bx = d.booth.x * 0.5 + d.pad.x * 0.5;
+    const bz = d.booth.z * 0.5 + d.pad.z * 0.5;
+    return { x, y: w.heightAt(x, z), z, yaw: Math.atan2(bx - x, bz - z) };
+  }, dist);
 }
 
-test("Pip's toys: a booth from 30 m; at the pad press Use → 3-2-1-GO → the trail lights up at the pad", async () => {
+test("Pip's toys: the booth from the arrival and 12 m; at the pad press Use → 3-2-1-GO → the trail lights up at the pad", async () => {
   const id = 'toys';
   await view(id);
   expect(await page.evaluate((i) => window.__rgGlasses!.active(i), id)).toBe(true);
@@ -442,14 +435,18 @@ test("Pip's toys: a booth from 30 m; at the pad press Use → 3-2-1-GO → the t
   expect(d.phase).toBe('idle');
   expect(d.trailShown).toBe(false);
   expect(d.toysShown).toBe(0);
-  // From ~30 m on the approach: the marquee reads in R-only and G-only.
-  const spot = await farSpot(d);
-  await standAt(spot, spot.yaw);
-  const far = await boothShots('toys-30m');
+  // From where children arrive (the end of the stepping-stone trail at the road) and from 12 m.
+  const arrive = await arrivalSpot(null);
+  await standAt(arrive, arrive.yaw);
+  await boothShots('toys-arrival');
+  console.log(`toys: booth rect from the arrival ${JSON.stringify(await page.evaluate(() => window.__rgGlasses!.boardRect('toys')))}`);
+  const near = await arrivalSpot(12);
+  await standAt(near, near.yaw);
+  const img12 = await boothShots('toys-12m');
   const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('toys'));
-  expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
-  expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
-  expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  expect(rect, 'the booth is on screen from 12 m').not.toBeNull();
+  expect(channelSpread(img12, rect!, 0), 'marquee R contrast from 12 m').toBeGreaterThan(80);
+  expect(channelSpread(img12, rect!, 1), 'marquee G contrast from 12 m').toBeGreaterThan(80);
   // On the pad: attract (demo runs, pad pulses, the device's button floats over the pad).
   await standAt(d.view, d.view.yaw);
   d = await dbg(id);
@@ -546,12 +543,9 @@ test("Pip's toys: follow the trail → the toy pops out (✓, lamp), flies into 
   let log = await logged();
   expect(log.results).toEqual([{ mechanic: id, tier: 1, hit: true }]);
   // The top of the pop, seen from two prints back.
+  // The top of the pop, with the default camera behind the child who just arrived.
   await stepN(52);
-  {
-    const p0 = d.prints[d.prints.length - 3];
-    await standAt(p0, Math.atan2(d.end.x - p0.x, d.end.z - p0.z), 1);
-  }
-  await boothShots('toys-pop');
+  await boothShots('toys-pop-1');
   await expectDrawBudget(page, id, 6);
   // The toy lands in its place, then the prize flies out (+5).
   await stepN(150);
@@ -617,8 +611,10 @@ test("Pip's toys: a time-out is a miss (✗); leaving cancels; three toys → th
     await forceToys({ play: true });
     await walkTrail();
     expect((await dbg(id)).found).toBe(toy + 1);
+    await stepN(52);
+    await boothShots(`toys-pop-${toy + 1}`);
     if (toy === 2) {
-      await stepN(Math.round((await dbg(id)).landAt * 60) + 6);
+      await stepN(Math.round((await dbg(id)).landAt * 60) + 6 - 52);
       d = await dbg(id);
       expect(d.celebrating, 'the basket hops').toBe(true);
       expect(d.inBasket).toBe(3);
