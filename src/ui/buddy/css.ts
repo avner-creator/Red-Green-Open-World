@@ -11,6 +11,7 @@ const CSS = `
   opacity:0;transform:scale(.4);transform-origin:var(--tx,50%) 110%;transition:opacity .14s,transform .22s cubic-bezier(.3,1.6,.5,1);
   visibility:hidden}
 .rg .pipb.on{opacity:1;transform:scale(1);visibility:visible}
+.rg .pipb.ease{transition:opacity .14s,transform .22s cubic-bezier(.3,1.6,.5,1),left .2s ease-out,top .2s ease-out}
 .rg .pipb.below{transform-origin:var(--tx,50%) -10%}
 .rg .pipb .pic{flex:none;width:calc(var(--u)*7.2);height:calc(var(--u)*7.2);display:flex;align-items:center;justify-content:center;
   background:#2b2418;border-radius:50%;box-shadow:inset 0 0 0 calc(var(--u)*.35) #ffd93b}

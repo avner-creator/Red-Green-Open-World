@@ -113,3 +113,50 @@ test.describe('how-to at an attraction', () => {
     expect(consoleErrors).toEqual([]);
   });
 });
+
+test.describe('bubble stays put on a phone (QA round 4-C regression)', () => {
+  test.use({ viewport: { width: 667, height: 375 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+
+  test('60 s sampled every frame: at most one move per line, never a jump without the ease', async ({ page }) => {
+    test.setTimeout(600_000);
+    const { consoleErrors } = await boot(page, '&buddyIntro=1');
+    await startGame(page, true);
+    const r = await page.evaluate(() => {
+      const rg = window.__rg!;
+      const el = document.querySelector<HTMLElement>('[data-testid="pip-bubble"]')!;
+      let line = '';
+      let pos: { x: number; y: number } | null = null;
+      const moves = new Map<string, number>();
+      const bad: string[] = [];
+      for (let f = 0; f < 60 * 60; f++) {
+        // Walk about, stop, turn: Pip and the hero move across the screen.
+        const ph = Math.floor(f / 240) % 4;
+        rg.inject(ph === 0 ? { moveY: 1 } : ph === 1 ? { moveX: 1, lookX: 0.02 } : ph === 2 ? null : { moveY: -1 });
+        rg.step(1 / 60, 1, false);
+        const on = el.classList.contains('on');
+        const id = `${el.dataset.id ?? ''}|${el.dataset.text ?? ''}`;
+        const p = { x: parseFloat(el.style.left) || 0, y: parseFloat(el.style.top) || 0 };
+        if (!on) {
+          pos = null;
+          continue;
+        }
+        if (id !== line || !pos) {
+          line = id;
+          pos = p;
+          continue;
+        }
+        const d = Math.hypot(p.x - pos.x, p.y - pos.y);
+        if (d > 0.5) {
+          moves.set(id, (moves.get(id) ?? 0) + 1);
+          if (d > 30 && !el.classList.contains('ease')) bad.push(`${id} jumped ${Math.round(d)} px at frame ${f}`);
+          pos = p;
+        }
+      }
+      rg.inject(null);
+      return { moves: [...moves.entries()], bad };
+    });
+    for (const [id, n] of r.moves) expect(n, id).toBeLessThanOrEqual(1);
+    expect(r.bad).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  });
+});

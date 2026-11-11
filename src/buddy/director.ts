@@ -34,8 +34,13 @@ const isGlasses = (a: Attraction): a is GlassesAttraction => (GLASSES_ATTRACTION
 
 export type IntroStep = 'story' | 'follow' | 'jump' | 'done';
 
-/** Seconds between re-prompts of the same step. */
-export const REPROMPT = 15;
+/** Seconds before each "follow me" re-prompt: it backs off so Pip never nags. */
+export const REPROMPT_STEPS = [12, 25, 45] as const;
+export const REPROMPT = REPROMPT_STEPS[0];
+/** Minimum seconds between stuck rescues, by how many came right before at the same spot. */
+export const RESCUE_GAPS = [0, 8, 12] as const;
+/** After this many rescues at the same spot (the camera turn did not help), Pip hops the hero free. */
+export const HOP_AFTER = 3;
 /** At most one unsolicited hint/reaction per this many seconds. */
 export const HINT_GAP = UNSOLICITED_GAP;
 /** The intro can be skipped after this many seconds. */
@@ -130,6 +135,11 @@ export interface DirectorSink {
   celebrate(big: boolean): void;
   /** Little bark (count barks, nudges). */
   bark(kind: 'yip' | 'bark' | 'whine'): void;
+  /**
+   * Stuck for good (a fence at the island edge, a touch stick with no camera turn): a friendly
+   * hop of the hero a few metres towards `toward` (always an attraction anchor).
+   */
+  hop?(toward: V2): void;
   /** Pip puts on his own magic glasses and sparkles for `seconds` (carries no position). */
   glasses(seconds: number): void;
   /** The hero's next goal right now. */
@@ -189,6 +199,10 @@ export class Director {
   private wanderT = 0;
   private beatT = 0;
   private lastNearest = Infinity;
+  private reprompts = 0;
+  private lastRescue = -99;
+  private stuckRun = 0;
+  private stuckAt: V2 | null = null;
   private at: Attraction | null = null;
   private atT = 0;
   /** The how-to topic where the hero is now (focused prompt, else the attraction). */
@@ -235,6 +249,10 @@ export class Director {
     this.pushT = 0;
     this.wanderT = 0;
     this.rescues = 0;
+    this.reprompts = 0;
+    this.lastRescue = -99;
+    this.stuckRun = 0;
+    this.stuckAt = null;
     this.at = null;
     this.atT = 0;
     this.topicNow = null;
@@ -269,7 +287,7 @@ export class Director {
     this.finishIntro();
     this.guiding = false;
     this.stopLead();
-    this.say(line(INTRO.skipped, PRIORITY.story, 'intro:skipped'));
+    this.say({ ...line(INTRO.skipped, PRIORITY.story, 'intro:skipped'), interrupt: true });
     return true;
   }
 
@@ -279,7 +297,7 @@ export class Director {
    */
   ask(explain: ScriptLine | null): void {
     if (explain) {
-      this.say(line(explain, PRIORITY.story, 'ask'));
+      this.say({ ...line(explain, PRIORITY.story, 'ask'), interrupt: true });
       return;
     }
     if (this.topicNow && this.step !== 'story') {
@@ -287,7 +305,7 @@ export class Director {
       this.howTo(this.topicNow, PRIORITY.story, true);
       return;
     }
-    this.sayGoal(PRIORITY.story);
+    this.sayGoal(PRIORITY.story, true);
   }
 
   // ───────────── events ─────────────
@@ -651,7 +669,9 @@ export class Director {
 
   /** "Follow me" again with a different line (or just a bark once they are used up). */
   private reprompt(): void {
-    if (this.playT - this.lastPrompt < REPROMPT || !this.canHint()) return;
+    const wait = REPROMPT_STEPS[Math.min(this.reprompts, REPROMPT_STEPS.length - 1)];
+    if (this.playT - this.lastPrompt < wait || !this.canHint()) return;
+    this.reprompts++;
     this.lastPrompt = this.playT;
     this.lastHint = this.playT;
     this.sink.bark('bark');
@@ -773,12 +793,20 @@ export class Director {
     this.pushT = 0;
     this.wanderT = 0;
     if (why === 'idle') this.stillT = -IDLE_SECONDS;
+    if (why === 'stuck') {
+      // Stuck again near the last stuck spot = the last rescue did not help.
+      const same = !!this.stuckAt && Math.hypot(v.hero.x - this.stuckAt.x, v.hero.z - this.stuckAt.z) < 6;
+      this.stuckRun = same ? this.stuckRun + 1 : 1;
+      this.stuckAt = { ...v.hero };
+      if (this.playT - this.lastRescue < RESCUE_GAPS[Math.min(this.stuckRun - 1, RESCUE_GAPS.length - 1)]) return false;
+    } else this.stuckRun = 0;
     this.rescue(v, why === 'stuck');
     return true;
   }
 
   private rescue(v: DirectorView, assist: boolean): void {
     this.rescues++;
+    this.lastRescue = this.playT;
     // Lead to the tour's target if there is one, else the nearest fun place not done yet.
     let to: Attraction | null = this.leadTo && this.leadKind === 'tour' ? this.leadTo : null;
     if (!to && this.step !== 'done') to = FIRST_ATTRACTION;
@@ -787,9 +815,21 @@ export class Director {
     const kind: LeadKind = this.leadKind === 'tour' || this.step !== 'done' ? 'tour' : 'rescue';
     this.leadToPlace(to, kind, { fetch: true, assist });
     this.sink.bark('bark');
-    if (this.step !== 'story' && this.canHint() && this.fresh(RESCUE.text)) {
-      this.lastHint = this.playT;
-      this.say(line(RESCUE, PRIORITY.tip, 'rescue'));
+    if (assist && this.stuckRun >= HOP_AFTER) {
+      // Two rescues did not get the hero free: a friendly hop towards the way out.
+      const p = this.sink.anchor(to);
+      if (p && this.sink.hop) {
+        this.sink.hop(p);
+        this.stuckRun = 0;
+        this.stuckAt = null;
+      }
+    }
+    if (this.step !== 'story' && this.canHint()) {
+      const pick = this.fresh(RESCUE.text) ? RESCUE : this.bag('follow').next((l) => this.fresh(l.text));
+      if (pick) {
+        this.lastHint = this.playT;
+        this.say(line({ ...RESCUE, text: pick.text }, PRIORITY.tip, 'rescue'));
+      }
     }
   }
 
@@ -872,7 +912,7 @@ export class Director {
     if (asked) {
       // The child asked: say it now.
       const first = items.shift()!;
-      this.say(first.line);
+      this.say({ ...first.line, interrupt: true });
     }
     this.chain.push(...items);
   }
@@ -906,8 +946,8 @@ export class Director {
     this.sinceProgress = 0;
   }
 
-  private sayGoal(priority: Line['priority']): void {
+  private sayGoal(priority: Line['priority'], interrupt = false): void {
     const g = this.sink.goal();
-    this.say(line(g.line, priority, `goal:${g.id}`));
+    this.say({ ...line(g.line, priority, `goal:${g.id}`), interrupt });
   }
 }

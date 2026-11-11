@@ -39,6 +39,8 @@ export interface Voice {
    * unlocked and a clip for it exists. Then the bubble shows only pictograms.
    */
   audible(text: string): boolean;
+  /** Still saying (or about to say) the current line: the bubble waits for the voice to finish. */
+  talking(): boolean;
   /** Seconds of the recorded clip for this text, once the manifest is loaded (bubble sync). */
   clipSeconds(text: string): number | null;
   /** Everything it was asked to say (kept in test mode only). */
@@ -81,6 +83,7 @@ function recorder(settings: SettingsApi): Voice {
     requests,
     // Test mode stands in for an unlocked device: audible when the voice is on and a clip exists.
     audible: (text) => pipVoiceLevel(settings.get()) > 0 && !!bank.info(text),
+    talking: () => false,
     speak(text) {
       void bank.load();
       if (requests.length >= 200) return;
@@ -129,7 +132,7 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
     typeof window === 'undefined' ? null : ((window as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor }).AudioContext ??
       (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext ??
       null);
-  const noop: Voice = { speak() {}, bark() {}, hush() {}, audible: () => false, clipSeconds: () => null, requests: [], dispose() {} };
+  const noop: Voice = { speak() {}, bark() {}, hush() {}, audible: () => false, talking: () => false, clipSeconds: () => null, requests: [], dispose() {} };
   if (opts.testMode) return recorder(opts.settings);
   if (!ctor) return noop;
 
@@ -202,16 +205,31 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
     }
   };
 
+  /** The gain of the clip now playing (faded out, never cut mid-word). */
+  let clipGain: GainNode | null = null;
+  /** A line is waiting for its clip (manifest / bytes / decode). */
+  let pending = false;
+
   const stopTalking = (): void => {
     token++;
+    pending = false;
     if (clip) {
+      const src = clip;
+      const g = clipGain;
+      clip = null;
+      clipGain = null;
       try {
-        clip.stop();
+        // A 150 ms fade instead of a hard cut.
+        const now = ac?.currentTime ?? 0;
+        g?.gain.setTargetAtTime(0, now, 0.04);
+        src.stop(now + 0.15);
       } catch {
         /* already stopped */
       }
-      clip.disconnect();
-      clip = null;
+      window.setTimeout(() => {
+        src.disconnect();
+        g?.disconnect();
+      }, 300);
     }
     speaker.cancel();
   };
@@ -221,12 +239,17 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
     const src = a.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = moodRate(mood);
-    src.connect(talkOut);
+    const g = a.createGain();
+    src.connect(g).connect(talkOut);
     src.onended = () => {
-      if (clip === src) clip = null;
+      if (clip === src) {
+        clip = null;
+        clipGain = null;
+      }
     };
     src.start(a.currentTime + 0.01);
     clip = src;
+    clipGain = g;
     duck(buf.duration / src.playbackRate.value + 0.3);
   };
 
@@ -345,6 +368,7 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
 
   return {
     requests: [],
+    talking: () => pending || clip !== null,
     audible: (text) => {
       const s = opts.settings.get();
       return talkLevel(s) > 1e-4 && !!ready() && !!bank.info(text);
@@ -362,17 +386,25 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
         return;
       }
       let settled = false;
-      const timer = window.setTimeout(() => {
+      pending = true;
+      // Wait for the clip list first (the very first line comes right after the first gesture),
+      // then give the clip itself CLIP_WAIT seconds before the on-device fallback.
+      void bank.load().then(() => {
         if (settled || mine !== token) return;
-        settled = true;
-        fallback(a, text, mood);
-      }, CLIP_WAIT * 1000);
-      void bank.buffer(a, text).then((buf) => {
-        if (settled || mine !== token) return;
-        settled = true;
-        window.clearTimeout(timer);
-        if (buf) playClip(a, buf, mood);
-        else fallback(a, text, mood);
+        const timer = window.setTimeout(() => {
+          if (settled || mine !== token) return;
+          settled = true;
+          pending = false;
+          fallback(a, text, mood);
+        }, CLIP_WAIT * 1000);
+        void bank.buffer(a, text).then((buf) => {
+          if (settled || mine !== token) return;
+          settled = true;
+          pending = false;
+          window.clearTimeout(timer);
+          if (buf) playClip(a, buf, mood);
+          else fallback(a, text, mood);
+        });
       });
     },
     hush() {

@@ -150,13 +150,16 @@ async function main() {
   if (todo.length) {
     const { model, voice, py } = setup();
     const work = join(CACHE, 'work');
-    rmSync(work, { recursive: true, force: true });
+    // Raw WAVs are named by clip id (= the line's text), so ones left by an interrupted run are
+    // reused; `--all` starts clean.
+    if (args.has('--all')) rmSync(work, { recursive: true, force: true });
     mkdirSync(work, { recursive: true });
+    const fresh = todo.filter((l) => !existsSync(join(work, `${l.id}.wav`)));
     // Render in a few parallel shards (PIP_TTS_SHARDS, default 3): much quicker on a busy machine.
     const shards = Math.max(1, Math.min(8, Number(process.env.PIP_TTS_SHARDS ?? 3) || 1));
     const runs = [];
     for (let k = 0; k < shards; k++) {
-      const part = todo.filter((_, i) => i % shards === k);
+      const part = fresh.filter((_, i) => i % shards === k);
       if (!part.length) continue;
       const dir = join(work, `s${k}`);
       mkdirSync(dir, { recursive: true });

@@ -150,6 +150,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
   const ui = createBuddyUi(ctx.uiRoot);
   const queue = new DialogueQueue();
   queue.clipSeconds = (l) => voice.clipSeconds(l.text);
+  queue.talking = () => voice.talking();
   const rand = mulberry(ctx.testMode ? 7 : (Date.now() & 0xffff) + 1);
   const hintFn = chestHintFn();
   const raycaster = { origin: new THREE.Vector3(), dir: new THREE.Vector3(0, -1, 0) };
@@ -307,6 +308,17 @@ export function createBuddy(ctx: GameContext): GameSystem {
       leader.set(target, opts?.radius ?? 6, opts?.fetch ?? false);
       if (!target) leadOut = null;
       assistT = target && opts?.assist ? 6 : 0;
+    },
+    hop(toward) {
+      const p = ctx.player;
+      if (p.mode !== 'walk') return;
+      const dx = toward.x - p.position.x;
+      const dz = toward.z - p.position.z;
+      const d = Math.hypot(dx, dz) || 1;
+      // About 5 m towards the way out, 1.8 m high: over a low fence, a comic boing.
+      p.launch(new THREE.Vector3((dx / d) * 6, 9, (dz / d) * 6));
+      voice.bark('yip');
+      cheerT = Math.max(cheerT, 1);
     },
     glasses(seconds) {
       gogglesT = Math.max(gogglesT, seconds);
@@ -894,7 +906,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         ui.setDevice(ctx.input.state.device);
         const ps = queue.current ? pipScreen() : null;
         pipOnScreen = !queue.current || !!ps?.on;
-        ui.update(queue.revealFraction(), heroRect());
+        ui.update(dt, queue.revealFraction(), ps, heroRect());
       }
     },
     dispose(): void {

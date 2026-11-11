@@ -282,6 +282,31 @@ describe('ShuffleBag', () => {
   });
 });
 describe('Director: rescues', () => {
+  it('"follow me" backs off (12 s, 25 s, 45 s) with varied lines, never the same twice', () => {
+    const { d, said, play } = talking(1);
+    d.begin(true);
+    play(40, { heroSpeed: 0, hero: { x: -30, z: 0 } });
+    expect(d.step).toBe('follow');
+    const n = said.length;
+    play(120, { heroSpeed: 0, hero: { x: -30, z: 0 } });
+    const f = said.slice(n).filter((l) => l.id === 'intro:follow');
+    expect(f.length).toBeGreaterThanOrEqual(2);
+    expect(f.length).toBeLessThanOrEqual(4);
+    expect(new Set(f.map((l) => l.text)).size).toBe(f.length);
+  });
+
+  it('stuck at the same fence after two rescues: Pip hops the hero free towards an attraction', () => {
+    const r = setup();
+    const hops: V2[] = [];
+    r.sink.hop = (t) => hops.push(t);
+    r.d.begin(true);
+    tick(r.d, 1);
+    tick(r.d, 40, view({ hero: { x: 98, z: -40 }, heroSpeed: 0.5, pushing: true }));
+    expect(r.d.rescues).toBeGreaterThanOrEqual(3);
+    expect(hops.length).toBeGreaterThanOrEqual(1);
+    expect(PLACES.some((p) => p.x === hops[0].x && p.z === hops[0].z)).toBe(true);
+  });
+
   it('pushing against a fence for 3 s: Pip fetches the hero, leads, and helps turn', () => {
     const { d, opts } = setup();
     d.begin(true);

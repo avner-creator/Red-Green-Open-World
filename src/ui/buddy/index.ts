@@ -26,8 +26,11 @@ export interface BuddyUi {
   readonly bubble: HTMLElement;
   /** Show a line (null hides the bubble) in a mode ('full' by default). */
   show(active: ActiveLine | null, mode?: BubbleMode): void;
-  /** Per frame: typewriter fraction (full mode) and the hero's screen box to keep clear. */
-  update(reveal: number, hero: Rect | null): void;
+  /**
+   * Per frame (game seconds): typewriter fraction (full mode), Pip's head on screen (px in uiRoot
+   * space; `on` false = the screen-edge point towards him) and the hero's screen box to keep clear.
+   */
+  update(dt: number, reveal: number, pip: { x: number; y: number; on?: boolean } | null, hero: Rect | null): void;
   setDevice(device: 'keyboard' | 'gamepad' | 'touch'): void;
   /** HUD element under the last mouse position, if Pip can explain it. */
   hovered(): HudKey | null;
@@ -38,6 +41,11 @@ export interface BuddyUi {
 
 const ARROW =
   '<svg viewBox="0 0 60 40" aria-hidden="true"><path d="M2 20 L26 2 L26 12 L58 12 L58 28 L26 28 L26 38 Z" fill="#ffd93b" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/><path d="M8 20 L24 8" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8"/></svg>';
+
+/** Seconds between "is the bubble covered?" checks. */
+const CHECK_EVERY = 0.25;
+/** The bubble moves only after its spot has been covered this long (then it eases). */
+export const OCCLUDED_MOVE = 0.5;
 
 export function createBuddyUi(root: HTMLElement): BuddyUi {
   injectBuddyCss();
@@ -59,9 +67,14 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   let mode: BubbleMode = 'full';
   let revealed = -1;
   let heroBox: Rect | null = null;
-  /** Seconds until the next "is the HUD under the bubble now?" check. */
+  let pipAt: { x: number; y: number; on?: boolean } | null = null;
+  /** Seconds until the next "is the bubble covered now?" check. */
   let recheck = 0;
-  let lastFrame = 0;
+  /** Seconds the bubble has been badly placed in a row (moves only after OCCLUDED_MOVE). */
+  let occludedT = 0;
+  /** Bubble's left edge and the tail x (eased towards Pip each frame). */
+  let boxX = 0;
+  let tailX = 0;
   let callout: string | null = null;
   let device: 'keyboard' | 'gamepad' | 'touch' | null = null;
   /** Draw the action glyph (key cap / pad button / touch gesture) for the current device. */
@@ -102,38 +115,48 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
     return { x: left, y: top, w: w - left - m, h: hh - top - m };
   };
 
-  /** Dock the bubble above the Pip button, off the hero and the HUD. */
-  const place = (): { x: number; y: number } | null => {
-    if (!active || mode === 'none') return null;
+  /**
+   * Choose the bubble's spot: above Pip's head when he is on screen, else docked above the Pip
+   * button; off the hero and the HUD. Called when a line starts, on resize, and when the spot has
+   * been covered for OCCLUDED_MOVE seconds (then it eases over ~200 ms) — never per frame.
+   */
+  const place = (ease = false): void => {
+    if (!active || mode === 'none') return;
     const host = root.getBoundingClientRect();
     const b = button.getBoundingClientRect();
     const u = Math.max(5, Math.min(22, Math.min(host.width, host.height) * 0.01));
-    const anchor = { x: b.left - host.left + b.width / 2, y: b.top - host.top };
+    const anchor = pipAt && pipAt.on !== false ? pipAt : { x: b.left - host.left + b.width / 2, y: b.top - host.top };
     const p = placeBubble(anchor, bubble.offsetWidth, bubble.offsetHeight, bounds(), heroBox, u * 3.4, hudRects(host));
+    bubble.classList.toggle('ease', ease);
     bubble.style.left = `${Math.round(p.x)}px`;
     bubble.style.top = `${Math.round(p.y)}px`;
-    bubble.style.setProperty('--tx', `${Math.round(p.tail)}px`);
     bubble.classList.toggle('below', p.below);
-    return p;
+    boxX = p.x;
+    tailX = p.tail;
+    bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
   };
 
-  /** Does the bubble now cover a HUD piece (one that appeared after it was placed)? */
-  const coversHud = (): boolean => {
+  /** Is the bubble now badly placed: over the hero or over a HUD piece that appeared later? */
+  const covered = (): boolean => {
     const host = root.getBoundingClientRect();
     const r = bubble.getBoundingClientRect();
     const me = { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
-    return hudRects(host).some((a) => me.x < a.x + a.w && me.x + me.w > a.x && me.y < a.y + a.h && me.y + me.h > a.y);
+    const hit = (a: Rect): boolean => me.x < a.x + a.w && me.x + me.w > a.x && me.y < a.y + a.h && me.y + me.h > a.y;
+    return (!!heroBox && hit(heroBox)) || hudRects(host).some(hit);
   };
   const onResize = (): void => {
-    place();
+    place(false);
   };
   window.addEventListener('resize', onResize);
 
   /** Screen boxes of the HUD pieces the bubble must not cover (relative to the UI root). */
+  // Only visible controls: never the full-screen touch wrappers (touch-hud, the stick and look
+  // zones), which made every spot look blocked on phones (QA round 4-C, P3).
   const AVOID =
     '[data-testid="wallet"],[data-testid="combo"],[data-testid="missions"],[data-testid="compass"],[data-testid="skill-chip"],' +
     '[data-testid="prompt"],[data-testid="mode-strip"],[data-testid="stars"],[data-testid="timer"],[data-testid="help"],' +
-    '[data-testid^="touch-"],[data-testid="pip-button"]';
+    '[data-testid^="touch-"]:not([data-testid="touch-hud"]):not([data-testid$="-zone"]):not([data-testid="touch-rotate"]),' +
+    '[data-testid="pip-button"]';
   const hudRects = (host: DOMRect): Rect[] => {
     const out: Rect[] = [];
     for (const el of root.querySelectorAll<HTMLElement>(AVOID)) {
@@ -224,17 +247,16 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       hidden.textContent = mode === 'full' ? a.line.text : '';
       bubble.classList.toggle('compact', mode === 'compact');
       bubble.classList.toggle('story', a.line.priority >= PRIORITY.story);
-      place();
-      recheck = 0.5;
+      place(false);
+      recheck = CHECK_EVERY;
+      occludedT = 0;
       bubble.classList.add('on');
       retrigger(bubble, 'pop');
     },
-    update(reveal, hero) {
+    update(dt, reveal, pip, hero) {
       heroBox = hero;
+      pipAt = pip;
       if (!active) return;
-      const now = performance.now();
-      const dt = lastFrame ? Math.min(0.2, (now - lastFrame) / 1000) : 0;
-      lastFrame = now;
       if (mode === 'full') {
         const text = active.line.text;
         const k = Math.round(reveal * text.length);
@@ -244,9 +266,23 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
           hidden.textContent = text.slice(k);
         }
       }
-      if (mode !== 'none' && (recheck -= dt) <= 0) {
-        recheck = 0.5;
-        if (coversHud()) place();
+      if (mode !== 'none') {
+        // The tail swings (eased) towards Pip; the bubble itself stays put.
+        if (pip) {
+          const w = bubble.offsetWidth;
+          const r = Math.min(bubble.offsetHeight / 2, 28);
+          const want = Math.max(r, Math.min(w - r, pip.x - boxX));
+          tailX += (want - tailX) * Math.min(1, dt * 10);
+          bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
+        }
+        if ((recheck -= dt) <= 0) {
+          recheck = CHECK_EVERY;
+          occludedT = covered() ? occludedT + CHECK_EVERY : 0;
+          if (occludedT > OCCLUDED_MOVE) {
+            occludedT = 0;
+            place(true);
+          }
+        }
       }
       placeCallout();
     },
