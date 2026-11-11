@@ -7,8 +7,9 @@
  *    tier's window. Opening the chute (Space) in the window is a hit (2/3/5 gems + a weak-eye
  *    flash); a manual open that is close but outside it (±20 m) is a miss; anything farther and the
  *    ride's own auto-open give no result. The ride itself never changes.
- *  - **Hoop gem (lineUp).** One strong-eye hoop (radius 3 m, flat) hangs 100–130 m up beside the
- *    gem trail (hands-off freefall passes beside it). A weak-eye gem orbits in the hoop's plane and
+ *  - **Hoop gem (lineUp).** One strong-eye hoop (radius 4 m, a solid double band, leaning back to
+ *    face the falling hero) hangs 100–130 m up, 5 m beside the gem trail: a little steering takes
+ *    the hero through it. A weak-eye gem orbits in the hoop's plane and
  *    is inside it 40 % of the time. Falling through the hoop while the gem is inside is a hit
  *    (+3 gems, the gem pops); through it while the gem is outside is a miss; beside it, nothing.
  *    Each eye alone lacks one half.
@@ -17,6 +18,7 @@
  * is attached and `update` returns at once. At most 4 draws (ring or flash, hoop, gem).
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BALLOON } from '../../../../config';
 import { VisionLayer } from '../../../../types';
 import type { GlassesTier } from '../../../../types';
@@ -26,8 +28,11 @@ import { buildGemGeometry } from '../../../gems';
 import { getSkydiveView } from '../../../skydive';
 import type { RidePhase } from '../../../skydive';
 import type { WeaveEnv, WeavePart } from '../types';
-import { CHUTE, HOOP, crossDisc, gemIsInside, gemOffset, hoopOutcome, orbitRadius, pickTarget, placeHoop, ringOutcome, ringT, stepTier, thetaFor, windowT } from './logic';
+import { CHUTE, HOOP, crossDisc, gemIsInside, gemOffset, hoopOutcome, orbitRadius, pickTarget, placeHoop, planeAxes, ringOutcome, ringT, stepTier, thetaFor, windowT } from './logic';
 import type { Outcome, P3 } from './logic';
+
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+const nVec = new THREE.Vector3();
 
 /** Chest height above the feet (the ride's own hoop test uses the same). */
 const CHEST = 0.85;
@@ -68,7 +73,9 @@ export function create(env: WeaveEnv): WeavePart {
   // ── objects (built lazily on the first ride) ──
   let ring: TimingRingBlock | null = null;
   let flash: RingBlock | null = null;
-  let hoop: RingBlock | null = null;
+  let hoop: THREE.Mesh | null = null;
+  let hoopMat: THREE.MeshBasicMaterial | null = null;
+  let hoopNormal: P3 = { x: 0, y: 1, z: 0 };
   let gem: THREE.Mesh | null = null;
   let gemMat: THREE.MeshBasicMaterial | null = null;
   let gemGeo: THREE.BufferGeometry | null = null;
@@ -102,8 +109,18 @@ export function create(env: WeaveEnv): WeavePart {
 
   function ensureObjects(): void {
     if (!hoop) {
-      hoop = createRing({ radius: HOOP.radius, thickness: HOOP.thickness, segments: 12, segmentFill: 0.78, spin: 0.05, facing: 'ground' });
-      hoop.object.name = 'chuteHoop';
+      // One merged mesh (1 draw): a thick solid band plus a thin outer edge, so the hoop reads as a
+      // bold double ring against sky and ground in the strong channel alone.
+      const band = new THREE.RingGeometry(HOOP.band[0], HOOP.band[1], 72, 1);
+      const edge = new THREE.RingGeometry(HOOP.edge[0], HOOP.edge[1], 72, 1);
+      const geo = mergeGeometries([band, edge], false);
+      band.dispose();
+      edge.dispose();
+      hoopMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+      hoop = new THREE.Mesh(geo, hoopMat);
+      hoop.name = 'chuteHoop';
+      hoop.castShadow = false;
+      hoop.receiveShadow = false;
     }
     if (!gem) {
       gemGeo = buildGemGeometry();
@@ -146,7 +163,9 @@ export function create(env: WeaveEnv): WeavePart {
       .filter((s) => s.tag === 'skydive')
       .map((s) => ({ x: s.position.x, y: s.position.y, z: s.position.z }))
       .sort((a, b) => b.y - a.y);
-    hoopCenter = placeHoop(trail, (x, z) => ctx.world.heightAt(x, z), h, side);
+    const placed = placeHoop(trail, (x, z) => ctx.world.heightAt(x, z), h, side);
+    hoopCenter = placed?.center ?? null;
+    if (placed) hoopNormal = placed.normal;
     hoopArmed = hoopCenter !== null && phase !== 'canopy';
     hoopFade = 1;
     gemPop = -1;
@@ -177,14 +196,17 @@ export function create(env: WeaveEnv): WeavePart {
     } else if (ring) detach(ring.object);
 
     // Hoop + gem.
-    if (hoop && gem && gemMat && hoopCenter && (hoopArmed || hoopFade > 0)) {
-      attach(hoop.object, VisionLayer.StrongOnly);
-      hoop.object.position.set(hoopCenter.x, hoopCenter.y, hoopCenter.z);
-      hoop.setFade(hoopArmed ? 1 : hoopFade);
+    if (hoop && hoopMat && gem && gemMat && hoopCenter && (hoopArmed || hoopFade > 0)) {
+      attach(hoop, VisionLayer.StrongOnly);
+      hoop.position.set(hoopCenter.x, hoopCenter.y, hoopCenter.z);
+      hoop.quaternion.setFromUnitVectors(Z_AXIS, nVec.set(hoopNormal.x, hoopNormal.y, hoopNormal.z));
+      hoopMat.opacity = hoopArmed ? 1 : hoopFade;
+      hoopMat.visible = hoopMat.opacity > 0;
       const hp = withChallenge(hoopTier, env.challenge());
       const o = gemOffset(theta, R, orbitDir);
-      if (gemPin) gem.position.set(gemPin.x, gemPin.y + 0.15, gemPin.z);
-      else gem.position.set(hoopCenter.x + o.x, hoopCenter.y + 0.15, hoopCenter.z + o.z);
+      const { u, w } = planeAxes(hoopNormal);
+      if (gemPin) gem.position.set(gemPin.x, gemPin.y, gemPin.z);
+      else gem.position.set(hoopCenter.x + u.x * o.x + w.x * o.z, hoopCenter.y + u.y * o.x + w.y * o.z, hoopCenter.z + u.z * o.x + w.z * o.z);
       gem.rotation.y = time * 1.4;
       let s = HOOP.gemScale * Math.max(0.7, hp.size);
       if (gemPop >= 0) {
@@ -196,7 +218,7 @@ export function create(env: WeaveEnv): WeavePart {
       if (gemPop >= 0.45) detach(gem);
       else attach(gem, VisionLayer.WeakOnly);
     } else {
-      detach(hoop?.object);
+      detach(hoop);
       detach(gem);
     }
 
@@ -231,7 +253,7 @@ export function create(env: WeaveEnv): WeavePart {
 
   function checkHoop(): void {
     if (!hoopArmed || !hoopCenter) return;
-    const d = crossDisc(prevChest, chest, hoopCenter, HOOP.radius);
+    const d = crossDisc(prevChest, chest, hoopCenter, HOOP.radius, hoopNormal);
     const through = d !== null;
     if (!through) {
       // Beside the hoop: no result. Once the hero is well below it, let it go.
@@ -297,7 +319,6 @@ export function create(env: WeaveEnv): WeavePart {
         flashT += dt;
         if (flashT >= CHUTE.flashSeconds) flashT = -1;
       }
-      hoop?.update(dt);
       flash?.update(dt);
       place(phase);
     },
@@ -305,10 +326,12 @@ export function create(env: WeaveEnv): WeavePart {
       deactivate();
       ring?.dispose();
       flash?.dispose();
-      hoop?.dispose();
+      hoop?.geometry.dispose();
+      hoopMat?.dispose();
       gemGeo?.dispose();
       gemMat?.dispose();
-      ring = flash = hoop = null;
+      ring = flash = null;
+      hoop = null;
       gem = null;
     },
     debug() {
@@ -322,13 +345,14 @@ export function create(env: WeaveEnv): WeavePart {
         lastOpen,
         hoop: {
           center: hoopCenter,
+          normal: hoopNormal,
           radius: HOOP.radius,
           tier: hoopTier,
           armed: hoopArmed,
           theta,
           gemInside: gemIsInside(theta, R),
           gem: gem ? { x: gem.position.x, y: gem.position.y, z: gem.position.z } : null,
-          attached: attached(hoop?.object),
+          attached: attached(hoop),
           gemAttached: attached(gem),
         },
         lastHoop,
@@ -362,6 +386,11 @@ export function create(env: WeaveEnv): WeavePart {
         ensureObjects();
         readChest();
         hoopCenter = at ? { x: at.x, y: at.y, z: at.z } : { x: chest.x + vel.x * Number(ahead), y: chest.y + vel.y * Number(ahead), z: chest.z + vel.z * Number(ahead) };
+        const n = params.hoopNormal as P3 | undefined;
+        if (n && typeof n.x === 'number') {
+          const l = Math.hypot(n.x, n.y, n.z) || 1;
+          hoopNormal = { x: n.x / l, y: n.y / l, z: n.z / l };
+        }
         hoopArmed = true;
         hoopFade = 1;
         gemPop = -1;

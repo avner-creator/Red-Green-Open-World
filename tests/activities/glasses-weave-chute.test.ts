@@ -18,6 +18,8 @@ import {
   orbitRadius,
   pickTarget,
   placeHoop,
+  planeAxes,
+  UP,
   ringOutcome,
   ringT,
   stepTier,
@@ -27,14 +29,15 @@ import {
 import type { GlassesTier } from '../../src/types';
 
 describe('chute ring (timeIt)', () => {
-  it('targets are 70–120 m, continuous, and spread', () => {
+  it('targets are 55–150 m, continuous, and spread', () => {
     const rng = seededRng(7);
     const ts = Array.from({ length: 2000 }, () => pickTarget(rng));
     expect(Math.min(...ts)).toBeGreaterThanOrEqual(CHUTE.targetMin);
     expect(Math.max(...ts)).toBeLessThanOrEqual(CHUTE.targetMax);
     expect(ts.filter((t) => Number.isInteger(t)).length).toBe(0);
-    // Well above the auto-open, never tied to it.
-    expect(CHUTE.targetMin - CHUTE.nearMiss).toBeGreaterThan(BALLOON.autoChuteHeight);
+    // Every hit window ends above the auto-open (an open there is always manual) and below the jump.
+    expect(CHUTE.targetMin - CHUTE.window[1]).toBeGreaterThan(BALLOON.autoChuteHeight + 5);
+    expect(CHUTE.targetMax + CHUTE.window[1]).toBeLessThan(BALLOON.topHeight - 15);
   });
 
   it('hit inside the tier window, miss when close, nothing when far or automatic', () => {
@@ -69,7 +72,7 @@ describe('chute ring (timeIt)', () => {
     expect(stepTier(1, false)).toBe(1);
   });
 
-  it('blind guess: opening at a random legal height hits ≤ 20 % at tier 1 (less above)', () => {
+  it('blind guess: the best FIXED opening height hits ≤ 18 / 12 / 8 % by tier; a random one far less', () => {
     const rng = seededRng(42);
     const N = 20000;
     const rate: Record<number, number> = {};
@@ -83,14 +86,29 @@ describe('chute ring (timeIt)', () => {
       }
       rate[tier] = hit / N;
     }
-    console.log(`chute ring blind hit rate: tier1 ${(rate[1] * 100).toFixed(1)} %, tier2 ${(rate[2] * 100).toFixed(1)} %, tier3 ${(rate[3] * 100).toFixed(1)} %`);
-    expect(rate[1]).toBeLessThanOrEqual(0.2);
+    console.log(`chute ring random-height hit rate: tier1 ${(rate[1] * 100).toFixed(1)} %, tier2 ${(rate[2] * 100).toFixed(1)} %, tier3 ${(rate[3] * 100).toFixed(1)} %`);
+    expect(rate[1]).toBeLessThanOrEqual(0.15);
     expect(rate[2]).toBeLessThan(rate[1]);
     expect(rate[3]).toBeLessThan(rate[2]);
-    // Even guessing the middle of the target range is not a reliable trick.
-    let mid = 0;
-    for (let i = 0; i < N; i++) if (ringOutcome(95, pickTarget(rng), 1, false) === 'hit') mid++;
-    expect(mid / N).toBeLessThanOrEqual(0.35);
+
+    // Best fixed strategy: scan every opening height (0.5 m steps over the whole manual fall) and
+    // take the highest hit rate over the same sampled targets.
+    const targets = Array.from({ length: 8000 }, () => pickTarget(rng));
+    const best: Record<number, { rate: number; at: number }> = {};
+    for (const tier of [1, 2, 3] as GlassesTier[]) {
+      best[tier] = { rate: 0, at: 0 };
+      for (let open = BALLOON.autoChuteHeight + 0.5; open <= 175; open += 0.5) {
+        let h = 0;
+        for (const t of targets) if (ringOutcome(open, t, tier, false) === 'hit') h++;
+        if (h / targets.length > best[tier].rate) best[tier] = { rate: h / targets.length, at: open };
+      }
+    }
+    console.log(
+      `chute ring best fixed height: tier1 ${(best[1].rate * 100).toFixed(1)} % (at ${best[1].at} m), tier2 ${(best[2].rate * 100).toFixed(1)} %, tier3 ${(best[3].rate * 100).toFixed(1)} %`,
+    );
+    expect(best[1].rate).toBeLessThanOrEqual(0.18);
+    expect(best[2].rate).toBeLessThanOrEqual(0.12);
+    expect(best[3].rate).toBeLessThanOrEqual(0.08);
   });
 });
 
@@ -103,6 +121,26 @@ describe('chute hoop gem (lineUp)', () => {
     expect(crossDisc({ x: 0, y: 105, z: 0 }, { x: 0, y: 101, z: 0 }, c, 3)).toBeNull();
     // Slanted: enters beside, crosses the plane inside.
     expect(crossDisc({ x: 6, y: 102, z: 0 }, { x: -2, y: 98, z: 0 }, c, 3)).toBeCloseTo(2);
+    // A hoop tilted 45° about z: a straight fall through its centre counts, one 5 m aside does not.
+    const n = { x: Math.SQRT1_2, y: Math.SQRT1_2, z: 0 };
+    expect(crossDisc({ x: 0, y: 130, z: 0 }, { x: 0, y: 70, z: 0 }, c, 4, n)).toBeCloseTo(0);
+    expect(crossDisc({ x: 0, y: 130, z: 5 }, { x: 0, y: 70, z: 5 }, c, 4, n)).toBeNull();
+    // 2 m aside along x: the crossing point is 2·√2 ≈ 2.83 m from the centre in the tilted plane.
+    expect(crossDisc({ x: 2, y: 130, z: 0 }, { x: 2, y: 70, z: 0 }, c, 4, n)).toBeCloseTo(2 * Math.SQRT2);
+  });
+
+  it('plane axes are orthonormal and lie in the hoop plane', () => {
+    for (const n of [UP, { x: 0.5, y: Math.sqrt(0.75), z: 0 }, { x: -0.3, y: 0.8, z: 0.52 }]) {
+      const l = Math.hypot(n.x, n.y, n.z);
+      const m = { x: n.x / l, y: n.y / l, z: n.z / l };
+      const { u, w } = planeAxes(m);
+      const dot = (a: typeof u, b: typeof u): number => a.x * b.x + a.y * b.y + a.z * b.z;
+      expect(dot(u, u)).toBeCloseTo(1);
+      expect(dot(w, w)).toBeCloseTo(1);
+      expect(dot(u, w)).toBeCloseTo(0);
+      expect(dot(u, m)).toBeCloseTo(0);
+      expect(dot(w, m)).toBeCloseTo(0);
+    }
   });
 
   it('the gem orbit passes through the hoop centre and swings out past the rim', () => {
@@ -140,23 +178,31 @@ describe('chute hoop gem (lineUp)', () => {
     expect(hoopOutcome(false, true)).toBeNull();
   });
 
-  it('hoop placement: on the trail height, beside the hands-off line, clear of every trail gem', () => {
+  it('hoop placement: on the trail height, 5 m beside the trail, clear of every trail gem, leaning back to the hero', () => {
     const ground = (): number => 0;
     const trail = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ x: i * 6, y: 170 - i * 22, z: i * 3 }));
     for (const side of [1, -1] as const) {
       for (const h of [100, 115, 130]) {
-        const p = placeHoop(trail, ground, h, side);
-        expect(p).not.toBeNull();
-        expect(p!.y).toBeLessThanOrEqual(130.01);
-        expect(p!.y).toBeGreaterThanOrEqual(99.99);
-        for (const s of trail) expect(Math.hypot(s.x - p!.x, s.y - p!.y, s.z - p!.z)).toBeGreaterThanOrEqual(HOOP.minSpotDistance);
+        const placed = placeHoop(trail, ground, h, side);
+        expect(placed).not.toBeNull();
+        const p = placed!.center;
+        const n = placed!.normal;
+        expect(Math.hypot(n.x, n.y, n.z)).toBeCloseTo(1);
+        expect(Math.acos(n.y)).toBeCloseTo(HOOP.tilt);
+        // Leans back up the trail (towards where the hero comes from).
+        expect(n.x * 6 + n.z * 3).toBeLessThan(0);
+        expect(HOOP.offset + HOOP.radius).toBeLessThan(10);
+        expect(p.y).toBeLessThanOrEqual(130.01);
+        expect(p.y).toBeGreaterThanOrEqual(99.99);
+        for (const s of trail) expect(Math.hypot(s.x - p.x, s.y - p.y, s.z - p.z)).toBeGreaterThanOrEqual(HOOP.minSpotDistance);
         // Distance to the straight trail line, horizontally, is at least the offset (minus slack).
-        const a = trail.find((s, i) => s.y >= p!.y && trail[i + 1] && trail[i + 1].y <= p!.y)!;
+        const a = trail.find((s, i) => s.y >= p.y && trail[i + 1] && trail[i + 1].y <= p.y)!;
         const b = trail[trail.indexOf(a) + 1];
         const dx = b.x - a.x;
         const dz = b.z - a.z;
-        const cross = Math.abs((p!.x - a.x) * dz - (p!.z - a.z) * dx) / Math.hypot(dx, dz);
+        const cross = Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) / Math.hypot(dx, dz);
         expect(cross).toBeGreaterThanOrEqual(HOOP.offset - 1e-6);
+        expect(cross).toBeLessThan(HOOP.offset + 3);
       }
     }
     expect(placeHoop(trail.slice(0, 1), ground, 110, 1)).toBeNull();
