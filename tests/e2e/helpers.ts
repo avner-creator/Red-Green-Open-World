@@ -24,6 +24,20 @@ export async function boot(page: Page, query = ''): Promise<{ consoleErrors: str
     if (m.type() === 'warning' && !/^\[\.WebGL|GPU stall|swiftshader|Automatic fallback/i.test(m.text())) ownWarnings.push(m.text());
   });
   page.on('pageerror', (e) => consoleErrors.push(String(e)));
+  if (process.env.RG_PROF) {
+    page.on('console', (m) => { if (m.text().startsWith('[prof]')) console.log(m.text()); });
+    await page.addInitScript(() => {
+      const iv = setInterval(() => {
+        const rg = window.__rg;
+        if (!rg || !rg.ready) return;
+        clearInterval(iv);
+        const st = rg.step.bind(rg);
+        rg.step = (dt, n, r) => { const t = performance.now(); st(dt, n, r); const d = performance.now() - t; if (d > 500) console.log(`[prof] step n=${n} render=${r ?? true} ${Math.round(d)}ms`); };
+        const rd = rg.render.bind(rg);
+        rg.render = () => { const t = performance.now(); rd(); console.log(`[prof] render ${Math.round(performance.now() - t)}ms`); };
+      }, 20);
+    });
+  }
   await page.goto(`/?test=1${query}`);
   await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
   // The boot overlay fades out (~0.5 s) and is then removed; never screenshot it half-faded.
@@ -83,6 +97,9 @@ export function lumaStdDev(img: PNG): number {
  * `tap: true` on touch pages.
  */
 export async function startGame(page: Page, tap = false): Promise<void> {
+  // A running real-time render loop makes every click wait seconds on SwiftShader (the tap on Go
+  // alone took ~23 s); every caller freezes right afterwards anyway.
+  await page.evaluate(() => window.__rg?.freeze(true));
   const play = page.getByTestId('play');
   if (tap) await play.tap();
   else await play.click();
@@ -90,4 +107,6 @@ export async function startGame(page: Page, tap = false): Promise<void> {
   await go.waitFor({ state: 'visible' });
   if (tap) await go.tap();
   else await go.click();
+  // Let UI that follows the loop (touch HUD, phase classes) catch up with the new phase.
+  await page.evaluate(() => window.__rg?.step(1 / 60, 3, false));
 }
