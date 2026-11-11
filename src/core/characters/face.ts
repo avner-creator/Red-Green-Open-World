@@ -143,19 +143,19 @@ export function buildFace(def: FaceDef, object: THREE.Object3D, bone: THREE.Obje
       emissiveIntensity: 0.3,
     });
   const r = def.eyeR;
-  const eyeGeo = new THREE.SphereGeometry(r, 22, 16);
+  const eyeGeo = new THREE.SphereGeometry(r, 20, 13);
   {
     const uv = eyeGeo.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5);
   }
-  const upGeo = flatUv(new THREE.SphereGeometry(r * 1.07, 22, 8, 0, Math.PI * 2, 0, Math.PI * 0.56), UV_LID);
-  const loGeo = flatUv(new THREE.SphereGeometry(r * 1.05, 22, 6, 0, Math.PI * 2, Math.PI * 0.6, Math.PI * 0.4), UV_LID);
+  const upGeo = flatUv(new THREE.SphereGeometry(r * 1.07, 20, 7, 0, Math.PI * 2, 0, Math.PI * 0.56), UV_LID);
+  const loGeo = flatUv(new THREE.SphereGeometry(r * 1.05, 20, 5, 0, Math.PI * 2, Math.PI * 0.6, Math.PI * 0.4), UV_LID);
   const blushGeo = flatUv(new THREE.CircleGeometry(1, 16), UV_BLUSH);
   // Smile: a thick arc, open side up (the torus arc starts on +X and runs through -Y).
-  const smileGeo = flatUv(new THREE.TorusGeometry(1, 0.2, 6, 16, Math.PI * 0.8), UV_MOUTH);
+  const smileGeo = flatUv(new THREE.TorusGeometry(1, 0.2, 5, 12, Math.PI * 0.8), UV_MOUTH);
   smileGeo.rotateZ(Math.PI + Math.PI * 0.1);
   // Brows: a short soft bar, gently arched.
-  const browGeo = flatUv(new THREE.TorusGeometry(1, 0.22, 5, 10, Math.PI * 0.45), UV_MOUTH);
+  const browGeo = flatUv(new THREE.TorusGeometry(1, 0.22, 4, 8, Math.PI * 0.45), UV_MOUTH);
   browGeo.rotateZ(Math.PI / 2 - Math.PI * 0.225);
 
   object.updateMatrixWorld(true);
