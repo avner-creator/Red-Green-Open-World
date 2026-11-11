@@ -142,12 +142,16 @@ test.afterAll(async () => {
   await page.close();
 });
 
+
 // ───────────────────────────── bounce ─────────────────────────────
 
-test('bounce: idle off the trampoline; ring mid-fall only in the weak channel; its timing hidden from the strong eye', async () => {
+/** Press Jump again (edge) while holding it. */
+const pressAgain = pressJump;
+
+test('bounce: idle off the trampoline; bold ring mid-fall (tier 1 and 3) only in the weak channel; its timing hidden from the strong eye', async () => {
   expect(await dbg('bounce')).toMatchObject({ active: false, tracked: 0 });
   expect(await draws('bounce')).toBe(0);
-  // Walk onto the mat holding Jump (a hold is not a press): 12 m, then an 18 m bounce with a ring.
+  // Walk onto the mat holding Jump (a hold is not a press): 12 m, 18 m (no ring), then 27 m with a ring.
   await page.evaluate(() => {
     const rg = window.__rg!;
     const c = window.__rgThrills!.trampoline();
@@ -157,13 +161,18 @@ test('bounce: idle off the trampoline; ring mid-fall only in the weak channel; i
   });
   let d = await stepBounceUntil('d.ring === true');
   expect(d).toMatchObject({ ring: true, falling: true, tier: 1, decided: false });
-  expect(d.fall as number).toBeGreaterThan(1.2);
-  // Mid-fall, with the perfect moment late in the fall (the closing ring still well outside).
+  expect(d.fall as number).toBeGreaterThan(1.5);
+  // Mid-fall, with the perfect moment late in the fall (the closing band still well outside).
   await force('bounce', { perfectAt: 0.8 });
-  d = await stepBounceUntil('d.at >= 0.3');
+  d = await stepBounceUntil('d.at >= 0.35');
   expect(d.at as number).toBeLessThan((d.perfect as number) - (d.half as number));
   expect(await draws('bounce')).toBe(1);
-  await save('bounce-midfall');
+  await save('bounce-midfall-t1');
+  await force('bounce', { tier: 3 });
+  await save('bounce-midfall-t3');
+  await force('bounce', { lookOffset: [-10, 4] });
+  await save('bounce-grass-t3', false);
+  await force('bounce', { lookOffset: null, tier: 1 });
   await expectOwnObjectsOnlyTouchWeak('weave-bounce');
   await expectAnswerBlindWithoutWeakEye(page, {
     setA: () => force('bounce', { perfectAt: 0 }),
@@ -173,42 +182,51 @@ test('bounce: idle off the trampoline; ring mid-fall only in the weak channel; i
   });
 });
 
-test('bounce: a press when the ring closes is a hit (gems, star burst); an early press is a miss; the landing press never counts', async () => {
+test('bounce: one press at the ring = hit; one early press = miss; mashing and the landing press give nothing', async () => {
   await events();
+  // Hit: one press when the ring closes (the result comes when the landing zone starts).
   await force('bounce', { perfectAt: 0.5 });
   let d = await stepBounceUntil('d.at >= d.perfect - 0.004');
   expect(d.decided).toBe(false);
   await pressJump();
-  d = await dbg('bounce');
+  expect(results(await events())).toEqual([]);
+  d = await stepBounceUntil('d.decided === true');
   expect(d).toMatchObject({ hits: 1, lastGrade: 'hit', ring: false });
   let ev = await events();
   expect(results(ev)).toEqual([{ type: 'result', mechanic: 'bounce', kind: 'timeIt', tier: 1, hit: true }]);
   expect(ev.some((e) => e.type === 'toast' && e.icon === 'gem')).toBe(true);
-  // Star burst on the layer (2 draws), within the budget.
-  await page.evaluate(() => window.__rg!.step(1 / 60, 8));
+  await page.evaluate(() => window.__rg!.step(1 / 60, 6));
   const n = await draws('bounce');
   expect(n).toBeGreaterThanOrEqual(1);
   expect(n).toBeLessThanOrEqual(3);
   await save('bounce-hit', false);
 
-  // The held press grows the bounce as before. Next fall: press right after the ring appears.
+  // Miss: next fall, one press right after the ring appears.
   d = await stepBounceUntil('d.ring === true && d.decided === false && d.at >= 0.1');
-  expect(d.hits).toBe(1);
   expect(d.at as number).toBeLessThan((d.perfect as number) - (d.half as number));
   await pressJump();
-  d = await dbg('bounce');
+  d = await stepBounceUntil('d.decided === true');
   expect(d).toMatchObject({ misses: 1, lastGrade: 'miss' });
   ev = await events();
   expect(results(ev)).toEqual([{ type: 'result', mechanic: 'bounce', kind: 'timeIt', tier: 1, hit: false }]);
   expect(ev.some((e) => e.type === 'toast')).toBe(false);
-  expect(await draws('bounce')).toBeLessThanOrEqual(3);
 
-  // Next fall: a press in the last 0.3 s before touchdown is the landing press: no result.
-  d = await stepBounceUntil('d.ring === true && d.decided === false && d.fall - d.at <= 0.3');
-  expect(d.misses).toBe(1);
+  // Mashing: two presses in one fall → no result.
+  await force('bounce', { perfectAt: 0.5 });
+  expect(await stepBounceUntil('d.ring === true && d.decided === false && d.at >= d.perfect - 0.004')).toMatchObject({ ring: true });
+  await pressJump();
+  await page.evaluate(() => window.__rg!.step(1 / 60, 6, false));
+  await pressAgain();
+  d = await stepBounceUntil('d.decided === true');
+  expect(d).toMatchObject({ hits: 1, misses: 1, mashed: 1, lastGrade: 'mash' });
+  expect(results(await events())).toEqual([]);
+
+  // The landing press only (last 0.3 s): no result.
+  expect(await stepBounceUntil('d.ring === true && d.decided === false && d.at >= 0.05')).toMatchObject({ ring: true });
+  expect(await stepBounceUntil('d.fall - d.at <= 0.3')).toMatchObject({ decided: true, presses: 0 });
   await pressJump();
   d = await dbg('bounce');
-  expect(d).toMatchObject({ hits: 1, misses: 1, lastGrade: 'ignore' });
+  expect(d).toMatchObject({ hits: 1, misses: 1, lastGrade: 'none' });
   expect(results(await events())).toEqual([]);
 
   // R lets go of the trampoline: nothing attached, no draws.
@@ -239,20 +257,54 @@ async function touchGem(i: number): Promise<number> {
   }, i);
 }
 
-test('hero: ring at the feet and ×N over the head, weak channel only; the sparkle is hidden from the strong eye', async () => {
+/** Press the skill key once (panda: a dash). */
+async function pressSkill(): Promise<void> {
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.inject({ skill: true, skillPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+  });
+}
+
+test('hero: on demand only (0 draws idle); recharge ring and ×N in the weak channel only; sparkles hidden from the strong eye', async () => {
   await page.evaluate(async () => {
     const rg = window.__rg!;
     await rg.ctx.player.setCharacter('panda'); // dash: fires on the ground
     rg.ctx.player.respawn();
     rg.step(1 / 60, 90, false);
   });
-  await force('hero', { combo: 3, spark: null, nextIn: 999 });
-  await page.evaluate(() => window.__rg!.step(1 / 60, 2));
+  await force('hero', { spark: null, nextIn: 999 });
+  // Idle in walk mode (skill ready, no combo): nothing attached.
+  expect(await dbg('hero')).toMatchObject({ active: false, tracked: 0, ring: null, number: null });
+  expect(await draws('hero')).toBe(0);
+
+  // The skill recharges: the ring shows its progress arc; the number shows at ×3.
+  await force('hero', { combo: 3 });
+  const home = await page.evaluate(() => {
+    const p = window.__rg!.ctx.player.position;
+    return { x: p.x, y: p.y, z: p.z, yaw: window.__rg!.ctx.player.yaw };
+  });
+  await pressSkill();
+  // The dash carries the hero 7 m; bring him back to the open spawn plaza for the picture.
+  await page.evaluate((h) => {
+    const rg = window.__rg!;
+    rg.step(1 / 60, 15, false);
+    rg.teleport(h.x, h.y + 0.05, h.z, h.yaw);
+    rg.step(1 / 60, 30);
+  }, home);
   let d = await dbg('hero');
-  expect(d).toMatchObject({ active: true, groundOk: true, number: { text: '×3' } });
+  expect(d.ring).not.toBeNull();
+  expect(d.number).toMatchObject({ text: '×3' });
   expect(await draws('hero')).toBe(2);
-  await save('hero-ring-number');
+  await save('hero-recharge');
   await expectOwnObjectsOnlyTouchWeak('weave-hero');
+
+  // Ready, then 2 s later the ring goes away again.
+  await page.evaluate(() => window.__rg!.step(1 / 60, 90 + 130, false));
+  d = await dbg('hero');
+  expect(d.ring).toBeNull();
+  expect(await draws('hero')).toBe(1); // the number only
   await expectAnswerBlindWithoutWeakEye(page, {
     setA: () => force('hero', { spark: null }),
     setB: () => force('hero', { spark: 'skill', age: 0.5 }),
@@ -266,25 +318,19 @@ test('hero: ring at the feet and ×N over the head, weak channel only; the spark
     label: 'hero number sparkle',
   });
   await force('hero', { spark: 'skill', age: 0.5 });
-  await save('hero-ring-sparkle', false);
+  await save('hero-sparkle');
   await force('hero', { spark: null, combo: null });
-  await page.evaluate(() => window.__rg!.step(1 / 60, 2, false));
-  d = await dbg('hero');
-  expect(d.number).toBeNull();
+  expect(await draws('hero')).toBe(0);
 });
 
 test('hero: skill in a ring sparkle = hit, late = miss; a gem in a number sparkle = hit', async () => {
   await events();
-  // Skill hit: a real dash press during the sparkle.
+  // Skill hit: a real dash press during the sparkle (the ring shows for the window).
   await force('hero', { spark: 'skill', nextIn: 999 });
-  await page.evaluate(() => {
-    const rg = window.__rg!;
-    rg.step(1 / 60, 24, false);
-    rg.inject({ skill: true, skillPressed: true });
-    rg.step(1 / 60, 1, false);
-    rg.inject(null);
-    rg.step(1 / 60, 2);
-  });
+  expect(await draws('hero')).toBe(1);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 24, false));
+  await pressSkill();
+  await page.evaluate(() => window.__rg!.step(1 / 60, 2));
   let d = await dbg('hero');
   expect(d).toMatchObject({ hits: 1, lastResult: 'skill:hit', spark: null });
   let ev = await events();
@@ -298,13 +344,8 @@ test('hero: skill in a ring sparkle = hit, late = miss; a gem in a number sparkl
   // Skill miss: the sparkle closes (1.5 s), then a dash 0.4 s later.
   await page.evaluate(() => window.__rg!.step(1 / 60, 120, false)); // dash recharges
   await force('hero', { spark: 'skill' });
-  await page.evaluate(() => {
-    const rg = window.__rg!;
-    rg.step(1 / 60, 90 + 24, false);
-    rg.inject({ skill: true, skillPressed: true });
-    rg.step(1 / 60, 1, false);
-    rg.inject(null);
-  });
+  await page.evaluate(() => window.__rg!.step(1 / 60, 90 + 24, false));
+  await pressSkill();
   d = await dbg('hero');
   expect(d).toMatchObject({ misses: 1, lastResult: 'skill:miss' });
   ev = await events();
@@ -331,19 +372,24 @@ test('hero: skill in a ring sparkle = hit, late = miss; a gem in a number sparkl
   expect(ev.some((e) => e.type === 'toast' && e.icon === 'gem')).toBe(true);
   expect(await draws('hero')).toBeLessThanOrEqual(3);
 
-  // Hidden avatar (a vehicle / ride): nothing attached, no draws.
+  // The combo runs out and the ring's ready hold ends: nothing attached again.
+  await page.evaluate(() => window.__rg!.step(1 / 60, 300, false));
+  expect(await dbg('hero')).toMatchObject({ active: false, tracked: 0 });
+  expect(await draws('hero')).toBe(0);
+  // Hidden avatar (a vehicle / ride): nothing attached even with a sparkle forced.
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.ctx.player.setVisible(false);
     rg.step(1 / 60, 2, false);
   });
-  expect(await dbg('hero')).toMatchObject({ active: false, tracked: 0 });
+  await force('hero', { spark: 'skill' });
+  await page.evaluate(() => window.__rg!.step(1 / 60, 2, false));
+  expect(await dbg('hero')).toMatchObject({ active: false, tracked: 0, spark: null });
   expect(await draws('hero')).toBe(0);
   await page.evaluate(() => {
     window.__rg!.ctx.player.setVisible(true);
     window.__rg!.step(1 / 60, 2, false);
   });
-  expect(await dbg('hero')).toMatchObject({ active: true });
 });
 
 test('no errors', async () => {

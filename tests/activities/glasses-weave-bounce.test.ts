@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNCE_RING, applyGrade, freshStreak, gradePress, perfectRange, planFall, windowHalf } from '../../src/activities/glasses/weave/bounce/logic';
+import { BOUNCE_RING, FallPresses, applyGrade, freshStreak, gradePress, perfectRange, planFall, windowHalf } from '../../src/activities/glasses/weave/bounce/logic';
 import type { FallPlan } from '../../src/activities/glasses/weave/bounce/logic';
 import { PLAYER } from '../../src/config';
 import { mulberry32 } from '../../src/vision/toolkit/rng';
@@ -9,6 +9,7 @@ import type { GlassesTier } from '../../src/types';
 const fallOf = (apex: number): number => Math.sqrt((2 * apex) / PLAYER.gravity);
 /** The falls a child meets on the trampoline: walk-on 12 m, then held growth ×1.5 up to 45 m, and decays. */
 const APEXES = [12, 18, 27, 40.5, 45, 45, 27.9, 17.3, 10.7];
+const TIERS: GlassesTier[] = [1, 2, 3];
 
 function gauss(rng: () => number): number {
   const u = Math.max(1e-9, rng());
@@ -17,32 +18,31 @@ function gauss(rng: () => number): number {
 }
 
 describe('perfect-bounce plan', () => {
-  it('no ring for short falls (the 12 m walk-on bounce); a ring from the first held bounce', () => {
+  it('no ring for short falls (walk-on 12 m, first held 18 m); a ring from the 27 m bounce', () => {
     expect(planFall(fallOf(12), 1, 0.5)).toBeNull();
-    expect(planFall(fallOf(18), 1, 0.5)).not.toBeNull();
+    expect(planFall(fallOf(18), 1, 0.5)).toBeNull();
+    expect(planFall(fallOf(27), 1, 0.5)).not.toBeNull();
     expect(planFall(fallOf(45), 3, 0.5)).not.toBeNull();
   });
 
-  it('the perfect moment is within 35–75 % of the fall and its window ends before the landing zone', () => {
+  it('the perfect moment is within 20–80 % of the fall and its window ends before the landing zone', () => {
     const rng = mulberry32(5);
     for (let i = 0; i < 4000; i++) {
-      const fall = BOUNCE_RING.minFall + rng() * 1.2;
+      const fall = BOUNCE_RING.minFall + rng() * 1.6;
       const tier = (1 + Math.floor(rng() * 3)) as GlassesTier;
       const p = planFall(fall, tier, rng())!;
       expect(p).not.toBeNull();
-      expect(p.perfect).toBeGreaterThanOrEqual(0.35 * fall - 1e-9);
-      expect(p.perfect).toBeLessThanOrEqual(0.75 * fall + 1e-9);
+      expect(p.perfect).toBeGreaterThanOrEqual(0.2 * fall - 1e-9);
+      expect(p.perfect).toBeLessThanOrEqual(0.8 * fall + 1e-9);
       expect(p.perfect + p.half).toBeLessThan(fall - BOUNCE_RING.landingIgnore);
-      expect(p.half).toBeLessThanOrEqual(BOUNCE_RING.maxShare * (fall - BOUNCE_RING.landingIgnore) + 1e-9);
     }
   });
 
-  it('the window narrows by tier', () => {
+  it('the window narrows by tier and stays humane (≥ ±90 ms at tier 1)', () => {
     const f = fallOf(45);
+    expect(windowHalf(f, 1)).toBeGreaterThanOrEqual(0.09);
     expect(windowHalf(f, 1)).toBeGreaterThan(windowHalf(f, 2));
     expect(windowHalf(f, 2)).toBeGreaterThan(windowHalf(f, 3));
-    const r = perfectRange(f, 1)!;
-    expect(r.hi - r.lo).toBeGreaterThan(0.4);
   });
 
   it('a forced share picks the moment deterministically', () => {
@@ -62,10 +62,25 @@ describe('perfect-bounce grading', () => {
     expect(gradePress(plan, 0.8)).toMatchObject({ kind: 'hit', perfect: true });
     expect(gradePress(plan, 0.86)).toMatchObject({ kind: 'hit', perfect: false });
     expect(gradePress(plan, 0.7)).toMatchObject({ kind: 'miss' });
-    expect(gradePress(plan, 0.95)).toMatchObject({ kind: 'miss' });
     expect(gradePress(plan, 0.05)).toMatchObject({ kind: 'miss' });
     expect(gradePress(plan, 1.6 - 0.34)).toEqual({ kind: 'ignore' });
-    expect(gradePress(plan, 1.6)).toEqual({ kind: 'ignore' });
+  });
+
+  it('a fall counts only with exactly one press before the landing zone', () => {
+    const one = new FallPresses();
+    one.press(plan, 0.81);
+    one.press(plan, 1.5); // the landing press: ignored entirely
+    expect(one.settle(plan)).toMatchObject({ kind: 'hit' });
+    const two = new FallPresses();
+    two.press(plan, 0.3);
+    two.press(plan, 0.8);
+    expect(two.settle(plan)).toEqual({ kind: 'mash' });
+    const none = new FallPresses();
+    none.press(plan, 1.4);
+    expect(none.settle(plan)).toEqual({ kind: 'none' });
+    const early = new FallPresses();
+    early.press(plan, 0.2);
+    expect(early.settle(plan)).toMatchObject({ kind: 'miss' });
   });
 
   it('tier rises after two hits in a row, falls after a miss; three perfects in a row pay +3', () => {
@@ -77,51 +92,116 @@ describe('perfect-bounce grading', () => {
     expect(applyGrade(s, hitP)).toBe(1);
     expect(s.tier).toBe(2);
     expect(applyGrade(s, hitP)).toBe(2);
-    expect(applyGrade(s, hitP)).toBe(2 + BOUNCE_RING.streakBonus); // 3rd perfect in a row (tier 3 from the next one)
+    expect(applyGrade(s, hitP)).toBe(2 + BOUNCE_RING.streakBonus);
     expect(s.tier).toBe(3);
     expect(applyGrade(s, { kind: 'miss', offset: 0.3 })).toBe(0);
     expect(s.tier).toBe(2);
     expect(s.perfectsInRow).toBe(0);
-    expect(applyGrade(s, { kind: 'ignore' })).toBe(0);
-    expect(s.tier).toBe(2);
   });
 });
 
 describe('perfect-bounce simulation', () => {
-  /** Runs `n` falls through a child model; returns hits / counted presses and hits / ringed falls. */
-  function simulate(tier: GlassesTier, pressAt: (plan: FallPlan, rng: () => number) => number, n = 20000, seed = 11): { perAttempt: number; perFall: number } {
+  /**
+   * A bouncing session: arcs rise then fall (apexes cycle through the trampoline's real chain).
+   * `presses(t0, t1)` gives the child's press times in [t0, t1) (absolute seconds). Returns the
+   * results the part would report.
+   */
+  function session(seconds: number, presses: (t0: number, t1: number) => number[], tier: GlassesTier, seed = 3): { hits: number; misses: number; rings: number } {
     const rng = mulberry32(seed);
+    let t = 0;
     let hits = 0;
-    let attempts = 0;
-    let falls = 0;
-    for (let i = 0; i < n; i++) {
-      const plan = planFall(fallOf(APEXES[i % APEXES.length]), tier, rng());
-      if (!plan) continue;
-      falls++;
-      const g = gradePress(plan, pressAt(plan, rng));
-      if (g.kind === 'ignore') continue;
-      attempts++;
-      if (g.kind === 'hit') hits++;
+    let misses = 0;
+    let rings = 0;
+    for (let i = 0; t < seconds; i++) {
+      const F = fallOf(APEXES[i % APEXES.length]);
+      const rise = presses(t, t + F);
+      t += F;
+      const plan = planFall(F, tier, rng());
+      const inFall = presses(t, t + F);
+      if (plan && rise.length === 0) {
+        rings++;
+        const fp = new FallPresses();
+        for (const p of inFall) fp.press(plan, p - t);
+        const g = fp.settle(plan);
+        if (g.kind === 'hit') hits++;
+        if (g.kind === 'miss') misses++;
+      }
+      t += F;
     }
-    return { perAttempt: hits / Math.max(1, attempts), perFall: hits / Math.max(1, falls) };
+    return { hits, misses, rings };
   }
 
-  it('a child who presses at a random moment of each fall hits ≤ 15 % at tier 1, less above', () => {
-    const blind = (p: FallPlan, rng: () => number): number => rng() * p.fall;
-    const t1 = simulate(1, blind);
-    const t2 = simulate(2, blind);
-    const t3 = simulate(3, blind);
-    expect(t1.perAttempt).toBeLessThanOrEqual(0.15);
-    expect(t2.perAttempt).toBeLessThan(t1.perAttempt);
-    expect(t3.perAttempt).toBeLessThan(t2.perAttempt);
-    // Reported in the stream notes: tier 1 per attempt / per fall.
-    console.info(`bounce blind hit rate: t1 ${(t1.perAttempt * 100).toFixed(1)} % (${(t1.perFall * 100).toFixed(1)} % of falls), t2 ${(t2.perAttempt * 100).toFixed(1)} %, t3 ${(t3.perAttempt * 100).toFixed(1)} %`);
+  it('a child mashing Jump (a tap every 0.3–0.7 s) for 60 s of bouncing gets no result at all', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const rng = mulberry32(100 + seed);
+      const taps: number[] = [];
+      for (let t = rng() * 0.5; t < 200; t += 0.3 + 0.4 * rng()) taps.push(t);
+      const at = (a: number, b: number): number[] => taps.filter((x) => x >= a && x < b);
+      const r = session(60, at, 1, seed);
+      expect(r.hits + r.misses, `seed ${seed}`).toBe(0);
+    }
   });
 
-  it('a child who presses when the ring closes (35 ms timing spread, 60 fps) hits ≥ 90 %', () => {
-    const aimed = (p: FallPlan, rng: () => number): number => Math.round((p.perfect + 0.035 * gauss(rng)) * 60) / 60;
-    const t1 = simulate(1, aimed);
-    expect(t1.perAttempt).toBeGreaterThanOrEqual(0.9);
-    console.info(`bounce aimed hit rate: t1 ${(t1.perAttempt * 100).toFixed(1)} %`);
+  /** Exact chance that a press `t` s after the fall start hits, over the random perfect moment. */
+  function hitChance(F: number, tier: GlassesTier, t: number): number {
+    const N = 1000;
+    let n = 0;
+    for (let k = 0; k < N; k++) {
+      const p = planFall(F, tier, (k + 0.5) / N);
+      if (p && gradePress(p, t).kind === 'hit') n++;
+    }
+    return n / N;
+  }
+
+  /** Best FIXED strategy for a fall: every fixed fraction of the fall and every fixed time before landing. */
+  function bestFixed(F: number, tier: GlassesTier): number {
+    let best = 0;
+    for (let q = 0; q <= 1.0001; q += 0.0025) best = Math.max(best, hitChance(F, tier, q * F));
+    for (let T = 0.35; T <= F; T += 0.005) best = Math.max(best, hitChance(F, tier, F - T));
+    return best;
+  }
+
+  it('the best fixed guessing strategy (table in the notes)', () => {
+    const rows: string[] = [];
+    const table: Record<string, number[]> = {};
+    for (const F of [1.3, 1.57, 2.02, 3]) {
+      const v = TIERS.map((tier) => (planFall(F, tier, 0.5) ? bestFixed(F, tier) : 0));
+      table[F] = v;
+      rows.push(`${F.toFixed(2)} s: ${v.map((x, i) => `t${i + 1} ${(x * 100).toFixed(1)} %`).join(', ')}${planFall(F, 1, 0.5) ? '' : ' (no ring)'}`);
+    }
+    console.info(`bounce best fixed strategy:\n${rows.join('\n')}`);
+    // 1.3 s falls get no ring; the asserted maxima (true values + < 1 point margin).
+    expect(table[1.3]).toEqual([0, 0, 0]);
+    expect(table[1.57][0]).toBeLessThanOrEqual(0.235);
+    expect(table[2.02][0]).toBeLessThanOrEqual(0.165);
+    expect(table[3][0]).toBeLessThanOrEqual(0.11);
+    for (const F of [1.57, 2.02, 3]) {
+      expect(table[F][1]).toBeLessThan(table[F][0]);
+      expect(table[F][2]).toBeLessThan(table[F][1]);
+    }
+  });
+
+  it('random presses hit rarely; a child who presses when the ring closes hits ≥ 90 %', () => {
+    const rng = mulberry32(11);
+    let blindHits = 0;
+    let blindN = 0;
+    let aimedHits = 0;
+    let aimedN = 0;
+    for (let i = 0; i < 20000; i++) {
+      const plan = planFall(fallOf(APEXES[i % APEXES.length]), 1, rng());
+      if (!plan) continue;
+      const blind = gradePress(plan, rng() * plan.fall);
+      if (blind.kind !== 'ignore') {
+        blindN++;
+        if (blind.kind === 'hit') blindHits++;
+      }
+      // 35 ms timing spread, 60 fps.
+      const aimed = gradePress(plan, Math.round((plan.perfect + 0.035 * gauss(rng)) * 60) / 60);
+      aimedN++;
+      if (aimed.kind === 'hit') aimedHits++;
+    }
+    console.info(`bounce random press t1: ${((100 * blindHits) / blindN).toFixed(1)} %, aimed ${((100 * aimedHits) / aimedN).toFixed(1)} %`);
+    expect(blindHits / blindN).toBeLessThan(0.15);
+    expect(aimedHits / aimedN).toBeGreaterThanOrEqual(0.9);
   });
 });
