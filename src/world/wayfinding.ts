@@ -462,7 +462,7 @@ export function buildWayfinding(k: Kit, roads: readonly ProcessedRoad[], blocked
   for (const g of GLASSES_WAY) {
     beacons.push(glassesBeacon(k, g));
     placed.push({ kind: 'beacon', name: g.id, x: g.beacon.x, z: g.beacon.z, r: 0.75 });
-    keepouts.push({ x: g.beacon.x, z: g.beacon.z, r: 2.2 }, { x: g.x, z: g.z, r: g.r + 1 });
+    keepouts.push({ x: g.beacon.x, z: g.beacon.z, r: 2.2 }, { x: g.x, z: g.z, r: g.r + 2.5 });
     if (g.trail) keepouts.push(...steppingStones(k, roads, g));
   }
   plazaArrows(k, decals);
