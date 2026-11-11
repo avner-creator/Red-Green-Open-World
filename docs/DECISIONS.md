@@ -78,3 +78,7 @@
 - R releases every ride, including the horse and rocket/trampoline flight (overrides "stay mounted on R"). Reason: one rule kids can rely on.
 - Play on the title starts at once with the saved (or default frog) hero; hero select is behind "change hero". Reason: one obvious button for 8-year-olds.
 - The orchestrator may `git apply` a diff a worker wrote and tested for files outside that worker's folders. Reason: it is the worker's code; avoids a second agent for a mechanical step.
+- QA3 fixes: every chest keeps ≥ 3 m from posts (measured from the arm tips), beacons, boards, small props and site circles (unit test). Plaza chest moved to the inner ring north-east of the fountain. Reason: the lock symbol must never overlap a sign.
+- `stamp:earned { id }` is emitted by attractions with a clear "round done" point (carnival, race, scoops, foam, bubble ball, dino sumo, rocket landing, chest); those ids stamp only on completion. Other slots keep the ticket/stunt/mode/glasses derivation. Reason: one explicit event where a clean emit point exists, no regressions elsewhere.
+- The first rocket-pad launch is free, like every attraction's first play. Reason: consistent "first go is free" rule.
+- HUD picture bubbles on desktop live on the pause screen ("?" legend); while playing the pointer is locked. Tap (touch) and free-pointer hover still show the bubble. Reason: a locked pointer cannot hover or click HUD chips.
