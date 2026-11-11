@@ -14,7 +14,16 @@ import { controlKeys } from './controlGlyphs';
 import { clear, h } from './dom';
 import { icon } from './icons';
 import type { Screen } from './screens';
-import { skillPicto, SKILL_NAMES } from './skillPicto';
+import { installExtraPowers } from '../core/skills-extra';
+import { choosePower, chosenPower, getPower, powersFor, powerState } from '../core/skills-powers';
+import { powerPicto, powerTile } from './characterSelectPowers';
+import { skillPicto } from './skillPicto';
+
+/** The wardrobe ("dress up") entry, plugged in by the wardrobe system; null = not available yet. */
+let wardrobeHook: ((heroId: string) => void) | null = null;
+export function setWardrobeHook(fn: ((heroId: string) => void) | null): void {
+  wardrobeHook = fn;
+}
 
 export interface CharacterSelect extends Screen {
   /** Called when another screen replaces this one (or the phase changes): restores the saved pick. */
@@ -44,6 +53,12 @@ function colors(c: CharacterDef): string {
 
 export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): CharacterSelect {
   injectCharacterCss();
+  // Extra super powers (rocket boots, giant…) run beside the player's classic skills.
+  try {
+    installExtraPowers(ctx);
+  } catch (err) {
+    console.warn('extra powers unavailable', err);
+  }
   let sel = 0;
   let active = false;
   let device: 'keyboard' | 'gamepad' | 'touch' = 'keyboard';
@@ -216,12 +231,27 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
     left.dataset.id = c.id;
     const emoteBtn = h('button', 'b d cs-emote', { type: 'button', 'aria-label': 'Emote', 'data-testid': 'csel-emote' }, icon('sparkle'), keysFor('emote'));
     emoteBtn.addEventListener('click', () => ctx.player.emote());
+    // Dress-up entry: the wardrobe system plugs in with `setWardrobeHook`.
+    const wardBtn = h(
+      'button',
+      'b d cs-ward',
+      { type: 'button', 'aria-label': 'Dress up', 'data-testid': 'csel-wardrobe', 'data-ready': String(!!wardrobeHook) },
+      icon('backpack'),
+    );
+    wardBtn.addEventListener('click', () => {
+      if (wardrobeHook) wardrobeHook(c.id);
+      else {
+        wardBtn.classList.remove('pop');
+        void wardBtn.offsetWidth;
+        wardBtn.classList.add('pop');
+      }
+    });
     clear(left);
     left.append(
       h('div', 'cs-name', { 'data-testid': 'csel-name' }, c.name.toUpperCase()),
       h('div', 'cs-bar'),
-      h('div', 'cs-story', {}, c.backstory),
-      h('div', 'cs-row', {}, emoteBtn),
+      h('div', 'cs-story', { 'data-testid': 'csel-story' }, c.backstory),
+      h('div', 'cs-row', {}, emoteBtn, wardBtn),
     );
 
     // right card: skill + key + action
@@ -249,8 +279,28 @@ export function createCharacterSelect(ctx: GameContext, hooks: SelectHooks): Cha
         ),
       );
     }
+    // Super power: the chosen one big, then every power as a tile (one press to pick).
+    const chosen = chosenPower(c);
+    const lifetime = ctx.profile?.data.lifetimeGems ?? 0;
+    const tiles = powersFor(c).map((p) =>
+      powerTile(p, powerState(c, p, lifetime), p === chosen, lifetime, p === c.signature, () => {
+        if (chosenPower(c) === p) return;
+        choosePower(c.id, p);
+        sfx('star');
+        refresh(false);
+        (right.querySelector(`[data-testid="csel-power-${p}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
+      }),
+    );
     right.append(
-      h('div', 'cs-skill', {}, h('div', 'cs-tile', { 'data-testid': 'csel-skill', 'data-skill': c.skill }, skillPicto(c.skill)), h('div', 'cs-skname', {}, SKILL_NAMES[c.skill]), keysFor('skill')),
+      h(
+        'div',
+        'cs-skill',
+        {},
+        h('div', 'cs-tile', { 'data-testid': 'csel-skill', 'data-skill': c.skill, 'data-power': chosen }, powerPicto(chosen)),
+        h('div', 'cs-skname', {}, getPower(chosen).name.toUpperCase()),
+        keysFor('skill'),
+      ),
+      h('div', 'cs-powers', { 'data-testid': 'csel-powers' }, ...tiles),
       act,
     );
     if (animate) {
