@@ -108,7 +108,10 @@ describe("Pip's script", () => {
     expect(bubbleMode({}, true)).toBe('compact');
     expect(bubbleMode({}, false)).toBe('full');
     expect(bubbleMode({ praise: true }, false)).toBe('full');
-    for (const l of Object.values(POOLS).flat()) if (l.icon !== 'nose' && !POOLS.idle.includes(l)) expect(l.praise, l.text).toBe(true);
+    for (const [id, pool] of Object.entries(POOLS) as [string, readonly ScriptLine[]][]) {
+      if (id === 'idle') continue;
+      for (const l of pool) expect(l.praise, l.text).toBe(true);
+    }
   });
 
   it('use prompts map to the right how-to', () => {

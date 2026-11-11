@@ -17,7 +17,7 @@
 // part formant-preserving), ~12% faster, trimmed, compressed, levelled, mono 24 kHz MP3 at 32 kbps.
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runnerImport } from 'vite';
@@ -152,9 +152,24 @@ async function main() {
     const work = join(CACHE, 'work');
     rmSync(work, { recursive: true, force: true });
     mkdirSync(work, { recursive: true });
-    const jobs = join(work, 'jobs.json');
-    writeFileSync(jobs, JSON.stringify(todo.map((l) => ({ id: l.id, spoken: l.spoken }))));
-    execFileSync(py, ['-I', join(ROOT, 'scripts/pip-voice/tts.py'), model, voice, jobs, work], { stdio: 'inherit' });
+    // Render in a few parallel shards (PIP_TTS_SHARDS, default 3): much quicker on a busy machine.
+    const shards = Math.max(1, Math.min(8, Number(process.env.PIP_TTS_SHARDS ?? 3) || 1));
+    const runs = [];
+    for (let k = 0; k < shards; k++) {
+      const part = todo.filter((_, i) => i % shards === k);
+      if (!part.length) continue;
+      const dir = join(work, `s${k}`);
+      mkdirSync(dir, { recursive: true });
+      const jobs = join(dir, 'jobs.json');
+      writeFileSync(jobs, JSON.stringify(part.map((l) => ({ id: l.id, spoken: l.spoken }))));
+      runs.push(
+        new Promise((ok, fail) => {
+          const p = spawn(py, ['-I', join(ROOT, 'scripts/pip-voice/tts.py'), model, voice, jobs, work], { stdio: ['ignore', 'inherit', 'inherit'] });
+          p.on('exit', (code) => (code === 0 ? ok() : fail(new Error(`tts shard ${k} exited with ${code}`))));
+        }),
+      );
+    }
+    await Promise.all(runs);
     for (const l of todo) {
       const file = `${l.id}.mp3`;
       const dur = postProcess(join(work, `${l.id}.wav`), join(OUT, file), work);

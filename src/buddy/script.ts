@@ -222,7 +222,7 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
     { text: 'Catch the glow-flies! Run or jump right through them!', icon: 'glasses', action: 'jump', mood: 'excited' },
     { text: 'Only magic glasses can see them. Fill up the jar!', icon: 'glasses', mood: 'curious' },
   ],
-  oddone: [{ text: 'Three shapes, one is different. Push that one's button!', icon: 'glasses', action: 'use', mood: 'curious' }],
+  oddone: [{ text: "Three shapes, one is different. Push that one's button!", icon: 'glasses', action: 'use', mood: 'curious' }],
   lineup: [
     { text: 'Stand on the pad. Move the magic ring onto a bubble!', icon: 'glasses', action: 'look', mood: 'curious' },
     { text: 'Then push the button to pop it!', icon: 'bubble', action: 'use', mood: 'excited' },

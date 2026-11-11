@@ -490,7 +490,7 @@ export class Director {
 
     this.onTick(v.remaining);
     this.updateLead(dt, v);
-    if (this.step !== 'story' && this.rescueCheck(dt, v, chestNear)) return;
+    if (this.rescueCheck(dt, v, chestNear)) return;
 
     if (this.step !== 'done') {
       this.introT += dt;
@@ -766,7 +766,8 @@ export class Director {
     if (v.heroSpeed > 1 && nearest > WANDER_RADIUS && nearest >= this.lastNearest - 0.05) this.wanderT += dt;
     else this.wanderT = Math.max(0, this.wanderT - dt * 2);
     this.lastNearest = nearest;
-    if (!why && this.guiding && this.wanderT > WANDER_SECONDS) why = 'wander';
+    // During the story only a hero stuck at a fence gets help (Pip keeps telling it meanwhile).
+    if (!why && this.guiding && this.step !== 'story' && this.wanderT > WANDER_SECONDS) why = 'wander';
     if (!why && this.guiding && this.stillT > IDLE_SECONDS && !v.nearAttraction && this.step !== 'story') why = 'idle';
     if (!why) return false;
     this.pushT = 0;
@@ -786,7 +787,7 @@ export class Director {
     const kind: LeadKind = this.leadKind === 'tour' || this.step !== 'done' ? 'tour' : 'rescue';
     this.leadToPlace(to, kind, { fetch: true, assist });
     this.sink.bark('bark');
-    if (this.canHint() && this.fresh(RESCUE.text)) {
+    if (this.step !== 'story' && this.canHint() && this.fresh(RESCUE.text)) {
       this.lastHint = this.playT;
       this.say(line(RESCUE, PRIORITY.tip, 'rescue'));
     }
