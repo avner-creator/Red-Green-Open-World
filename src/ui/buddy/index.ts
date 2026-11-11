@@ -72,6 +72,8 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   let recheck = 0;
   /** Seconds the bubble has been badly placed in a row (moves only after OCCLUDED_MOVE). */
   let occludedT = 0;
+  /** The bubble moves at most once per line (then it stays, even if covered again). */
+  let movedThisLine = false;
   /** Bubble's left edge and the tail x (eased towards Pip each frame). */
   let boxX = 0;
   let tailX = 0;
@@ -250,6 +252,7 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       place(false);
       recheck = CHECK_EVERY;
       occludedT = 0;
+      movedThisLine = false;
       bubble.classList.add('on');
       retrigger(bubble, 'pop');
     },
@@ -275,11 +278,12 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
           tailX += (want - tailX) * Math.min(1, dt * 10);
           bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
         }
-        if ((recheck -= dt) <= 0) {
+        if (!movedThisLine && (recheck -= dt) <= 0) {
           recheck = CHECK_EVERY;
           occludedT = covered() ? occludedT + CHECK_EVERY : 0;
           if (occludedT > OCCLUDED_MOVE) {
             occludedT = 0;
+            movedThisLine = true;
             place(true);
           }
         }
