@@ -152,9 +152,12 @@ export function buildChestSpots(height: HeightFn): ChestSpot[] {
   const at = (x: number, z: number, yaw: number): ChestSpot => ({ x, y: height(x, z), z, yaw });
   const [bx, bz] = findShore(height, -94, -2, -118, -50, 1.6);
   return [
-    at(11, 13, -0.6),
-    at(-58, 62, Math.PI),
-    at(-52, -140, -Math.PI / 2),
+    // Inner plaza ring, north-east of the fountain, off the walking lines from spawn to the roads and
+    // ≥ 3 m clear of the fingerposts, the Gear Shack and the benches (QA round 3: at (11, 13) its lock
+    // symbol overlapped the Carnival Island post's arms).
+    at(6.9, -7.8, -0.39),
+    at(-58, 62.6, Math.PI),
+    at(-51, -141, -Math.PI / 2),
     at(bx, bz, 0.8),
     at(102, 74, -Math.PI / 2),
     at(28, 106, -Math.PI / 2),

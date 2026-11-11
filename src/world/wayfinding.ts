@@ -49,7 +49,7 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
     hang: ['bouncePads', 'trampoline', 'ranch'],
   },
   // Carnival Island post: on the plaza's south-east rim, right of the spawn camera's line of sight and
-  // clear of the first chest's lock view
+  // clear of the plaza chest
   // (the plaza post is left of it), so both read from the spawn view. Arms in three rows; the race arm
   // points straight away from the camera, so it also carries a hanging disc.
   {
