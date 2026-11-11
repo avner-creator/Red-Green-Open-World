@@ -56,8 +56,8 @@ of radius 6 m. No anchor was added or moved.
 
 | id | x | z | Where | Nearest reserved point | Nearest anchor edge | Nearest road edge |
 |---|---|---|---|---|---|---|
-| `glowflies` | −40.7 | 73.2 | west meadow, west of the airstrip | ≥ 35 m | sillyZone ≥ 28 m | ≥ 30 m |
-| `oddone` | −47.4 | −2.2 | woods west of the plaza (49 m from spawn) | foamCourse 27 m | ranch 37 m | west 19 m |
+| `glowflies` | −68.4 | 19 | open meadow beside the west road, by the ranch fence (69 m from spawn) | foamCourse 57 m | ranch 10 m | west 16 m |
+| `oddone` | −36.5 | 3 | meadow between the west road and the foam course (37 m from spawn) | foamCourse 24 m | foamCourse 19 m | west 9 m |
 | `lineup` | 71.7 | −89.5 | by the ridge road towards the bridge | carnivalRow 70 m | trampoline 55 m | ridge 10 m |
 | `toys` | −50 | 13 | beside the west road (50 m from spawn) | foamCourse 40 m | ranch 23 m | west 9 m |
 | `gates` | 48 | 104 | south-east, past the loop road | bubbleArena 48 m | sillyZone 24 m | loop 19 m |
@@ -77,7 +77,14 @@ the site):
   bubbleArena (35, 57.5), dinoRing (16, 58.5) with both booths, gearShack (14, 2);
 - ≥ 14 m between sites, ≥ 7 m from every gem and chest spot;
 - checked once when they were chosen: dry land, gentle slope, no collider, trunk or building.
-  If a fixed site is ever blocked at runtime it stays where it is and logs one warning.
+  If a fixed site is ever blocked at runtime it stays where it is and logs one warning (in test
+  mode no console warning: `__rgGlasses.sites()` reports `valid: false` and `problem`, and
+  `tests/e2e/glasses-framework.spec.ts` fails naming the site and what blocks it).
+
+Re-sited after the M1 integration merge: `glowflies` (was −40.7, 73.2: a scatter rock and bushes
+from `src/world/scatter.ts` now stand on it) and `oddone` (was −47.4, −2.2: scatter oaks and a
+bush). Both new rows came from `__rgGlasses.search` on the merged world; the mini-games' own layout
+search succeeds there (odd one out: 0 problems; glow-flies: 3, the usual minimum).
 
 What reaches outside a site's circle: glow-flies roam up to 9 m from their centre (no
 colliders); line-up bubbles float 8–13 m ahead in the air (no colliders); the paw trail runs
