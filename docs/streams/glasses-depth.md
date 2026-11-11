@@ -3,8 +3,9 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 is on `main`. Phase 2 is built, QA'd and fixed on this branch** (started
-2026-11-11 from `origin/integration/m1`, with the owner's go-ahead). The Phase 1 sections below
+**Status: Phase 1 is on `main`. Phase 2 is done and ready to merge** (built from
+`origin/integration/m1` with the owner's go-ahead; `npm run verify` green: 977 unit tests,
+253 e2e tests). The Phase 1 sections below
 describe what was merged; "Phase 2" is near the end.
 
 `npm run verify` is green on the final branch: 664 unit tests and 174 e2e tests passed (see "Test results" at the end).
@@ -355,12 +356,15 @@ and misses raced the Auto challenge. Measured: +17 KB gzip of JavaScript over
 
 ## Test results
 
-`npm run verify` on the final branch (code at `b010a8b`, which includes `origin/main` `be5b4b2`;
-later commits are docs only), 2026-11-11: typecheck and lint clean; **664 unit tests passed**
-(65 files); build passed; **174 e2e tests passed, 1 skipped** (the skip comes from `main`), in
-14.5 minutes on the shared 4-CPU machine. 45 of the e2e tests are this stream's (seven
-`glasses-*` specs, about 4.5 minutes of the suite).
+**Phase 2 (final branch, code at `c4368c0`, which includes `origin/main` `b296977` and
+`origin/integration/m1` `161edf3`; later commits are docs only), 2026-11-11:** `npm run verify`
+is green — typecheck and lint clean; **977 unit tests passed** (92 files); build passed;
+**253 e2e tests passed, 3 skipped** (the skips come from `main`), in 16 minutes with three
+workers. 69 of the e2e tests are this stream's (eleven `glasses-*` specs).
+
+Phase 1 (code at `b010a8b`, on `origin/main` `be5b4b2`): 664 unit tests and 174 e2e tests
+passed, 1 skipped.
 
 One thing to watch: `tests/e2e/vision.spec.ts` (an existing spec) failed once for a builder
-while four test runs shared the machine and passed on both reruns and in every full run; it
+while four test runs shared the machine and passed on every rerun and in every full run; it
 looks like a timing flake under load, not a break.
