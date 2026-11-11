@@ -50,3 +50,10 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - In flight: `agent/pip-voice` (spoken lines: pre-rendered clips, Web Speech fallback), `agent/arena-fun` (ball pass-through bug + fun pass on bubble soccer and dino sumo), `agent/integrate-m3` (four red e2e on integration b9cc7ef: secrets key-2 trail after chest moves, glasses-challenge framing after camera collision, buddy-hud bubble trigger, shop deny toast timing; then merge `agent/boot-loads` and Stream P Phase 2 `agent/glasses-depth` cd07540).
 - `main` is at 9cd3e3d (game code = 7cda79b). Not yet on `main`: Pip guide, QA3 fixes, camera collision.
 - Next: play-through QA of a full round of every attraction and mini-game once batch 3 is green.
+
+## Batch 3 on `main` (2026-11-12 ~10:00 UTC)
+- `npm run verify` green on 02a3fc7: 1068 unit, 273 e2e passed, 4 skipped (21 min).
+- Now on `main`: Pip speaks real words (145 clips, Kokoro-82M Apache-2.0, owner approved the voice), Pip leads and rescues, camera collision with static-scenery occluders (`userData.cameraIgnore` / `userData.cameraOccluder`), bubble soccer solid ball + dash kick, dino sumo belly charge, QA3 fixes, Stream P Phase 2 (six optional weak-eye layers, result reports from 16 twists).
+- Lesson: a 50% failure of the core channel test was streamed Scoops models attaching between two captures of a frozen frame, not a leak. Models must attach on a simulation step. Same pattern still exists in carnival, bubbleball, foamlava, skyrides, race (wanted: loop-gated attach in `src/core/characters/load.ts`).
+- Owner playtest on a phone: "overall okay", Pip's text bubbles "kept glitching" (on the previous build; recheck).
+- Open: Low is 5 draws over at the Gear Shack; camera squeezed in 1.7 m village gaps and in canopies while driving; dino sumo likely too easy; toys mini-game has no trail; full-round play-through QA of every attraction (in flight as `agent/qa4-*`).

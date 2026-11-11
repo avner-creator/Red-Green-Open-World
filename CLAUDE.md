@@ -143,4 +143,6 @@ Picking the project up in a new session? Start with `docs/HANDOFF.md`.
 - Worktree agents: use the unique local branch name given in your brief, never a shared name such
   as `work`.
 - Strict TypeScript, no `any` without a comment. Small modules. Constants in `src/config.ts`.
+- Camera collision only treats static world scenery as obstacles. Set `userData.cameraIgnore = true` on a mesh to opt out and `userData.cameraOccluder = true` to opt in. Layer objects and anything that moves must never affect the camera.
+- Downloaded models are added to the scene on a simulation step (in `update()`), never inside a promise callback, so a frozen frame stays identical between renders.
 - Commit often with clear messages. One concern per commit.
