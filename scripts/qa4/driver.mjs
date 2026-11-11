@@ -18,16 +18,23 @@ const server = await preview({ preview: { port, strictPort: true, open: false },
 const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--mute-audio'],
 });
-const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+let page;
 const errors = [];
-page.on('console', (m) => {
-  if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`);
-});
-page.on('pageerror', (e) => errors.push(String(e)));
 const q = process.env.QA_QUERY ?? '&freeze=1&quality=low';
-await page.goto(`http://localhost:${port}/?test=1${q}`);
-await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 240000 });
-console.log('READY');
+/** (Re)open the game page: used at start and after a renderer crash (load on the shared box). */
+async function boot() {
+  if (page) await page.close().catch(() => {});
+  page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`);
+  });
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('crash', () => errors.push('RENDERER CRASH'));
+  await page.goto(`http://localhost:${port}/?test=1${q}`);
+  await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 240000 });
+  console.log('READY');
+}
+await boot();
 
 const shot = async (name) => {
   const buf = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' });
@@ -73,6 +80,7 @@ http
           server.httpServer.close();
           process.exit(0);
         }
+        if (req.url === '/reboot') await boot();
         const fn = new AsyncFunction('page', 'shot', 'hold', 'tap', 'st', 'log', 'errors', body);
         const r = await fn(page, shot, hold, tap, st, log, errors);
         res.end(logs.join('\n') + (r !== undefined ? `\n=> ${JSON.stringify(r)}` : '') + '\n');
