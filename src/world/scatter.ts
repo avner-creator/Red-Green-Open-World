@@ -6,6 +6,7 @@
  * Grass and flowers are generated lazily per small cell around the camera and fade out with distance.
  */
 import * as THREE from 'three';
+import { inSightline } from './sightlines';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Quality } from '../types';
 import { T } from './batch';
@@ -467,7 +468,13 @@ export function buildScatter(
   const addTree = (kind: TreeKind, x: number, z: number, s: number, y?: number): void => {
     const yy = y ?? h(x, z);
     const tintBase = kind === 'oak' ? (rng.chance(0.25) ? 0xfff0b0 : 0xffffff) : 0xffffff;
-    push(species[kind], CELL, x, yy - 0.05, z, rng.range(0, Math.PI * 2), s, s * rng.range(0.9, 1.15), tint(tintBase, 1));
+    const yaw = rng.range(0, Math.PI * 2);
+    const sy = s * rng.range(0.9, 1.15);
+    const c = tint(tintBase, 1);
+    // Open sightlines to the mini-game booths: the random numbers are still drawn, so every other
+    // tree on the island stays exactly where it was.
+    if (inSightline(x, z, 1.6 * s)) return;
+    push(species[kind], CELL, x, yy - 0.05, z, yaw, s, sy, c);
     col.cyl(x, yy, z, 2.2 * s, (kind === 'palm' ? 0.22 : 0.3) * s);
   };
   for (const m of manual) {
@@ -519,11 +526,21 @@ export function buildScatter(
       const s = big ? rng.range(1.4, 2.8) : rng.range(0.35, 0.9);
       if (rocks >= 322) continue;
       rocks++;
-      push(rng.chance(0.5) ? species.rockA : species.rockB, CELL, x, y - (0.15 + 0.4 * Math.min(1, sl)) * s, z, rng.range(0, 6.28), s, s * rng.range(0.7, 1.2), tint(0xffffff, 0.6));
+      const sp = rng.chance(0.5) ? species.rockA : species.rockB;
+      const yaw = rng.range(0, 6.28);
+      const sy = s * rng.range(0.7, 1.2);
+      const c = tint(0xffffff, 0.6);
+      if (big && inSightline(x, z, s)) continue; // same random draws either way (see addTree)
+      push(sp, CELL, x, y - (0.15 + 0.4 * Math.min(1, sl)) * s, z, yaw, s, sy, c);
       if (big) col.sphere(x, y + 0.1 * s, z, 0.75 * s);
     } else if (!pad && y > 1.5 && placedBushes < 380 && rng.chance(0.35 + 0.5 * forest(x, z))) {
       placedBushes++;
-      push(species.bush, CELL, x, y - 0.1, z, rng.range(0, 6.28), rng.range(0.7, 1.4), rng.range(0.6, 1.2), tint(0xffffff, 1));
+      const yaw = rng.range(0, 6.28);
+      const s = rng.range(0.7, 1.4);
+      const sy = rng.range(0.6, 1.2);
+      const c = tint(0xffffff, 1);
+      if (s > 1 && inSightline(x, z, s)) continue;
+      push(species.bush, CELL, x, y - 0.1, z, yaw, s, sy, c);
     }
   }
   for (const sp of Object.values(species)) flush(sp, CELL);

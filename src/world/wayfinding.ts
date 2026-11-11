@@ -13,6 +13,7 @@ import { PLAZA } from './village';
 import type { ProcessedRoad } from './terrain';
 import type { Keepout } from './scatter';
 import { Decals } from './decals';
+import { tallPennant } from './outer/common';
 import type { IconId } from './pictograms';
 import { ATTRACTIONS, GLASSES_WAY, wayTarget, type Attraction, type GlassesWay, type WayTarget } from './attractions';
 
@@ -40,6 +41,9 @@ export interface FingerpostDef {
  * its arms broadside (big icon discs on both faces) between 2.2 and 3.5 m up, below the HUD, and
  * the player's path east stays clear.
  */
+/** The toys trail-head flag (beside the toys fingerpost). */
+export const TOYS_FLAG = { x: -8.9, z: 67.2 } as const;
+
 export const FINGERPOSTS: readonly FingerpostDef[] = [
   {
     x: 8.4, z: 4.9, scale: 1,
@@ -79,6 +83,9 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
   // The bridge's far end, the roost path, the ranch approach.
   { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee', 'lookout'] },
   { x: 4.6, z: -133, scale: 0.85, targets: ['dragonRoost'] },
+  // Glasses booths hidden behind a crest or cliff: an arm with their pictogram where the child arrives.
+  { x: -8, z: 66, scale: 1, stripe: true, targets: ['toys'] },
+  { x: 65.2, z: -80.6, scale: 0.85, targets: ['lineup'] },
   // Where the roost footpath leaves the north road (QA round 3: make the way up to the roost obvious).
   { x: -22, z: -135.8, scale: 0.85, targets: ['dragonRoost', 'lighthouse', 'bungee'] },
   { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform', 'farm', 'huts'] },
@@ -314,10 +321,41 @@ function steppingStones(k: Kit, roads: readonly ProcessedRoad[], g: GlassesWay):
       if (d < best.d) best = { d, x: px, z: pz, w: r.def.width };
     }
   }
+  return layStones(k, best.x, best.z, g.x, g.z, best.w / 2 + 0.7, best.d - g.r + 0.4);
+}
+
+/**
+ * Extra stepping-stone paths from a given road point straight to a site's pad (where a child arrives
+ * along a different road than the nearest one).
+ */
+const EXTRA_STONE_PATHS: readonly { id: string; from: readonly [number, number] }[] = [
+  // Gates: from the loop road (the race lap) down to the pad.
+  { id: 'gates', from: [46, 82] },
+];
+
+function extraStonePaths(k: Kit, roads: readonly ProcessedRoad[]): Keepout[] {
+  const out: Keepout[] = [];
+  for (const p of EXTRA_STONE_PATHS) {
+    const g = GLASSES_WAY.find((q) => q.id === p.id);
+    if (!g) continue;
+    const [fx, fz] = p.from;
+    // Start just past the road edge, stop at the pad's rim.
+    const d = Math.hypot(g.x - fx, g.z - fz);
+    const ux = (g.x - fx) / d;
+    const uz = (g.z - fz) / d;
+    let s0 = 0;
+    while (s0 < d && roadEdgeDistance(roads, fx + ux * s0, fz + uz * s0) < 0.7) s0 += 0.25;
+    out.push(...layStones(k, fx, fz, g.x, g.z, s0, d - g.r + 0.4));
+  }
+  return out;
+}
+
+/** Flat stones from (fx, fz) towards (tx, tz), between distances s0 and s1, in a gentle zig-zag. */
+function layStones(k: Kit, fx: number, fz: number, tx: number, tz: number, s0: number, s1: number): Keepout[] {
+  const best = { x: fx, z: fz, d: Math.hypot(tx - fx, tz - fz) };
+  const g = { x: tx, z: tz };
   const ux = (g.x - best.x) / best.d;
   const uz = (g.z - best.z) / best.d;
-  const s0 = best.w / 2 + 0.7;
-  const s1 = best.d - g.r + 0.4;
   const out: Keepout[] = [];
   const n = Math.max(2, Math.round((s1 - s0) / 1.15));
   for (let i = 0; i <= n; i++) {
@@ -425,6 +463,43 @@ function chevrons(k: Kit, roads: readonly ProcessedRoad[], blocked: (x: number, 
   geo.dispose();
 }
 
+/**
+ * Zebra crossings where a stepping-stone trail leaves a road (odd one out on the west road): cream bars
+ * on the dark asphalt (bright on dark in both colour channels), flush with the road surface.
+ */
+const CROSSINGS: readonly { road: string; site: string }[] = [{ road: 'west', site: 'oddone' }];
+
+function crossings(k: Kit, roads: readonly ProcessedRoad[]): void {
+  for (const c of CROSSINGS) {
+    const r = roads.find((q) => q.def.id === c.road);
+    const g = GLASSES_WAY.find((q) => q.id === c.site);
+    if (!r || !g) continue;
+    let best = { d: Infinity, x: 0, z: 0, ux: 0, uz: 1 };
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const a = r.pts[i];
+      const b = r.pts[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const l = Math.hypot(dx, dz) || 1;
+      const t = Math.max(0, Math.min(1, ((g.x - a.x) * dx + (g.z - a.z) * dz) / (l * l)));
+      const px = a.x + dx * t;
+      const pz = a.z + dz * t;
+      const d = Math.hypot(g.x - px, g.z - pz);
+      if (d < best.d) best = { d, x: px, z: pz, ux: dx / l, uz: dz / l };
+    }
+    const { ux, uz } = best;
+    const yaw = Math.atan2(ux, uz);
+    const half = r.def.width / 2 - 0.45;
+    for (let o = -half; o <= half + 1e-6; o += (2 * half) / 6) {
+      const x = best.x + uz * o;
+      const z = best.z - ux * o;
+      const pitch = -Math.atan2(k.h(x + ux, z + uz) - k.h(x - ux, z - uz), 2);
+      const roll = Math.atan2(k.h(x + uz * 0.3, z - ux * 0.3) - k.h(x - uz * 0.3, z + ux * 0.3), 0.6);
+      k.b.add('road', rbox(0.5, 0.02, 2.8, 0.01), 0xf3efe3, T(x, k.h(x, z) + 0.15, z, yaw, 1, 1, 1, pitch, roll));
+    }
+  }
+}
+
 /** Bouncy landing zone where the rocket-pad flight ends (the net itself is built by the activity). */
 function landingZone(k: Kit): void {
   const { x, z, radius } = LAUNCH_NET;
@@ -467,8 +542,13 @@ export function buildWayfinding(k: Kit, roads: readonly ProcessedRoad[], blocked
     keepouts.push({ x: g.beacon.x, z: g.beacon.z, r: 2.2 }, { x: g.x, z: g.z, r: g.r + 2.5 });
     if (g.trail) keepouts.push(...steppingStones(k, roads, g));
   }
+  keepouts.push(...extraStonePaths(k, roads));
+  // Toys: a tall flag at the trail head shows over the ground crest towards the booth.
+  tallPennant(k, TOYS_FLAG.x, TOYS_FLAG.z, 6.5, 0x24476a, Math.atan2(-30.5 - TOYS_FLAG.x, 69.7 - TOYS_FLAG.z));
+  placed.push({ kind: 'post', name: 'toys flag', x: TOYS_FLAG.x, z: TOYS_FLAG.z, r: 0.3 });
   plazaArrows(k, decals);
   chevrons(k, roads, blocked);
+  crossings(k, roads);
   landingZone(k);
   keepouts.push({ x: LAUNCH_NET.x, z: LAUNCH_NET.z, r: LAUNCH_NET.radius + 1.5, mown: true });
   return { decals, arms, placed, beacons, keepouts };
