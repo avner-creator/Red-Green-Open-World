@@ -21,14 +21,14 @@ import { ROADS } from '../../../world/layout'; // read-only pure data: flies sta
 import { seededRng } from '../idle';
 import { roadClearance, siteToWorld } from '../sites';
 import type { Mechanic, MechanicEnv } from '../types';
-import { FLIES } from './constants';
+import { FLIES, FLY_CAMERA } from './constants';
 import { GLOWFLIES_DEMO } from './demo';
 import { createGlowInstances } from './fx';
 import { buildJar } from './jar';
 import { choosePatchLayout } from './layout';
 import { Swarm } from './logic';
 import type { PatchShape, V3 } from './logic';
-import { blinkOn, endTimedRound, FLY_BOOTH, FLY_PAD, FLY_ROUND, FLY_RULES, flyBoothCentre, flyBoothFootprint } from './round';
+import { blinkOn, FLY_BOOTH, FLY_PAD, FLY_PROMPT_SIZE, FLY_ROUND, FLY_RULES, flyArrivalTargets, flyBoothCentre, flyBoothFootprint, flyPrompt } from './round';
 
 /** World XZ → site-local (inverse of `siteToWorld`). */
 export function toLocal(site: { x: number; z: number; yaw: number }, wx: number, wz: number): { x: number; z: number } {
@@ -94,7 +94,7 @@ function roamGrid(ctx: MechanicEnv['ctx'], env: MechanicEnv, c: { x: number; z: 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
   // Shift/turn the patch so a child on the pad sees the meadow and the booth, all inside the site.
-  const layout = choosePatchLayout(ctx, site, PATCH_LAYOUT.hero.z, PATCH_LAYOUT.targets, flyBoothFootprint());
+  const layout = choosePatchLayout(ctx, site, PATCH_LAYOUT.hero.z, PATCH_LAYOUT.targets, flyBoothFootprint(), { at: site.arrival, targets: flyArrivalTargets() });
   const centreW = { x: layout.x, z: layout.z };
   const centre = toLocal(site, centreW.x, centreW.z);
   const inLayout = (x: number, z: number): { x: number; z: number } => {
@@ -148,11 +148,6 @@ export function create(env: MechanicEnv): Mechanic {
   /** The flies of the round in play (null between rounds: no flies out). */
   let swarm: Swarm | null = null;
   let roundTier: GlassesTier = 1;
-  /** Seconds left in the round (from GO). */
-  let left = 0;
-  let elapsed = 0;
-  /** Catches not yet reported to the round (one per frame while it is in `play`). */
-  let pending = 0;
   let caught = 0;
   let totalCaught = 0;
   let nearMisses = 0;
@@ -181,9 +176,6 @@ export function create(env: MechanicEnv): Mechanic {
   function startFlies(tier: GlassesTier): void {
     roundTier = tier;
     swarm = makeSwarm(nextSeed ?? Math.floor(env.rng() * 2 ** 31), tier);
-    left = FLY_ROUND.time;
-    elapsed = 0;
-    pending = 0;
     caught = 0;
     tickAt = Math.ceil(FLY_ROUND.hurry);
     jarMesh.setFill(0);
@@ -192,12 +184,20 @@ export function create(env: MechanicEnv): Mechanic {
 
   function stopFlies(): void {
     swarm = null;
-    pending = 0;
   }
 
+  // The ONE play prompt ("catch!") in front of the booth's picture board side, in clear view from the
+  // pad camera (central safe area, off the hero): picked once from the layout.
+  const groundL = (x: number, z: number): number => {
+    const w = siteToWorld(layout, x, z);
+    return env.groundAt(w.x, w.z) - site.y;
+  };
+  const promptPick = flyPrompt(groundL);
   const kit = env.booth({
     frame: { x: layout.x, z: layout.z, yaw: layout.yaw },
-    spec: FLY_BOOTH,
+    spec: { ...FLY_BOOTH, playPromptAt: promptPick.at, playPromptSize: FLY_PROMPT_SIZE },
+    // From the pad the hero faces the middle of the meadow.
+    look: { x: 0, z: 0 },
     demo: GLOWFLIES_DEMO,
     rules: FLY_RULES,
     hooks: {
@@ -205,7 +205,11 @@ export function create(env: MechanicEnv): Mechanic {
         if (i === 0) startFlies(tier);
       },
       onIdle() {
+        // Time up (or cancelled): the lamps never earned go dark; the flies go home.
+        for (let i = kit.round.results.length; i < FLY_RULES.tries; i++) kit.booth.setLamp(i, 'off');
+        if (swarm && caught < FLY_RULES.tries) ctx.audio.play('whoosh', { volume: 0.4, pitch: 0.8 });
         stopFlies();
+        releaseCamera();
       },
     },
   });
@@ -256,12 +260,31 @@ export function create(env: MechanicEnv): Mechanic {
     bursts.commit(k);
   }
 
+  // ── the round camera: while the flies are out the camera is pulled back, lower and a little
+  // wider, so the flies over the meadow sit well inside the picture, not at its top edge. Held
+  // only while the round is in play and the hero walks; released the moment it ends (the kit's
+  // celebration camera takes over), the child leaves, rides, respawns or the session changes. ──
+  let camHeld = false;
+  function releaseCamera(): void {
+    if (!camHeld) return;
+    camHeld = false;
+    ctx.cameraRig.setOverride(null);
+  }
+  function holdCamera(): void {
+    if (active && swarm && kit.phase() === 'play' && ctx.player.mode === 'walk') {
+      ctx.cameraRig.setOverride(FLY_CAMERA);
+      camHeld = true;
+    } else releaseCamera();
+  }
+  const offSession = ctx.events.on('session:phase', () => releaseCamera());
+
   /** The unlit lamps blink, faster as the time runs out; the last seconds tick. */
   function clockLook(): void {
     const phase = kit.phase();
     if (!swarm || (phase !== 'play' && phase !== 'beat')) return;
     const done = kit.round.results.length;
-    const on = blinkOn(left, elapsed);
+    const left = kit.round.timeLeft;
+    const on = blinkOn(left, FLY_ROUND.time - left);
     for (let i = done; i < FLY_RULES.tries; i++) kit.booth.setLamp(i, on ? 'chase' : 'off');
     if (left <= tickAt && tickAt > 0) {
       ctx.audio.play('tick', { pitch: 1 + (FLY_ROUND.hurry - tickAt) * 0.05, volume: 0.6 });
@@ -281,40 +304,30 @@ export function create(env: MechanicEnv): Mechanic {
     const from = Math.hypot(chest.x - prev.x, chest.y - prev.y, chest.z - prev.z) > maxStep ? chest : prev;
     const inside = Math.hypot(pp.x - centreW.x, pp.z - centreW.z) <= FLIES.insideRadius;
 
-    const phase = kit.phase();
-    if (swarm && (phase === 'play' || phase === 'beat')) {
+    if (swarm && kit.phase() === 'play') {
+      // ✓ / ✗ pop above the hero's head (never at a fly: a caught one is gone, a lost one leaving).
+      headW.set(pp.x, pp.y + PLAYER.height + 0.7, pp.z);
       for (const { at } of swarm.catchAlong(from, chest)) {
         if (burstList.length >= FLIES.maxBursts) burstList.shift();
         burstList.push({ t: 0, p: at });
-        pending++;
         caught++;
         totalCaught++;
         jarMesh.setFill(caught);
         jarMesh.gulp();
+        // A timed round: every catch lights the next lamp; the 5th ends the round.
+        kit.report(true, kit.toLocal(headW));
+        if (!swarm) break;
       }
-      for (const ev of swarm.update(dt, inside, chest)) {
+      for (const ev of swarm?.update(dt, inside, chest) ?? []) {
         if (ev.type === 'miss') {
           // It got away while the hero was near: a miss with no lamp (lamps count catches).
           nearMisses++;
-          env.result(roundTier, false);
+          kit.note(false, kit.toLocal(headW));
         }
       }
-      if (pending > 0 && kit.phase() === 'play') {
-        pending--;
-        // ✓ above the hero's head (the fly is caught: nothing left to give away).
-        headW.set(pp.x, pp.y + PLAYER.height + 0.7, pp.z);
-        kit.report(true, kit.toLocal(headW));
-      }
-      left -= dt;
-      elapsed += dt;
       clockLook();
-      if (left <= 0 && kit.phase() === 'play') {
-        // Time's up: the round ends with the catches so far (no lamp, no result for the rest).
-        for (let i = kit.round.results.length; i < FLY_RULES.tries; i++) kit.booth.setLamp(i, 'off');
-        endTimedRound(kit.round);
-        ctx.audio.play('whoosh', { volume: 0.4, pitch: 0.8 });
-      }
     }
+    holdCamera();
 
     Object.assign(prev, chest);
     havePrev = true;
@@ -326,6 +339,7 @@ export function create(env: MechanicEnv): Mechanic {
   }
 
   function reset(): void {
+    releaseCamera();
     stopFlies();
     caught = 0;
     totalCaught = 0;
@@ -350,6 +364,7 @@ export function create(env: MechanicEnv): Mechanic {
     reset,
     setActive(on) {
       active = on;
+      if (!on) releaseCamera();
       kit.setActive(on);
       dropTransient();
       if (!on) {
@@ -361,6 +376,8 @@ export function create(env: MechanicEnv): Mechanic {
     },
     update,
     dispose() {
+      releaseCamera();
+      offSession();
       kit.dispose();
       env.remove(weak);
       env.remove(jarMesh.mesh);
@@ -381,8 +398,9 @@ export function create(env: MechanicEnv): Mechanic {
         caught,
         totalCaught,
         nearMisses,
-        pending,
-        left,
+        left: kit.round.timeLeft,
+        camHeld,
+        promptFits: promptPick.fits,
         time,
         out: swarm !== null,
         bursts: burstList.length,
@@ -415,7 +433,8 @@ export function create(env: MechanicEnv): Mechanic {
       if (params.play) kit.forcePlay(typeof params.tier === 'number' ? (Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier) : undefined);
       if (params.start) kit.start();
       if (typeof params.pin === 'number') kit.pin(params.pin);
-      if (typeof params.left === 'number') left = params.left;
+      // Seconds left in a timed round (the machine's clock jumps there).
+      if (typeof params.left === 'number' && kit.phase() === 'play') kit.round.t = Math.max(0, FLY_ROUND.time - params.left);
       // Every alive fly this close to the end of its life (seconds); the next update decides.
       if (typeof params.lifeLeft === 'number' && swarm) for (const f of swarm.flies) if (f.state === 'alive') f.age = Math.max(0, f.life - params.lifeLeft);
       if (typeof params.time === 'number') time = params.time;

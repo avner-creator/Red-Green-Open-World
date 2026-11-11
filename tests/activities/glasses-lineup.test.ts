@@ -15,6 +15,7 @@ import {
   toXY,
 } from '../../src/activities/glasses/lineup/aim';
 import type { V3 } from '../../src/activities/glasses/lineup/aim';
+import { auditDemo } from '../../src/activities/glasses/booth/legibility';
 import { RoundMachine } from '../../src/activities/glasses/booth/round';
 import { simulate } from '../../src/activities/glasses/booth/sim';
 import { GLASSES } from '../../src/activities/glasses/constants';
@@ -93,7 +94,7 @@ function play(seed: number, strategy: Strategy, minutes: number, lock: GlassesTi
 const mash = (p: XY): Strategy => () => ({ p, press: true });
 
 describe('line-up ring offsets', () => {
-  it('drawn offsets stay in the region (5°–14°, never the lower sector) and spread by area', () => {
+  it('drawn offsets stay in the region (5°–16°, never the lower sector) and spread by area', () => {
     const rng = mulberry32(4);
     let inner = 0;
     const n = 20000;
@@ -219,7 +220,7 @@ describe('line-up rounds (booth kit)', () => {
     expect(m.tier).toBe(1);
   });
 
-  it('the booth stays inside the site circle and the demo has 4–6 frames', () => {
+  it('the booth stays inside the site circle and the demo has 4–6 legible frames', () => {
     for (const side of [-1, 1] as const) {
       const b = lineupBooth(side);
       for (const p of [...boothFootprint(side), { x: b.pad.x, z: b.pad.z + (b.pad.r ?? 1) }, ...(b.decals ?? [])]) {
@@ -230,6 +231,9 @@ describe('line-up rounds (booth kit)', () => {
     }
     expect(LINEUP_DEMO.frames).toBeGreaterThanOrEqual(4);
     expect(LINEUP_DEMO.frames).toBeLessThanOrEqual(6);
+    const audit = auditDemo(LINEUP_DEMO);
+    console.info(`line-up demo: hero ${audit.minHeroPx.toFixed(0)} px at 8 m, ≤ ${audit.maxThings} pictures a frame`);
+    expect(audit.problems).toEqual([]);
   });
 
   it('gems per minute: a blind tapper ≤ 6 at every tier, a child who sees the ring ≥ 25 at tier 1', () => {

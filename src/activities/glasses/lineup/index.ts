@@ -7,7 +7,7 @@
  * the camera: steer it over the bubble and tap Use (the booth's prompt shows the device's button).
  * Bubble inside the ring → it pops, ✓, a bright lamp; not inside → the oldest bubble floats away,
  * ✗, a dim lamp; a bubble left alone for 12 s floats away too (✗). 5 bubbles a round; 3 pops or
- * more win the prize. After every tap and every time-out the ring jumps to a new offset (5°–14°
+ * more win the prize. After every tap and every time-out the ring jumps to a new offset (5°–16°
  * from the centre, any direction but down), so without the weak eye the only option is a blind
  * guess (≤ 8 % a tap, tests/activities/glasses-lineup.test.ts).
  *
@@ -21,13 +21,17 @@ import type { GlassesTier, Interactable } from '../../../types';
 import { withChallenge } from '../../../vision/toolkit';
 import { deviceFor } from '../booth/cells';
 import type { DeviceId } from '../booth/cells';
+import { PAD_TOP } from '../booth/geometry';
+import type { BoothSpec } from '../booth/types';
+import { padCamera, screenPoint } from '../booth/view';
+import { siteToWorld } from '../sites';
 import type { Mechanic, MechanicEnv } from '../types';
 import { aimForReticle, angleBetween, reticleDirection, tolerance } from './aim';
 import type { V3 } from './aim';
 import { LINEUP, LINEUP_RULES, lineupBooth } from './constants';
 import { LINEUP_DEMO } from './demo';
 import { LineupGame } from './game';
-import { chooseBoothSide } from './layout';
+import { chooseLineupLayout, lineupPrompt, LINEUP_LOOK } from './layout';
 import { createBubbles, createHoop } from './visuals';
 
 const DEG = Math.PI / 180;
@@ -37,11 +41,15 @@ export function create(env: MechanicEnv): Mechanic {
   const site = env.site;
   const B = LINEUP.bubble;
 
-  // ── the booth (beside the pad, on the side with clear ground) ──
-  const side = chooseBoothSide(ctx, site);
-  const spec = lineupBooth(side);
-  /** Facing from the pad towards the bubbles (local −Z), player-yaw convention. */
-  const padYaw = site.yaw + Math.PI;
+  // ── the layout: turned to face where children arrive; the booth beside the pad ──
+  const { lay, side } = chooseLineupLayout(ctx, site);
+  const promptPick = lineupPrompt(side, (x, z) => {
+    const w = siteToWorld(lay, x, z);
+    return env.groundAt(w.x, w.z) - site.y;
+  });
+  const spec: BoothSpec = { ...lineupBooth(side), playPromptAt: promptPick.at, playPromptSize: LINEUP.promptSize };
+  /** Facing from the pad towards the bubbles (layout −Z), player-yaw convention. */
+  const padYaw = lay.yaw + Math.PI;
 
   // ── layers ──
   const bubbles = createBubbles(B.slots);
@@ -84,9 +92,12 @@ export function create(env: MechanicEnv): Mechanic {
   });
 
   const kit = env.booth({
+    frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
     spec,
     demo: LINEUP_DEMO,
     rules: LINEUP_RULES,
+    // From the pad the hero faces the bubbles' sky.
+    look: LINEUP_LOOK,
     hooks: {
       onTry(_i, tier) {
         game.open(tier);
@@ -140,6 +151,14 @@ export function create(env: MechanicEnv): Mechanic {
           const yaw = padYaw + a * DEG;
           const p = new THREE.Vector3(padPos.x + Math.sin(yaw) * d, padPos.y + h, padPos.z + Math.cos(yaw) * d);
           if (env.groundAt(p.x, p.z) > p.y - S.clearance) continue;
+          // Well inside the default picture from the pad (16:9 and 4:3), above the hero.
+          if (!padCams.every((c) => {
+            const q = screenPoint(p, c);
+            return !!q && q.x >= S.screen.x0 && q.x <= S.screen.x1 && q.y >= S.screen.y0 && q.y <= S.screen.y1;
+          })) continue;
+          // Nothing (the booth, a tree) between the pad camera and the bubble.
+          dir.subVectors(p, padCams[0].position);
+          if (ctx.physics.raycast(padCams[0].position, dir.clone().normalize(), dir.length())) continue;
           dir.subVectors(p, eye);
           const len = dir.length();
           dir.normalize();
@@ -158,11 +177,14 @@ export function create(env: MechanicEnv): Mechanic {
     if (out.length < B.slots + 1) {
       for (const a of [-10, 0, 10, 5]) {
         const yaw = padYaw + a * DEG;
-        out.push(new THREE.Vector3(padPos.x + Math.sin(yaw) * 9, padPos.y + 5.5, padPos.z + Math.cos(yaw) * 9));
+        out.push(new THREE.Vector3(padPos.x + Math.sin(yaw) * 8.5, padPos.y + 3.0, padPos.z + Math.cos(yaw) * 8.5));
       }
     }
     return out;
   }
+
+  /** The default camera of a hero on the pad facing the bubbles (world), at 16:9 and 4:3. */
+  const padCams = [16 / 9, 4 / 3].map((aspect) => padCamera({ x: padPos.x, y: padPos.y + PAD_TOP, z: padPos.z }, { x: padPos.x + Math.sin(padYaw) * 10, z: padPos.z + Math.cos(padYaw) * 10 }, aspect));
 
   const dirFromEye = (p: THREE.Vector3): V3 => ({ x: p.x - eye.x, y: p.y - eye.y, z: p.z - eye.z });
 

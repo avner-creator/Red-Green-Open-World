@@ -1,6 +1,6 @@
 /**
  * Seeing matters, against the REAL round rules: a simulated hero starts on the pad at the meadow's
- * edge; after 3-2-1-GO the flies come out and the round runs for `FLY_ROUND.time` seconds or until
+ * edge; after 3-2-1-GO the flies come out and the round runs for `FLY_RULES.time` seconds or until
  * 5 catches. One who can see the flies (heads for the nearest one, jumps for high ones) must reach
  * the prize (3 catches) in > 90 % of rounds; a blind lawn-mower (laps at sprint speed with random
  * jumps) in < 15 %. Gems per minute include walking back to the pad between rounds.
@@ -8,11 +8,15 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER } from '../../src/config';
 import { RoundMachine } from '../../src/activities/glasses/booth/round';
+import type { RoundEvent } from '../../src/activities/glasses/booth/round';
 import { FLIES } from '../../src/activities/glasses/glowflies/constants';
 import { Swarm } from '../../src/activities/glasses/glowflies/logic';
 import type { Fly, PatchShape, V3 } from '../../src/activities/glasses/glowflies/logic';
-import { endTimedRound, flyBoothCentre, FLY_PAD, FLY_ROUND, FLY_RULES } from '../../src/activities/glasses/glowflies/round';
+import { flyBoothCentre, flyBoothFootprint, FLY_PAD, FLY_RULES } from '../../src/activities/glasses/glowflies/round';
 import { seededRng } from '../../src/activities/glasses/idle';
+import { auditDemo } from '../../src/activities/glasses/booth/legibility';
+import { GLASSES } from '../../src/activities/glasses/constants';
+import { GLOWFLIES_DEMO } from '../../src/activities/glasses/glowflies/demo';
 import type { GlassesTier } from '../../src/types';
 
 const R = FLIES.roamRadius;
@@ -138,10 +142,8 @@ function playRounds(make: () => Brain, seed: number, minutes: number, fixedTier?
   const m = new RoundMachine(FLY_RULES);
   const rng = seededRng(seed * 31 + 7);
   const h: Hero = { x: FLY_PAD.x, z: FLY_PAD.z, y: 0, vy: 0, grounded: true };
-  let swarm: Swarm | null = null;
+  let swarm = null as Swarm | null;
   let brain = make();
-  let left = 0;
-  let pending = 0;
   let gems = 0;
   let near = 0;
   let prized = 0;
@@ -154,31 +156,30 @@ function playRounds(make: () => Brain, seed: number, minutes: number, fixedTier?
       // Back to the pad, then step on it (starts the round).
       if (moveTo(h, FLY_PAD.x, FLY_PAD.z)) m.start();
     }
-    for (const e of m.step(DT)) {
-      if (e.type === 'try' && e.index === 0) {
+    const onEvents = (events: RoundEvent[]): void => {
+      for (const e of events) {
+        if (e.type === 'try' && e.index === 0) {
         swarm = new Swarm({ rng: seededRng(seed * 1000 + k++), patch, toWorld: (x, z) => ({ x, z }), groundAt: () => 0, tier: e.tier });
-        brain = make();
-        left = FLY_ROUND.time;
-        pending = 0;
-      } else if (e.type === 'end') {
-        catches.push(e.hits);
-        if (e.hits >= FLY_RULES.minHits) prized++;
-        swarm = null;
-      } else if (e.type === 'pay') gems += e.gems;
-    }
-    const playing = swarm !== null && (m.phase === 'play' || m.phase === 'beat');
+          brain = make();
+        } else if (e.type === 'end') {
+          catches.push(e.hits);
+          if (e.hits >= FLY_RULES.minHits) prized++;
+          swarm = null;
+        } else if (e.type === 'pay') gems += e.gems;
+      }
+    };
+    // The kit's timed round: the machine ends the play when the time is up.
+    onEvents(m.step(DT));
+    const playing = swarm !== null && m.phase === 'play';
     if (playing && swarm) brain(h, swarm, rng);
     physics(h);
     const cur: V3 = { x: h.x, y: h.y + CHEST, z: h.z };
     if (playing && swarm) {
-      pending += swarm.catchAlong(prev, cur).length;
-      for (const ev of swarm.update(DT, true, cur)) if (ev.type === 'miss') near++;
-      if (pending > 0 && m.phase === 'play') {
-        m.report(true);
-        pending--;
-      }
-      left -= DT;
-      if (left <= 0) endTimedRound(m);
+      // Every catch lights the next lamp (the 5th ends the round).
+      for (let n = swarm.catchAlong(prev, cur).length; n > 0 && m.phase === 'play'; n--) onEvents(m.report(true));
+      // (`onEvents` may have ended the round and taken the flies home.)
+      const still = swarm as Swarm | null;
+      for (const ev of still?.update(DT, true, cur) ?? []) if (ev.type === 'miss') near++;
     }
     prev = cur;
   }
@@ -232,16 +233,22 @@ describe('glow-flies rounds: seeing them matters', () => {
     const m = new RoundMachine(FLY_RULES);
     m.start();
     for (let i = 0; i < 400 && m.phase !== 'play'; i++) m.step(DT);
-    m.report(true);
-    m.step(DT);
-    m.report(true);
-    m.step(DT);
-    m.report(true);
-    m.step(DT);
+    for (let i = 0; i < 3; i++) {
+      m.report(true);
+      m.step(DT);
+    }
     expect(m.phase).toBe('play');
-    endTimedRound(m);
-    expect(m.results).toEqual([true, true, true, false, false]);
-    const ev = m.step(DT);
+    expect(m.results).toEqual([true, true, true]);
+    const ev: RoundEvent[] = [];
+    for (let t = 0; t < (FLY_RULES.time ?? 0) && m.phase === 'play'; t += DT) ev.push(...m.step(DT));
     expect(ev).toContainEqual({ type: 'end', hits: 3, gems: FLY_RULES.prize[1][3] });
+    expect(m.results, 'no result for the catches never made').toEqual([true, true, true]);
+  });
+
+  it('the demo is legible (the kit\'s auditDemo) and the booth stays inside the site', () => {
+    const audit = auditDemo(GLOWFLIES_DEMO);
+    console.info(`glow-flies demo: hero ${audit.minHeroPx.toFixed(0)} px at 8 m, ≤ ${audit.maxThings} pictures a frame`);
+    expect(audit.problems).toEqual([]);
+    for (const p of flyBoothFootprint()) expect(Math.hypot(p.x, p.z)).toBeLessThanOrEqual(GLASSES.siteRadius + 0.4);
   });
 });
