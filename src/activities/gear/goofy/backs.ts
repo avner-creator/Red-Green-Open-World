@@ -17,7 +17,7 @@ export function buildButterflyWings(): Wearable {
     const body = P(at(ball(0.04, 8, 6).scale(1, 3.5, 1), -0.02, 0.0, 0), 0x1a1030, 0.8);
     return [up, low, body].map((g) => (s < 0 ? g.scale(-1, 1, 1) : g));
   };
-  return flapper(wing(1), { spread: 0.9, rate: 7, y: 0.12, z: -0.07 });
+  return flapper(wing(1), { spread: 0.9, rate: 7, y: 0.12, z: -0.07, size: 1.35 });
 }
 
 /** Little dragon wings: dark leathery panels with bright bony edges and claws. */
@@ -39,8 +39,8 @@ export function buildDragonWings(): Wearable {
  * Two wings that flap mirrored: one wing geometry drawn twice (the right one is a mirrored Mesh on
  * the same geometry and material), so a pair costs exactly 2 draws.
  */
-function flapper(wing: Geo[], o: { spread: number; rate: number; y: number; z: number }): Wearable {
-  const spec = goofy({ moving: wing, pivot: [0, 0, 0] });
+function flapper(wing: Geo[], o: { spread: number; rate: number; y: number; z: number; size?: number }): Wearable {
+  const spec = goofy({ moving: wing, pivot: [0, 0, 0], size: o.size ?? 1 });
   const root = spec.object.children[0] as THREE.Group;
   const pivotL = root.children.find((c) => !(c as THREE.Mesh).isMesh) as THREE.Group;
   const wingMesh = pivotL.children[0] as THREE.Mesh;
@@ -171,25 +171,31 @@ export function buildFlag(): Wearable {
     const r = Math.hypot(x - W / 2, y);
     return r < 0.07 ? 0xffffff : Math.floor((x / W) * 4) % 2 ? 0xffd21f : 0x1d3fd0;
   }, 0.75, 1.05);
-  const pos = flag.getAttribute('position');
-  const base = Float32Array.from(pos.array as Float32Array);
   const body: Geo[] = [
     P(at(cyl(0.015, 0.015, 0.95, 8), 0, 0.42, -0.12), 0xffffff, 0.7),
     P(at(ball(0.035, 8, 6), 0, 0.91, -0.12), 0xffc928, 0.7, 1.1),
     P(at(box(0.08, 0.14, 0.05, 0.02), 0, -0.02, -0.08), 0x1c1c26, 0.7),
   ];
   const w = new Wobble(30, 2, 0.05, 0, 1);
-  const spec = goofy({ body, moving: [flag], pivot: [0, 0.76, -0.12] });
+  const spec = goofy({ body, moving: [at(flag, 0.015, 0.76, -0.12)], pivot: [0, 0.76, -0.12] });
+  // The merged cloth (relative to the pole top) is re-shaped every frame.
+  let clothMesh: THREE.Mesh | null = null;
+  spec.object.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.parent && !(m.parent as THREE.Mesh).isMesh && m.parent.position.y > 0.5) clothMesh = m;
+  });
+  const pos = (clothMesh as THREE.Mesh | null)?.geometry.getAttribute('position') ?? null;
+  const base = pos ? Float32Array.from(pos.array as Float32Array) : new Float32Array(0);
   return {
     object: spec.object,
     update(dt, speed) {
       w.step(dt, speed);
+      if (!pos) return;
       const t = w.time;
       for (let i = 0; i < pos.count; i++) {
         const x = base[i * 3] as number;
-        const k = x / W;
-        pos.setZ(i, (base[i * 3 + 2] as number) + Math.sin(t * 6 - x * 14) * 0.05 * k);
-        pos.setX(i, x * (1 - 0.1 * k * Math.min(1, speed / 6)));
+        const k = Math.max(0, x / W);
+        pos.setZ(i, (base[i * 3 + 2] as number) + Math.sin(t * 6 - x * 14) * 0.05 * k - 0.12 * k * Math.min(1, speed / 6));
       }
       pos.needsUpdate = true;
     },
@@ -217,7 +223,7 @@ export function buildSurfboard(): Wearable {
     paintBy(board, (x, y) => (Math.abs(x) < 0.025 ? 0x1c1c26 : y > 0.1 && y < 0.22 ? 0xff7414 : y > 0.26 && y < 0.32 ? 0x1d3fd0 : 0xffffff), 0.6, 1.05),
     P(at(box(0.32, 0.04, 0.06, 0.015), 0, -0.05, 0.02), 0x1c1c26, 0.8),
   ];
-  return goofy({ body: body.map((g) => g.translate(0, 0, -0.12)), offset: [0, 0.18, 0], tilt: [0, 0, 0.35] });
+  return goofy({ body: body.map((g) => g.translate(0, 0, -0.12)), offset: [0, 0.18, 0], tilt: [0, 0.45, 0.35] });
 }
 
 /** Fizzy soda jetpack: two bottles with foamy puffs that bubble when you run. */

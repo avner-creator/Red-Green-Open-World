@@ -114,7 +114,7 @@ test.describe('dressing room', () => {
     // In play: the HUD hanger button opens it (paused), Esc closes it (playing again).
     await startGame(page);
     await expect(page.getByTestId('hud-wardrobe')).toBeVisible();
-    await page.getByTestId('hud-wardrobe').click();
+    await page.getByTestId('hud-wardrobe').click({ force: true }); // it pops when something is new
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     expect(await phase(page)).toBe('paused');
     await page.keyboard.press('Escape');
@@ -220,6 +220,77 @@ test.describe('dressing room by touch', () => {
     expect(await phase(page)).toBe('playing');
     await expect(page.getByTestId('touch-hud')).toBeVisible();
     await save(page, 'touch-hud', 300);
+    expect(consoleErrors).toEqual([]);
+  });
+});
+
+test.describe('goofy items on every hero in the world (RG_SHOTS=1 only)', () => {
+  test.use({ viewport: { width: 640, height: 400 } });
+  test.skip(!SHOTS, 'screenshots for humans');
+
+  test('twelve outfits on six heroes, full / R / G', async ({ page }) => {
+    test.setTimeout(900_000);
+    const { consoleErrors } = await boot(page, '&quality=medium');
+    await page.evaluate(() => {
+      const rg = window.__rg!;
+      rg.start();
+      rg.step(1 / 60, 10, false);
+    });
+    const looks: [string, string, string, string][] = [
+      ['robot', 'hat-viking', 'face-googly', 'back-butterfly'],
+      ['frog', 'hat-duck', 'face-moustache', 'back-balloons'],
+      ['panda', 'hat-sombrero', 'face-hearts', 'back-plush'],
+      ['bee', 'hat-unicorn', 'face-bigglasses', 'back-dragon'],
+      ['flamingo', 'hat-chef', 'face-snorkel', 'back-flag'],
+      ['rex', 'hat-dino', 'face-clown', 'back-turtle'],
+      ['robot', 'hat-octopus', 'face-disguise', 'back-soda'],
+      ['frog', 'hat-tricorn', 'face-mask', 'back-windup'],
+      ['panda', 'hat-fishbowl', 'face-beard', 'back-snail'],
+      ['bee', 'hat-tophat', 'face-visor', 'back-surf'],
+      ['flamingo', 'hat-jester', 'face-clown', 'back-butterfly'],
+      ['rex', 'hat-cone', 'face-googly', 'back-balloons'],
+    ];
+    for (const [n, [hero, ...items]] of looks.entries()) {
+      for (const side of ['front', 'back'] as const) {
+        if (side === 'back' && n % 2) continue;
+        await page.evaluate(
+          async ({ hero, items, side }) => {
+            const rg = window.__rg!;
+            const ctx = rg.ctx;
+            await ctx.player.setCharacter(hero);
+            const sp = ctx.world.anchors.spawn;
+            rg.teleport(sp.position.x, sp.position.y, sp.position.z, sp.yaw);
+            for (const id of items) {
+              ctx.profile.unlock(id, 'shop');
+              ctx.economy.equip(ctx.economy.item(id)!.slot, id);
+            }
+            rg.step(1 / 60, 50, false);
+            const pl = ctx.player;
+            const p = pl.position;
+            const fx = Math.sin(pl.yaw);
+            const fz = Math.cos(pl.yaw);
+            const k = side === 'front' ? 1 : -1;
+            const d = hero === 'rex' ? 4.2 : 3.2;
+            const c = ctx.camera;
+            ctx.uiRoot.style.display = 'none';
+            c.position.set(p.x + k * (fx * d + fz * 1.1), p.y + 1.8, p.z + k * (fz * d - fx * 1.1));
+            c.fov = 42;
+            c.updateProjectionMatrix();
+            c.lookAt(p.x, p.y + (hero === 'rex' ? 1.3 : 1.15), p.z);
+            rg.render();
+          },
+          { hero, items, side },
+        );
+        const buf = await page.screenshot({ type: 'png', animations: 'disabled' });
+        const name = `world-${String(n + 1).padStart(2, '0')}-${hero}-${side}`;
+        writeFileSync(`${OUT}/${name}.png`, buf);
+        if (n < 2 || hero === 'rex') {
+          const png = PNG.sync.read(buf);
+          writeFileSync(`${OUT}/${name}-R.png`, channel(png, 0));
+          writeFileSync(`${OUT}/${name}-G.png`, channel(png, 1));
+        }
+      }
+    }
     expect(consoleErrors).toEqual([]);
   });
 });

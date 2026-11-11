@@ -70,6 +70,10 @@ export const WARDROBE_CSS = `
   border:calc(var(--u)*.45) solid #000;display:flex;align-items:center;justify-content:center}
 .rg .dr-tile .tryon .ic{font-size:calc(var(--u)*3.6);color:#000;--out:#fff}
 .rg .dress .celebrate{position:absolute;inset:0}
+@media (max-height:520px) and (min-aspect-ratio:1/1){
+  .rg .dr-tabs{display:grid;grid-template-columns:repeat(2,auto);align-content:start;gap:calc(var(--u)*1.2);padding:calc(var(--u)*1)}
+  .rg .b.dr-tab{min-width:max(48px,calc(var(--u)*10))!important;min-height:max(46px,calc(var(--u)*9))!important}
+}
 @media (max-aspect-ratio:1/1){
   .rg .dr-room{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) minmax(0,1fr);grid-template-areas:"top top" "tabs stage" "tabs grid"}
 }
