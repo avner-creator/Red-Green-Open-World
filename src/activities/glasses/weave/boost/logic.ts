@@ -1,72 +1,55 @@
 /**
- * Pure maths for the buggy-race glasses part (`./index.ts`): the weak-eye beat on the next boost
- * pad. No three, no DOM; unit-tested.
+ * Pure maths for the buggy-race glasses part (`./index.ts`): the "turbo tap". No three, no DOM;
+ * unit-tested.
  *
- * The beat is a steady cycle of `BOOST.period` seconds. `t` = position in the cycle (0..1); the
- * closing ring meets its target ring at `perfectAt`, and the pad is "hot" while
- * |t − perfectAt| ≤ half the tier's window. Each pad gets a random phase offset, so the beat cannot
- * be learned from the clock or the track.
+ * A weak-eye countdown ring stands over the next boost pad and closes as the buggy nears it; it
+ * meets its target ring at the tap zone. The child taps the turbo button (Emote) as the buggy
+ * reaches the pad. Only a press is ever judged:
+ *  - in the tier's tap zone (and on the pad sideways) = hit;
+ *  - inside the pad's press window but outside the zone = miss (aimed at the pad, mistimed);
+ *  - anywhere else, or a second press at the same pad = nothing. A pad crossed without a press
+ *    = nothing.
+ *
+ * Distances are `along` = buggy centre minus pad centre along the pad's travel direction
+ * (negative = before the pad). The race counts a pad (whoosh + boost) once `along ≥ −padHalf.along`
+ * (−2.2 m). The zone sits round that edge and ends ≤ 1.2 m past it, so a child cannot hear the
+ * race's whoosh and react in time: the timing must come from the weak-eye ring.
  */
 import type { GlassesTier } from '../../../../types';
 
 export const BOOST = {
-  /** Beat period, seconds (steady at every tier). */
-  period: 1.2,
-  /** Hot window, seconds, by tier. By-luck hit rate = window / period: 28 %, 22.5 %, 16.7 %. */
-  window: { 1: 0.34, 2: 0.27, 3: 0.2 } as Readonly<Record<GlassesTier, number>>,
-  /** Cycle position where the closing ring sits on the target ring (middle of the hot window). */
-  perfectAt: 0.75,
-  /** The beat shows on the next pad from this far ahead (metres along the lap)… */
-  showAhead: 40,
-  /** …fading in over the last few metres before that. */
+  /** Centre of the tap zone (along, metres): just before the race's own trigger edge (−2.2). */
+  zoneCentre: -3,
+  /** Half-length of the tap zone by tier (metres): 4 m, 2.6 m, 1.5 m long. */
+  zoneHalf: { 1: 2, 2: 1.3, 3: 0.75 } as Readonly<Record<GlassesTier, number>>,
+  /** Sideways (|across|) a hit must be within: the pad's half-width (1.9) + a little. */
+  across: 2.5,
+  /**
+   * Press window (along, metres): a press from 32 m before to 10 m past a pad is aimed at it
+   * (hit or miss); outside every window it is ignored. The long run-up keeps the best blind
+   * tapping rhythm below 15 % (see `bestBlindRate`).
+   */
+  windowBefore: 32,
+  windowAfter: 10,
+  /** Ring: shows from this far (metres to the zone centre), fading in over `fadeIn`. */
+  showFrom: 62,
   fadeIn: 6,
-  /** A pad more than this far behind (metres) was passed without touching it: no result. */
-  passedBehind: 4,
-  /** The beat must have been on show this long (seconds) before a crossing is judged. */
-  minSeen: 0.5,
+  /** The ring closes over this distance (metres) before the zone centre. */
+  span: 60,
+  /** Ring look (metres): target ring radius, closing ring start, line width, centre height. */
+  ringRadius: 2.8,
+  ringStart: 8.5,
+  ringThickness: 0.75,
+  ringHeight: 5.2,
+  /** Closing ring meets its target at this t (toolkit default). */
+  perfectAt: 0.8,
   /** Gems for a turbo pad by tier. */
   pay: { 1: 1, 2: 2, 3: 3 } as Readonly<Record<GlassesTier, number>>,
   /** Hits in a row that raise the tier. */
   hitsToRise: 2,
-  /**
-   * Look (metres): an upright ring standing across the road at the pad, its centre just above the
-   * road, so the road hides the lower half and it reads as an arch whose legs stand beside the
-   * buggy (the chase camera looks over the buggy at the pad). Closing ring start, line width.
-   */
-  ringRadius: 3.4,
-  ringStart: 6.8,
-  ringThickness: 0.7,
-  ringHeight: 0.1,
   /** Weak-eye flash after a turbo pad, seconds. */
   flashSeconds: 0.75,
 } as const;
-
-/** Cycle position 0..1 at `clock` seconds for a pad whose phase offset is `offset` (0..1). */
-export function cycleAt(offset: number, clock: number, period: number = BOOST.period): number {
-  const v = offset + clock / period;
-  return v - Math.floor(v);
-}
-
-/** Half the hot window in cycle units. */
-export function halfWindowT(tier: GlassesTier): number {
-  return BOOST.window[tier] / BOOST.period / 2;
-}
-
-/** Is the beat hot at cycle position `t`? */
-export function isHot(t: number, tier: GlassesTier): boolean {
-  return Math.abs(t - BOOST.perfectAt) <= halfWindowT(tier);
-}
-
-/** Chance that a child who ignores the beat lands a pad crossing in the hot window. */
-export function luckRate(tier: GlassesTier): number {
-  return BOOST.window[tier] / BOOST.period;
-}
-
-/** The phase offset that puts the cycle at `t` exactly `inSeconds` from `clock`. */
-export function offsetFor(t: number, clock: number, inSeconds = 0, period: number = BOOST.period): number {
-  const v = t - (clock + inSeconds) / period;
-  return v - Math.floor(v);
-}
 
 /** Signed lap distance from `from` to `to` on a loop of length `L`, in [−L/2, L/2). */
 export function lapDelta(from: number, to: number, L: number): number {
@@ -75,34 +58,35 @@ export function lapDelta(from: number, to: number, L: number): number {
   return d >= L / 2 ? d - L : d;
 }
 
-export interface PadAt {
-  readonly s: number;
+export type Outcome = 'hit' | 'miss' | null;
+
+/** Is `along` inside the pad's press window? */
+export function inWindow(along: number): boolean {
+  return along >= -BOOST.windowBefore && along <= BOOST.windowAfter;
+}
+
+/** Is `along` in the tier's tap zone? */
+export function inZone(along: number, tier: GlassesTier): boolean {
+  return Math.abs(along - BOOST.zoneCentre) <= BOOST.zoneHalf[tier];
+}
+
+/** A press at (`along`, `across`) relative to the pad it is aimed at. */
+export function classifyPress(along: number, across: number, tier: GlassesTier): Outcome {
+  if (!inWindow(along)) return null;
+  return inZone(along, tier) && Math.abs(across) <= BOOST.across ? 'hit' : 'miss';
 }
 
 /**
- * Index of the next pad ahead of `progress` (the nearest one no more than `passedBehind` behind),
- * and how far ahead it is (negative = just behind). −1 if there are no pads.
+ * Which pad a press is aimed at: of the pads whose press window holds it, the one whose zone is
+ * nearest. `alongs[i]` = buggy minus pad i along the lap. −1 if none.
  */
-export function nextPad(pads: readonly PadAt[], progress: number, L: number): { index: number; ahead: number } {
+export function assignPad(alongs: readonly number[]): number {
   let best = -1;
   let bestD = Infinity;
-  for (let i = 0; i < pads.length; i++) {
-    const d = lapDelta(progress, pads[i].s, L);
-    if (d < -BOOST.passedBehind) continue;
-    if (d < bestD) {
-      bestD = d;
-      best = i;
-    }
-  }
-  return { index: best, ahead: best < 0 ? Infinity : bestD };
-}
-
-/** The pad nearest to `progress` along the lap (the one the race just counted as hit). */
-export function nearestPad(pads: readonly PadAt[], progress: number, L: number): number {
-  let best = -1;
-  let bestD = Infinity;
-  for (let i = 0; i < pads.length; i++) {
-    const d = Math.abs(lapDelta(progress, pads[i].s, L));
+  for (let i = 0; i < alongs.length; i++) {
+    const a = alongs[i];
+    if (!inWindow(a)) continue;
+    const d = Math.abs(a - BOOST.zoneCentre);
     if (d < bestD) {
       bestD = d;
       best = i;
@@ -111,23 +95,87 @@ export function nearestPad(pads: readonly PadAt[], progress: number, L: number):
   return best;
 }
 
-/** Beat visibility (0..1) for a pad `ahead` metres away. */
-export function showFade(ahead: number): number {
-  if (ahead > BOOST.showAhead) return 0;
-  const k = (BOOST.showAhead - ahead) / BOOST.fadeIn;
+/** Pass number of the buggy at pad `s` (changes once per lap, half a lap away from the pad). */
+export function passKey(progress: number, s: number, L: number): number {
+  return Math.floor((progress - s + L / 2) / L);
+}
+
+/**
+ * One judged press per pad per pass. `press(progress)` returns the pad index and the outcome
+ * (null = not judged). `alongAt(i)` may refine the along/across for the assigned pad (the game
+ * uses the buggy's real position); by default along = lap distance, across = 0.
+ */
+export class TapJudge {
+  private judged: number[];
+  constructor(
+    private readonly padS: readonly number[],
+    private readonly L: number,
+  ) {
+    this.judged = padS.map(() => Number.NEGATIVE_INFINITY);
+  }
+  reset(): void {
+    this.judged.fill(Number.NEGATIVE_INFINITY);
+  }
+  /** Has pad `i` been judged on the buggy's current pass? */
+  isJudged(i: number, progress: number): boolean {
+    return this.judged[i] === passKey(progress, this.padS[i], this.L);
+  }
+  press(progress: number, tier: GlassesTier, at?: (i: number) => { along: number; across: number }): { pad: number; outcome: Outcome; along: number } {
+    const alongs = this.padS.map((s) => lapDelta(s, progress, this.L));
+    const i = assignPad(alongs);
+    if (i < 0) return { pad: -1, outcome: null, along: NaN };
+    const key = passKey(progress, this.padS[i], this.L);
+    const pos = at ? at(i) : { along: alongs[i], across: 0 };
+    if (this.judged[i] === key) return { pad: i, outcome: null, along: pos.along };
+    this.judged[i] = key;
+    return { pad: i, outcome: classifyPress(pos.along, pos.across, tier), along: pos.along };
+  }
+}
+
+/**
+ * The pad the ring stands on: the nearest one ahead that is not yet judged on this pass and whose
+ * zone the buggy has not passed by more than `windowAfter`. `toZone` = metres to its zone centre.
+ */
+export function ringPad(padS: readonly number[], progress: number, L: number, judged: (i: number) => boolean): { index: number; toZone: number } {
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < padS.length; i++) {
+    const d = lapDelta(progress, padS[i] + BOOST.zoneCentre, L);
+    if (d < -BOOST.windowAfter || judged(i)) continue;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return { index: best, toZone: best < 0 ? Infinity : bestD };
+}
+
+/** Closing-ring position 0..1 for `toZone` metres before the zone centre (perfectAt at 0). */
+export function ringT(toZone: number): number {
+  const t = (1 - toZone / BOOST.span) * BOOST.perfectAt;
+  return t < 0 ? 0 : t > 1 ? 1 : t;
+}
+
+/** Half the tap zone in ring-t units (the target ring flares inside it). */
+export function zoneHalfT(tier: GlassesTier): number {
+  return (BOOST.zoneHalf[tier] / BOOST.span) * BOOST.perfectAt;
+}
+
+/** Ring visibility 0..1 at `toZone` metres. */
+export function showFade(toZone: number): number {
+  if (toZone > BOOST.showFrom) return 0;
+  const k = (BOOST.showFrom - toZone) / BOOST.fadeIn;
   return k >= 1 ? 1 : k <= 0 ? 0 : k * k * (3 - 2 * k);
 }
 
-export type Outcome = 'hit' | 'miss' | null;
-
 /**
- * A pad crossing. Judged only for the pad that carried the beat, once it had been on show
- * `minSeen` seconds: hot = hit, cold = miss. Anything else (another pad, a beat not yet seen) gives
- * no result.
+ * Upper bound of the hit rate per judged press for a child who cannot see the pads or the ring
+ * and taps in a fixed rhythm (the best one): the first press inside a pad's window is the judged
+ * one, so the best rhythm puts it at the end of the zone: zone length / (window start → zone end).
  */
-export function judge(crossed: number, target: number, seen: number, t: number, tier: GlassesTier): Outcome {
-  if (crossed < 0 || crossed !== target || seen < BOOST.minSeen) return null;
-  return isHot(t, tier) ? 'hit' : 'miss';
+export function bestBlindRate(tier: GlassesTier): number {
+  const zoneEnd = BOOST.windowBefore + BOOST.zoneCentre + BOOST.zoneHalf[tier];
+  return (2 * BOOST.zoneHalf[tier]) / zoneEnd;
 }
 
 /** Per-session staircase: up after `hitsToRise` hits in a row, down after a miss. */
