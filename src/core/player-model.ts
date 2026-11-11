@@ -13,6 +13,8 @@ import { PLAYER } from '../config';
 import type { PlayerAnim } from '../types';
 import type { AttachPart } from './characters/catalog';
 import type { LoadedCharacter } from './characters/load';
+import { createWobble } from './characters/wobble';
+import type { Wobble, WobbleDrive } from './characters/wobble';
 
 export type { AttachPart };
 export type ModelAnim = PlayerAnim | 'emote';
@@ -31,6 +33,10 @@ export interface PlayerModel {
   /** Play an animation (cross-fades). `rate` scales playback speed. */
   play(anim: ModelAnim, rate?: number, restart?: boolean): void;
   update(dt: number): void;
+  /** Floppy secondary motion drive for the next update (see characters/wobble.ts). */
+  readonly wobbleDrive: WobbleDrive;
+  /** The current character's wobble layer (null for the fallback robot). */
+  readonly wobble: Wobble | null;
 }
 
 /** Simple both-channel robot used only when no character model could load. */
@@ -82,6 +88,8 @@ export function createPlayerModel(): PlayerModel {
   for (const part of Object.keys(anchors) as AttachPart[]) fallback.anchors[part].add(anchors[part]);
 
   let character: LoadedCharacter | null = null;
+  let wobble: Wobble | null = null;
+  const wobbleDrive: WobbleDrive = { side: 0, up: 0, fwd: 0, yawRate: 0, air: 0, amount: 1, arms: 1 };
   let lastAnim: ModelAnim = 'idle';
   let lastRate = 1;
 
@@ -94,8 +102,13 @@ export function createPlayerModel(): PlayerModel {
     get character() {
       return character;
     },
+    wobbleDrive,
+    get wobble() {
+      return wobble;
+    },
     setCharacter(c) {
       if (c === character) return;
+      wobble?.restore();
       if (character) character.object.removeFromParent();
       else fallback.object.removeFromParent();
       character = c;
@@ -104,6 +117,7 @@ export function createPlayerModel(): PlayerModel {
       for (const part of Object.keys(anchors) as AttachPart[]) c.anchors[part].add(anchors[part]);
       c.play(lastAnim, lastRate, 0);
       c.update(0);
+      wobble = createWobble(c.object);
     },
     play(anim, rate = 1, restart = false) {
       lastAnim = anim;
@@ -111,7 +125,9 @@ export function createPlayerModel(): PlayerModel {
       character?.play(anim, rate, 0.18, restart);
     },
     update(dt) {
+      wobble?.restore();
       character?.update(dt);
+      if (wobble && dt > 0) wobble.apply(dt, wobbleDrive);
     },
   };
 }
