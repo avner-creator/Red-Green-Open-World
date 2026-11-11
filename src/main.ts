@@ -223,7 +223,9 @@ async function boot(): Promise<void> {
     if (api) api.frames = frames;
   };
 
-  let frozen = false;
+  // Test mode only: `&freeze=1` starts with the real-time loop stopped (e2e helpers freeze right
+  // after boot anyway; each stray software-rendered frame costs seconds).
+  let frozen = testMode && params.get('freeze') === '1';
   /** True while the GPU context is lost: nothing is updated or drawn until it is restored. */
   let contextLost = false;
   let last = performance.now();

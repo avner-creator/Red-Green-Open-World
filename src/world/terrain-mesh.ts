@@ -47,7 +47,7 @@ const SKIRT_DROP = 8;
  * which tiles are always drawn at full detail.
  */
 const LOD_Q: Record<Quality, { tau: number; full: number }> = {
-  low: { tau: 0.012, full: 24 },
+  low: { tau: 0.016, full: 20 },
   medium: { tau: 0.007, full: 40 },
   high: { tau: 0.004, full: 60 },
 };

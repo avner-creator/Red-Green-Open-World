@@ -113,7 +113,7 @@ export function createTubes(count: number, bases: readonly THREE.Vector3[], yaws
   const root = new THREE.Group();
   root.name = 'silly-tubes';
   const bodyMat = new THREE.MeshStandardMaterial({ roughness: 0.42 });
-  const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.34, SILLY.tube.segLen, 6, 14), bodyMat, count * segs);
+  const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.34, SILLY.tube.segLen, 4, 12), bodyMat, count * segs);
   const arms = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.12, 0.42, 4, 8), bodyMat, count * 4);
   const eyes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 12, 8), new THREE.MeshStandardMaterial({ color: COL.white, roughness: 0.3 }), count * 2);
   const pupils = new THREE.InstancedMesh(new THREE.SphereGeometry(0.055, 10, 6), new THREE.MeshStandardMaterial({ color: COL.ink, roughness: 0.4 }), count * 2);

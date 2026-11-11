@@ -172,6 +172,7 @@ test('holding jump on the trampoline grows the bounce up to ~45 m and awards big
  * outfit stays on the body in every pose.
  */
 test('balloon ride with a carried key, open the chest, ride again wearing the hat', async () => {
+  test.setTimeout(240_000);
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
