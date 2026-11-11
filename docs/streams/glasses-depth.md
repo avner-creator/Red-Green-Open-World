@@ -3,10 +3,9 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 is merged into `integration/m1`. Phase 2 is built on this branch** (started
-2026-11-11 from `origin/integration/m1`, with the owner's go-ahead); QA and the final full test
-run are in progress. The Phase 1 sections below describe what was merged; "Phase 2" is near
-the end.
+**Status: Phase 1 is on `main`. Phase 2 is built, QA'd and fixed on this branch** (started
+2026-11-11 from `origin/integration/m1`, with the owner's go-ahead). The Phase 1 sections below
+describe what was merged; "Phase 2" is near the end.
 
 `npm run verify` is green on the final branch: 664 unit tests and 174 e2e tests passed (see "Test results" at the end).
 
@@ -259,31 +258,35 @@ summary's name for odd one out. Numbers: +51 KB gzip of JavaScript (+2.5 %); eac
 - Screenshots (full, R-only, G-only) are written by the specs to `test-results/glasses/` and
   `test-results/glasses-toolkit/`, `test-results/glasses-ui/`.
 
-## Phase 2 (built; QA and final checks running)
+## Phase 2 (built, QA'd and fixed)
 
-Base: `origin/integration/m1` (merged in again at `438b801`), which has the economy, every
-attraction, the sites and Phase 1. Pushed to `agent/glasses-depth` with plain pushes.
+Base: `origin/integration/m1` / `origin/main` (merged in again at `161edf3`), which has the
+economy, every attraction, the sites and Phase 1. Pushed to `agent/glasses-depth` with plain
+pushes.
 
 Phase 2 weaves weak-eye play into things that already exist. Each piece is optional (the host
-attraction plays exactly as before if the child ignores it), pays a small gem reward, reports
-its hits and misses with `glasses:result`, and costs nothing when not in use (nothing attached,
-an early return). All Phase 2 code lives in `src/activities/glasses/weave/<part>/`; the part
-contract is `weave/types.ts`, the survey of what each part attaches to is `weave/README.md`,
-and the test API is `window.__rgGlasses.weave.{ids, debug, force, reset, draws}`.
+attraction plays exactly as before, and a child who ignores the piece gets no misses), pays a
+small gem reward, reports its hits and misses with `glasses:result`, and costs nothing when not
+in use (nothing attached, an early return). All Phase 2 code lives in
+`src/activities/glasses/weave/<part>/`; the part contract is `weave/types.ts`, the survey of
+what each part attaches to is `weave/README.md` (written before the QA fixes; the table below is
+current), and the test API is `window.__rgGlasses.weave.{ids, debug, force, reset, draws}`.
 
-| Part | What the child sees and does | Reward | By luck (weak eye shut) | Draw calls in use |
+| Part | What the child sees and does | Reward | Best blind strategy (weak eye shut) | Draw calls in use |
 |---|---|---|---|---|
-| `bounce` (timeIt) | On the giant trampoline a weak-eye ring rides below the hero during a fall and closes at a random moment (35–75 % of the fall). One press of Jump or Use at that moment is a hit. Presses in the last 0.35 s before landing, a held Jump and no press are not counted. Only falls of 1.2 s or more get a ring. | 1 / 2 / 3 gems; +3 for three perfects in a row | 13 % / 11 % / 9 % | ≤ 2 |
-| `chute` (timeIt + lineUp) | In the skydive a weak-eye ring round the hero closes as the height nears a random target (70–120 m); opening the parachute then is a hit (±8 / ±5 / ±3 m). A near miss (within ±20 m) is a miss; anything else and every auto-open is not counted. Also: a strong-eye hoop hangs high in the fall and a weak-eye gem orbits through it; falling through the hoop while the gem is inside is a hit, while it is outside a miss. | 2 / 3 / 5 gems; hoop gem 3 | ring 12 % / 8 % / 4 %; hoop 40 % (so that case is a miss) | ≤ 4 |
-| `hero` (onHero) | A weak-eye ring at the feet shows the skill recharging and pops when it is ready; a weak-eye `×N` floats over the head during a combo. Every 20–40 s one of them sparkles for 1.5 / 1.0 / 0.7 s: firing the skill (ring) or collecting a gem (number) during the sparkle is a hit. | 2 gems | 7–12 % of windows | 2–3 |
-| `boost` (timeIt) | In the buggy race the next weak-eye boost pad gets a weak-eye arch with a beat (period 1.2 s). Driving over the pad on the beat is a "turbo pad"; off the beat is a miss; pads never touched are not counted. The race's own boost is untouched. | 1 / 2 / 3 gems | 28 % / 23 % / 17 % | ≤ 2 |
-| `fakes` (tellApart) | At four ground gem spots (plaza (15, −9), Silly Zone (26, 104), beach (74, 132), beach (−97, −7)) two weak-eye fakes stand with the real gem on a 3.3 m triangle. Collecting the real one first is a hit; touching a fake first is a miss (the real gem still pays as usual). The tell gets finer by tier: spins the other way → 5 facets instead of 8 → no sparkle. | +2 gems | 1 in 3 (about 3.6 gems per minute at most) | 2 |
-| `shack` (popOut) | A dot picture on the Gear Shack's right wall and three gift boxes tagged with shapes; open the box whose shape is hidden in the dots. Wrong box: a nap and a new picture; 1 gem until two wins in a row. | First full-pay win of a session: the cheapest for-sale item the child does not own, free (10 gems if none). Then 3 / 5 / 8 gems | 1 in 3; a guessing bot earns 2.5 gems per minute | 3–4 |
+| `bounce` (timeIt) | On the giant trampoline a bold weak-eye ring rides below the hero during a fall and closes at a random moment (20–80 % of the fall; windows ±90 / 70 / 55 ms). Exactly one press of Jump or Use at that moment is a hit; one press at another moment is a miss. Two or more presses in a fall, a held Jump, a press in the last 0.35 s before landing, and no press are not counted. Only falls of 1.5 s or more get a ring (bounces of about 27 m and up). | 1 / 2 / 3 gems; +3 for three perfects in a row | tier 1: 23 % on the shortest ringed fall, 16 % from 45 m, 10 % on a 3 s fall; tier 3: 13 % / 9 % / 6 % | ≤ 2 |
+| `chute` (timeIt + lineUp) | In the skydive a weak-eye ring round the hero closes as the height nears a random target (55–150 m above ground); opening the parachute then is a hit (±8 / ±5 / ±3 m). A near miss (within ±20 m) is a miss; anything else and every auto-open is not counted. Also: a thick strong-eye hoop (radius 4 m) hangs 5 m beside the fall line at 100–130 m, tilted to face the hero, and a weak-eye gem orbits through it; falling through the hoop while the gem is inside is a hit, while it is outside a miss. | 2 / 3 / 5 gems; hoop gem 3 | ring: 17.5 % / 11 % / 7 % (always opening at the best fixed height); hoop: 40 % (so that case is reported as a miss) | ≤ 4 |
+| `hero` (onHero) | A bold weak-eye ring at the feet shows the skill recharging and pops when it is ready (shown only while recharging, ~2 s after ready and during a sparkle); a weak-eye `×N` floats over the head during a combo. Every 20–40 s one of them sparkles for 1.5 / 1.0 / 0.7 s: firing the skill (ring) or collecting a gem (number) during the sparkle is a hit; acting within 1.5 s after it closed is a miss. | 2 gems | 7–12 % of windows | 0 idle, ≤ 3 |
+| `boost` (timeIt) | In the buggy race the next weak-eye boost pad gets a big weak-eye countdown ring with a smiley inside (the Emote button's symbol). Tapping **Emote** (C/G, d-pad up, touch Emote) just as the buggy reaches the pad is a "turbo pad"; a tap near a pad but mistimed is a miss; taps elsewhere and pads crossed without a tap are not counted. The race's own boost is untouched. One wordless Emote toast at the first race start of a session shows which button. | 1 / 2 / 3 gems | 13 % / 9 % / 5 % per tap (best rhythm); about 2 gems per minute blind against up to ~50 seeing | ≤ 2 |
+| `fakes` (tellApart) | At four ground gem spots ((−14, −13), (−3.5, −45), (145, 54), (−97, −7)) two weak-eye fakes stand with the real gem on a 3.3 m triangle. Collecting the real one first is a hit; touching a fake first is a miss (the real gem still pays as usual). Tells by tier: the fakes stand point-up → 5 facets instead of 8 → no sparkle stripes and the other spin. | +2 gems | 1 in 3 (about 3.6 gems per minute at most) | 2 |
+| `shack` (popOut) | A dot picture on a board at the Gear Shack's left wall and three gift boxes with bows, each tagged with a shape; open the box whose shape is hidden in the dots. Wrong box: a nap and a new picture; 1 gem until two wins in a row. | First full-pay win of a session: the cheapest for-sale item the child does not own, free (10 gems if none). Then 3 / 5 / 8 gems | 1 in 3; a guessing bot earns 2.5 gems per minute | 3–4 within 25 m |
 
 Every part has the same automated proofs as the Phase 1 mini-games (`tests/e2e/glasses-weave-*.spec.ts`):
 its layer changes only its own channel for all 4 lens/eye combinations; with the weak layer
 hidden, frames for two different answers or timings are bit-identical; a hit and a miss through
-real play; zero draws when not in use; and the host attraction's own spec still passes.
+real play; zero draws when not in use; a host round played without touching the cue reports
+nothing (boost, chute); and the host attraction's own spec still passes. The unit simulations
+test the best fixed blind strategy, not only random guessing.
 
 **Results from existing glasses twists.** Sixteen twists that other attractions already had now
 report `glasses:result` (21 one-line emits: 17 hits, 4 misses), so the Auto challenge and the
@@ -297,7 +300,13 @@ and chest locks (already counted through `gem:collected`, `chest:key`, `chest:op
 
 The summary screen has names for all of them (`KNOWN_NAMES` in `src/ui/glasses/summaryModel.ts`).
 
-### Phase 2 edits to other owners' files (complete list, against `origin/integration/m1`)
+**Auto challenge pacing** (`src/vision/challenge/`): with so many sources, bursts must not race
+the staircase. A hit counts toward the next step only if 4 s of play have passed since the last
+counted hit (any source); a miss steps down only if 4 s have passed since the last counted miss
+from the same mechanic. The summary still counts every hit and miss. The fastest climb is one
+level per 8 s; a foam-course run of 14 landings moves it at most one step.
+
+### Phase 2 edits to other owners' files (complete list, against `origin/main`)
 
 | File | Change |
 |---|---|
@@ -315,16 +324,33 @@ No other file outside `src/activities/glasses/`, `src/vision/`, `src/ui/glasses/
 stream's tests was changed in Phase 2. `src/types.ts`, `src/main.ts`, `src/config.ts` and
 `package.json` are untouched in Phase 2.
 
+### Phase 2 QA (independent pass, then one fix round)
+
+No blockers; the strong channel was clean in every shot; no banned wording. Found and fixed:
+the boost judged every pad crossing, so a child who just drove got 12 misses in three laps (now
+an explicit tap; a race without taps reports nothing); the blind odds for the parachute ring and
+the bounce ring were understated because the simulations guessed at random instead of using the
+best fixed strategy (ranges widened, simulations changed, numbers above are the honest ones);
+the skydive's strong-eye hoop was thin, dashed and too far from the fall line; mashing Jump on
+the trampoline produced misses; the hero ring was attached all session; fake-gem tells were too
+subtle and one spot was hidden; the shack board hid behind the plaza fingerpost; bursts of hits
+and misses raced the Auto challenge. Measured: +17 KB gzip of JavaScript over
+`integration/m1` (+2.1 %); the weave adds about 3 layer draws on the plaza (the shack within
+25 m of spawn), 0 elsewhere when nothing is in use.
+
 ### Phase 2 notes and known limits
 
-- The shack's dot-picture board covers the gem roundel on the kiosk's right wall (the world
-  owner's prop). It looks intentional, but it is their wall.
-- The foam course reports every landing on a hidden tile (about 14 per shortcut run). So that
-  bursts like this do not race the Auto challenge, a hit counts toward the staircase only if
-  4 s of play have passed since the last counted hit (the summary still counts every hit).
-- The boost arch can be partly hidden by the buggy or by hills on bends.
-- By-luck rates are highest for `boost` (28 % at tier 1) and the skydive hoop (40 %, reported
-  as a miss when the gem is outside), both by design: the host must stay fun for everyone.
+- QA did not get to everything after a container restart: toast counts over full rounds,
+  pause / session end in the middle of a cue, and per-frame CPU of the idle weave were not
+  measured (the specs check zero draws after leaving each host).
+- The shack sits on a crowded plaza: from the play spot a pole of the neighbouring shop and the
+  hero partly cover the view; the board is readable but not pretty from every angle.
+- The boost ring can be hidden by hills or a checkpoint arch on bends until about 25 m.
+- By-luck rates above 15 % remain for short trampoline falls at tier 1 (23 %), the parachute
+  ring at tier 1 (17.5 %) and the "pick one of three" games (1 in 3); in each case a wrong
+  guess is reported as a miss and the reward is 1–3 gems.
+- Tier-3 fake gems are told apart by missing sparkle stripes and the spin: hard in a still
+  frame, by design the hardest step.
 - Three sites moved after the integration merge (see "Sites: fixed coordinates").
 
 ## Test results
