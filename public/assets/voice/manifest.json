@@ -836,11 +836,11 @@
    "spoken": "Okay! Have fun!",
    "dur": 1.1
   },
-  "on-the-edge-mash-the-button-to-hop-back-first-to-three-wins": {
-   "file": "on-the-edge-mash-the-button-to-hop-back-first-to-three-wins.mp3",
-   "text": "On the edge? Mash the button to hop back! First to three wins.",
-   "spoken": "On the edge? Mash the button to hop back! First to three wins.",
-   "dur": 3.43
+  "on-the-edge-mash-to-hop-back-first-to-three-wins": {
+   "file": "on-the-edge-mash-to-hop-back-first-to-three-wins.mp3",
+   "text": "On the edge? Mash to hop back! First to three wins!",
+   "spoken": "On the edge? Mash to hop back! First to three wins!",
+   "dur": 3
   },
   "one": {
    "file": "one.mp3",

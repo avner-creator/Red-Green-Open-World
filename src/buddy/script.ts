@@ -204,7 +204,7 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
   ],
   dinoRing: [
     { text: 'Dino sumo! Belly-bump the dinos out of the ring!', icon: 'dragon', action: 'jump', mood: 'silly' },
-    { text: 'On the edge? Mash the button to hop back! First to three wins.', icon: 'dragon', action: 'jump', mood: 'excited' },
+    { text: 'On the edge? Mash to hop back! First to three wins!', icon: 'dragon', action: 'jump', mood: 'excited' },
   ],
   foamCourse: [
     { text: 'Race a friend across the foam on floats and blocks!', icon: 'bubble', action: 'use', mood: 'excited' },
