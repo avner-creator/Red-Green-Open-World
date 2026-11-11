@@ -8,7 +8,7 @@ import type { WalletChip } from './wallet';
 import { CREDITS } from './credits';
 import { h } from './dom';
 import { counterText } from './format';
-import { outfitIcon, STUNT_ICON } from './glyphs';
+import { outfitIcon, stuntIcon } from './glyphs';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
 
@@ -100,6 +100,8 @@ export function createPause(a: Actions): Screen {
 }
 
 const STUNT_ORDER: StuntKind[] = ['bigBounce', 'longGlide', 'bullseye', 'bigAir', 'bungee', 'launch'];
+/** Attraction rounds: a sticker each, shown only once played (the end screen stays short). */
+const ATTRACTION_ORDER: StuntKind[] = ['carnival', 'scoops', 'race', 'sky', 'bumper', 'foam'];
 const CONFETTI = ['#ffd93b', '#ffffff', '#ffb02e', '#7fe3ff', '#ff8fc7', '#c8ff7f'];
 /** Outfit slots shown on the end screen (an outfit id maps to a slot by hat/cape/glass/paint). */
 const OUTFIT_SLOTS: UiIconName[] = ['hat', 'cape', 'glasses', 'paint'];
@@ -233,8 +235,9 @@ export function createEnd(ctx: GameContext, a: Actions, tracker: EconTracker): E
       econRow.classList.toggle('on', econRow.childElementCount > 0);
       for (const k of STUNT_ORDER) {
         const v = s.bestStunts[k];
-        smalls.append(sticker(STUNT_ICON[k], v && v > 0 ? String(Math.round(v)) : '', i++, !!v && v > 0));
+        smalls.append(sticker(stuntIcon(k), v && v > 0 ? String(Math.round(v)) : '', i++, !!v && v > 0));
       }
+      for (const k of ATTRACTION_ORDER) if (s.bestStunts[k] !== undefined) smalls.append(sticker(stuntIcon(k), '', i++, true));
       const have = outfitSlotsFilled([...s.outfits, ...outfitIds]);
       for (const slot of OUTFIT_SLOTS) smalls.append(sticker(slot, '', i++, have.has(slot), 'outfit'));
       confetti.replaceChildren();

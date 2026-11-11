@@ -3,26 +3,44 @@
  * relative to the camera. Both-eye only: it reads anchors, never gems, keys or locks.
  */
 import type { AnchorName, GameContext } from '../types';
+import { COMPASS_ATTRACTIONS } from '../world/attractions';
+import { drawPictogram, type IconId } from '../world/pictograms';
 import { h } from './dom';
 import { pictogram } from './wayIcons';
 import type { PictoName } from './wayIcons';
 import { distanceDots, relativeBearing } from './compassMath';
 import { layoutMarkers, pickFocus } from './compassLayout';
 
-/** Attractions shown on the strip, in draw order. */
-export const COMPASS_TARGETS: readonly { anchor: AnchorName; icon: PictoName }[] = [
-  { anchor: 'trampoline', icon: 'wTrampoline' },
-  { anchor: 'bouncePads', icon: 'wPads' },
-  { anchor: 'garage', icon: 'wCar' },
-  { anchor: 'balloon', icon: 'wBalloon' },
-  { anchor: 'landingRings', icon: 'wTarget' },
-  { anchor: 'launchPads', icon: 'wRocket' },
+/** HUD icons for the world pictograms that have one; the rest draw the world sign's own pictogram. */
+const HUD_ICON: Partial<Record<IconId, PictoName>> = {
+  iTrampoline: 'wTrampoline', iBounce: 'wPads', iCar: 'wCar', iBalloon: 'wBalloon', iTarget: 'wTarget', iRocket: 'wRocket',
+  iHorse: 'horse', iBungee: 'bungee', iSilly: 'flop',
+};
+/** Landmarks with a beacon but no activity of their own stay off the strip. */
+const NOT_ON_STRIP: ReadonlySet<AnchorName> = new Set<AnchorName>(['lakePlatform', 'lighthouse']);
+
+/** Attractions shown on the strip, in draw order: the world's attraction list plus the Gear Shack. */
+export const COMPASS_TARGETS: readonly { anchor: AnchorName; icon: PictoName | IconId }[] = [
+  ...COMPASS_ATTRACTIONS.filter((a) => !NOT_ON_STRIP.has(a.anchor)).map((a) => ({ anchor: a.anchor, icon: HUD_ICON[a.icon] ?? a.icon })),
   { anchor: 'gearShack', icon: 'shop' },
-  // Integration: the newer attractions (both-eye places, never a weak-eye object).
-  { anchor: 'ranch', icon: 'horse' },
-  { anchor: 'bungee', icon: 'bungee' },
-  { anchor: 'sillyZone', icon: 'flop' },
 ];
+
+/** With many attractions, only the nearest few (plus the focus) get a full marker; the rest are ticks. */
+const FULL_MARKERS = 6;
+
+const WORLD_ICONS: ReadonlySet<string> = new Set(COMPASS_ATTRACTIONS.map((a) => a.icon));
+
+function markerIcon(name: PictoName | IconId): HTMLElement {
+  if (!WORLD_ICONS.has(name)) return pictogram(name as PictoName);
+  // A world pictogram (round badge) drawn on a small canvas: the same picture as the signs.
+  const el = h('span', 'ic wpic');
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const c = cv.getContext('2d');
+  if (c) drawPictogram(c, name as IconId, 0, 0, 64);
+  el.append(cv);
+  return el;
+}
 
 /** Closer than this the marker hides (you are already there). */
 const ARRIVED = 7;
@@ -71,7 +89,7 @@ export function createCompass(ctx: GameContext): Compass {
       'div',
       'wf-m hidden',
       { 'data-testid': 'compass-marker', 'data-anchor': t.anchor },
-      pictogram(t.icon),
+      markerIcon(t.icon),
       arrL,
       arrR,
       h('span', 'dots', {}, ...dots),
@@ -113,9 +131,32 @@ export function createCompass(ctx: GameContext): Compass {
           m.el.className = 'wf-m hidden';
         }
       }
-      const prevIdx = shown.findIndex((c) => c.m.anchor === prevFocus);
-      const focusIdx = shown.length ? pickFocus(shown, prevIdx) : -1;
-      prevFocus = focusIdx >= 0 ? shown[focusIdx].m.anchor : null;
+      const prevIdx0 = shown.findIndex((c) => c.m.anchor === prevFocus);
+      const focus0 = shown.length ? pickFocus(shown, prevIdx0) : -1;
+      prevFocus = focus0 >= 0 ? shown[focus0].m.anchor : null;
+      // Crowded strip: the nearest FULL_MARKERS plus the focus keep a marker; the rest become ticks
+      // at their bearing (no layout, never overlapping a marker's icon).
+      if (shown.length > FULL_MARKERS + 1) {
+        const keep = new Set([...shown].sort((a, b) => a.dist - b.dist).slice(0, FULL_MARKERS));
+        if (focus0 >= 0) keep.add(shown[focus0]);
+        for (const c of shown) {
+          if (keep.has(c)) continue;
+          const left = `calc(50% + ${(Math.max(-1, Math.min(1, c.rel / (Math.PI / 2))) * (halfU - 1)).toFixed(2)} * var(--u))`;
+          if (left !== c.m.left) {
+            c.m.left = left;
+            c.m.el.style.left = left;
+          }
+          if (c.m.cls !== 'tick') {
+            c.m.cls = 'tick';
+            c.m.el.className = 'wf-m tick';
+            c.m.arrow = 9;
+            c.m.arrL.style.display = 'none';
+            c.m.arrR.style.display = 'none';
+          }
+        }
+        for (let i = shown.length - 1; i >= 0; i--) if (!keep.has(shown[i])) shown.splice(i, 1);
+      }
+      const focusIdx = shown.findIndex((c) => c.m.anchor === prevFocus);
       const placed = layoutMarkers(shown.map((c, i) => ({ rel: c.rel, focus: i === focusIdx })), halfU);
       shown.forEach((c, i) => {
         const m = c.m;

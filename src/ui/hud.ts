@@ -4,7 +4,7 @@ import { clear, h, retrigger } from './dom';
 import type { EconTracker } from './econState';
 import { formatTime, timeFraction } from './format';
 import { createHudEcon } from './hudEcon';
-import { outfitIcon, STUNT_ICON, useKey } from './glyphs';
+import { outfitIcon, stuntIcon, useKey } from './glyphs';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
 
@@ -98,7 +98,7 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
     }),
     ctx.events.on('ui:toast', (e) => toast(e.icon, e.text)),
     ctx.events.on('stunt', (e) => {
-      toast(STUNT_ICON[e.kind], e.stars > 0 ? `+${e.stars}` : undefined, e.stars > 0 ? 'star' : undefined);
+      toast(stuntIcon(e.kind), e.stars > 0 ? `+${e.stars}` : undefined, e.stars > 0 ? 'star' : undefined);
       if (e.stars > 0) retrigger(stars, 'pop');
     }),
     ctx.events.on('chest:opened', (e) => {

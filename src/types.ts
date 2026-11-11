@@ -40,6 +40,49 @@ export interface ChannelAssignment {
   strong: Channel;
 }
 
+/** Kinds of glasses play (docs/GAME_DESIGN.md "Red-green depth pass"); used for scoring and the grown-up summary. */
+export type GlassesKind = 'find' | 'follow' | 'read' | 'tellApart' | 'timeIt' | 'lineUp' | 'popOut' | 'onHero';
+
+/** Difficulty tier of a weak-eye object: 1 = big, bright, slow … 3 = small, faint, fast (worth more). */
+export type GlassesTier = 1 | 2 | 3;
+
+/**
+ * Per-session challenge modifiers on top of the calibrated eye settings ("Auto challenge").
+ * Runtime only: never written to the saved settings. Every scale is 0..1 where 1 = exactly the
+ * calibrated value, so the picture can only get harder than calibrated, never stronger.
+ */
+export interface ChallengeModifiers {
+  /** Staircase step: 0 (calibrated) .. `maxLevel`. */
+  level: number;
+  maxLevel: number;
+  /** Effective weak-layer strength = settings.eye.weakStrength × weakScale. */
+  weakScale: number;
+  /** Effective strong-eye contrast = max(0.4, settings.eye.strongContrast × strongScale). */
+  strongScale: number;
+  /** Suggested size multiplier for weak-eye objects built with the vision toolkit. */
+  sizeScale: number;
+}
+
+/** Hits and misses of one mechanic at one tier in a session. */
+export interface GlassesTally {
+  /** Mechanic id, e.g. 'gems', 'glowflies', 'oddOneOut'. */
+  mechanic: string;
+  kind: GlassesKind;
+  tier: GlassesTier;
+  hits: number;
+  misses: number;
+}
+
+/** What the grown-up summary screen shows: plain counts, nothing else. */
+export interface GlassesSummary {
+  /** One row per mechanic and tier that had at least one result in the session. */
+  rows: readonly GlassesTally[];
+  /** Seconds played in the session the rows cover. */
+  seconds: number;
+  /** Auto challenge: was it on, where the staircase ended and how many steps it took each way. */
+  challenge: { enabled: boolean; level: number; maxLevel: number; stepsUp: number; stepsDown: number };
+}
+
 export type Quality = 'low' | 'medium' | 'high';
 
 export interface GameSettings {
@@ -50,6 +93,8 @@ export interface GameSettings {
   volumeMusic: number; // 0..1
   volumeSfx: number; // 0..1
   quality: Quality;
+  /** Grown-up option "Auto challenge": gently adapts weak-eye objects during a session. Default off (undefined). */
+  autoChallenge?: boolean;
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -86,6 +131,17 @@ export interface VisionApi {
   render(dt: number): void;
   /** Test/debug: hide or show every object of a layer. */
   setLayerVisible(layer: VisionLayer, visible: boolean): void;
+  /** Current per-session challenge modifiers (identity, level 0, when "Auto challenge" is off). */
+  challenge?(): Readonly<ChallengeModifiers>;
+  /** Test/debug: force modifiers (clamped to 0..1); null hands control back to the staircase. Never touches saved settings. */
+  setChallenge?(mods: Partial<Pick<ChallengeModifiers, 'level' | 'weakScale' | 'strongScale' | 'sizeScale'>> | null): void;
+  /**
+   * Fade a whole layer (`WeakOnly` or `StrongOnly`) to `fade` 0..1 (1 = normal), eased over `seconds`
+   * (default 0 = at once). Multiplies with the challenge modifiers; never touches the other channel.
+   */
+  setLayerFade?(layer: VisionLayer, fade: number, seconds?: number): void;
+  /** Glasses-play counts of the current (or the last finished) session, for the grown-up summary. */
+  sessionSummary?(): GlassesSummary;
   /** Open the calibration screen (DOM overlay + test patterns). Calls `onClose` when done. */
   openCalibration(onClose: () => void): void;
   dispose(): void;
@@ -95,7 +151,10 @@ export interface VisionApi {
 
 export type SessionPhase = 'title' | 'playing' | 'paused' | 'ended';
 export type PlayerMode = 'walk' | 'flop' | 'driving' | 'riding' | 'external';
-export type StuntKind = 'bigBounce' | 'longGlide' | 'bullseye' | 'bigAir' | 'bungee' | 'launch';
+export type StuntKind =
+  | 'bigBounce' | 'longGlide' | 'bullseye' | 'bigAir' | 'bungee' | 'launch'
+  /** Attraction rounds finished (value = score or place, stars = result). */
+  | 'carnival' | 'scoops' | 'race' | 'sky' | 'bumper' | 'foam';
 
 export interface GameEvents {
   'session:phase': { phase: SessionPhase; previous: SessionPhase };
@@ -119,6 +178,10 @@ export interface GameEvents {
   'player:land': { speed: number };
   'player:flop': Record<string, never>;
   'player:respawn': Record<string, never>;
+  /** Glasses play: something only the weak eye (or both eyes together) could do was hit or missed. */
+  'glasses:result': { mechanic: string; kind: GlassesKind; tier: GlassesTier; hit: boolean };
+  /** The "Auto challenge" staircase moved or was reset. */
+  'glasses:challenge': { modifiers: Readonly<ChallengeModifiers> };
   /** The playable character changed (after its model loaded and swapped in). */
   'player:character': { id: string };
   /** A character skill fired (double jump, glide start, dash, super-bounce spring, ground pound). */
@@ -308,6 +371,20 @@ export interface ExternalController {
   onRelease?(): void;
 }
 
+/** See `PlayerApi.addMoveModifier`. Each factor defaults to 1. */
+export interface MoveModifier {
+  /** Top walk/sprint speed. */
+  speed?: number;
+  /** Gravity while walking/jumping (< 1 = floaty). */
+  gravity?: number;
+  /** Ground grip: acceleration and braking (< 1 = slippery). */
+  friction?: number;
+  /** Jump take-off speed. */
+  jump?: number;
+  /** Seconds until it removes itself (omit = until `remove()`). */
+  duration?: number;
+}
+
 export interface PlayerApi {
   /** Root object (feet at origin). Outfits attach to named bones via `attach`. */
   readonly object: THREE.Object3D;
@@ -330,6 +407,13 @@ export interface PlayerApi {
   flop(): void;
   /** Back to the last safe spot (or the spawn point). */
   respawn(): void;
+  /**
+   * Walk-mode movement modifier (ice-cream effects, slippery ground…). Active modifiers multiply
+   * together; `duration` (s, game time) makes it expire on its own. Returns `remove()`. All are
+   * cleared when a session starts or ends. The object is kept (not copied): its factors may be
+   * eased while it is active (re-read every frame).
+   */
+  addMoveModifier(mod: MoveModifier): () => void;
   setExternalController(controller: ExternalController | null): void;
   /** Force an animation while in external mode (ignored in walk mode). */
   setAnimation(anim: PlayerAnim): void;
@@ -412,7 +496,8 @@ export type IconName =
   | 'gem' | 'key' | 'lock' | 'chest' | 'star' | 'car' | 'horse' | 'balloon' | 'parachute'
   | 'bungee' | 'trampoline' | 'rocket' | 'hat' | 'cape' | 'glasses' | 'paint' | 'exit'
   | 'hand' | 'clock' | 'flop' | 'eye' | 'check'
-  | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet';
+  | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet'
+  | 'tent' | 'plane' | 'dragon' | 'cone' | 'flag' | 'bubble';
 
 export interface Interactable {
   id: string;
@@ -450,7 +535,9 @@ export type AnchorName =
   | 'spawn' | 'garage' | 'ranch' | 'trampoline' | 'bouncePads' | 'bungee' | 'bungeeLanding'
   | 'balloon' | 'landingRings' | 'lakePlatform' | 'lighthouse' | 'sillyZone' | 'launchPads'
   /** Gear Shack kiosk on the plaza; +Z of its yaw is the counter side where the player stands. */
-  | 'gearShack';
+  | 'gearShack'
+  /** Carnival Island attractions (positions, yaws and clear radii: `src/world/layout.ts`). */
+  | 'carnivalRow' | 'iceCream' | 'bubbleArena' | 'dinoRing' | 'raceStart' | 'foamCourse' | 'airstrip' | 'dragonRoost';
 
 export interface WorldApi {
   /** Island is `size`×`size` metres centred on the origin; water level is y = `waterLevel`. */
@@ -477,7 +564,8 @@ export interface WorldApi {
 
 export type SfxName =
   | 'gem' | 'gemNear' | 'jump' | 'land' | 'boing' | 'bigBoing' | 'flop' | 'splash' | 'whoosh'
-  | 'chute' | 'key' | 'chest' | 'star' | 'click' | 'horn' | 'bump' | 'neigh' | 'start' | 'fanfare' | 'tick';
+  | 'chute' | 'key' | 'chest' | 'star' | 'click' | 'horn' | 'bump' | 'neigh' | 'start' | 'fanfare' | 'tick'
+  | 'roar' | 'baa' | 'cluck' | 'squeak';
 
 export interface AudioApi {
   /** Must be called from a user gesture once (Play button). */
@@ -565,6 +653,12 @@ export interface TestApi {
   /** Hide/show every registered layer object whose name starts with `prefix`. Returns how many matched. */
   setLayerObjectsVisible(prefix: string, visible: boolean): number;
   setRemaining(seconds: number): void;
+  /** Every E target added after the core systems (activities): id and current prompt position. */
+  interactables(): { id: string; position: [number, number, number] }[];
+  /** True while some system holds a camera override (setOverride with a non-null value). */
+  cameraOverridden(): boolean;
+  /** Sound loops currently on (intensity > 0): 'wind' | 'engine' | 'gallop'. */
+  audioLoops(): string[];
   inject(patch: Partial<InputState> | null): void;
   state(): SessionState & { playerPosition: [number, number, number]; playerMode: PlayerMode };
   /** Uncaught errors seen since boot. */
@@ -583,7 +677,12 @@ export type EquipSlot = OutfitSlot | 'trail' | 'emote' | 'character';
 export type ShopCategory = 'character' | 'outfit' | 'paint' | 'trail' | 'emote';
 export type WalletReason = 'gem' | 'mission' | 'jackpot' | 'shop' | 'ticket' | 'test';
 export type UnlockSource = 'shop' | 'chest' | 'starter';
-export type TicketKind = 'balloon' | 'rocketPad';
+export type TicketKind =
+  | 'balloon' | 'rocketPad'
+  /** Attractions: first play of each per session free, then `ECONOMY.attractionTicket`. */
+  | 'bubbleBall' | 'dinoSumo' | 'carnival' | 'foam' | 'plane' | 'dragon' | 'race' | 'scoops';
+/** `EconomyApi.rideTicket` outcome: 'practice' = could not pay; play anyway, no prize. */
+export type TicketOutcome = 'free' | 'paid' | 'practice';
 export type BuyResult = 'ok' | 'owned' | 'tooPoor' | 'notForSale' | 'unknown';
 export type MissionKind =
   | 'collectGems' | 'megaGems' | 'combo' | 'bounceHeight' | 'openChest' | 'driveGems' | 'landRings' | 'stars';
@@ -670,6 +769,11 @@ export interface EconomyApi {
   ticketPrice(kind: TicketKind): number;
   /** Call when the player starts a ride. true = go (paid or free; emits `ticket:paid`). false = not enough gems (emits `ticket:denied`; the ride must not start). */
   payTicket(kind: TicketKind): boolean;
+  /**
+   * Attractions: like `payTicket`, but a child who cannot pay still plays a practice round
+   * ('practice': no prize; `ticket:denied` is still emitted so the HUD/Pip can say why).
+   */
+  rideTicket(kind: TicketKind): TicketOutcome;
   /** This session's three missions (empty on the title screen before the first session). */
   readonly missions: readonly MissionState[];
   /** Current streak. multiplier 1 = no combo. timeLeft = seconds before it drops. */

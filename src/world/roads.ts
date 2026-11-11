@@ -212,6 +212,7 @@ export function buildRoadDressing(k: Kit, roads: readonly ProcessedRoad[], block
         if (p) shrubBed(k, p[0], p[1], 3.6, Math.atan2(f.nx, f.nz) + Math.PI / 2, 40 + n);
       }
       // Landmarks well back from the verge: trees, rock pairs with a bush, or a lone bush.
+      if (r.def.landmarks === false) continue;
       const q = place(hw + 6.5 + (n % 3), 3);
       if (!q) continue;
       if (n % 2 === 0) trees.push({ x: q[0], z: q[1], kind: n % 6 === 0 ? 'pine' : 'oak', scale: 0.95 + (n % 4) * 0.08 });

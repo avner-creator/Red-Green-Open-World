@@ -67,6 +67,8 @@ function baseUrl(): string {
   }
 }
 
+const ATTRACTION_STUNTS: ReadonlySet<string> = new Set(['carnival', 'scoops', 'race', 'sky', 'bumper', 'foam']);
+
 export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'testMode'>): AudioApi {
   let engine: Engine | null = null;
   let failed = false;
@@ -252,7 +254,8 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
     director.stunt(e.kind, clock);
     play('star');
     if (e.kind === 'bigBounce' && e.value >= WHOOP_HEIGHT) playX('whoop');
-    if (e.kind === 'bullseye') playX('cheer');
+    // Hitting a target, or finishing an attraction round with stars: the crowd cheers.
+    if (e.kind === 'bullseye' || (e.stars > 0 && ATTRACTION_STUNTS.has(e.kind))) playX('cheer');
   });
   ev.on('vehicle:bump', (e) => play('bump', { volume: Math.min(1, 0.4 + e.speed / 12) }));
   ev.on('session:tick', (e) => {

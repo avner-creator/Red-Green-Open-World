@@ -12,7 +12,7 @@ const R = 2.4;
 
 /** Balloon: a slightly tall sphere with 10 alternating gores (aStripe = 1 on white gores) and a knot. */
 function balloonGeo(): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(R, 30, 18).toNonIndexed();
+  const g = new THREE.SphereGeometry(R, 20, 10).toNonIndexed();
   const pos = g.attributes.position;
   const stripe = new Float32Array(pos.count);
   for (let i = 0; i < pos.count; i += 3) {

@@ -5,14 +5,52 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# Vite's hashed output: safe to cache forever.
+# Security headers on every response. Keep identical to SECURITY_HEADERS in vite.config.ts
+# (`vite preview` and the e2e suite run under the same policy; tests/boot/boot.test.ts compares them).
+# 'wasm-unsafe-eval' lets Rapier compile its WebAssembly without allowing JS eval; the UI builds its
+# styles at runtime ('unsafe-inline' styles); the game calls no other origin.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+
+# The HTML names the current hashed files: always revalidate it.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Vite's hashed output (JS chunks and the physics WASM): safe to cache forever.
 [[headers]]
   for = "/build/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# MIME types: Netlify already serves .wasm as application/wasm (needed for streaming compile with
+# nosniff) and .js as text/javascript. Netlify path rules only allow `*` at the end of a path, so
+# "/build/*.wasm" is not used: such a rule could match the JS chunks too. The asset folders below
+# hold one file type each, so they are typed per folder.
 
 # public/assets files are not content-hashed: cache briefly and revalidate.
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=3600, must-revalidate"
+
+[[headers]]
+  for = "/assets/characters/*"
+  [headers.values]
+    Content-Type = "model/gltf-binary"
+
+[[headers]]
+  for = "/assets/audio/*"
+  [headers.values]
+    Content-Type = "audio/ogg"

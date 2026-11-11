@@ -1,10 +1,13 @@
 // Cold-boot network log: every request (and its transferred bytes) up to the title screen, and
 // then up to the first playable frame after Play. Checks that only the selected character's GLB
 // and no music load before Play. Plays as a real user would (no test mode).
+// "loading screen" = what the browser needs to paint the inline loading screen and run its
+// progress bar: the HTML plus the scripts index.html names (not the preloaded WASM).
+// gzip / brotli columns compress the dist files (vite preview itself sends them uncompressed).
 // Usage: npm run build && node scripts/boot-requests.mjs
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { chromium } from '@playwright/test';
 import { preview } from 'vite';
 
@@ -31,7 +34,10 @@ async function run(stored) {
   page.on('pageerror', (e) => errors.push(String(e)));
 
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/`);
+  await page.goto(`http://localhost:${port}/`, { waitUntil: 'commit' });
+  // The loader script marks the first boot stage as soon as it runs (older builds: no marker).
+  await page.waitForSelector('#boot[data-stage], #boot.js', { state: 'attached', timeout: 60_000 }).catch(() => undefined);
+  const tLoader = Date.now() - t0;
   await page.waitForSelector('#boot', { state: 'detached', timeout: 180_000 });
   await page.waitForSelector('[data-testid="play"]', { state: 'visible', timeout: 30_000 });
   await page.waitForTimeout(500);
@@ -53,23 +59,33 @@ async function run(stored) {
 
   const base = `http://localhost:${port}/`;
   const rows = [...reqs.values()].filter((r) => r.url.startsWith(base));
-  const gz = (url) => {
+  const file = (url) => {
     try {
-      const path = decodeURIComponent(new URL(url).pathname).replace(/^\/$/, '/index.html');
-      return gzipSync(readFileSync(join('dist', path)), { level: 9 }).length;
+      return readFileSync(join('dist', decodeURIComponent(new URL(url).pathname).replace(/^\/$/, '/index.html')));
     } catch {
-      return 0;
+      return null;
     }
   };
+  const gz = (url) => (file(url) ? gzipSync(file(url), { level: 9 }).length : 0);
+  const br = (url) => (file(url) ? brotliCompressSync(file(url), { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }).length : 0);
+  const html = readFileSync('dist/index.html', 'utf8');
+  const loaderFiles = new Set([...html.matchAll(/<script[^>]+src="\.\/([^"]+)"|<link[^>]+rel="modulepreload"[^>]+href="\.\/([^"]+)"/g)].map((m) => `/${m[1] ?? m[2]}`));
+  const isLoader = (r) => {
+    const path = new URL(r.url).pathname;
+    return path === '/' || path === '/index.html' || loaderFiles.has(path);
+  };
   console.log(`\n######## stored character: ${stored ?? 'none (first visit)'}`);
-  for (const stage of ['title', 'play']) {
-    const list = rows.filter((r) => r.stage === stage);
-    const bytes = list.reduce((s, r) => s + r.bytes, 0);
-    const gzBytes = list.reduce((s, r) => s + gz(r.url), 0);
-    console.log(`== ${stage === 'title' ? `boot → title (${tTitle} ms)` : `title → first playable frame + 3 s (${tPlay} ms total)`}: ${list.length} requests, ${(bytes / 1048576).toFixed(2)} MB transferred, ~${(gzBytes / 1048576).toFixed(2)} MB gzip`);
-    for (const r of list) console.log(`  ${(r.bytes / 1024).toFixed(0).padStart(6)} KB  ${r.url.slice(base.length - 1)}`);
-  }
-  const want = `/${stored ?? 'robot'}.glb`;
+  const mb = (n) => (n / 1048576).toFixed(2);
+  const kb = (n) => `${(n / 1024).toFixed(0).padStart(6)} KB`;
+  const report = (label, list) => {
+    const sum = (f) => list.reduce((s, r) => s + f(r), 0);
+    console.log(`== ${label}: ${list.length} requests, ${mb(sum((r) => r.bytes))} MB transferred, ~${mb(sum((r) => gz(r.url)))} MB gzip, ~${mb(sum((r) => br(r.url)))} MB brotli`);
+    for (const r of list) console.log(`  ${kb(r.bytes)} raw ${kb(gz(r.url))} gz ${kb(br(r.url))} br  ${r.url.slice(base.length - 1)}`);
+  };
+  report(`loading screen (inline HTML + entry script, ${tLoader} ms)`, rows.filter((r) => r.stage === 'title' && isLoader(r)));
+  report(`boot → title (${tTitle} ms, includes the above)`, rows.filter((r) => r.stage === 'title'));
+  report(`title → first playable frame + 3 s (${tPlay} ms total)`, rows.filter((r) => r.stage === 'play'));
+  const want = `/${stored ?? 'frog'}.glb`; // DEFAULT_CHARACTER in src/core/characters/catalog.ts
   const early = rows.filter((r) => r.stage === 'title' && /\/assets\/(characters|audio)\//.test(r.url));
   if (early.length !== 1 || !early[0].url.endsWith(want)) {
     console.log(`FAIL: expected only ${want} before Play, got ${early.map((r) => r.url).join(', ') || 'nothing'}`);

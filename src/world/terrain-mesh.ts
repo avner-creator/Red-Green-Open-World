@@ -9,6 +9,8 @@ import { sampleMask } from './terrain';
 import { fbm, lerp, smoothstep } from './rng';
 import { SEED } from './layout';
 import { patch } from './materials';
+import type { Quality } from '../types';
+import { EDGE_E, EDGE_N, EDGE_S, EDGE_W, buildLodGrid, pickStep, tileIndices } from './terrain-lod';
 
 type RGB = [number, number, number];
 const lin = (hex: number): RGB => {
@@ -30,7 +32,25 @@ const mix3 = (a: RGB, b: RGB, t: number): RGB => [lerp(a[0], b[0], t), lerp(a[1]
 export interface TerrainMesh {
   group: THREE.Group;
   colorAt(x: number, z: number, out: THREE.Color): THREE.Color;
+  /** Pick tile steps and cull tiles for this camera (cheap; only re-selects after it moved/turned). */
+  update(camera: THREE.Camera): void;
+  setQuality(q: Quality): void;
+  stats(): { triangles: number };
 }
+
+/** Cells per LOD tile (40 m). */
+const TILE = 20;
+/** How far skirts hang below the tile edges (m); more than any coarse tile's error on screen. */
+const SKIRT_DROP = 8;
+/**
+ * Screen-space error budget (metres of height error per metre of distance) and the radius within
+ * which tiles are always drawn at full detail.
+ */
+const LOD_Q: Record<Quality, { tau: number; full: number }> = {
+  low: { tau: 0.012, full: 24 },
+  medium: { tau: 0.007, full: 40 },
+  high: { tau: 0.004, full: 60 },
+};
 
 /**
  * 0..1 per vertex: where farm plots may be painted. Open, gently sloped grass at least ~8 m from any
@@ -136,10 +156,6 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
       col[i * 3 + 2] = c[2] * ao;
     }
   }
-  const posA = new THREE.BufferAttribute(pos, 3);
-  const norA = new THREE.BufferAttribute(nor, 3);
-  const colA = new THREE.BufferAttribute(col, 3);
-  const fieldA = new THREE.BufferAttribute(fieldMask(t), 1);
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
   patch(mat, 'rg-terrain', {
     vertexPre: 'attribute float aField; varying float vField;',
@@ -206,49 +222,140 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
         }
       }`,
   });
-  // 4×4 tiles that share one set of vertex buffers, so the camera frustum culls what is behind.
-  const TILES = 4;
-  const per = n / TILES;
+  // One mesh, one draw: tiles pick a step by screen-space error each time the camera moves (see
+  // terrain-lod.ts) and their index lists are concatenated into one dynamic index buffer.
+  const NN = N * N;
+  const posS = new Float32Array(NN * 6);
+  posS.set(pos);
+  for (let i = 0; i < NN; i++) {
+    posS[(NN + i) * 3] = pos[i * 3];
+    posS[(NN + i) * 3 + 1] = pos[i * 3 + 1] - SKIRT_DROP;
+    posS[(NN + i) * 3 + 2] = pos[i * 3 + 2];
+  }
+  const twice = (a: Float32Array): Float32Array => {
+    const o = new Float32Array(a.length * 2);
+    o.set(a);
+    o.set(a, a.length);
+    return o;
+  };
+  const field = fieldMask(t);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posS, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(twice(nor), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(twice(col), 3));
+  geo.setAttribute('aField', new THREE.BufferAttribute(twice(field), 1));
+  // Roads and pads weigh more in the error: a coarse surface must not swallow the road ribbon.
+  const weight = new Float32Array(NN);
+  for (let i = 0; i < NN; i++) weight[i] = 1 + 3 * Math.min(1, t.roadMask[i] * 2) + 2 * t.padMask[i];
+  const lod = buildLodGrid(H, n, TILE, weight);
+  const TT = lod.tiles;
+  const cap = n * n * 6 + TT * TT * 4 * TILE * 12;
+  const indexA = new THREE.BufferAttribute(new Uint32Array(cap), 1);
+  indexA.setUsage(THREE.DynamicDrawUsage);
+  geo.setIndex(indexA);
+  geo.setDrawRange(0, 0);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), half * 1.5);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'terrain:lod';
+  mesh.receiveShadow = true;
+  mesh.castShadow = false;
+  mesh.matrixAutoUpdate = false;
+  // Culled per tile in `update`.
+  mesh.frustumCulled = false;
   const group = new THREE.Group();
   group.name = 'terrain';
-  for (let tz = 0; tz < TILES; tz++) {
-    for (let tx = 0; tx < TILES; tx++) {
-      const idx = new Uint32Array(per * per * 6);
-      let k = 0;
-      let y0 = Infinity;
-      let y1 = -Infinity;
-      for (let iz = tz * per; iz < (tz + 1) * per; iz++) {
-        for (let ix = tx * per; ix < (tx + 1) * per; ix++) {
-          const a = iz * N + ix;
-          const b = a + 1;
-          const c = a + N;
-          const d = c + 1;
-          // Split along b–c, matching Rapier's heightfield triangles.
-          idx[k++] = a; idx[k++] = c; idx[k++] = b;
-          idx[k++] = b; idx[k++] = c; idx[k++] = d;
-          y0 = Math.min(y0, H[a], H[d]);
-          y1 = Math.max(y1, H[a], H[d]);
-        }
+  group.add(mesh);
+
+  const cache = new Map<number, Uint32Array>();
+  const steps = new Int32Array(TT * TT);
+  const visible = new Uint8Array(TT * TT);
+  const keys = new Int32Array(TT * TT).fill(-1);
+  const frustum = new THREE.Frustum();
+  const pv = new THREE.Matrix4();
+  const sphere = new THREE.Sphere();
+  const camPos = new THREE.Vector3();
+  const camDir = new THREE.Vector3();
+  const lastPos = new THREE.Vector3(1e9, 0, 0);
+  const lastDir = new THREE.Vector3();
+  let quality: Quality = 'medium';
+  let dirty = true;
+  let triangles = 0;
+  const tileSize = TILE * t.cell;
+
+  const select = (): void => {
+    const q = LOD_Q[quality];
+    for (let tz = 0; tz < TT; tz++) {
+      for (let tx = 0; tx < TT; tx++) {
+        const ti = tz * TT + tx;
+        const cx = -half + (tx + 0.5) * tileSize;
+        const cz = -half + (tz + 0.5) * tileSize;
+        const hs = tileSize / 2;
+        const lo = lod.y0[ti];
+        const hi = lod.y1[ti];
+        sphere.center.set(cx, (lo + hi) / 2, cz);
+        sphere.radius = Math.hypot(hs, hs, (hi - lo) / 2 + SKIRT_DROP / 2) + 2;
+        visible[ti] = frustum.intersectsSphere(sphere) ? 1 : 0;
+        // Distance from the camera to the tile's box.
+        const dx = Math.max(0, Math.abs(camPos.x - cx) - hs);
+        const dz = Math.max(0, Math.abs(camPos.z - cz) - hs);
+        const dy = Math.max(0, camPos.y - hi, lo - camPos.y);
+        steps[ti] = pickStep(lod, ti, Math.hypot(dx, dy, dz), q.tau, q.full, steps[ti]);
       }
-      const tg = new THREE.BufferGeometry();
-      tg.setAttribute('position', posA);
-      tg.setAttribute('normal', norA);
-      tg.setAttribute('color', colA);
-      tg.setAttribute('aField', fieldA);
-      tg.setIndex(new THREE.BufferAttribute(idx, 1));
-      const cx = -half + (tx + 0.5) * per * t.cell;
-      const cz = -half + (tz + 0.5) * per * t.cell;
-      const hs = (per * t.cell) / 2;
-      tg.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, (y0 + y1) / 2, cz), Math.hypot(hs, hs, (y1 - y0) / 2 + 1));
-      tg.boundingBox = new THREE.Box3(new THREE.Vector3(cx - hs, y0 - 1, cz - hs), new THREE.Vector3(cx + hs, y1 + 1, cz + hs));
-      const mesh = new THREE.Mesh(tg, mat);
-      mesh.name = `terrain:${tx},${tz}`;
-      mesh.receiveShadow = true;
-      mesh.castShadow = false;
-      mesh.matrixAutoUpdate = false;
-      group.add(mesh);
     }
-  }
+    let k = 0;
+    let changed = false;
+    for (let tz = 0; tz < TT; tz++) {
+      for (let tx = 0; tx < TT; tx++) {
+        const ti = tz * TT + tx;
+        if (!visible[ti]) {
+          if (keys[ti] !== -1) changed = true;
+          keys[ti] = -1;
+          continue;
+        }
+        const s = steps[ti];
+        const other = (ox: number, oz: number): boolean => {
+          if (ox < 0 || oz < 0 || ox >= TT || oz >= TT) return false;
+          const oi = oz * TT + ox;
+          return steps[oi] !== s;
+        };
+        const mask =
+          (other(tx - 1, tz) ? EDGE_W : 0) | (other(tx + 1, tz) ? EDGE_E : 0) | (other(tx, tz - 1) ? EDGE_N : 0) | (other(tx, tz + 1) ? EDGE_S : 0);
+        const key = (ti * 32 + s) * 16 + mask;
+        if (keys[ti] !== key) changed = true;
+        keys[ti] = key;
+        let idx = cache.get(key);
+        if (!idx) cache.set(key, (idx = tileIndices(n, TILE, tx, tz, s, mask, NN)));
+        k += idx.length;
+      }
+    }
+    if (!changed && !dirty) return;
+    const arr = indexA.array as Uint32Array;
+    k = 0;
+    for (let ti = 0; ti < TT * TT; ti++) {
+      if (keys[ti] === -1) continue;
+      const idx = cache.get(keys[ti]) as Uint32Array;
+      arr.set(idx, k);
+      k += idx.length;
+    }
+    indexA.clearUpdateRanges();
+    indexA.addUpdateRange(0, k);
+    indexA.needsUpdate = true;
+    geo.setDrawRange(0, k);
+    triangles = k / 3;
+  };
+
+  const update = (camera: THREE.Camera): void => {
+    camera.updateMatrixWorld();
+    camera.getWorldPosition(camPos);
+    camera.getWorldDirection(camDir);
+    if (!dirty && camPos.distanceToSquared(lastPos) < 1 && camDir.dot(lastDir) > 0.9995) return;
+    lastPos.copy(camPos);
+    lastDir.copy(camDir);
+    pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(pv);
+    select();
+    dirty = false;
+  };
   /** Base ground colour (before shader detail) at a point: grass tufts take it on so they blend in. */
   const colorAt = (x: number, z: number, out: THREE.Color): THREE.Color => {
     const gx = THREE.MathUtils.clamp((x + half) / t.cell, 0, n - 1e-6);
@@ -270,5 +377,14 @@ export function createTerrainMesh(t: TerrainData): TerrainMesh {
     }
     return out.setRGB(r, gg, bb);
   };
-  return { group, colorAt };
+  return {
+    group,
+    colorAt,
+    update,
+    setQuality(q) {
+      quality = q;
+      dirty = true;
+    },
+    stats: () => ({ triangles }),
+  };
 }

@@ -219,6 +219,31 @@ const RECIPES: Record<SfxName, Recipe> = {
   tick: (s, t, v, p) => {
     s.tone('sine', [[0, 1500 * p], [0.04, 1200 * p]], t, 0.05, { peak: 0.12 * v, attack: 0.002 });
   },
+  roar: (s, t, v, p) => {
+    // A friendly cartoon roar (dragon, dino suits): a growly rise and fall, more "rawr" than scary.
+    const pts: FreqPoints = [[0, 110 * p], [0.18, 190 * p], [0.45, 160 * p], [0.8, 90 * p]];
+    s.tone('sawtooth', pts, t, 0.9, { peak: 0.13 * v, attack: 0.05, filter: { type: 'lowpass', freq: 900 } });
+    s.tone('square', pts.map(([d, f]) => [d, f * 1.5] as const), t, 0.85, { peak: 0.05 * v, attack: 0.05, filter: { type: 'lowpass', freq: 1400 } });
+    s.burst(t, 0.8, 'bandpass', 500 * p, 300 * p, 1.4, 0.08 * v, 0.06);
+  },
+  baa: (s, t, v, p) => {
+    // Sheep: a nasal wobbling "baa" (vibrato from a zig-zag pitch line).
+    const pts: FreqPoints = [[0, 330 * p], [0.08, 380 * p], [0.16, 350 * p], [0.24, 385 * p], [0.32, 345 * p], [0.4, 370 * p], [0.55, 300 * p]];
+    s.tone('sawtooth', pts, t, 0.6, { peak: 0.1 * v, attack: 0.03, filter: { type: 'bandpass', freq: 1300, q: 2 } });
+    s.tone('triangle', pts, t, 0.6, { peak: 0.06 * v, attack: 0.03 });
+  },
+  cluck: (s, t, v, p) => {
+    // Chicken: two short clucks.
+    for (let i = 0; i < 2; i++) {
+      const at = t + i * 0.14;
+      s.tone('square', [[0, 700 * p], [0.04, 980 * p], [0.07, 600 * p]], at, 0.08, { peak: 0.08 * v, attack: 0.003, filter: { type: 'bandpass', freq: 1500, q: 1.5 } });
+    }
+  },
+  squeak: (s, t, v, p) => {
+    // Rubber-toy squeak (comic dodges, rubber duck).
+    s.tone('sine', [[0, 1700 * p], [0.05, 2500 * p], [0.12, 1900 * p]], t, 0.14, { peak: 0.12 * v, attack: 0.004 });
+    s.tone('triangle', [[0, 3400 * p], [0.05, 5000 * p]], t, 0.08, { peak: 0.03 * v, attack: 0.004 });
+  },
 };
 
 /** Play one SFX at absolute time `t`. Returns its approximate duration in seconds. */

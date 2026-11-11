@@ -18,6 +18,9 @@ export const WAYFINDING_CSS = `
 .rg .wf-m.sm{width:calc(var(--u)*3.6);height:calc(var(--u)*3.6);margin:calc(var(--u)*-1.8) 0 0 calc(var(--u)*-1.8);font-size:calc(var(--u)*2.4)}
 .rg .wf-m.cl{opacity:.9}
 .rg .wf-m.hidden{opacity:0}
+.rg .wf-m.tick{width:calc(var(--u)*1.2);height:calc(var(--u)*1.2);margin:calc(var(--u)*-.6) 0 0 calc(var(--u)*-.6);background:#fff;border-width:calc(var(--u)*.25);z-index:0}
+.rg .wf-m.tick>*{display:none}
+.rg .wf-m .wpic canvas{width:100%;height:100%;display:block;border-radius:50%}
 .rg .wf-m .arr{position:absolute;top:50%;width:calc(var(--u)*1.7);height:calc(var(--u)*1.9);margin-top:calc(var(--u)*-.95);display:none}
 .rg .wf-m .arr svg{width:100%;height:100%;overflow:visible}
 .rg .wf-m.cl .arr{display:block}

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { VisionLayer } from '../types';
 import type { GameContext, VisionApi } from '../types';
 import { createLayerMaterial } from './materials';
+import { createToolkitTestApi, type ToolkitTestApi } from './toolkit/testApi';
 
 export interface TestObjectOptions {
   layer: 'both' | 'weak' | 'strong';
@@ -26,6 +27,8 @@ export interface VisionTestApi {
   removeTestObjects(): void;
   /** True while the calibration overlay is open. */
   calibrationOpen(): boolean;
+  /** Vision toolkit blocks (rings, glyphs, half symbols, dot pictures). */
+  toolkit: ToolkitTestApi;
 }
 
 declare global {
@@ -65,5 +68,6 @@ export function installTestHooks(ctx: Pick<GameContext, 'camera'>, vision: Visio
       objects.clear();
     },
     calibrationOpen,
+    toolkit: createToolkitTestApi(ctx, vision),
   };
 }

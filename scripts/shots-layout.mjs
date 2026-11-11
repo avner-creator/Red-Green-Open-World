@@ -39,6 +39,8 @@ const HUD = {
   tPause: '[data-testid="touch-pause"]',
   tSkill: '[data-testid="touch-skill"]',
   tEmote: '[data-testid="touch-emote"]',
+  pipBtn: '[data-testid="pip-button"]',
+  pipBubble: '[data-testid="pip-bubble"]',
 };
 
 async function rects(page, map) {
@@ -83,7 +85,7 @@ try {
   browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--mute-audio'] });
   for (const s of sizes) {
     const page = await browser.newPage({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: 1, hasTouch: s.touch, isMobile: s.touch });
-    await page.goto(`http://localhost:${port}/?test=1&quality=low`);
+    await page.goto(`http://localhost:${port}/?test=1&quality=low&buddy=1`);
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 180000 });
     await page.waitForSelector('#boot', { state: 'detached', timeout: 10000 });
     await page.evaluate(() => window.__rg.freeze(true));

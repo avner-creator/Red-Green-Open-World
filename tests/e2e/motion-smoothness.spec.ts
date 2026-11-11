@@ -195,7 +195,9 @@ test('the buggy moves smoothly against the chase camera at every display rate', 
   for (const rate of RATES) {
     expect.soft(results[rate].speed, rate).toBeGreaterThan(12);
     expect.soft(results[rate].maxSpeed, rate).toBeLessThan(17.5);
-    expect.soft(results[rate].minUp, rate).toBeGreaterThan(0.95);
+    // Not flipped: the south road now has kerbs and footpath junctions (outer areas, sites), and the
+    // gentle right steer rides up on one (about 20° of roll at most).
+    expect.soft(results[rate].minUp, rate).toBeGreaterThan(0.92);
     expect.soft(results[rate].jerk, `camera-space jerk @${rate}`).toBeLessThan(JERK_MAX);
     expect.soft(results[rate].angJerk, `pitch/roll rate change @${rate}`).toBeLessThan(ANG_JERK_MAX);
   }
@@ -216,12 +218,17 @@ test('the buggy feels the same at every display rate (launch, hop, real-time)', 
       let to14 = -1;
       let i = 0;
       rg.inject({ moveY: 1 });
+      let zPrev = z0;
+      let tPrev = 0;
       while (t < 2 && i < dts.length) {
+        zPrev = car.position.z;
+        tPrev = t;
         rg.step(dts[i], 1, false);
         t += dts[i++];
         if (to14 < 0 && car.speed >= 14) to14 = t;
       }
-      const dist2s = car.position.z - z0;
+      // Distance at exactly 2 s of game time (the last frame can overshoot by up to one frame).
+      const dist2s = zPrev + ((car.position.z - zPrev) * (2 - tPrev)) / Math.max(1e-6, t - tPrev) - z0;
       // Hop at speed: one press, peak height above the start over the next second.
       const y0 = car.position.y;
       rg.inject({ moveY: 1, jumpPressed: true });
@@ -318,4 +325,89 @@ test('walking is smooth against the camera at every display rate', async () => {
     expect.soft(results[rate].hJerk, `walk horizontal jerk @${rate}`).toBeLessThan(JERK_MAX);
     expect.soft(results[rate].jerk - results[rate].worldJerk, `walk camera-added jerk @${rate}`).toBeLessThan(0.2);
   }
+});
+
+test('a boosted buggy (race pad / workshop rocket) stays smooth at every display rate', async () => {
+  test.setTimeout(240_000);
+  if ((await page.evaluate(() => window.__rg!.state().playerMode)) !== 'driving') await getIn(page);
+  const results: Record<string, Metrics> = {};
+  for (const rate of RATES) {
+    await resetDrive(page);
+    await measure(page, trace('60', 60), { moveY: 1 }, 'car');
+    // Boost: +5 m/s top speed for 3 s with a one-shot 3 m/s kick (what a race pad gives).
+    await page.evaluate(() => {
+      const car = window.__rg!.ctx.vehicles.all[0] as unknown as { buggy?: { boost(extra: number, s: number, kick?: number): void } };
+      car.buggy?.boost(5, 3, 3);
+    });
+    // Skip the kick frame itself (a deliberate shove), then measure while boosted.
+    await measure(page, trace('60', 6), { moveY: 1 }, 'car');
+    results[rate] = await measure(page, trace(rate, framesFor(rate, 1.2)), { moveY: 1 }, 'car');
+  }
+  console.log('[smooth] boosted', JSON.stringify(results, (_, v: unknown) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)));
+  for (const rate of RATES) {
+    expect.soft(results[rate].maxSpeed, `boosted top speed @${rate}`).toBeGreaterThan(15);
+    expect.soft(results[rate].jerk, `boosted camera-space jerk @${rate}`).toBeLessThan(JERK_MAX * 1.5);
+    expect.soft(results[rate].angJerk, `boosted pitch/roll rate change @${rate}`).toBeLessThan(ANG_JERK_MAX);
+  }
+});
+
+test('rival buggies in a race move smoothly at every display rate', async () => {
+  test.setTimeout(240_000);
+  const started = await page.evaluate(() => {
+    const rg = window.__rg!;
+    // Out of the car, then start a race from the grid (the race seats the player itself).
+    if (rg.ctx.player.vehicle) {
+      rg.inject({ usePressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 60, false);
+    }
+    const race = window.__rgRace;
+    if (!race) return false;
+    const ok = race.start();
+    rg.step(1 / 60, 400, false); // lights, then the friends get going
+    return ok;
+  });
+  expect(started).toBe(true);
+  const results: Record<string, { jerk: number; speed: number }> = {};
+  for (const rate of RATES) {
+    const dts = trace(rate, framesFor(rate, 1.2));
+    results[rate] = await page.evaluate((dts) => {
+      const rg = window.__rg!;
+      const own = rg.ctx.vehicles.all[0].object;
+      const rivals = rg.ctx.scene.children.filter((o) => o.name === 'buggy' && o !== own);
+      const rows: number[][][] = rivals.map(() => []);
+      for (const dt of dts) {
+        rg.step(dt, 1, false);
+        rivals.forEach((r, i) => rows[i].push([r.position.x, r.position.y, r.position.z, dt]));
+      }
+      let jerk = 0;
+      let speed = 0;
+      for (const rr of rows) {
+        for (let i = 2; i < rr.length; i++) {
+          let d = 0;
+          for (let c = 0; c < 3; c += 2) {
+            const v1 = (rr[i][c] - rr[i - 1][c]) / rr[i][3];
+            const v0 = (rr[i - 1][c] - rr[i - 2][c]) / rr[i - 1][3];
+            d += (v1 - v0) ** 2;
+          }
+          jerk = Math.max(jerk, Math.sqrt(d));
+          speed = Math.max(speed, Math.hypot(rr[i][0] - rr[i - 1][0], rr[i][2] - rr[i - 1][2]) / rr[i][3]);
+        }
+      }
+      return { jerk, speed, n: rivals.length };
+    }, dts);
+  }
+  console.log('[smooth] rivals', JSON.stringify(results, (_, v: unknown) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)));
+  for (const rate of RATES) {
+    expect.soft(results[rate].speed, `rivals moving @${rate}`).toBeGreaterThan(4);
+    // Rivals are posed every rendered frame from their lap position (no fixed-step aliasing): their
+    // horizontal velocity changes only as much as cornering, rubber-banding and their deliberate
+    // comic wobbles/hops do (≤ ~1.4 m/s per frame measured; aliasing would be 10+).
+    expect.soft(results[rate].jerk, `rival horizontal jerk @${rate}`).toBeLessThan(2.5);
+  }
+  await page.evaluate(() => {
+    window.__rgRace?.exit();
+    window.__rg!.step(1 / 60, 60, false);
+  });
 });
