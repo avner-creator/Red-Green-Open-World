@@ -47,6 +47,11 @@ const FIXED = 1 / 60;
  */
 const COUNT_CAM = { distance: 6, height: 2.2, yawOffset: Math.PI } as const;
 /**
+ * Run camera: behind and above the hero. High enough to look down on the floats and the foam
+ * (where to land) and to keep the far village under the top of the frame (Medium triangle budget).
+ */
+const RUN_CAM = { distance: 6.2, height: 4.0, yawOffset: 0 } as const;
+/**
  * Seconds after GO during which the stick is read relative to the course (straight ahead = W)
  * instead of the camera, while the camera swings from the front to behind the hero (QA6 B1: W
  * read against the front camera walked the hero backwards off the start deck).
@@ -550,7 +555,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
           phaseT = 0;
           steerT = 0;
           sim.running = true;
-          ctx.cameraRig.setOverride({ distance: 6.2, height: 2.8, yawOffset: 0 });
+          ctx.cameraRig.setOverride({ ...RUN_CAM });
           snapCameraBehind();
           bot = botPlan ? new Autopilot(botPlan === 'main' ? MAIN_PLAN : SHORTCUT_PLAN) : null;
         }
