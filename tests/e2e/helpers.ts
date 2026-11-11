@@ -108,5 +108,5 @@ export async function startGame(page: Page, tap = false): Promise<void> {
   if (tap) await go.tap();
   else await go.click();
   // Let UI that follows the loop (touch HUD, phase classes) catch up with the new phase.
-  await page.evaluate(() => window.__rg?.step(1 / 60, 3, false));
+  if (tap) await page.evaluate(() => window.__rg?.step(1 / 60, 3, false));
 }
