@@ -5,7 +5,7 @@ it is a game, how to start it and what to do. The kit gives every mini-game the 
 
 | Piece | What the child sees | Where it lives |
 |---|---|---|
-| Marquee | candy-striped poles, a dark banner with marquee bulbs and scallops, the **magic-glasses mark** on a mast, pennant strings, a striped counter | `geometry.ts` |
+| Marquee | tall candy-striped poles, a big picture board, a dark banner with marquee bulbs and scallops, the **magic-glasses mark** on a mast, pennant strings, a striped counter | `geometry.ts` |
 | Picture board | a looping **demo flipbook**: a chunky little hero doing the action (4–6 frames, ~2.5 fps) | your `demo`, `atlas.ts` |
 | Lamp row | one lamp per try: off / ✓ bright (hit) / ✗ dim (miss) / chasing (celebration, attract twinkle) | `booth.ts` |
 | Start pad | glowing, pulsing disc on the ground; walk-in pads show footprints, press pads show a ring plus a floating **button pictogram for the device in use** (key cap E, gamepad X, tapping hand) | `geometry.ts`, `booth.ts` |
@@ -118,9 +118,9 @@ Need a new prompt? Replace one you do not use or ask for a cell; never draw outs
   round at that site (added at the round's start, removed when idle and the fx are done).
 - Your own meshes: keep them merged (gates: arches + sign = 1 draw, halves 2). Budget ≤ 6 during a
   round (`expectDrawBudget`), idle = booth 1 + your idle objects.
-- At spawn and the Gear Shack the six games together draw 7 calls (pinned in
+- At spawn and the Gear Shack the six games together draw 5 calls (pinned in
   `tests/e2e/glasses-framework.spec.ts`). A booth must not change that.
-- Triangles: the gates booth is 614 (budget ≤ 1,500).
+- Triangles: the gates booth is ~1,090 with its raised pad and chevrons (budget ≤ 1,500).
 
 ## Dos and don'ts
 
@@ -128,9 +128,10 @@ Need a new prompt? Replace one you do not use or ask for a cell; never draw outs
   prompts and countdown are both-eye and identical for every answer. Lamps only change after a
   report. The ✓/✗ pop may sit at the chosen object (the child has answered).
 - **Prompts** sit at a fixed place per phase, never on top of the play: idle → above the pad (or
-  an empty sign right behind it, as gates does), play → in front of the booth's picture board (the
-  default), wait → wherever the child is looking (gates: beyond the arch they ran through).
-  Check with screenshots from the pad that no prompt covers a symbol or a weak-eye object.
+  an empty sign right behind it, as gates does), play → **near the play, where the child looks
+  from the pad** (see "Where the play prompt goes" below; the booth-board default is only a
+  fallback and is often off screen), wait → wherever the child is looking (gates: beyond the arch
+  they ran through). Never under the HUD; never over a symbol or a weak-eye object.
 - Weak-eye things stay on the weak layer; the kit never draws anything at a weak-eye object's place.
 - Use the existing `SfxName`s only (the kit uses tick, start, gem, boing, fanfare, click, star).
 - No words in the world (digits and "GO!" are the only glyphs). No health wording anywhere.
@@ -138,6 +139,72 @@ Need a new prompt? Replace one you do not use or ask for a cell; never draw outs
   have colliders (marquee poles, counter + board).
 - Keyboard, gamepad and touch only through `ctx.input.state` and `ctx.interactions` (the kit's pad
   target uses the `flag` icon and is enabled only while idle).
+
+## Fix round (QA): the rules every booth now follows
+
+### The start pad stands out of the grass
+- The pad is a **raised candy-striped drum** (`PAD_TOP` 15 cm, solid: the hero steps up), a glowing
+  rim, a glowing face and six **glowing bollards** (`PAD_POSTS`, 62 cm) that stand out of tall
+  grass; all pulse (`padFace`, `padGlow`, `padPosts` slots). Chevrons and footprints are low raised
+  wedges (`DECAL_TOP`), not paint. Still the booth's one mesh.
+- On the first update the kit puts the pad and every decal on the **real walkable surface**
+  (a physics ray, as `src/activities/secrets` does for its start rings; `booth.settle`), then adds
+  the drum's collider. Nothing for the game to do.
+- Checked on every site at Low, Medium and High: `glasses-framework.spec.ts` "start pad visible
+  from 8 m" (paints the pad dark and counts the changed pixels).
+
+### The celebration happens in view
+- When the tries end the kit turns the camera to `celebrateAt` (default: the booth's picture
+  board) with `ctx.cameraRig.setOverride({ yawOffset })`, holds it through the celebration and the
+  prize flight (≤ 4.2 s), then releases it. It releases **at once** on look input, respawn, a
+  vehicle (player not walking), pause / session change, leaving the site, far-idle or reset.
+- Confetti and a burst also fire **next to the child** (towards where the camera looks), and the
+  prize gems fly from the banner to the child.
+- `celebrateAt` may be a function (asked when the tries end): gates turns the camera so the booth
+  sits in the left of the view and the pad in the middle, from wherever the child stopped.
+
+### Where the play prompt goes (`view.ts`)
+- During a try the ONE prompt floats **near the play's focus, in clear view from the pad camera**:
+  `pickPromptSpot(candidates, { pad, look, size, keepClear })` returns the first candidate whose
+  billboard lies in `PROMPT_SAFE` (the central area no HUD element covers: wallet, compass, timer,
+  Fun Pass chip, radio top; wardrobe and skill buttons right; touch controls bottom corners), off
+  the hero (`HERO_BOX`) and off every `keepClear` thing (symbols, the sign …), at 16:9 and 4:3.
+  Pass the result as `spec.playPromptAt` (and `playPromptSize`). Pick once from the layout: the
+  place never depends on the answer. Gates: candidates beside the sign, between it and the arches.
+- `playPrompt: 'button'` shows the Use button of the device in use (key E, gamepad X, a tapping
+  hand) and follows the device.
+- Set `setup.look` (the play's focus seen from the pad) so `kit.padView()` and the e2e check stand
+  the hero on the pad facing the play.
+- **e2e**: `glasses-framework.spec.ts` "the play prompt is in clear view from the pad" stands on
+  every pad, starts a try (`__rgGlasses.boothPlay`), projects the prompt at 640×360 and 1280×720
+  and checks it against every visible HUD element's rectangle (`hudRects`, `checkPromptClear` in
+  `tests/e2e/glasses-helpers.ts`) and the safe area. Add your game's id to `PROMPT_ENFORCED` when
+  it passes (today: gates; glowflies, toys and dot signs already pass; odd one out and line-up do not).
+
+### Demo legibility (rule of thumb, `DEMO_RULE`)
+- The picture board is 2.34 m: at **8 m on a 640×360 screen** that is ~91 px. Where the hero
+  appears it must be **≥ 33 of the panel's 100 units tall** (≥ 26 px at 8 m), and a frame shows
+  **≤ 9 pictures** (kit drawings). Close-ups, one idea per frame.
+- `auditDemo(demo)` (`legibility.ts`) measures it in node (no canvas): hero height per frame,
+  pictures per frame, px at 8 m. `tests/activities/glasses-booth-fix.test.ts` enforces it for gates
+  and logs the others (today: dot signs 18 px, glow-flies 26 px, line-up 26 px and 14 pictures,
+  odd one out 21 px and 11 pictures, toys 17 px).
+
+### Booths face the arrival
+- `site.arrival` is the road end of the world's stepping-stone trail (nearest road point; the
+  world lays the trail straight from there to the site's edge). Opt in with
+  `LayoutSpec.arrival = site.arrival` and `arrivalTargets` (marquee lamps / banner / board, the
+  pad): the layout turns to face the arrival and scores clear sightlines from 12 m and 30 m.
+  `glasses-framework.spec.ts` logs anything that stands between the arrival and each booth.
+
+### Small additions
+- `report(hit, at, tier?)`: a per-try tier. `note(hit, at?, tier?)`: a result with a pop and a sound
+  that lights no lamp and does not move the round. `finish()`: end the tries now.
+- Timed rounds: `RoundRules.time` (s): one play phase; every report lights the next lamp; ends when
+  the time is up, all lamps are lit or `finish()`; prize by hits.
+- `setup.extra`: your own static geometry (frame-local, booth-atlas UVs) merged into the booth.
+- ✓ / ✗ pops and digits are drawn on top **and write depth**, so a weak-eye object behind a pop is
+  hidden for the weak eye too (no cost).
 
 ## Checklist for a mini-game moving to the kit
 
@@ -154,3 +221,6 @@ Need a new prompt? Replace one you do not use or ask for a cell; never draw outs
       clocks), a round with a hit and a miss through real input, lamps, celebration, prize paid, cancel
 - [ ] screenshots (full, R-only, G-only; 640×360 and 1280×720) looked at; compared with the carnival row
 - [ ] `glasses-framework.spec.ts` still green: spawn / Gear Shack draws unchanged
+- [ ] play prompt placed with `pickPromptSpot` near the play; your id in `PROMPT_ENFORCED`
+- [ ] `auditDemo(yourDemo).problems` is empty (hero ≥ 33 units, ≤ 9 pictures per frame)
+- [ ] `celebrateAt` set if the child ends the tries away from the booth; layout opts in to `arrival`
