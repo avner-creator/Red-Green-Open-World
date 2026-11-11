@@ -125,6 +125,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   let first = true;
   /** Pitch added by the spring arm to swing over / under an obstacle right behind the hero. */
   let lift = 0;
+  /** Scripted-camera unblock: next scan countdown and the clear yaw being swung to (or null). */
+  let scanT = 0;
+  let swingTo: number | null = null;
   const occluders = createCameraOccluders(ctx.scene);
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
@@ -303,6 +306,32 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         liftTarget = Math.min(ARM.seeOver, CAM.maxPitch - pitch);
       }
     }
+    // Scripted cameras (celebrations, results, countdowns: an override without a fixed yaw) may
+    // not end in a bush, a sign or the hero's head (QA5 m5/m9): when the arm is cut short, swing
+    // round to the clearest of 8 directions instead of sitting at the obstacle.
+    if (phase !== 'title' && !chase && override && override.yawOffset === undefined) {
+      scanT -= dt;
+      if (scanT <= 0) {
+        scanT = 0.25;
+        swingTo = null;
+        armDir(pitch, probeDir);
+        const here = clearAlong(pivot, probeDir, reach, ARM.hardRadius, ballHard) ?? reach;
+        if (here < wantDistance * 0.7) {
+          const keep = yaw;
+          let best = here;
+          for (let i = 1; i < 8; i++) {
+            yaw = keep + (i * Math.PI) / 4;
+            const d = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+            if (d > best + 0.5) {
+              best = d;
+              swingTo = yaw;
+            }
+          }
+          yaw = keep;
+        }
+      }
+      if (swingTo !== null) yaw += angleDelta(yaw, swingTo) * damp(4, dt);
+    } else swingTo = null;
     lift += (liftTarget - lift) * damp(ARM.liftRate, dt);
     armDir(clamp(pitch + lift, CAM.minPitch, CAM.maxPitch), dir);
     const hardHit = clearAlong(pivot, dir, reach, ARM.hardRadius, ballHard);

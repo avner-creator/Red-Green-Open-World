@@ -427,7 +427,9 @@ export function createRace(ctx: GameContext): Race {
       d.play(placeIdx === 0 ? 'cheer' : 'wave', 1, 0.2);
     });
     for (const s of site.podiumSteps) confetti.burst(s.clone().setY(s.y + 2.2), 60);
-    ctx.cameraRig.setOverride({ distance: 7.5, height: 1.6, fov: 52, orbitRate: 0.25, lookAhead: 0 });
+    // A safe scripted spot: in front of the podium looking at the winners (an orbit swung the
+    // camera through the podium and the roadside bushes: QA5 m5).
+    ctx.cameraRig.setOverride({ distance: 7.5, height: 1.6, fov: 52, yawOffset: Math.PI, lookAhead: 0 });
     ctx.audio.play('fanfare');
   }
 

@@ -129,18 +129,18 @@ test('Esc that the browser swallows while the Fun Pass is open closes the card, 
 });
 
 test('Esc with an overlay open (workshop, shop, radio…) closes that overlay first; only a bare Esc pauses', async () => {
-  type W = Window & { __rgEscOverlay?: () => () => boolean };
+  type W = Window & { __rgEscOverlay?: () => () => boolean; __rgEsc?: () => boolean };
   // Key path: the Esc key-down reaches the page.
-  await page.evaluate(() => ((window as W).__rgEsc = (window as W).__rgEscOverlay!()));
+  await page.evaluate(() => ((window as unknown as W).__rgEsc = (window as unknown as W).__rgEscOverlay!()));
   await page.keyboard.press('Escape');
   await step(3);
-  expect(await page.evaluate(() => ((window as W & { __rgEsc: () => boolean }).__rgEsc)())).toBe(false);
+  expect(await page.evaluate(() => (window as unknown as W).__rgEsc!())).toBe(false);
   expect(await phase()).toBe('playing');
   // Lock path: Chrome swallows the Esc that exits pointer lock.
-  await page.evaluate(() => ((window as W).__rgEsc = (window as W).__rgEscOverlay!()));
+  await page.evaluate(() => ((window as unknown as W).__rgEsc = (window as unknown as W).__rgEscOverlay!()));
   await loseLock(false);
   await settle();
-  expect(await page.evaluate(() => ((window as W & { __rgEsc: () => boolean }).__rgEsc)())).toBe(false);
+  expect(await page.evaluate(() => (window as unknown as W).__rgEsc!())).toBe(false);
   expect(await phase()).toBe('playing');
   // The Fun Pass card takes a plain (non-swallowed) Esc too.
   await page.keyboard.press('Tab');

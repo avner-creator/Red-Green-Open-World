@@ -303,7 +303,7 @@ for (const [w, h] of [[667, 375], [750, 342], [844, 390], [915, 412]] as const) 
             if (ow > 2 && oh > 2) overlaps.push(`${name(els[i])} x ${name(els[j])} (${Math.round(ow)}x${Math.round(oh)})`);
           }
         }
-        return { ids: els.map((e) => `${name(e)}@${[...Object.values(e.getBoundingClientRect().toJSON())].slice(0, 4).map(Math.round).join(',')}`), overlaps, small };
+        return { ids: els.map((e) => `${name(e)}@${((q) => [q.left, q.top, q.width, q.height].map(Math.round).join(','))(e.getBoundingClientRect())}`), overlaps, small };
       });
       console.log(`${w}x${h}`, JSON.stringify(r));
       expect(r.ids.length).toBeGreaterThan(5);
