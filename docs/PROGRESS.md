@@ -44,3 +44,9 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - No blockers. Red-green rule exact in all four lens/eye combinations at three mini-games and a chest. Report: `docs/qa/round3.md` on `agent/qa3`.
 - Majors, assigned: camera inside trees/props (`agent/camera-clear`); Pip does not guide a non-reader and walked toward a gem (`agent/pip-guide`); plaza chest against a fingerpost plus ten minor world/economy/UI items (`agent/qa3-fixes`).
 - QA did not check: a full round of each attraction and mini-game, rocket pads at 0 gems, HUD explain bubbles (none appeared on click), frame time, audio, real glasses, gamepad, touch.
+
+## Owner playtest 3 and batch 3 (2026-11-12 ~06:40 UTC)
+- Owner feedback: Pip must speak real words in a cute voice (non-readers); bubble soccer and "the wobbly one" (taken as dino sumo) underwhelming; hero walks through the soccer ball; wants more QA.
+- In flight: `agent/pip-voice` (spoken lines: pre-rendered clips, Web Speech fallback), `agent/arena-fun` (ball pass-through bug + fun pass on bubble soccer and dino sumo), `agent/integrate-m3` (four red e2e on integration b9cc7ef: secrets key-2 trail after chest moves, glasses-challenge framing after camera collision, buddy-hud bubble trigger, shop deny toast timing; then merge `agent/boot-loads` and Stream P Phase 2 `agent/glasses-depth` cd07540).
+- `main` is at 9cd3e3d (game code = 7cda79b). Not yet on `main`: Pip guide, QA3 fixes, camera collision.
+- Next: play-through QA of a full round of every attraction and mini-game once batch 3 is green.
