@@ -54,7 +54,9 @@ export const TRAIL = {
   /** The first print's direction, off the child's view line from the pad (radians, either side). */
   startOff: [0.4, 1.75] as readonly [number, number],
   /** Path shape tries per direction. */
-  variants: 4,
+  variants: 6,
+  /** Rounds of candidates (new fan turn and bends each) before the fallback. */
+  rounds: 4,
   /** The trail starts this far from the pad's centre (just past its rim). */
   startOffset: 1.4,
   /** Path sampling step for the validity checks. */
@@ -78,6 +80,9 @@ export const TRAIL = {
   markerSize: 0.8,
   /** Open sky over the hidden spot: no trunk or wall within this radius at trunk height. */
   skyClear: 4,
+  /** No trunk, wall, post or bumpable toy this close to the hidden spot / to the default camera behind the hero on the last stretch. */
+  endClear: 6,
+  camClear: 6,
   /** A passed print fades out over this long. */
   passFade: 0.7,
 } as const;
