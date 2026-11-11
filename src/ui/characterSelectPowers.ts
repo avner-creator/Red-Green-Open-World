@@ -43,20 +43,28 @@ export const POWER_CSS = `
 @keyframes pw-ball{0%,100%{transform:translateY(0) scale(1.2,.8)}10%{transform:translateY(-2px) scale(1)}50%{transform:translateY(-18px)}90%{transform:translateY(-2px)}}
 @keyframes pw-grow{0%,30%{transform:scale(.5)}60%,90%{transform:scale(1.15)}}
 @keyframes pw-bub{to{transform:scale(1.08)}}
-.rg .cs-powers{display:flex;flex-wrap:wrap;gap:.35em;justify-content:center;max-width:15em}
-.rg .cs-pw{position:relative;display:flex;flex-direction:column;align-items:center;gap:.1em;width:4.3em;padding:.3em .2em .25em;border-radius:.8em;border:.16em solid rgba(0,0,0,.55);background:rgba(20,22,28,.55);color:#fff;font:inherit;font-size:.78em;cursor:pointer;pointer-events:auto}
-.rg .cs-pw .sk{font-size:2.6em}
-.rg .cs-pw .pn{font-size:.58em;font-weight:900;letter-spacing:.02em;line-height:1.05;text-align:center;min-height:2.1em}
-.rg .cs-pw.on{background:#fff;color:#000;border-color:#000;box-shadow:0 0 0 .16em #ffd93b;transform:scale(1.06)}
-.rg .cs-pw.on .sk svg{stroke:#000}
-.rg .cs-pw.lock{opacity:.8;cursor:default}
-.rg .cs-pw.lock .sk{opacity:.45}
-.rg .cs-pw .need{display:flex;align-items:center;gap:.15em;font-size:.62em;font-weight:900}
+.rg .csel .cs-right{flex:0 0 36%;max-width:calc(var(--u)*62)}
+.rg .csel .cs-right .cs-skill{flex-direction:row;gap:calc(var(--u)*1.2)}
+.rg .csel .cs-right .cs-tile{width:calc(var(--u)*10);height:calc(var(--u)*10);font-size:calc(var(--u)*8.5)}
+.rg .cs-powers{display:grid;grid-template-columns:repeat(5,1fr);gap:calc(var(--u)*.6);width:100%}
+.rg .cs-pw{position:relative;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.2);padding:calc(var(--u)*.5) calc(var(--u)*.2);min-width:0;
+  border-radius:calc(var(--u)*1.4);border:calc(var(--u)*.35) solid #000;background:rgba(255,255,255,.12);color:#fff;font:inherit;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+.rg .cs-pw .sk{font-size:calc(var(--u)*5.4)}
+.rg .cs-pw .pn{font-size:calc(var(--u)*1.35);font-weight:900;line-height:1.05;text-align:center;-webkit-text-stroke:calc(var(--u)*.2) #000;paint-order:stroke fill}
+.rg .cs-pw.on{background:#fff;color:#000;box-shadow:0 0 0 calc(var(--u)*.45) #ffd93b,0 0 0 calc(var(--u)*.8) #000;transform:scale(1.08)}
+.rg .cs-pw.on .pn{-webkit-text-stroke:0}
+.rg .cs-pw:focus-visible{outline:calc(var(--u)*.5) solid #ffd93b}
+.rg .cs-pw.lock{cursor:default;background:rgba(0,0,0,.35)}
+.rg .cs-pw.lock .sk{opacity:.4}
+.rg .cs-pw.lock .pn{display:none}
+.rg .cs-pw .need{display:flex;align-items:center;gap:.1em;font-size:calc(var(--u)*1.5);font-weight:900;-webkit-text-stroke:calc(var(--u)*.2) #000;paint-order:stroke fill}
 .rg .cs-pw .need .ic{width:1.1em;height:1.1em}
-.rg .cs-pw .bar{width:80%;height:.3em;border-radius:.2em;background:rgba(255,255,255,.25);overflow:hidden}
+.rg .cs-pw .bar{width:80%;height:calc(var(--u)*.6);border-radius:calc(var(--u)*.4);background:rgba(255,255,255,.25);box-shadow:0 0 0 calc(var(--u)*.2) #000;overflow:hidden}
 .rg .cs-pw .bar i{display:block;height:100%;width:var(--p);background:#ffd93b}
-.rg .cs-pw .star{position:absolute;top:-.35em;right:-.35em;font-size:.9em}
-.rg .cs-wardrobe{display:flex;align-items:center;gap:.3em;margin-top:.3em}
+.rg .cs-pw .star{position:absolute;top:calc(var(--u)*-1);right:calc(var(--u)*-.8);font-size:calc(var(--u)*2.6);color:#ffd93b}
+.rg .cs-ward{min-width:max(48px,calc(var(--u)*7));min-height:max(48px,calc(var(--u)*7));font-size:calc(var(--u)*2.6)}
+.rg .cs-ward[data-ready="false"]{opacity:.75}
+.rg .cs-ward.pop{animation:cs-card .32s cubic-bezier(.2,1.5,.4,1)}
 `;
 
 /** Pictogram for any power. */
