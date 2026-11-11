@@ -39,6 +39,27 @@ const triggersByApi = new WeakMap<InputApi, DriveTriggers>();
 export function driveTriggers(api: InputApi): Readonly<DriveTriggers> {
   return triggersByApi.get(api) ?? { accelerate: 0, brake: 0 };
 }
+/** Why the last `pausePressed` fired (test log / diagnostics): core-internal. */
+export type PauseSource = 'key' | 'pad' | 'touch' | 'lock-esc';
+const pauseSourceByApi = new WeakMap<InputApi, { source: PauseSource | null; detail: string }>();
+/** Source of this frame's `pausePressed` (null when it is false). */
+export function pauseSource(api: InputApi): { source: PauseSource | null; detail: string } {
+  return pauseSourceByApi.get(api) ?? { source: null, detail: '' };
+}
+/** Mouse look is wanted but the pointer is not locked (window lost focus, lock refused, Esc resume). */
+const lookHintByApi = new WeakMap<InputApi, () => boolean>();
+export function lookHintWanted(api: InputApi): boolean {
+  return lookHintByApi.get(api)?.() ?? false;
+}
+/** How long after a lock loss we wait for an Esc / blur to explain it (ms). */
+const LOCK_LOSS_SETTLE_MS = 180;
+/** An Esc or a window blur this close to a lock loss explains it (ms). */
+const LOCK_LOSS_WINDOW_MS = 600;
+/** Pads that report no standard mapping: button 9 is not Start on them (headsets, wheels, HID noise). */
+function padPauseAllowed(pad: Gamepad): boolean {
+  return pad.mapping === 'standard';
+}
+
 const EDGE_FIELDS = ['jumpPressed', 'usePressed', 'flopPressed', 'respawnPressed', 'pausePressed', 'skillPressed', 'emotePressed'] as const;
 
 function isTextField(t: EventTarget | null): boolean {
@@ -58,30 +79,65 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
   let device: InputState['device'] = 'keyboard';
   let injected: Partial<InputState> | null = null;
   let intentionalRelease = false;
-  let pauseFromLockLoss = false;
-  let lockLostAt = -Infinity;
+  /** Time of an unexplained pointer-lock loss still being classified (Esc → pause; blur → hint). */
+  let lockLossPending: number | null = null;
+  let lastEscAt = -Infinity;
+  let lastBlurAt = -Infinity;
+  /** The game asked for pointer lock and has not released it on purpose since. */
+  let wantLock = false;
+  const pauseInfo: { source: PauseSource | null; detail: string } = { source: null, detail: '' };
+  let queuedPauseDetail = '';
   const padPrev: boolean[] = [];
+  let padKey = '';
   let padSprintLatch = false;
 
   const locked = (): boolean => document.pointerLockElement === ctx.canvas;
+  /**
+   * Automated browsers (Playwright, `navigator.webdriver`) never get a real pointer lock: in
+   * headless Chromium a granted lock balloons the renderer to 2+ GB within seconds and it is
+   * killed (measured: every viewport size; a blank WebGL page with a lock also stalls). Tests that
+   * need the real lock pass `&reallock=1`. Real players are unaffected.
+   */
+  const automationNoLock =
+    typeof navigator !== 'undefined' && navigator.webdriver === true &&
+    !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('reallock') === '1');
+  let lockRequests = 0;
 
+  /** True while we re-dispatch the Esc the browser swallowed (so in-game cards can close on it). */
+  let replayingEsc = false;
+  /** The last real Esc key-down was consumed (preventDefault) by an in-game card. */
+  let lastEscConsumed = false;
+  const onKeyDownCapture = (e: KeyboardEvent): void => {
+    if (e.code !== 'Escape' || replayingEsc) return;
+    lastEscAt = performance.now();
+    lastEscConsumed = false;
+    queueMicrotask(() => (lastEscConsumed = e.defaultPrevented));
+  };
   const onKeyDown = (e: KeyboardEvent): void => {
+    if (replayingEsc) return;
     if (isTextField(e.target) && e.code !== 'Escape') return;
     device = 'keyboard';
     touch.noteOtherDevice();
     if (gameplay && GAME_KEYS.has(e.code)) e.preventDefault();
     if (!e.repeat) {
       const action = KEY_ACTIONS[e.code];
-      // Some browsers deliver Esc after it already broke pointer lock: don't pause twice.
-      const echo = action === 'pause' && performance.now() - lockLostAt < 400;
-      if (action && !echo) queued.add(action);
+      // Some browsers deliver Esc after it already broke pointer lock: the lock-loss classifier
+      // pauses for it, so don't queue a second pause.
+      const echo = action === 'pause' && lockLossPending !== null;
+      if (action && !echo) {
+        queued.add(action);
+        if (action === 'pause') queuedPauseDetail = e.code;
+      }
     }
     held.add(e.code);
   };
   const onKeyUp = (e: KeyboardEvent): void => {
+    // Chrome swallows the Esc key-down that exits pointer lock; its key-up may still arrive.
+    if (e.code === 'Escape') lastEscAt = performance.now();
     held.delete(e.code);
   };
   const onBlur = (): void => {
+    lastBlurAt = performance.now();
     held.clear();
   };
   const onMouseMove = (e: MouseEvent): void => {
@@ -98,19 +154,55 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       return;
     }
     if (intentionalRelease) intentionalRelease = false;
-    else if (gameplay) {
-      pauseFromLockLoss = true;
-      lockLostAt = performance.now();
-    }
+    // Not ours: Esc (browser-handled, usually no key-down reaches us) or the window losing focus
+    // (alt-tab, an OS notification, another app). Only Esc pauses; the rest keeps playing with a
+    // "click to look" hint. Classified a moment later, once a trailing blur / Esc key-up arrived.
+    else if (gameplay) lockLossPending = performance.now();
     mouseX = mouseY = 0;
   };
   const onCanvasClick = (): void => {
     if (gameplay && !locked()) api.capturePointer();
   };
+  /** Resolves a pending lock loss: true = it was Esc (pause), false = not yet / not Esc. */
+  const lockLossPauses = (now: number): boolean => {
+    if (lockLossPending === null) return false;
+    const t = lockLossPending;
+    const near = (at: number): boolean => Math.abs(at - t) < LOCK_LOSS_WINDOW_MS;
+    if (near(lastEscAt) && now - t >= 30) {
+      lockLossPending = null;
+      // The Esc already closed an open card (Fun Pass, controls) where the browser let it through.
+      return gameplay && !lastEscConsumed && !escClosesCard();
+    }
+    if (now - t < LOCK_LOSS_SETTLE_MS) return false;
+    lockLossPending = null;
+    const focusLost = near(lastBlurAt) || document.hidden || (typeof document.hasFocus === 'function' && !document.hasFocus());
+    // Focused, no blur: the only thing left that drops the lock is the browser's own Esc handling.
+    return gameplay && !focusLost && !escClosesCard();
+  };
+  /**
+   * Chrome keeps the Esc that exits pointer lock to itself. Replay it to the page: an open in-game
+   * card (Fun Pass, controls card) closes on it and calls preventDefault, and then Esc only meant
+   * "close the card", not "pause". Our own key handlers ignore the replay.
+   */
+  const escClosesCard = (): boolean => {
+    if (typeof KeyboardEvent === 'undefined') return false;
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+    replayingEsc = true;
+    try {
+      // Real key events target the focused element, so window capture listeners see them first.
+      (document.activeElement ?? document.body).dispatchEvent(ev);
+    } finally {
+      replayingEsc = false;
+    }
+    return ev.defaultPrevented;
+  };
 
+  window.addEventListener('keydown', onKeyDownCapture, true);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
+  // Focus back: that earlier blur no longer explains a later lock loss.
+  window.addEventListener('focus', () => (lastBlurAt = -Infinity));
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('pointerlockchange', onLockChange);
   ctx.canvas.addEventListener('click', onCanvasClick);
@@ -129,7 +221,15 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
         if (p.mapping === 'standard') break;
       }
     }
-    if (!pad) return null;
+    if (!pad) {
+      padKey = '';
+      return null;
+    }
+    // A pad seen for the first time (or swapped) starts from its current buttons: a button already
+    // down when it connects (or a stuck one) is not a press.
+    const id = `${pad.index}:${pad.id}`;
+    const fresh = id !== padKey;
+    padKey = id;
     const btn = (i: number): boolean => {
       const b = pad.buttons[i];
       return !!b && (b.pressed || b.value > LOOK.triggerThreshold);
@@ -141,6 +241,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       return v < 0.08 ? 0 : Math.min(1, (v - 0.08) / 0.84);
     };
     const pressed = new Set<Action>();
+    if (fresh) for (let i = 0; i < pad.buttons.length; i++) padPrev[i] = btn(i);
     const edge = (i: number, action: Action): void => {
       const now = btn(i);
       if (now && !padPrev[i]) pressed.add(action);
@@ -149,7 +250,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
     edge(PAD.x, 'use');
     edge(PAD.b, 'flop');
     edge(PAD.y, 'respawn');
-    edge(PAD.start, 'pause');
+    if (padPauseAllowed(pad)) edge(PAD.start, 'pause');
     edge(PAD.lb, 'skill');
     edge(PAD.up, 'emote');
     const lsNow = btn(PAD.ls);
@@ -187,10 +288,24 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       const tf = touch.read();
       const pressed = new Set<Action>(queued);
       queued.clear();
+      pauseInfo.source = null;
+      pauseInfo.detail = '';
+      if (pressed.has('pause')) {
+        pauseInfo.source = 'key';
+        pauseInfo.detail = queuedPauseDetail;
+      }
+      if (pad?.pressed.has('pause') && !pauseInfo.source) {
+        pauseInfo.source = 'pad';
+        pauseInfo.detail = `start (${pad.pressed.size} pressed)`;
+      }
       if (pad) for (const a of pad.pressed) pressed.add(a);
+      if (tf.pressed.has('pause') && !pauseInfo.source) pauseInfo.source = 'touch';
       for (const a of tf.pressed) pressed.add(a);
-      const pausePressed = pressed.has('pause') || pauseFromLockLoss;
-      pauseFromLockLoss = false;
+      if (lockLossPauses(performance.now()) && !pauseInfo.source) {
+        pauseInfo.source = 'lock-esc';
+        pressed.add('pause');
+      }
+      const pausePressed = pressed.has('pause');
 
       Object.assign(state, NEUTRAL);
       // The touch HUD is up while touch is the active device (a key, mouse or pad turns it off).
@@ -232,7 +347,11 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
     },
     capturePointer() {
       // Touch play has no pointer lock (phones don't support it; a stray lock would eat taps).
-      if (locked() || touch.controls.active) return;
+      if (touch.controls.active) return;
+      wantLock = true;
+      if (locked()) return;
+      lockRequests++;
+      if (automationNoLock) return;
       try {
         const r = ctx.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
         if (r && typeof r.catch === 'function') r.catch(() => undefined);
@@ -241,6 +360,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       }
     },
     releasePointer() {
+      wantLock = false;
       if (!locked()) return;
       intentionalRelease = true;
       document.exitPointerLock();
@@ -251,6 +371,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       touch.setGameplay(enabled);
       // Don't carry presses made in a menu into gameplay (or vice versa); pause always survives.
       for (const a of [...queued]) if (a !== 'pause') queued.delete(a);
+      if (!enabled) lockLossPending = null;
       mouseX = mouseY = 0;
     },
     inject(patch) {
@@ -258,6 +379,9 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
     },
   };
   triggersByApi.set(api, triggers);
+  pauseSourceByApi.set(api, pauseInfo);
+  if (ctx.testMode) (window as unknown as { __rgLockRequests?: () => number }).__rgLockRequests = () => lockRequests;
+  lookHintByApi.set(api, () => gameplay && wantLock && !locked() && !touch.controls.active && device === 'keyboard');
   registerTouchControls(api, touch.controls);
   return api;
 }

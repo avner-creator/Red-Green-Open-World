@@ -12,7 +12,7 @@ import { U } from '../materials';
 import { birdGeo, butterflyGeo, chickenGeo, critterMaterial, duckGeo, fishGeo, sheepGeo, softMaterial } from './geo';
 import { Pool } from './pool';
 import {
-  BUTTERFLY_AREAS, CHICKENS, COOP, DUCKS, FIREFLY_ZONES, FISH, FLOCKS, GULLS, PEN, SHEEP,
+  BUTTERFLY_AREAS, CHICKENS, COOPS, DUCKS, FIREFLY_ZONES, FISH, FLOCKS, GULLS, PENS, SHEEP,
 } from './places';
 import {
   TAU, fishArc, makeWaddler, stepFlock, stepWaddler, type Flock, type Threat, type Waddler, type WaddlerParams,
@@ -171,11 +171,11 @@ export function createCritters(deps: CritterDeps): Critters {
   }
 
   // ── Farm ──
-  const inPen = (x: number, z: number, m: number): boolean => Math.abs(x - PEN.x) < PEN.hx + m && Math.abs(z - PEN.z) < PEN.hz + m;
+  const inPen = (x: number, z: number, m: number): boolean => PENS.some((p) => Math.abs(x - p.x) < p.hx + m && Math.abs(z - p.z) < p.hz + m);
   const sheep: Waddler[] = SHEEP.map(([x, z]) => makeWaddler(x, z));
   const chickens: Waddler[] = CHICKENS.map(([x, z]) => makeWaddler(x, z));
   const okSheep = (x: number, z: number): boolean => deps.isLand(x, z) && inPen(x, z, 3);
-  const okChick = (x: number, z: number): boolean => deps.isLand(x, z) && Math.hypot(x - COOP.x, z - COOP.z) < COOP.r + 6;
+  const okChick = (x: number, z: number): boolean => deps.isLand(x, z) && COOPS.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + 6);
   for (const w of [...sheep, ...chickens]) w.yaw = rng.range(0, TAU);
   const sheepCols = SHEEP.map((_, i) => new THREE.Color(i === 2 ? 0x8a8078 : 0xffffff));
   const chickCols = CHICKENS.map((_, i) => new THREE.Color(i === 1 ? 0xd9b48a : 0xffffff));
@@ -355,7 +355,7 @@ export function createCritters(deps: CritterDeps): Critters {
       }
 
       // Farm animals (simulated only near the player or camera).
-      const farmNear = dist2(cam, PEN.x, PEN.z) < FAR.farm ** 2 || (pl !== null && (pl.x - PEN.x) ** 2 + (pl.z - PEN.z) ** 2 < FAR.farm ** 2);
+      const farmNear = PENS.some((p) => dist2(cam, p.x, p.z) < FAR.farm ** 2 || (pl !== null && (pl.x - p.x) ** 2 + (pl.z - p.z) ** 2 < FAR.farm ** 2));
       if (farmNear) {
         const herd = [
           { list: sheep, p: SHEEP_P, ok: okSheep, pool: sheepPool, cols: sheepCols, kind: 'sheep' as const, scale: 1.15, off: 0 },

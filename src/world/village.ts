@@ -26,10 +26,10 @@ function fountain(k: Kit): void {
   const b = k.b;
   // Basin: outer wall + rim + water.
   b.add('matte', cylG(40), 0xd6ccb8, T(x, y, z, 0, 4.3, 0.5, 4.3), { aoY: y, aoH: 0.5, ao: 0.3 });
-  b.add('paint', torusG(0.26, 64, Math.PI * 2, 4.2), 0xe9e1cf, T(x, y + 0.62, z));
+  b.add('paint', torusG(0.26, 48, Math.PI * 2, 4.2, 6), 0xe9e1cf, T(x, y + 0.62, z));
   b.add('gloss', discG(40), 0x4f9fae, T(x, y + 0.5, z, 0, 4.05, 0.07, 4.05));
   // Ripple rings (bright) on the water.
-  for (const r of [2.7, 3.3]) b.add('gloss', torusG(0.04, 48, Math.PI * 2, r), 0xcfeff2, T(x, y + 0.57, z, 0, 1, 0.3, 1));
+  for (const r of [2.7, 3.3]) b.add('gloss', torusG(0.04, 36, Math.PI * 2, r, 3), 0xcfeff2, T(x, y + 0.57, z, 0, 1, 0.3, 1));
   // Pedestal, lower bowl, column, upper bowl, finial.
   b.add('matte', cylG(16, 0.8), 0xd6ccb8, T(x, y + 0.5, z, 0, 0.75, 1.3, 0.75));
   b.add('paint', cylG(32, 1), 0xe9e1cf, T(x, y + 1.8, z, 0, 2.0, 0.22, 2.0));
@@ -58,7 +58,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   ringBand(k, px, pz, y + 0.07, 12.5, 13.3, 0xaba293);
   ringBand(k, px, pz, y + 0.07, 13.3, pr, 0xd2c8b5);
   // Curb ring.
-  k.b.add('matte', torusG(0.18, 128, Math.PI * 2, pr), 0x9d9485, T(px, y + 0.02, pz));
+  k.b.add('matte', torusG(0.18, 72, Math.PI * 2, pr, 4), 0x9d9485, T(px, y + 0.02, pz));
   // Radial dark stone spokes (a compass rose) in the inner ring.
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
@@ -109,7 +109,8 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   LOTS.forEach((lot, i) => house(k, lot, opts, 100 + i * 17));
 
   // ── Plaza furniture ──
-  const benchAngles = [-132, -50, -2, 70, 114, -168];
+  // (−2° gave way: it blocked the straight walk from the plaza to Scoops, QA round 4.)
+  const benchAngles = [-132, -50, 70, 114, -168];
   for (const a of benchAngles) {
     // (angles avoid the five road entrances: −90, −23, 40, 90, 150 degrees)
     const r = THREE.MathUtils.degToRad(a);
@@ -168,7 +169,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   }
   // Planters at the street corners.
   planter(k, -9, -15.5, 3, 1.1, 0, 7);
-  planter(k, 9, -15.5, 3, 1.1, 0, 8);
+  // (The east corner's planter gave way to the island map board, fill/mapboard.ts.)
   // Trees on the ridge slope that closes the view at the end of the street.
   trees.push(
     { x: -14, z: -70, kind: 'oak', scale: 1.1 },

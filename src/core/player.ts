@@ -13,6 +13,7 @@ import { loadCharacter } from './characters/load';
 import type { LoadedCharacter } from './characters/load';
 import { GROUP_AVATAR, groups } from './physics';
 import { angleDelta, approach, approachVec2, cameraRelative, canJump, damp, integrateVertical } from './motion-math';
+import { clampAbs, toBodyFrame } from './characters/wobble-math';
 import { createPlayerFx } from './player-fx';
 import { createPlayerModel } from './player-model';
 import type { ModelAnim } from './player-model';
@@ -68,6 +69,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   const model = createPlayerModel();
   const fx = createPlayerFx(model);
   const object = model.root;
+  // Test hook: the wobble layer's head offsets (tests/e2e/wobble.spec.ts).
+  if (ctx.testMode) Object.defineProperty(object.userData, 'wobble', { get: () => model.wobble, enumerable: false });
   ctx.scene.add(object);
   const sfx = createSkillFx(ctx.scene, model.anchors.back);
   // Boot straight into the remembered pick, so only ONE character GLB loads before Play.
@@ -405,6 +408,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       resetAir();
       launched = false;
       groundedFor = 0;
+      wobSkip = 2;
       syncCollider();
       internal.onTeleport?.(api.yaw);
     },
@@ -512,6 +516,47 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       recomputeMods();
     }
   });
+
+  // Floppy-hero drive: smoothed body acceleration → springs on head/arms/tail (visual only).
+  const wobPrevVel = new THREE.Vector3();
+  let wobPrevYaw = 0;
+  let wobSkip = 2;
+  let wobAx = 0;
+  let wobAy = 0;
+  let wobAz = 0;
+  let wobAir = 0;
+  function driveWobble(dt: number): void {
+    const d = model.wobbleDrive;
+    if (!(dt > 0)) return;
+    if (wobSkip > 0) {
+      wobSkip--;
+      wobPrevVel.copy(velocity);
+      wobPrevYaw = api.yaw;
+      d.side = d.up = d.fwd = d.yawRate = 0;
+      wobAx = wobAy = wobAz = 0;
+      return;
+    }
+    const k = 1 - Math.exp(-dt * 30);
+    wobAx += (clampAbs((velocity.x - wobPrevVel.x) / dt, 45) - wobAx) * k;
+    wobAz += (clampAbs((velocity.z - wobPrevVel.z) / dt, 45) - wobAz) * k;
+    // Vertical: only the ground's push counts (free fall feels weightless; landing bumps).
+    const ay = grounded || vehicle ? clampAbs((velocity.y - wobPrevVel.y) / dt, 60) : 0;
+    wobAy += (ay - wobAy) * k;
+    const b = toBodyFrame(wobAx, wobAz, api.yaw);
+    d.side = b.side;
+    d.fwd = b.fwd;
+    d.up = wobAy;
+    d.yawRate = clampAbs(angleDelta(api.yaw, wobPrevYaw) / dt, 8);
+    const flying = external ? externalAnim === 'jump' || externalAnim === 'fall' : !vehicle && !grounded && airTime > 0.15;
+    wobAir += ((flying ? 1 : 0) - wobAir) * (1 - Math.exp(-dt * (flying ? 6 : 10)));
+    d.air = wobAir;
+    d.amount = vehicle ? 0.5 : mode === 'flop' ? 0.3 : 1;
+    d.arms = vehicle || (external && externalAnim === 'sit') ? 0 : 1;
+    if (!vehicle && mode !== 'flop') fx.lean(d.fwd, d.side);
+    else fx.lean(0, 0);
+    wobPrevVel.copy(velocity);
+    wobPrevYaw = api.yaw;
+  }
 
   function playAnim(next: ModelAnim, rate = 1): void {
     model.play(next, rate);
@@ -838,6 +883,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     if (airTime < 0.12 && speed < 3) return; // stepping off a kerb isn't a landing
     ctx.events.emit('player:land', { speed });
     fx.kick(-Math.min(5, 0.8 + speed * 0.18));
+    // Comic stumble: a hard landing tips the body forward a moment (visual only).
+    fx.stumble(Math.min(0.22, speed * 0.012));
     if (!wasLaunched && speed > MOVE.flopLandingSpeed && mode === 'walk') api.flop();
   }
 
@@ -944,6 +991,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       emoting = false;
     }
     justLeftVehicle = false;
+    driveWobble(dt);
     sfx.update(dt);
     fx.update(dt);
     model.update(dt);

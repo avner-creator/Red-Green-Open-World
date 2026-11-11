@@ -10,22 +10,59 @@ const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 
+export interface Footprint {
+  x: number;
+  z: number;
+  r: number;
+  hx?: number;
+  hz?: number;
+  cos?: number;
+  sin?: number;
+}
+
+/** Distance from (x, z) to a collider footprint's edge (negative inside). */
+export function footprintDistance(f: Footprint, x: number, z: number): number {
+  if (f.hx === undefined || f.hz === undefined) return Math.hypot(x - f.x, z - f.z) - f.r;
+  const dx = x - f.x;
+  const dz = z - f.z;
+  const c = f.cos ?? 1;
+  const s = f.sin ?? 0;
+  // World → box local: local x along (c, −s), local z along (s, c).
+  const lx = dx * c - dz * s;
+  const lz = dx * s + dz * c;
+  const ex = Math.abs(lx) - f.hx;
+  const ez = Math.abs(lz) - f.hz;
+  return ex > 0 || ez > 0 ? Math.hypot(Math.max(ex, 0), Math.max(ez, 0)) : Math.max(ex, ez);
+}
+
 export class Colliders {
   count = 0;
+  /**
+   * Footprint of every collider added, for placement checks (fill/guard.ts): a circle (x, z, r), or
+   * for boxes a rectangle (half extents hx, hz along local x / z, turned by yaw: cos, sin).
+   */
+  readonly circles: Footprint[] = [];
   constructor(private physics: PhysicsApi) {}
   /** Box in the local frame of `m` (rotation and translation only). */
   box(m: THREE.Matrix4, cx: number, cy: number, cz: number, hx: number, hy: number, hz: number): void {
     m.decompose(_p, _q, _s);
     const c = new THREE.Vector3(cx, cy, cz).applyQuaternion(_q).add(_p);
     this.physics.addStaticBox(c, new THREE.Vector3(hx, hy, hz), _q.clone());
+    // Footprint rectangle (low kerbs and slabs a hero steps onto are left out).
+    if (hy > 0.15) {
+      const ax = new THREE.Vector3(1, 0, 0).applyQuaternion(_q);
+      this.circles.push({ x: c.x, z: c.z, r: 0, hx, hz, cos: ax.x, sin: -ax.z });
+    }
     this.count++;
   }
   cyl(x: number, y: number, z: number, halfH: number, r: number): void {
     this.physics.addStaticCylinder(new THREE.Vector3(x, y + halfH, z), halfH, r);
+    this.circles.push({ x, z, r });
     this.count++;
   }
   sphere(x: number, y: number, z: number, r: number): void {
     this.physics.addStaticSphere(new THREE.Vector3(x, y, z), r);
+    this.circles.push({ x, z, r });
     this.count++;
   }
 }

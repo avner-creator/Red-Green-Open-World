@@ -5,7 +5,7 @@ import { ClipBank, MANIFEST_PATH } from '../../src/buddy/clips';
 import type { VoiceManifest } from '../../src/buddy/clips';
 import { DialogueQueue, PRIORITY, lineTiming } from '../../src/buddy/dialogue';
 import type { Line } from '../../src/buddy/dialogue';
-import { CHEST, INTRO, RESCUE, REACT, needGems } from '../../src/buddy/script';
+import { CHEST, ECON, HOWTO, INTRO, POOLS, RESCUE, STORY, needGems } from '../../src/buddy/script';
 import { pickLocalVoice } from '../../src/buddy/speech';
 import { createVoice, pipVoiceLevel } from '../../src/buddy/voice';
 import { NEED_GEMS_MAX, allVoiceLines, clipId, spokenText } from '../../src/buddy/voiceLines';
@@ -13,7 +13,7 @@ import type { EventBus, GameSettings, SettingsApi } from '../../src/types';
 
 const DIR = join(__dirname, '../../public/assets/voice');
 const manifest = JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')) as VoiceManifest;
-const BUDGET = 1.5 * 1024 * 1024;
+const BUDGET = 2.5 * 1024 * 1024;
 
 describe("Pip's voice clips", () => {
   const lines = allVoiceLines();
@@ -26,13 +26,15 @@ describe("Pip's voice clips", () => {
       expect(c.text).toBe(l.text);
       expect(existsSync(join(DIR, c.file)), c.file).toBe(true);
       expect(c.dur, l.id).toBeGreaterThan(0.25);
-      expect(c.dur, l.id).toBeLessThan(4);
+      expect(c.dur, l.id).toBeLessThan(6);
     }
   });
 
-  it('the story lines (intro, lead, rescue, chest, reactions) are all covered', () => {
-    const texts = [...Object.values(INTRO), RESCUE, ...Object.values(CHEST), ...Object.values(REACT)].map((l) => l.text);
-    texts.push('Follow me!', 'Now you choose!', 'Find the key!', needGems(3).text);
+  it('the story, how-tos, economy lines and every reaction pool are all covered', () => {
+    const texts = [...STORY, ...Object.values(INTRO), RESCUE, ...Object.values(CHEST), ...Object.values(ECON), ...Object.values(HOWTO).flat(), ...Object.values(POOLS).flat()].map(
+      (l) => l.text,
+    );
+    texts.push('Follow me!', needGems(3).text);
     for (const t of texts) expect(manifest.clips[clipId(t)], t).toBeTruthy();
   });
 
@@ -139,7 +141,7 @@ describe('bubble follows the voice', () => {
     q.onChange = (a) => seen.push(a ? a.line.text : null);
     q.say(line);
     expect(q.current?.duration).toBeGreaterThanOrEqual(3.35);
-    q.say({ ...line, text: 'Find the key!' });
+    q.say({ ...line, text: 'Find the key!', interrupt: true });
     // The voice is hushed (null) before the new line speaks: Pip never talks over himself.
     expect(seen).toEqual(['Hi! I am Pip!', null, 'Find the key!']);
   });

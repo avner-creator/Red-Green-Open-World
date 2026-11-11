@@ -116,3 +116,112 @@ export function launchStars(rotations: number, upright: boolean): number {
 export function trickStars(n: number): number {
   return n >= 3 ? 2 : 1;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Surprise bounces: every chained trampoline bounce rolls a little randomness (seeded, so tests
+// can pin it): a sideways kick that never throws you off the bed, an occasional SUPER BOING, a
+// random auto trick, and a bonus star hanging somewhere up the column.
+
+/** Small fast seeded RNG (mulberry32): 0 <= r < 1. */
+export function makeRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export const SURPRISE = {
+  /** Largest random sideways kick, m/s (scaled up a little with height). */
+  kickMax: 1.6,
+  kickPerMetre: 0.035,
+  /** About 1 in 6 chained bounces is a SUPER BOING (from this apex up). */
+  superChance: 1 / 6,
+  superMinApex: 4,
+  /** Apex multiplier for a SUPER BOING (at least `superMinGain` metres more), capped at the max. */
+  superMul: 1.6,
+  superMinGain: 6,
+  /** Chance of a random auto trick (front flip, back flip, cartwheel, twirl) on bounces >= 6 m. */
+  trickChance: 0.3,
+  trickMinApex: 6,
+  /** Chance of a bonus star in the column, and how far off the straight line up it may hang (m). */
+  starChance: 0.4,
+  starMinApex: 5,
+  starOffset: 1.2,
+  /** Landing spots stay within this share of the mat radius (the kick never throws you off). */
+  safeShare: 0.72,
+} as const;
+
+export type AutoTrick = 'none' | 'frontFlip' | 'backFlip' | 'cartwheel' | 'twirl';
+const TRICKS: readonly AutoTrick[] = ['frontFlip', 'backFlip', 'cartwheel', 'twirl'];
+
+export interface BounceSurprise {
+  kickX: number;
+  kickZ: number;
+  superBoing: boolean;
+  trick: AutoTrick;
+  /** Bonus star height as a share of the apex (0.35..0.95), or -1 for none. */
+  starAt: number;
+  starX: number;
+  starZ: number;
+}
+
+/** Roll the surprises for a chained bounce of `apex` metres (`max` = the trampoline's top). */
+export function rollSurprise(rng: () => number, apex: number, max: number): BounceSurprise {
+  const a = rng() * Math.PI * 2;
+  const mag = (SURPRISE.kickMax + SURPRISE.kickPerMetre * apex) * (0.35 + 0.65 * rng());
+  const superBoing = apex >= SURPRISE.superMinApex && apex < max && rng() < SURPRISE.superChance;
+  const top = superBoing ? superApex(apex, max) : apex;
+  const trick = top >= SURPRISE.trickMinApex && rng() < SURPRISE.trickChance ? (TRICKS[Math.floor(rng() * TRICKS.length)] ?? 'twirl') : 'none';
+  let starAt = -1;
+  let starX = 0;
+  let starZ = 0;
+  if (top >= SURPRISE.starMinApex && rng() < SURPRISE.starChance) {
+    starAt = 0.35 + 0.6 * rng();
+    const sa = rng() * Math.PI * 2;
+    const sr = SURPRISE.starOffset * rng();
+    starX = Math.cos(sa) * sr;
+    starZ = Math.sin(sa) * sr;
+  }
+  return { kickX: Math.cos(a) * mag, kickZ: Math.sin(a) * mag, superBoing, trick, starAt, starX, starZ };
+}
+
+/** Apex of a SUPER BOING launched from a normal bounce of `apex`. */
+export function superApex(apex: number, max: number): number {
+  return Math.min(max, Math.max(apex * SURPRISE.superMul, apex + SURPRISE.superMinGain));
+}
+
+/**
+ * Shrink a random kick so the landing stays on the bed: (lx, lz) is the landing offset from the
+ * mat centre without the kick, `T` the flight time. A landing that is already outside (the child
+ * steered/ran off) is left alone apart from the kick being dropped.
+ */
+export function keepOnBed(lx: number, lz: number, kx: number, kz: number, T: number, safeR: number): { kx: number; kz: number } {
+  if (Math.hypot(lx, lz) > safeR) return { kx: 0, kz: 0 };
+  let s = 1;
+  for (let i = 0; i < 8 && Math.hypot(lx + kx * T * s, lz + kz * T * s) > safeR; i++) s *= 0.6;
+  if (Math.hypot(lx + kx * T * s, lz + kz * T * s) > safeR) s = 0;
+  return { kx: kx * s, kz: kz * s };
+}
+
+/** Auto-trick pose at progress u (0..1, eased): flip pitch, cartwheel roll, twirl yaw (radians). */
+export function autoTrickPose(trick: AutoTrick, u: number): { pitch: number; roll: number; yaw: number } {
+  const k = Math.min(1, Math.max(0, u));
+  const e = k * k * (3 - 2 * k);
+  const turn = e * Math.PI * 2;
+  switch (trick) {
+    case 'frontFlip':
+      return { pitch: turn, roll: 0, yaw: 0 };
+    case 'backFlip':
+      return { pitch: -turn, roll: 0, yaw: 0 };
+    case 'cartwheel':
+      return { pitch: 0, roll: turn, yaw: 0 };
+    case 'twirl':
+      return { pitch: 0, roll: 0, yaw: turn * 2 };
+    default:
+      return { pitch: 0, roll: 0, yaw: 0 };
+  }
+}
