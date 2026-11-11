@@ -251,16 +251,17 @@ function drawAtlas(g: G): void {
     g.arc(cx + Math.cos(a) * 229, 256 + Math.sin(a) * 229, 9, 0, Math.PI * 2);
     g.fill();
   }
-  // A tube person and a play triangle.
-  tube(g, cx - 70, 400, 250, 0.25, YEL, false);
+  // A big play triangle pointing into the park (up in the texture) and a small tube person.
   g.beginPath();
-  g.moveTo(cx + 10, 170);
-  g.lineTo(cx + 150, 256);
-  g.lineTo(cx + 10, 342);
+  g.moveTo(cx, 90);
+  g.lineTo(cx + 118, 300);
+  g.lineTo(cx - 118, 300);
   g.closePath();
   g.fillStyle = YEL;
   g.fill();
   stroke(g, 10);
+  tube(g, cx + 120, 430, 150, 0.3, PINK, false);
+  tube(g, cx - 120, 430, 150, -0.3, CREAM, false);
 }
 
 export interface BoardModel {
@@ -276,6 +277,8 @@ export interface BoardSpec {
   /** Start pad centre (on the ground) and radius. */
   pad: THREE.Vector3;
   padRadius: number;
+  /** Extra turn of the pad picture (0: the triangle points to +Z). */
+  padYaw: number;
 }
 
 /** Board sizes (metres). */
@@ -299,9 +302,10 @@ export function createBoard(spec: BoardSpec, k: Kit): BoardModel {
   plane.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(spec.board.x, spec.board.y + bottom + height / 2, spec.board.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, spec.boardYaw, 0)), new THREE.Vector3(1, 1, 1)));
   const disc = new THREE.CircleGeometry(spec.padRadius, 40).rotateX(-Math.PI / 2);
   const duv = disc.attributes.uv;
-  // Circle UVs are 0..1 over the square; map into the right-hand 512×512 cell (flipped so the
-  // triangle points away from the board, into the zone).
+  // Circle UVs are 0..1 over the square; map into the right-hand 512×512 cell. Texture up → +Z
+  // (into the park, away from the entrance) after the half turn.
   for (let i = 0; i < duv.count; i++) duv.setXY(i, u + duv.getX(i) * (1 - u), duv.getY(i));
+  disc.rotateY(Math.PI + spec.padYaw);
   disc.translate(spec.pad.x, spec.pad.y + 0.07, spec.pad.z);
   const geo = mergeGeometries([plane.toNonIndexed(), disc.toNonIndexed()], false);
   plane.dispose();

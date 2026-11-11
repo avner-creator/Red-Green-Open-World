@@ -90,7 +90,7 @@ export interface SillyTestApi {
   /** Pillow centres. */
   pillows(): [number, number, number][];
   /** Gantry leg feet and board posts (solid, for walk-into tests). */
-  solids(): { name: string; at: [number, number, number]; radius: number }[];
+  solids(): { name: string; at: [number, number, number]; radius: number; halfZ?: number }[];
   round(): { phase: string; booped: number; total: number; targets: number[]; timeLeft: number; practice: boolean; result: unknown };
   /** Start a round now (as if the pad was held). */
   startRound(): void;
@@ -114,7 +114,7 @@ const TUBE_LOCAL: [number, number][] = [
   ...[50, 70, 90, 110, 130].map((d): [number, number] => [Math.cos((d * Math.PI) / 180) * 11, Math.sin((d * Math.PI) / 180) * 11]),
   [10.3, -3.8],
   [5, -8.7],
-  [-1.6, -7.6],
+  [-3.2, -6.6],
 ];
 const TUBE_SOLID = { radius: 0.5, halfHeight: 1.4 } as const;
 const PAD_LOCAL = { x: 0, z: -12.2, r: 1.3 } as const;
@@ -280,7 +280,7 @@ export function createSilly(ctx: GameContext): Silly {
 
   // ── Picture board + start pad ──
   const boardPos = at(3.5, -11.6);
-  const board = createBoard({ board: boardPos, boardYaw: Math.PI, pad: padPos, padRadius: PAD_LOCAL.r }, kit);
+  const board = createBoard({ board: boardPos, boardYaw: Math.PI, pad: padPos, padRadius: PAD_LOCAL.r, padYaw: 0 }, kit);
   root.add(board.mesh);
   const boardPosts = [-1, 1].map((s) => new THREE.Vector3(boardPos.x - s * (1.75 + 0.05), boardPos.y, boardPos.z + 0.06));
   for (const p of boardPosts) colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(p.x, p.y + 1.5, p.z), 1.5, 0.14));
@@ -895,7 +895,7 @@ export function createSilly(ctx: GameContext): Silly {
         { name: 'hub', at: arr(hub), radius: 0.7 },
         { name: 'seesaw', at: arr(seesawC), radius: 0.6 },
         { name: 'pedestal', at: arr(new THREE.Vector3(seesawC.x + SEESAW.half + 0.2, seesawC.y, seesawC.z + 1.7)), radius: 0.6 },
-        ...[-1, 1].map((s) => ({ name: `gantry${s}`, at: arr(new THREE.Vector3(gantryAt.x + s * GANTRY.halfSpan, gantryAt.y, gantryAt.z)), radius: 0.2 })),
+        ...[-1, 1].map((s) => ({ name: `gantry${s}`, at: arr(new THREE.Vector3(gantryAt.x + s * GANTRY.halfSpan, gantryAt.y, gantryAt.z)), radius: 0.2, halfZ: 1.2 })),
         ...boardPosts.map((p, i) => ({ name: `post${i}`, at: arr(p), radius: 0.14 })),
       ],
       round: () => ({

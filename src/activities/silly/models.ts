@@ -221,10 +221,12 @@ export function createFaces(tubeCount: number): THREE.InstancedMesh {
 /** Bobbing "bop me!" arrows above lit tube people (bright, both-eye). */
 export function createMarkers(count: number): THREE.InstancedMesh {
   const k = new Kit();
-  // Down arrow: a fat cone head and a shaft, with a dark rim so it reads on the bright sky.
-  k.add('gloss', new THREE.ConeGeometry(0.62, 0.8, 4), COL.yellow, k.t(0, 0, 0, Math.PI, Math.PI / 4, 0));
-  k.add('gloss', new THREE.BoxGeometry(0.42, 0.7, 0.42), COL.yellow, k.t(0, 0.72, 0));
-  k.add('gloss', new THREE.ConeGeometry(0.72, 0.92, 4), COL.ink, k.t(0, -0.02, 0, Math.PI, Math.PI / 4, 0, 1, 0.92, 1).premultiply(new THREE.Matrix4().makeTranslation(0, 0.06, 0)));
+  // Down arrow: a bright fat head, a dark collar and shaft, a bright knob on top (bright/dark
+  // bands so it reads against the pale sky and the dark ground, in R-only and G-only).
+  k.add('gloss', new THREE.ConeGeometry(0.7, 0.85, 4), COL.yellow, k.t(0, 0, 0, Math.PI, Math.PI / 4, 0));
+  k.add('gloss', new THREE.BoxGeometry(1.02, 0.1, 1.02), COL.ink, k.t(0, 0.45, 0, 0, Math.PI / 4, 0));
+  k.add('gloss', new THREE.BoxGeometry(0.4, 0.75, 0.4), COL.ink, k.t(0, 0.85, 0, 0, Math.PI / 4, 0));
+  k.add('gloss', new THREE.SphereGeometry(0.32, 12, 8), COL.yellow, k.t(0, 1.35, 0));
   const geo = kitGeometry(k);
   const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, emissive: 0x3a2a00 }), count);
   mesh.name = 'silly-markers';
