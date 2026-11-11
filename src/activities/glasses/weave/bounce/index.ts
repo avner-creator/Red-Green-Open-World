@@ -1,41 +1,50 @@
 /**
  * `bounce` (timeIt): a weak-eye perfect-bounce timing ring on the giant trampoline.
  *
- * While the hero falls in a trampoline flight (owner 'trampoline') with enough time left, a
- * ground-facing timing ring lies on the fall line to the landing spot, 3 m below the hero's feet
+ * While the hero falls in a trampoline flight (owner 'trampoline') with enough time left, a bold
+ * ground-facing timing ring (`./boldRing.ts`: thick two-tone bands, a ticked target, nothing like
+ * the mat's painted stripes) lies on the fall line to the landing spot, 3 m below the hero's feet
  * (so the high, downward-looking trampoline camera always has it on screen right under the hero,
  * never over the both-eye body), and settles onto the landing spot 0.3 m above the mat at the end.
- * It closes onto its target at a random moment between 35 % and 75 % of the fall (`./logic.ts`). One press of Jump or
- * Use per fall is the attempt: in the window = hit (1 / 2 / 3 gems by tier, a weak-eye star burst;
- * three perfects in a row +3), outside it = miss. A press in the last 0.35 s is the ordinary landing
- * press and never counts; holding Jump from before the fall makes no press; a press during the
- * rise means the child is tapping, so that fall gets no ring and no result.
+ * Its closing band meets the target at a random moment between 20 % and 80 % of the fall
+ * (`./logic.ts`).
+ *
+ * The attempt is exactly ONE press of Jump or Use before the last 0.35 s of the fall. When the
+ * landing zone starts the fall is settled: one press in the window = hit (1 / 2 / 3 gems by tier,
+ * a weak-eye star burst; three perfects in a row +3), one press outside it = miss. No press, a
+ * press only in the landing zone (the ordinary landing press), two or more presses (mashing), or
+ * a press during the rise (tapping: that fall gets no ring) give no result at all.
  *
  * Read-only on the trampoline: it reads the public Flight state (`getFlight`), never changes an
  * apex and never calls `flight.begin`. Hold-to-grow keeps working (press at the ring, keep holding
- * through the landing). Everything is on the WeakOnly layer; feedback after the press only.
- * Nothing is attached and `update` returns early while the hero is not on the trampoline.
+ * through the landing). Everything is on the WeakOnly layer; feedback only once the fall is
+ * settled. Nothing is attached and `update` returns early while the hero is not on the trampoline.
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../../../types';
 import type { GlassesTier } from '../../../../types';
-import { createGlyphSprite, createRing, createTimingRing, withChallenge } from '../../../../vision/toolkit';
-import type { GlyphSpriteBlock, RingBlock, TimingRingBlock } from '../../../../vision/toolkit';
+import { createGlyphSprite, createRing, timingRadius, withChallenge } from '../../../../vision/toolkit';
+import type { GlyphSpriteBlock, RingBlock } from '../../../../vision/toolkit';
 import { timeToLand } from '../../../ballistics';
 import { getFlight } from '../../../flight';
 import type { WeaveEnv, WeavePart } from '../types';
-import { applyGrade, freshStreak, gradePress, planFall } from './logic';
-import type { FallPlan, PressGrade } from './logic';
+import { createBoldRing } from './boldRing';
+import type { BoldRingBlock } from './boldRing';
+import { FallPresses, applyGrade, freshStreak, inLandingZone, planFall } from './logic';
+import type { FallOutcome, FallPlan } from './logic';
 
 /** Look of the ring (metres, before the tier size). */
 const LOOK = {
   lift: 0.3,
   /** The ring rides this far below the hero's feet on the fall line. */
   below: 3,
-  target: 1.5,
+  target: 1.6,
   start: 4.2,
-  thickness: 0.3,
-  /** `t` at which the closing ring meets the target (toolkit convention). */
+  /** Band widths (m) before the tier size, and their floor (bold at every tier). */
+  targetWidth: 0.45,
+  closingWidth: 0.5,
+  minWidth: 0.3,
+  /** `t` at which the closing band meets the target (toolkit timing convention). */
   perfectAt: 0.8,
   missFade: 0.35,
   burstTime: 0.8,
@@ -47,7 +56,9 @@ interface Fall {
   plan: FallPlan;
   /** Seconds since the fall started (from the live flight). */
   at: number;
+  /** Settled (the landing zone started): no more presses count. */
   decided: boolean;
+  presses: FallPresses;
   /** Landing spot (fixed for the fall). */
   spot: THREE.Vector3;
 }
@@ -56,7 +67,8 @@ export function create(env: WeaveEnv): WeavePart {
   const { ctx } = env;
   const streak = freshStreak();
   let fall: Fall | null = null;
-  let ring: TimingRingBlock | null = null;
+  let bold: BoldRingBlock | null = null;
+  let ring: BoldRingBlock | null = null;
   let ringFade = 1;
   let ringFading = false;
   let burst: RingBlock | null = null;
@@ -68,17 +80,19 @@ export function create(env: WeaveEnv): WeavePart {
   let wasOn = false;
   /** Test hook: perfect moment as a share of the allowed range (sticky until reset / null). */
   let forcedShare: number | null = null;
+  /** Test hook: shift the ring sideways (to look at it over the grass beside the mat). */
+  const lookOffset = new THREE.Vector3();
   let hits = 0;
   let misses = 0;
   let perfects = 0;
   let falls = 0;
   let skipped = 0;
-  let lastGrade: PressGrade['kind'] | null = null;
+  let mashed = 0;
+  let lastGrade: FallOutcome['kind'] | null = null;
 
   const dropRing = (): void => {
     if (!ring) return;
     env.remove(ring.object);
-    ring.dispose();
     ring = null;
     ringFading = false;
   };
@@ -98,9 +112,46 @@ export function create(env: WeaveEnv): WeavePart {
     return out.set(p.x + f.vx * tau, y, p.z + f.vz * tau);
   };
 
+  /** Ring size by tier: smaller at higher tiers, never below 70 % (it stays bold). */
+  const ringSize = (tier: GlassesTier): number => Math.max(0.7, withChallenge(tier, env.challenge()).size);
+
   const applyRing = (): void => {
     if (!ring || !fall) return;
-    ring.setT(Math.min(1, (fall.at / fall.plan.perfect) * LOOK.perfectAt));
+    const pl = fall.plan;
+    const s = ringSize(pl.tier);
+    const t = Math.min(1, (fall.at / pl.perfect) * LOOK.perfectAt);
+    ring.set({
+      closing: Math.max(0.001, timingRadius(t, LOOK.target * s, LOOK.start * s, LOOK.perfectAt)),
+      near: Math.abs(fall.at - pl.perfect) <= pl.half ? 1 : 0,
+    });
+  };
+
+  const makeRing = (plan: FallPlan, spot: THREE.Vector3): void => {
+    dropRing();
+    const tp = withChallenge(plan.tier, env.challenge());
+    const s = ringSize(plan.tier);
+    if (!bold) {
+      bold = createBoldRing({ maxRadius: LOOK.start, facing: 'ground' });
+      bold.object.name = 'weave-bounce-ring';
+    }
+    const r = bold;
+    r.set({
+      target: LOOK.target * s,
+      targetWidth: Math.max(LOOK.minWidth, LOOK.targetWidth * s),
+      closingWidth: Math.max(LOOK.minWidth, LOOK.closingWidth * s),
+      progress: 1,
+      ticks: 8,
+      rotation: 0,
+      level: Math.max(0.85, tp.level),
+      opacity: 1,
+    });
+    ringPos(r.object.position, spot);
+    ring = r;
+    ringFade = 1;
+    ringFading = false;
+    r.setFade(1);
+    applyRing();
+    env.add(r.object, VisionLayer.WeakOnly);
   };
 
   const startFall = (f: ReturnType<typeof getFlight>): void => {
@@ -116,41 +167,13 @@ export function create(env: WeaveEnv): WeavePart {
     }
     risePress = false;
     const spot = new THREE.Vector3(p.x + f.vx * left, f.endY + LOOK.lift, p.z + f.vz * left);
-    fall = { plan, at: 0, decided: false, spot };
+    fall = { plan, at: 0, decided: false, presses: new FallPresses(), spot };
     makeRing(plan, spot);
-  };
-
-  const makeRing = (plan: FallPlan, spot: THREE.Vector3): void => {
-    dropRing();
-    const tp = withChallenge(plan.tier, env.challenge());
-    const s = tp.size;
-    // The toolkit "near" highlight marks the whole hit window (in t units of the closing ring).
-    const nearT = (plan.half / plan.perfect) * LOOK.perfectAt;
-    const r = createTimingRing({
-      radius: LOOK.target * s,
-      startRadius: LOOK.start * s,
-      thickness: Math.max(0.16, LOOK.thickness * s),
-      perfectAt: LOOK.perfectAt,
-      perfect: nearT,
-      good: nearT,
-      targetAlpha: 0.6,
-      level: tp.level,
-      opacity: tp.opacity,
-      facing: 'ground',
-    });
-    r.object.name = 'weave-bounce-ring';
-    ringPos(r.object.position, spot);
-    ring = r;
-    ringFade = 1;
-    ringFading = false;
-    r.setFade(1);
-    applyRing();
-    env.add(r.object, VisionLayer.WeakOnly);
   };
 
   const ensureFx = (): { burst: RingBlock; star: GlyphSpriteBlock } => {
     if (!burst) {
-      burst = createRing({ radius: 1, thickness: 0.2, segments: 10, segmentFill: 0.42, spin: 0.45, facing: 'ground' });
+      burst = createRing({ radius: 1, thickness: 0.24, segments: 10, segmentFill: 0.42, spin: 0.45, facing: 'ground' });
       burst.object.name = 'weave-bounce-burst';
     }
     if (!star) {
@@ -158,17 +181,6 @@ export function create(env: WeaveEnv): WeavePart {
       star.object.name = 'weave-bounce-star';
     }
     return { burst, star };
-  };
-
-  const celebrate = (at: THREE.Vector3): void => {
-    const fx = ensureFx();
-    fxSpot.copy(at);
-    fxLeft = LOOK.burstTime;
-    fx.burst.object.position.copy(at).y += 0.02;
-    fx.star.object.position.copy(at).y += LOOK.starRise;
-    updateFx(0);
-    env.add(fx.burst.object, VisionLayer.WeakOnly);
-    env.add(fx.star.object, VisionLayer.WeakOnly);
   };
 
   const updateFx = (dt: number): void => {
@@ -188,11 +200,27 @@ export function create(env: WeaveEnv): WeavePart {
     }
   };
 
-  const press = (g: PressGrade): void => {
+  const celebrate = (at: THREE.Vector3): void => {
+    const fx = ensureFx();
+    fxSpot.copy(at);
+    fxLeft = LOOK.burstTime;
+    updateFx(0);
+    env.add(fx.burst.object, VisionLayer.WeakOnly);
+    env.add(fx.star.object, VisionLayer.WeakOnly);
+  };
+
+  /** The landing zone started: settle the fall's presses into one result (or none). */
+  const settle = (): void => {
     if (!fall) return;
     fall.decided = true;
+    const g = fall.presses.settle(fall.plan);
     lastGrade = g.kind;
-    if (g.kind === 'ignore') return;
+    if (g.kind === 'none' || g.kind === 'ignore') return;
+    if (g.kind === 'mash') {
+      mashed++;
+      ringFading = true;
+      return;
+    }
     const tier: GlassesTier = fall.plan.tier;
     const gems = applyGrade(streak, g);
     env.result(tier, g.kind === 'hit');
@@ -218,7 +246,8 @@ export function create(env: WeaveEnv): WeavePart {
     risePress = false;
     wasOn = false;
     forcedShare = null;
-    hits = misses = perfects = falls = skipped = 0;
+    lookOffset.set(0, 0, 0);
+    hits = misses = perfects = falls = skipped = mashed = 0;
     lastGrade = null;
   };
 
@@ -255,21 +284,25 @@ export function create(env: WeaveEnv): WeavePart {
       if (fxLeft > 0) ringPos(fxSpot, fall.spot);
       if (ring) {
         ringPos(ring.object.position, fall.spot);
+        ring.object.position.x += lookOffset.x;
+        ring.object.position.z += lookOffset.z;
         applyRing();
-        ring.update(dt);
         if (ringFading) {
           ringFade = Math.max(0, ringFade - dt / LOOK.missFade);
           ring.setFade(ringFade);
           if (ringFade <= 0) dropRing();
         }
       }
-      if (pressed && !fall.decided) press(gradePress(fall.plan, fall.at));
+      if (fall.decided) return;
+      if (pressed) fall.presses.press(fall.plan, fall.at);
+      if (inLandingZone(fall.plan, fall.at)) settle();
     },
     dispose() {
       reset();
-      ring?.dispose();
+      bold?.dispose();
       burst?.dispose();
       star?.dispose();
+      bold = null;
       burst = null;
       star = null;
     },
@@ -285,12 +318,14 @@ export function create(env: WeaveEnv): WeavePart {
         perfect: fall?.plan.perfect ?? null,
         half: fall?.plan.half ?? null,
         decided: fall?.decided ?? null,
+        presses: fall?.presses.presses ?? null,
         tier: streak.tier,
         hitsInRow: streak.hitsInRow,
         perfectsInRow: streak.perfectsInRow,
         hits,
         misses,
         perfects,
+        mashed,
         falls,
         skipped,
         lastGrade,
@@ -299,21 +334,38 @@ export function create(env: WeaveEnv): WeavePart {
       };
     },
     force(params) {
-      if ('perfectAt' in params) {
-        const v = params.perfectAt;
-        forcedShare = typeof v === 'number' ? Math.min(1, Math.max(0, v)) : null;
-        if (fall && forcedShare !== null) {
-          const re = planFall(fall.plan.fall, fall.plan.tier, 0, forcedShare);
-          if (re) {
-            fall.plan = re;
-            if (ring && !fall.decided) makeRing(re, fall.spot);
-          }
+      if ('lookOffset' in params) {
+        const o = params.lookOffset;
+        if (Array.isArray(o) && typeof o[0] === 'number' && typeof o[1] === 'number') lookOffset.set(o[0], 0, o[1]);
+        else lookOffset.set(0, 0, 0);
+        if (ring && fall) {
+          ringPos(ring.object.position, fall.spot);
+          ring.object.position.x += lookOffset.x;
+          ring.object.position.z += lookOffset.z;
         }
       }
       if (typeof params.tier === 'number') {
         const t = Math.round(params.tier);
         streak.tier = (t >= 3 ? 3 : t <= 1 ? 1 : 2) as GlassesTier;
         streak.hitsInRow = 0;
+        if (fall && !fall.decided) {
+          const re = planFall(fall.plan.fall, streak.tier, 0, forcedShare ?? 0.5);
+          if (re) {
+            fall.plan = re;
+            if (ring) makeRing(re, fall.spot);
+          }
+        }
+      }
+      if ('perfectAt' in params) {
+        const v = params.perfectAt;
+        forcedShare = typeof v === 'number' ? Math.min(1, Math.max(0, v)) : null;
+        if (fall && forcedShare !== null && !fall.decided) {
+          const re = planFall(fall.plan.fall, fall.plan.tier, 0, forcedShare);
+          if (re) {
+            fall.plan = re;
+            if (ring) applyRing();
+          }
+        }
       }
     },
     drawObjects: () => env.tracked(),

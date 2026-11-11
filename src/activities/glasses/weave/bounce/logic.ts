@@ -3,25 +3,28 @@
  * `tests/activities/glasses-weave-bounce.test.ts`.
  *
  * One trampoline fall = from the apex (vy turns ≤ 0) to touchdown. A fall long enough gets a plan:
- * a random "perfect" moment between 35 % and 75 % of the fall (never the touchdown, which both eyes
- * see), and a hit window around it. The window narrows by tier and is never more than
- * `maxShare` of the countable fall on each side, so a child who presses at a random moment hits
- * rarely (≤ 15 % at tier 1, see the simulation test).
+ * a random "perfect" moment between 20 % and 80 % of the fall (never in the landing zone: the
+ * touchdown is visible to both eyes), and a hit window around it that narrows by tier.
+ *
+ * The attempt is exactly ONE press before the landing zone (`FallPresses`): no press, a press only
+ * in the last 0.35 s (the ordinary landing press) or two and more presses (mashing) give no result.
+ * The best FIXED guessing strategy is measured in the unit simulation (see the table there).
  */
 import type { GlassesTier } from '../../../../types';
 
 export const BOUNCE_RING = {
-  /** Shortest fall (s) that gets a ring (an 18 m bounce, the first held one, falls 1.28 s). */
-  minFall: 1.2,
+  /**
+   * Shortest fall (s) that gets a ring. 1.5 s = a 25 m bounce: the walk-on 12 m and the first held
+   * 18 m bounce have none (too short for a fair, hard-to-guess window); 27 m, 40 m and 45 m do.
+   */
+  minFall: 1.5,
   /** A press this close (s) to touchdown is the ordinary landing press: never counted. */
   landingIgnore: 0.35,
   /** The perfect moment lies between these shares of the fall. */
-  earliest: 0.35,
-  latest: 0.75,
-  /** Half-width (s) of the hit window by tier. */
-  goodHalf: { 1: 0.11, 2: 0.08, 3: 0.06 } as Readonly<Record<GlassesTier, number>>,
-  /** The half-width is at most this share of the countable fall (fall − landingIgnore). */
-  maxShare: 0.07,
+  earliest: 0.2,
+  latest: 0.8,
+  /** Half-width (s) of the hit window by tier (±90 ms at tier 1 stays humane for a child). */
+  goodHalf: { 1: 0.09, 2: 0.07, 3: 0.055 } as Readonly<Record<GlassesTier, number>>,
   /** Within this share of the half-width the hit is "perfect". */
   perfectShare: 0.45,
   /** Keep the window's end this far (s) before the ignored landing zone. */
@@ -48,9 +51,8 @@ export interface FallPlan {
 }
 
 /** The window half-width for a fall at a tier. */
-export function windowHalf(fall: number, tier: GlassesTier): number {
-  const R = BOUNCE_RING;
-  return Math.min(R.goodHalf[tier], R.maxShare * Math.max(0, fall - R.landingIgnore));
+export function windowHalf(_fall: number, tier: GlassesTier): number {
+  return BOUNCE_RING.goodHalf[tier];
 }
 
 /** Earliest and latest perfect moment for a fall (s after the fall start), or null if too short. */
@@ -88,6 +90,35 @@ export function gradePress(plan: FallPlan, at: number): PressGrade {
   const a = Math.abs(offset);
   if (a <= plan.half) return { kind: 'hit', perfect: a <= plan.perfectHalf, offset };
   return { kind: 'miss', offset };
+}
+
+/** True when a press `at` s after the fall start lies in the landing zone (never counted). */
+export function inLandingZone(plan: FallPlan, at: number): boolean {
+  return at > plan.fall - BOUNCE_RING.landingIgnore;
+}
+
+export type FallOutcome = PressGrade | { kind: 'none' } | { kind: 'mash' };
+
+/**
+ * The presses of one fall. Presses in the landing zone are ignored entirely; the fall is settled
+ * once the landing zone starts: exactly one press = graded, none = no result, two or more = mashing
+ * (no result).
+ */
+export class FallPresses {
+  presses = 0;
+  firstAt = -1;
+
+  press(plan: FallPlan, at: number): void {
+    if (inLandingZone(plan, at)) return;
+    this.presses++;
+    if (this.presses === 1) this.firstAt = at;
+  }
+
+  settle(plan: FallPlan): FallOutcome {
+    if (this.presses === 0) return { kind: 'none' };
+    if (this.presses > 1) return { kind: 'mash' };
+    return gradePress(plan, this.firstAt);
+  }
 }
 
 /** Session progress: tier, hits in a row, perfects in a row. */
