@@ -2,11 +2,12 @@
  * The skill on screen while playing: a HUD chip (bottom-right: pictogram + key cap, dims during the
  * cooldown, pulses when ready) and the state hook for the touch Skill button.
  */
-import type { GameContext, SkillId } from '../types';
+import type { PowerId } from '../core/skills-powers';
+import type { GameContext } from '../types';
+import { powerPicto } from './characterSelectPowers';
 import { injectCharacterCss } from './characterSelectCss';
 import { controlKeys } from './controlGlyphs';
 import { h } from './dom';
-import { skillPicto } from './skillPicto';
 
 interface SkillView {
   update(): void;
@@ -14,16 +15,18 @@ interface SkillView {
 
 /** Tracks the player's skill and applies ready / cooldown / active to an element. */
 function bindSkillState(ctx: GameContext, host: HTMLElement, ring: HTMLElement, slot: HTMLElement, onSkill?: () => void): SkillView {
-  let id: SkillId | null = null;
+  let id: string | null = null;
   let maxCd = 0.5;
   let cls = '';
   let frac = -1;
   return {
     update() {
       const sk = ctx.player.skill;
-      if (sk.id !== id) {
-        id = sk.id;
-        slot.replaceChildren(skillPicto(sk.id, true));
+      // The chosen super power's picture (an extra power runs beside the classic skill `sk.id`).
+      const shown = sk.power ?? sk.id;
+      if (shown !== id) {
+        id = shown;
+        slot.replaceChildren(powerPicto(shown as PowerId, true));
         maxCd = 0.5;
         onSkill?.();
       }
@@ -40,6 +43,7 @@ function bindSkillState(ctx: GameContext, host: HTMLElement, ring: HTMLElement, 
         ring.style.setProperty('--p', String(f));
       }
       host.dataset.skill = sk.id;
+      host.dataset.power = shown;
     },
   };
 }

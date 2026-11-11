@@ -14,6 +14,8 @@
  *   swapped for the default free one.
  */
 import { CHARACTERS, DEFAULT_CHARACTER } from '../../core/characters/catalog';
+import { POWER_KEY, setPowerStore } from '../../core/skills-powers';
+import type { PowerStore } from '../../core/skills-powers';
 import { setCharacterAccess } from '../../ui/characterAccess';
 import { clearLegacyPick, legacyPickStore, loadPick, savePick, setPickStore } from '../../ui/characterLogic';
 import type { EconomyApi, GameContext, ShopItem } from '../../types';
@@ -27,6 +29,34 @@ export const CHARACTER_ITEMS: readonly ShopItem[] = CHARACTERS.map((c) => ({
   price: Math.max(0, c.price),
   swatch: c.cardColors[0],
 }));
+
+/** Per-hero power picks <-> the profile's 'power' slot (`hero:power,hero:power`). */
+export function encodePowers(all: Record<string, string>): string | null {
+  const ok = /^[A-Za-z0-9_-]+$/;
+  const pairs = Object.entries(all).filter(([h, p]) => ok.test(h) && ok.test(p)).map(([h, p]) => `${h}:${p}`);
+  return pairs.length ? pairs.join(',') : null;
+}
+export function decodePowers(v: string | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const pair of (v ?? '').split(',')) {
+    const [h, p] = pair.split(':');
+    if (h && p) out[h] = p;
+  }
+  return out;
+}
+
+/** The old standalone key, read once for the migration (then removed). */
+function takeLegacyPowers(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(POWER_KEY);
+    if (raw === null) return {};
+    localStorage.removeItem(POWER_KEY);
+    const v: unknown = JSON.parse(raw);
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
 
 const isCharacter = (id: string | null): id is string => !!id && CHARACTERS.some((c) => c.id === id);
 
@@ -58,11 +88,25 @@ export function wireCharacters(ctx: GameContext, economy: EconomyApi): () => voi
   clearLegacyPick();
   setPickStore({ load: () => profile.equipped('character'), save: (id) => profile.equip('character', id) });
 
+  // Super power picks live in the profile too ('power' slot); the old key is migrated once.
+  const legacyPowers = takeLegacyPowers();
+  if (!profile.equipped('power') && Object.keys(legacyPowers).length) profile.equip('power', encodePowers(legacyPowers));
+  const powerStore: PowerStore = {
+    load: () => decodePowers(profile.equipped('power')),
+    save: (all) => {
+      const v = encodePowers(all);
+      if (v !== profile.equipped('power')) profile.equip('power', v);
+    },
+  };
+  setPowerStore(powerStore);
+
   // At boot (before the UI puts the remembered hero in the world): never start as a locked hero.
   ensureOwned(profile.equipped('character'));
 
   const offs = [
     events.on('item:equipped', (e) => {
+      // Picks changed from outside (reset, tests): drop the power cache so it re-reads the profile.
+      if (e.slot === 'power') setPowerStore(powerStore);
       if (e.slot !== 'character') return;
       if (e.itemId === null) {
         // A hero cannot be taken off: keep the current one (or the default once it is not owned).
@@ -87,5 +131,6 @@ export function wireCharacters(ctx: GameContext, economy: EconomyApi): () => voi
   return () => {
     for (const off of offs) off();
     setPickStore(null);
+    setPowerStore(null);
   };
 }

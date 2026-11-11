@@ -19,6 +19,7 @@ import { findNetSite } from './rocketSite';
 import type { NetSite, SiteWorld } from './rocketSite';
 import { getStuntGate } from './stuntGate';
 import { thrillSpots } from './thrillSpots';
+import { flashPractice } from '../ui/practiceMark';
 
 /** true/'free'/'paid' = launch; 'practice' = launch without the prize (no stunt); false = wobble. */
 export type LaunchGate = () => boolean | TicketOutcome;
@@ -233,6 +234,8 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
       return;
     }
     practice = ticket === 'practice';
+    // 0 gems (or not enough): still launch, and show it pays nothing (crossed-out gem).
+    if (practice) flashPractice(ctx);
     active = i;
     launched = false;
     bounceNo = 0;

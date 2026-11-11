@@ -17,6 +17,7 @@ import { createPlayerFx } from './player-fx';
 import { createPlayerModel } from './player-model';
 import type { ModelAnim } from './player-model';
 import { createSkillFx } from './skill-fx';
+import { chosenPower } from './skills-powers';
 import { SKILL, SkillMachine } from './skills';
 import type { SkillEvent } from './skills';
 import { ANIM, CONTROLLER, MOVE } from './tuning';
@@ -221,6 +222,10 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     },
     get bounceBoost() {
       return skills.bounceBoost;
+    },
+    get power() {
+      const p = chosenPower(getCharacter(characterId));
+      return p !== skills.id ? p : undefined;
     },
   };
   /** Stop a running skill and its effects (mode change, respawn, ride). */

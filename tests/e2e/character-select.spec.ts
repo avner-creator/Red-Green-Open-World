@@ -196,7 +196,8 @@ test.describe('character select', () => {
     await expect(page.getByTestId('csel-power-bounceBall')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('csel-skill')).toHaveAttribute('data-power', 'bounceBall');
     await save(page, 'select-powers');
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rgow.powers.v1') ?? '{}').frog)).toBe('bounceBall');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('power'))).toContain('frog:bounceBall');
+    expect(await page.evaluate(() => localStorage.getItem('rgow.powers.v1'))).toBeNull();
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
     await step(page, 10);
@@ -222,7 +223,8 @@ test.describe('character select', () => {
     });
     expect(vy).toBeGreaterThan(3);
     // Back to the signature power for the other tests.
-    await page.evaluate(() => localStorage.removeItem('rgow.powers.v1'));
+    await expect(page.getByTestId('skill-chip')).toHaveAttribute('data-power', 'bounceBall');
+    await page.evaluate(() => window.__rg!.ctx.profile.equip('power', null));
     expect(consoleErrors).toEqual([]);
   });
 });

@@ -56,6 +56,7 @@ import {
 } from './models';
 import { createBoard } from './board';
 import { createBoopHud } from './hud';
+import { flashPractice } from '../../ui/practiceMark';
 
 export interface SillySpot {
   position: THREE.Vector3;
@@ -333,6 +334,7 @@ export function createSilly(ctx: GameContext): Silly {
     if (round.phase === 'countdown' || round.phase === 'play') return;
     const economy = (ctx as Partial<GameContext>).economy;
     const practice = economy ? economy.rideTicket(SILLY_TICKET) === 'practice' : false;
+    if (practice) flashPractice(ctx);
     roundNo++;
     const seed = ctx.testMode ? TEST_SEED + roundNo : Math.floor(Math.random() * 2 ** 31);
     handle(round.start(seed, practice));
