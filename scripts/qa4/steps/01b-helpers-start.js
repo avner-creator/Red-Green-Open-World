@@ -24,7 +24,7 @@ H.ui = () => page.evaluate(() => {
 });
 H.dist = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
 H.shots = [];
-H.snap = async (name) => { const p = await shot(name); H.shots.push(p); return p; };
+H.snap = async (name) => { await page.evaluate(() => window.__rg.render()); const p = await shot(name); H.shots.push(p); return p; };
 // Start: click PLAY like a child, then keep the session long so rounds are not cut off.
 await page.evaluate(() => window.__rg.start()); // PLAY click: see 05-play-mem.js (renderer OOM)
 await st(30);
