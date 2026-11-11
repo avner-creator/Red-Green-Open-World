@@ -37,10 +37,13 @@ export function polarityBg(bg: number, blurred: number): number {
   return bg * w + blurred * (1 - w);
 }
 
-/** One layer channel: `bg + clamp(f - bg, ±limit) * mask * strength`. Mask 0 returns `bg` exactly. */
-export function compositeLayer(bg: number, L: number, mask: number, strength: number, limit: number, pivotBg: number = bg): number {
+/**
+ * One layer channel: `bg + clamp(f - bg, ±limit) * mask * (strength * mul)`. Mask 0 (or mul 0)
+ * returns `bg` exactly; `mul` = 1 gives exactly the result without a multiplier.
+ */
+export function compositeLayer(bg: number, L: number, mask: number, strength: number, limit: number, pivotBg: number = bg, mul = 1): number {
   const delta = Math.min(limit, Math.max(-limit, layerTarget(L, bg, pivotBg) - bg));
-  return bg + delta * clamp01(mask) * clamp01(strength);
+  return bg + delta * clamp01(mask) * (clamp01(strength) * mul);
 }
 
 /** Strong-eye contrast (0.4..1) around mid-grey. */
@@ -64,13 +67,51 @@ export function compositePixel(
   eye: EyeSettings,
   weak: LayerSample,
   strong: LayerSample,
+  runtime: RuntimeMultipliers = IDENTITY_RUNTIME,
 ): [number, number, number] {
   const ch = deriveChannels(eye);
   const wi = ch.weak === 'r' ? 0 : 1;
   const si = 1 - wi;
+  const u = effectiveUniforms(eye, runtime);
   const out: [number, number, number] = [rgb[0], rgb[1], rgb[2]];
-  out[wi] = clamp01(compositeLayer(rgb[wi], weak.L, weak.M, eye.weakStrength, eye.crosstalkLimit));
-  const s = compositeLayer(rgb[si], strong.L, strong.M, eye.weakStrength, eye.crosstalkLimit);
-  out[si] = clamp01(applyContrast(s, eye.strongContrast));
+  out[wi] = clamp01(compositeLayer(rgb[wi], weak.L, weak.M, u.strength, u.limit, rgb[wi], u.weakMul));
+  const s = compositeLayer(rgb[si], strong.L, strong.M, u.strength, u.limit, rgb[si], u.strongMul);
+  out[si] = clamp01(applyContrast(s, u.contrast));
   return out;
+}
+
+/** Runtime (never saved) multipliers on top of the calibrated eye settings. All 0..1, 1 = calibrated. */
+export interface RuntimeMultipliers {
+  /** `setLayerFade(WeakOnly, …)` value. */
+  weakFade: number;
+  /** `setLayerFade(StrongOnly, …)` value. */
+  strongFade: number;
+  /** Auto challenge: weak-layer strength scale. */
+  weakScale: number;
+  /** Auto challenge: strong-eye contrast scale. */
+  strongScale: number;
+}
+
+export const IDENTITY_RUNTIME: Readonly<RuntimeMultipliers> = Object.freeze({ weakFade: 1, strongFade: 1, weakScale: 1, strongScale: 1 });
+
+/** The numbers the compositor shader receives. */
+export interface EffectiveUniforms {
+  strength: number;
+  limit: number;
+  contrast: number;
+  weakMul: number;
+  strongMul: number;
+}
+
+/**
+ * Calibrated settings + runtime multipliers → shader uniforms. Weak strength (strength × weakMul)
+ * never exceeds the calibrated weakStrength; contrast stays in [CONTRAST_FLOOR, strongContrast].
+ * With identity multipliers these are exactly the calibrated values.
+ */
+export function effectiveUniforms(eye: EyeSettings, rt: Readonly<RuntimeMultipliers> = IDENTITY_RUNTIME): EffectiveUniforms {
+  const weakMul = clamp01(rt.weakFade) * clamp01(rt.weakScale);
+  const strongMul = clamp01(rt.strongFade);
+  const scaled = eye.strongContrast * clamp01(rt.strongScale);
+  const contrast = Math.min(eye.strongContrast, Math.max(COMPOSITE.contrastFloor, scaled));
+  return { strength: eye.weakStrength, limit: eye.crosstalkLimit, contrast, weakMul, strongMul };
 }

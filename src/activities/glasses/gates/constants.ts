@@ -1,0 +1,43 @@
+/** Half-symbol gates: layout (site-local metres; +Z = the approach) and tuning. */
+import type { GlassesTier } from '../../../types';
+
+export const GATES = {
+  /** Arch centres along X, all on the plane z = archZ. */
+  archX: [-3.1, 0, 3.1] as const,
+  archZ: -2.6,
+  /** Opening half width, outer half width, straight height of the inner sides, depth. */
+  innerHalf: 0.95,
+  outerHalf: 1.3,
+  straight: 1.5,
+  depth: 0.5,
+  /** Posts reach this far below the arch's ground (slopes). */
+  sink: 0.7,
+  /** Feet must be below this height above the arch's ground for a crossing to count (jumps count). */
+  passHeight: 2.2,
+  /** Symbol plaque on top of each arch (edge, centre height). */
+  plaque: 1.2,
+  plaqueY: 3.75,
+  /** The half-symbol sign: a lectern between the plate and the arches, facing the plate; its
+   *  panel sits above the hero's head in the default camera view from the plate, and below the
+   *  arch plaques behind it. */
+  signZ: 0.1,
+  signY: 2.2,
+  signTilt: 0.15,
+  signPanel: 1.56,
+  signFrame: 1.8,
+  /** Half-symbol height on the sign at tier 1 (× the tier size). */
+  halfSize: 1.3,
+  /** Start plate (centre z, radius). */
+  plateZ: 2.0,
+  plateR: 0.95,
+  /** Nap after a miss: seconds on the plate before the next sign (1st, 2nd, 3rd+ miss in a row). */
+  missPause: [3, 6, 8] as const,
+  /** Seconds after an answer before the plate can start a new round. */
+  rearm: 0.8,
+  /** Celebration lengths (s). */
+  squash: 0.9,
+  wobble: 0.8,
+} as const;
+
+/** Gems per tier. */
+export const GATE_GEMS: Readonly<Record<GlassesTier, number>> = { 1: 3, 2: 4, 3: 6 };

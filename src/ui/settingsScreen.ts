@@ -2,6 +2,7 @@
 import { SESSION } from '../config';
 import type { GameContext, Quality } from '../types';
 import { h } from './dom';
+import { createGlassesSettingsRows } from './glasses/settingsRows';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
 import type { Screen } from './screens';
@@ -27,7 +28,7 @@ interface SliderOpts {
   fmt(v: number): string;
 }
 
-export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibrate(): void }): SettingsScreen {
+export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibrate(): void; onSummary?(): void }): SettingsScreen {
   const refreshers: (() => void)[] = [];
   const S = (): ReturnType<typeof ctx.settings.get> => ctx.settings.get();
 
@@ -110,6 +111,8 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     reset.replaceChildren(icon('restart'), 'Reset');
   }
 
+  const autoRows = createGlassesSettingsRows(ctx, { openSummary: o.onSummary });
+  refreshers.push(autoRows.refresh);
   // Reset the player's profile (gems and items): hold to confirm, like the gate.
   let held = 0;
   let pHeld = false;
@@ -147,6 +150,7 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     slider({ ic: 'gem', label: 'Gem glow', testid: 'weak-strength', ...pct(() => S().eye.weakStrength, (v) => ctx.settings.set({ eye: { weakStrength: v } }), 20) }),
     slider({ ic: 'bolt', label: 'Ghosting guard', testid: 'crosstalk', ...pct(() => S().eye.crosstalkLimit, (v) => ctx.settings.set({ eye: { crosstalkLimit: v } }), 5) }),
     slider({ ic: 'sun', label: 'Other-eye dimmer', testid: 'strong-contrast', ...pct(() => S().eye.strongContrast, (v) => ctx.settings.set({ eye: { strongContrast: v } }), 40) }),
+    ...autoRows.rows,
     row('eye', 'Calibration', null, calibrate),
   ];
   const gameRows: HTMLElement[] = [

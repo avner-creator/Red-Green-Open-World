@@ -6,6 +6,7 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
 export function sanitizeSettings(input: DeepPartial<GameSettings> | undefined, base: GameSettings = DEFAULT_SETTINGS): GameSettings {
   const eyeIn = input?.eye ?? {};
   const b = base.eye;
+  const autoChallenge = typeof input?.autoChallenge === 'boolean' ? input.autoChallenge : typeof base.autoChallenge === 'boolean' ? base.autoChallenge : undefined;
   return {
     eye: {
       leftLens: eyeIn.leftLens === 'red' || eyeIn.leftLens === 'green' ? eyeIn.leftLens : b.leftLens,
@@ -19,6 +20,7 @@ export function sanitizeSettings(input: DeepPartial<GameSettings> | undefined, b
     volumeMusic: clamp(input?.volumeMusic ?? base.volumeMusic, 0, 1),
     volumeSfx: clamp(input?.volumeSfx ?? base.volumeSfx, 0, 1),
     quality: input?.quality === 'low' || input?.quality === 'medium' || input?.quality === 'high' ? input.quality : base.quality,
+    ...(autoChallenge === undefined ? {} : { autoChallenge }),
   };
 }
 
