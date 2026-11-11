@@ -459,7 +459,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
   keep(foam.material);
   const fw = PIT.x1 - PIT.x0;
   const fl = PIT.z1 - PIT.z0;
-  const foamGeo = keep(new THREE.PlaneGeometry(fw, fl, 24, 84).rotateX(-Math.PI / 2).translate((PIT.x0 + PIT.x1) / 2, 0, (PIT.z0 + PIT.z1) / 2));
+  const foamGeo = keep(new THREE.PlaneGeometry(fw, fl, 16, 56).rotateX(-Math.PI / 2).translate((PIT.x0 + PIT.x1) / 2, 0, (PIT.z0 + PIT.z1) / 2));
   const foamMesh = new THREE.Mesh(foamGeo, foam.material);
   foamMesh.position.y = FOAM_Y;
   foamMesh.receiveShadow = true;
@@ -523,7 +523,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
   // Machine bubbles drifting over the finish deck.
   const MB = 26;
   const mbMat = keep(new THREE.MeshStandardMaterial({ color: 0xe8f0ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.55, emissive: 0x223366 }));
-  const mbMesh = new THREE.InstancedMesh(keep(new THREE.SphereGeometry(1, 10, 8)), mbMat, MB);
+  const mbMesh = new THREE.InstancedMesh(keep(new THREE.IcosahedronGeometry(1, 1)), mbMat, MB);
   mbMesh.name = 'foam-lava-machine-bubbles';
   mbMesh.frustumCulled = false;
   root.add(mbMesh);

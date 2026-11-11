@@ -64,7 +64,7 @@ export const TOUR = {
   prize: [5, 3] as readonly number[],
   /** Auto bubbles: blow at a both-eye cloud this close ahead (m) and within this angle (rad). */
   autoBreath: { range: 32, angle: 0.42 },
-  cloudRadius: 3.2,
+  cloudRadius: 4.2,
   bubbleHit: 2.9,
   flapLift: 7,
   rhythmBonus: 3.5,
@@ -74,7 +74,7 @@ export const TOUR = {
 
 /** Stars for a dragon tour by points (clouds, golden clouds, treasure). */
 export function tourStars(points: number): number {
-  return points >= 16 ? 3 : points >= 9 ? 2 : points >= 3 ? 1 : 0;
+  return points >= 16 ? 3 : points >= 10 ? 2 : points >= 4 ? 1 : 0;
 }
 
 export interface DragonRide {
@@ -657,7 +657,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     hud.hidePodium();
     podiumT = 0;
     resetTour();
-    if (!pilot.take(hooks)) return;
+    if (!pilot.take(hooks, model.root.getObjectByName('pip-seat') ?? null)) return;
     enter('feed');
     weak.visible = true;
     both.visible = true;
@@ -801,7 +801,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
       const c = cloudSpots[i];
       dummy.position.set(c.x, c.y + Math.sin(time * 1.2 + i) * 0.4, c.z);
       dummy.rotation.set(0, i, 0);
-      dummy.scale.setScalar(1.2);
+      dummy.scale.setScalar(1.7);
       dummy.updateMatrix();
       cloudMesh.setMatrixAt(i, dummy.matrix);
       cloudOutline.setMatrixAt(i, dummy.matrix);

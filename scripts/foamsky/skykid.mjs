@@ -28,11 +28,13 @@ try {
   if (MODE === 'all' || MODE === 'plane') {
     await tp(planeIt[0] + 9, planeIt[2] - 6, -Math.PI / 2);
     await shot('plane-approach');
-    let r = await walkTo(planeIt[0], planeIt[2], { tol: 2.5 });
-    console.log('to plane', JSON.stringify(r), await st());
+    // Walk onto the start ring by the plane and just stand there (no button).
+    const padAt = await ev(() => window.__rgSky.plane.pad.at.toArray());
+    let r = await walkTo(padAt[0], padAt[2], { tol: 0.6 });
+    console.log('to plane pad', JSON.stringify(r), await st());
     await shot('plane-at');
     const w0 = await wallet();
-    await tap('KeyE');
+    for (let k = 0; k < 8 && (await ev(() => window.__rgSky.plane.phase)) === 'idle'; k++) { await step(12); if (k === 3) await shot('plane-pad-filling'); }
     let t = 0, next = 0, last = '', loops = 0;
     const tw = Date.now();
     while (t < 200 * 60) {
@@ -104,10 +106,27 @@ try {
       if (ph !== last) { console.log(`[dragon] t=${(t / 60).toFixed(1)} phase ${ph} ${await st()} ${await pip()}`); last = ph; }
       if (ph === 'idle' && t > 60) break;
       if (ph === 'tour') {
+        // Kid who tries: steer for the nearest cloud-balloon ahead, flap when below it.
+        const aim = await ev(() => {
+          const scene = window.__rg.ctx.scene; const p = window.__rg.ctx.player.position; const fwd = window.__rg.ctx.player.yaw;
+          const cm = scene.getObjectByName('sky-dragon-fx').children.find((c) => c.isInstancedMesh && c.count === 18);
+          if (!cm) return null;
+          const m = new p.constructor(); const q = new window.__rg.ctx.camera.quaternion.constructor(); const sc = new p.constructor(); const mat = new window.__rg.ctx.camera.matrix.constructor();
+          let best = null, bd = 1e9;
+          for (let i = 0; i < cm.count; i++) {
+            cm.getMatrixAt(i, mat); mat.decompose(m, q, sc); if (sc.x < 0.1) continue;
+            const dx = m.x - p.x, dz = m.z - p.z; const d = Math.hypot(dx, dz);
+            let da = Math.atan2(dx, dz) - fwd; da = Math.atan2(Math.sin(da), Math.cos(da));
+            if (Math.abs(da) > 1.2 || d < 3) continue;
+            const cost = d + Math.abs(da) * 30; if (cost < bd) { bd = cost; best = { da, dy: m.y - p.y - 1.5 }; }
+          }
+          return best;
+        });
         const k = [];
-        if (t % 50 < 3) k.push('Space');
-        if (Math.floor(t / 180) % 3 === 1) k.push('KeyD');
-        if (t % 300 === 150) k.push('KeyQ');
+        if (process.env.HANDS_OFF !== '1' && aim) {
+          if (aim.da > 0.1) k.push('KeyA'); else if (aim.da < -0.1) k.push('KeyD');
+          if (aim.dy > 3 && t % 40 < 3) k.push('Space'); else if (aim.dy < -3) k.push('KeyS');
+        }
         await setKeys(k);
       } else await release();
       await step(6);

@@ -106,3 +106,32 @@ describe('friends in the other planes', () => {
     vi.doUnmock('../../src/core/characters/load');
   });
 });
+
+describe('Pip back seat is published while flying', () => {
+  it('take() puts the seat on the player object and the end of the ride clears it', async () => {
+    const { SkyPilot } = await import('../../src/activities/skyrides/pilot');
+    let controller: { onRelease(): void } | null = null;
+    const player = {
+      mode: 'walk',
+      object: new THREE.Group(),
+      setExternalController(c: { onRelease(): void } | null) {
+        controller = c;
+        this.mode = c ? 'external' : 'walk';
+      },
+      setTilt() {},
+      setVisualRotation() {},
+    };
+    const ctx = {
+      player,
+      session: { state: { phase: 'playing' } },
+      audio: { setLoop() {} },
+      cameraRig: { setOverride() {} },
+    } as unknown as GameContext;
+    const pilot = new SkyPilot(ctx);
+    const seat = new THREE.Object3D();
+    expect(pilot.take({ step: () => true, onRelease: () => {} }, seat)).toBe(true);
+    expect(player.object.userData.pipSeat).toBe(seat);
+    controller!.onRelease();
+    expect(player.object.userData.pipSeat).toBeUndefined();
+  });
+});

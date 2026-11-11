@@ -200,8 +200,9 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
 
   function standBeside(): void {
     const side = parkYaw + Math.PI / 2;
-    const x = park.x + Math.sin(side) * 4.5;
-    const z = park.z + Math.cos(side) * 4.5;
+    // Just outside the plane's E radius, so no prompt sits under the podium.
+    const x = park.x + Math.sin(side) * 5.6;
+    const z = park.z + Math.cos(side) * 5.6;
     player.teleport(new THREE.Vector3(x, ctx.world.heightAt(x, z) + 0.05, z), parkYaw);
   }
 
@@ -559,7 +560,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
       startS = c.course.nearest(runwayPoint(site, RUNWAY.length + 20, 0, new THREE.Vector3()));
       rivals?.loadHeroes(pickFriends(player.characterId));
       rivals?.park(rivalSpots, startS);
-      if (!pilot.take(hooks)) return;
+      if (!pilot.take(hooks, model.root.getObjectByName('pip-seat') ?? null)) return;
       enter('board');
       fly.x = park.x;
       fly.y = park.y;

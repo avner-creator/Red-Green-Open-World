@@ -71,7 +71,7 @@ const CSS = `
   color:#15110a;font-size:calc(var(--u)*3)}
 .rg-sky .sk-cap.pad{border-radius:50%;min-width:calc(var(--u)*5.4);padding:0}
 .rg-sky .sk-cap .sk-bar{width:calc(var(--u)*9);height:calc(var(--u)*1.2);border:calc(var(--u)*.4) solid #15110a;border-top:none;border-radius:0 0 calc(var(--u)*.5) calc(var(--u)*.5);margin-top:calc(var(--u)*1)}
-.rg-sky .sk-podium{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.6);opacity:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.6);
+.rg-sky .sk-podium{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) scale(.6);opacity:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.6);
   background:radial-gradient(ellipse at center,rgba(16,20,42,.95),rgba(16,20,42,.85));border:calc(var(--u)*.7) solid #fff;border-radius:calc(var(--u)*4);
   padding:calc(var(--u)*2.4) calc(var(--u)*4);box-shadow:0 calc(var(--u)*1.2) 0 #000;transition:transform .35s cubic-bezier(.3,1.6,.5,1),opacity .2s}
 .rg-sky .sk-podium.on{transform:translate(-50%,-50%) scale(1);opacity:1}

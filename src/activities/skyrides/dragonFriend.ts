@@ -15,7 +15,7 @@ import type { V3 } from './flightModel';
 
 export const FRIEND = {
   /** Chance to pop each cloud it passes close to. */
-  skill: 0.55,
+  skill: 0.8,
   /** Cruise speed along the route (m/s, before rubber-banding). */
   speed: 17,
   scale: 0.82,
@@ -70,7 +70,7 @@ export class DragonFriend {
 
   /** Line up just behind the start for a new tour. */
   reset(startS: number, seed: number): void {
-    this.s = this.prevS = startS - 10;
+    this.s = this.prevS = startS - 3;
     this.score = 0;
     this.speed = 0;
     this.rand = rng(seed);
