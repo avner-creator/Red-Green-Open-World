@@ -55,11 +55,11 @@ export const FAKES = {
 export const FAKE_TAGS: readonly string[] = ['plaza', 'beach', 'ranch', 'lighthouse', 'silly'];
 
 /** What gives a fake away, per tier (each fake differs from the real gem in this one way only). */
-export type Tell = 'spin' | 'facets' | 'table';
-export const TELLS: Readonly<Record<GlassesTier, Tell>> = { 1: 'spin', 2: 'facets', 3: 'table' };
+export type Tell = 'spin' | 'facets' | 'sparkle';
+export const TELLS: Readonly<Record<GlassesTier, Tell>> = { 1: 'spin', 2: 'facets', 3: 'sparkle' };
 /** Facets of the real gem (gems.ts `buildGemGeometry`) and of a tier-2 fake. */
 export const REAL_FACETS = 8;
-export const FAKE_FACETS = 6;
+export const FAKE_FACETS = 5;
 
 export interface SpotInfo {
   /** Index in `ctx.world.gemSpots` (gem id `gem<index>`). */

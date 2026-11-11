@@ -169,6 +169,7 @@ test('shack: neither eye alone can tell the hidden shape', async () => {
   await expectAnswerBlindWithoutWeakEye(page, {
     setA: () => wforce('shack', { shapes: SHAPES, answer: 0, seed: 1234 }),
     setB: () => wforce('shack', { shapes: SHAPES, answer: 1, seed: 1234 }),
+    combos: MIRROR_COMBOS,
     label: 'shack strong eye alone',
   });
   // With the strong layer hidden the two pictures differ in the weak channel only (the weak
@@ -301,24 +302,41 @@ test('fakes: four ground spots; a cluster arms on approach; only the weak channe
   d = await wdebug<FakesDebug>('fakes');
   const cx = (d.armed!.corners[0].x + d.armed!.corners[1].x + d.armed!.corners[2].x) / 3;
   const cz = (d.armed!.corners[0].z + d.armed!.corners[1].z + d.armed!.corners[2].z) / 3;
-  // Stand 5 m from the cluster centre (on the side with the clearest line), facing it.
-  const spotFrom = await page.evaluate(({ cx, cz }) => {
+  // Stand ~5 m from the cluster (on a side with a clear line), a little to its right, so the
+  // default camera shows all three gems beside the hero.
+  const from = await page.evaluate(({ cx, cz, corners }) => {
     const ctx = window.__rg!.ctx;
     const V = ctx.player.position.constructor as new (x: number, y: number, z: number) => typeof ctx.player.position;
-    for (let k = 0; k < 16; k++) {
-      const a = (k / 16) * Math.PI * 2;
-      const x = cx + Math.cos(a) * 6;
-      const z = cz + Math.sin(a) * 6;
+    const clear = (x: number, z: number, h: number): boolean => {
       const g = ctx.world.heightAt(x, z);
-      const o = new V(x, g + 2.5, z);
-      const dir = new V(cx - x, ctx.world.heightAt(cx, cz) + 1.2 - (g + 2.5), cz - z);
+      const o = new V(x, g + h, z);
+      const dir = new V(cx - x, ctx.world.heightAt(cx, cz) + 1.2 - (g + h), cz - z);
       const len = dir.length();
-      if (!ctx.physics.raycast(o, dir.normalize(), len)) return { x, z };
+      return !ctx.physics.raycast(o, dir.normalize(), len);
+    };
+    // Looking along a median of the triangle spreads the three gems across the picture.
+    const medians = corners.map((c) => Math.atan2(c.z - cz, c.x - cx));
+    const angles = [...medians, ...Array.from({ length: 16 }, (_, k) => (k / 16) * Math.PI * 2)];
+    for (const a of angles) {
+      const fx = Math.cos(a);
+      const fz = Math.sin(a);
+      // Hero: 5 m out and 2.2 m to the side; camera ~5 m further back.
+      const x = cx + fx * 5 + fz * 2.2;
+      const z = cz + fz * 5 - fx * 2.2;
+      if (clear(x, z, 1.6) && clear(cx + fx * 10.5 + fz * 2.2, cz + fz * 10.5 - fx * 2.2, 3.5)) return { x, z, yaw: Math.atan2(-fx, -fz) };
     }
-    return { x: cx + 6, z: cz };
-  }, { cx, cz });
-  await standAt(spotFrom.x, spotFrom.z, yawTo(spotFrom, { x: cx, z: cz }));
+    return { x: cx + 5, z: cz, yaw: -Math.PI / 2 };
+  }, { cx, cz, corners: d.armed!.corners });
+  await standAt(from.x, from.z, from.yaw);
   await shots('fakes', true);
+  // The still tells, a step closer: tier 2 (5 facets) and tier 3 (no sparkle: no bright table, no stripes).
+  await wforce('fakes', { spot, answer: 1, angle: 0.4, tier: 2 });
+  await standAt(cx + (from.x - cx) * 0.7, cz + (from.z - cz) * 0.7, from.yaw, 4);
+  await shots('fakes-tier2');
+  await wforce('fakes', { spot, answer: 1, angle: 0.4, tier: 3 });
+  await shots('fakes-tier3', true);
+  await wforce('fakes', { spot, answer: 1, angle: 0.4, tier: 1 });
+  await standAt(from.x, from.z, from.yaw, 2);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: 'fakes' });
 });
 
@@ -326,6 +344,7 @@ test('fakes: answer-blind for the strong eye', async () => {
   await expectAnswerBlindWithoutWeakEye(page, {
     setA: () => wforce('fakes', { spot, answer: 0, angle: 0.4 }),
     setB: () => wforce('fakes', { spot, answer: 2, angle: 0.4 }),
+    combos: MIRROR_COMBOS,
     label: 'fakes strong eye alone',
   });
 });

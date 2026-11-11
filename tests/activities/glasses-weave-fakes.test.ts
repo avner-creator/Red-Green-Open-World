@@ -6,7 +6,6 @@ import { DULL_TABLE, fakeGemGeometry } from '../../src/activities/glasses/weave/
 import { mulberry32 } from '../../src/vision/toolkit';
 
 const spot = (index: number, x: number, z: number, tag = 'plaza', float = 1.2): SpotInfo => ({ index, x, y: float, z, tag, ground: 0 });
-const none = { circles: [], reserved: () => false };
 
 describe('fakes: spot choice', () => {
   it('keeps only low ordinary ground spots outside sites, reserved footprints and anchors', () => {
@@ -94,7 +93,7 @@ describe('fakes: tier ladder and tells', () => {
       seq.push(l.tier);
     }
     expect(seq).toEqual([1, 2, 2, 3, 3, 3, 2, 1, 1, 1]);
-    expect(TELLS).toEqual({ 1: 'spin', 2: 'facets', 3: 'table' });
+    expect(TELLS).toEqual({ 1: 'spin', 2: 'facets', 3: 'sparkle' });
   });
 
   it('random picking: right about 1 in 3; pays at most +2 per spot per respawn', () => {
@@ -125,17 +124,17 @@ describe('fakes: the look', () => {
     expect(arr(same, 'color')).toEqual(arr(real, 'color'));
   });
 
-  it('tier 2 differs only in facets, tier 3 only in the brightness of the top table', () => {
+  it('tier 2 differs only in facets (5), tier 3 only in shading: no bright table, no facet stripes', () => {
     const real = buildGemGeometry();
-    const six = fakeGemGeometry(6);
-    expect(six.getAttribute('position').count).toBe((real.getAttribute('position').count / 8) * 6);
-    const dull = fakeGemGeometry(undefined, DULL_TABLE);
+    const five = fakeGemGeometry(5);
+    expect(five.getAttribute('position').count).toBe((real.getAttribute('position').count / 8) * 5);
+    const dull = fakeGemGeometry(undefined, false);
     expect(arr(dull, 'position')).toEqual(arr(real, 'position'));
     const a = arr(real, 'color');
     const b = arr(dull, 'color');
-    const changed = a.filter((v, i) => v !== b[i]);
-    expect(changed.length).toBeGreaterThan(0);
-    expect(new Set(changed)).toEqual(new Set([1]));
-    expect(Math.max(...b)).toBeLessThan(1);
+    expect(a.filter((v, i) => v !== b[i]).length).toBeGreaterThan(a.length / 2);
+    expect(Math.max(...a)).toBe(1);
+    expect(Math.max(...b)).toBeLessThan(0.9);
+    expect(b).toContain(Math.fround(DULL_TABLE));
   });
 });

@@ -3,8 +3,8 @@
  * the hero comes near one whose Glow Gem is there, two weak-eye fakes appear beside it, the three
  * on the corners of a triangle (the real gem at a random corner). The fakes have the real gem's
  * geometry, size, shading and halo; ONE thing gives them away, finer with the tier:
- *   tier 1: they spin the other way · tier 2: 6 facets instead of 8 · tier 3: a dull top table
- *   (the real gem's bright sparkle core is missing).
+ *   tier 1: they spin the other way · tier 2: 5 facets instead of 8 · tier 3: no sparkle (the real
+ *   gem's bright top table and its light/dark facet stripes are missing).
  *
  *  - Touching a fake first (along the hero's path) → it poofs on the layer, a miss, round over (the
  *    other fake poofs too). The real gem still pays as always when collected.
@@ -27,7 +27,7 @@ import { FIXED_SITES } from '../../sites';
 import type { WeaveEnv, WeavePart } from '../types';
 import { eligibleSpots, FAKE_FACETS, FAKES, firstTouch, nextLadder, pickSpots, TELLS, triangle } from './logic';
 import type { Ladder, P3, SpotInfo, Tell } from './logic';
-import { DULL_TABLE, fakeGemGeometry, haloTexture } from './look';
+import { fakeGemGeometry, haloTexture } from './look';
 
 /** The real gem's scale, bob and spin (gems.ts). */
 const GEM_SCALE = 1.15;
@@ -108,7 +108,7 @@ export function create(env: WeaveEnv): WeavePart {
     present = spots.map(() => true);
     spent = spots.map(() => false);
     blocked = spots.map(() => false);
-    geos = { spin: fakeGemGeometry(), facets: fakeGemGeometry(FAKE_FACETS), table: fakeGemGeometry(undefined, DULL_TABLE) };
+    geos = { spin: fakeGemGeometry(), facets: fakeGemGeometry(FAKE_FACETS), sparkle: fakeGemGeometry(undefined, false) };
     haloTex = haloTexture();
     haloMat.map = haloTex;
     haloMat.needsUpdate = true;
