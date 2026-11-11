@@ -36,11 +36,13 @@ export const BOOST = {
   fadeIn: 6,
   /** The ring closes over this distance (metres) before the zone centre. */
   span: 60,
+  /** The ring moves on to the next pad once the buggy is this far past the zone centre. */
+  ringLeave: 2.5,
   /** Ring look (metres): target ring radius, closing ring start, line width, centre height. */
   ringRadius: 2.8,
   ringStart: 8.5,
   ringThickness: 0.75,
-  ringHeight: 5.2,
+  ringHeight: 4.4,
   /** Closing ring meets its target at this t (toolkit default). */
   perfectAt: 0.8,
   /** Gems for a turbo pad by tier. */
@@ -134,14 +136,15 @@ export class TapJudge {
 
 /**
  * The pad the ring stands on: the nearest one ahead that is not yet judged on this pass and whose
- * zone the buggy has not passed by more than `windowAfter`. `toZone` = metres to its zone centre.
+ * zone the buggy has not left behind (by more than `ringLeave`), so the next pad's ring shows as early as
+ * the pad spacing allows. `toZone` = metres to its zone centre.
  */
 export function ringPad(padS: readonly number[], progress: number, L: number, judged: (i: number) => boolean): { index: number; toZone: number } {
   let best = -1;
   let bestD = Infinity;
   for (let i = 0; i < padS.length; i++) {
     const d = lapDelta(progress, padS[i] + BOOST.zoneCentre, L);
-    if (d < -BOOST.windowAfter || judged(i)) continue;
+    if (d < -BOOST.ringLeave || judged(i)) continue;
     if (d < bestD) {
       bestD = d;
       best = i;

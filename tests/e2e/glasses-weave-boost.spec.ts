@@ -1,11 +1,13 @@
 /**
- * Glasses weave part `boost` on the buggy race, on one shared page: the weak-eye beat hoop on the
- * next boost pad. Proves: nothing attached / zero draws outside a race and ≤ 2 inside; the layer
- * changes only the weak channel (all 4 lens/eye combinations); answer-blind (two beat phases give
- * identical frames without the weak eye); a turbo-pad hit and a miss through real (autopilot)
- * driving with the right `glasses:result`, gems, and the race's own pad boost called exactly as
- * before (nothing extra). Screenshots (driver's camera; full, R-only, G-only; 640×360 and
- * 1280×720) of a pad with the beat cold and hot go to test-results/glasses/weave/.
+ * Glasses weave part `boost` ("turbo tap") on the buggy race, on one shared page: a weak-eye
+ * countdown ring over the next boost pad; the child taps Emote as the buggy reaches the pad.
+ * Proves: nothing attached / zero draws outside a race and ≤ 2 inside; the layer changes only the
+ * weak channel (all 4 lens/eye combinations); answer-blind (two ring states give identical frames
+ * without the weak eye); a full autopilot race with NO presses gives zero results and pays
+ * nothing and toasts nothing; a hit and a miss through real input during an autopilot race, with the right
+ * `glasses:result`, gems, and the buggy's boost calls exactly the race's own. Screenshots (driver's
+ * camera; full, R-only, G-only; 640×360 and 1280×720) at ~50 m, ~25 m and on the pad go to
+ * test-results/glasses/weave/.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
@@ -27,15 +29,15 @@ interface BoostDebug {
   attached: number;
   padsHit: number | null;
   target: number;
-  ahead: number | null;
-  fade: number;
-  t: number;
-  hot: boolean;
+  toZone: number | null;
+  along: number | null;
+  across: number | null;
+  inZone: boolean;
   tier: number;
-  seen: number;
   ringAttached: boolean;
   flashAttached: boolean;
-  last: { pad: number; t: number; outcome: 'hit' | 'miss' | null } | null;
+  last: { pad: number; along: number; across: number; outcome: 'hit' | 'miss' | null } | null;
+  presses: number;
   hits: number;
   misses: number;
 }
@@ -45,17 +47,14 @@ const debug = (): Promise<BoostDebug> => page.evaluate((i) => window.__rgGlasses
 const force = (params: Record<string, unknown>): Promise<void> => page.evaluate(({ i, p }) => window.__rgGlasses!.weave!.force(i, p), { i: ID, p: params });
 const draws = (): Promise<number> => page.evaluate((i) => window.__rgGlasses!.weave!.draws(i), ID);
 /**
- * Gems the part paid since the last call: wallet earns with reason 'mission' minus the rewards of
- * missions completed meanwhile (the race's own stunts can finish a mission; the autopilot can drive
- * through a gem, which pays with reason 'gem').
+ * The gem toasts ("+N") since the last call. The part's only both-eye feedback is `env.pay`, whose
+ * toast this is; nothing else on a race with enough gems toasts "+N" with the gem icon (the race
+ * does only for a practice run).
  */
-const paid = (): Promise<number> =>
+const toasts = (): Promise<string[]> =>
   page.evaluate(() => {
-    const w = window as unknown as { __earn: number; __missionPaid: number };
-    const n = w.__earn - w.__missionPaid;
-    w.__earn = 0;
-    w.__missionPaid = 0;
-    return n;
+    const w = window as unknown as { __toasts: string[] };
+    return w.__toasts.splice(0);
   });
 
 async function results(): Promise<Result[]> {
@@ -85,48 +84,67 @@ async function shots(name: string): Promise<void> {
   await page.evaluate(() => window.__rg!.render());
 }
 
-/** Autopilot on until the beat stands fully on a pad `minAhead`..`maxAhead` metres ahead. */
-async function driveToBeat(minAhead: number, maxAhead: number): Promise<BoostDebug> {
+/** Walk to the grid, start a race of `laps` laps, count down, autopilot on. */
+async function startRace(laps: number): Promise<void> {
+  const ok = await page.evaluate((laps) => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    race.setLaps(laps);
+    const g = race.gridView();
+    rg.teleport(g[0] + 5, g[1] + 0.3, g[2] - 7);
+    rg.step(1 / 60, 10, false);
+    const started = race.start();
+    rg.step(1 / 30, 100, false);
+    race.autopilot(true);
+    return started && race.phase === 'racing';
+  }, laps);
+  expect(ok, 'race started').toBe(true);
+}
+
+/** Autopilot until the ring stands on a pad whose tap zone is `lo`..`hi` metres ahead. */
+async function driveToRing(lo: number, hi: number): Promise<BoostDebug> {
   const d = (await page.evaluate(
     ({ lo, hi }) => {
       const rg = window.__rg!;
       const weave = window.__rgGlasses!.weave!;
-      window.__rgRace!.autopilot(true);
       for (let i = 0; i < 60 * 40; i++) {
-        const d = weave.debug('boost') as { ahead: number | null; ringAttached: boolean; fade: number; seen: number };
-        if (d.ringAttached && d.fade >= 1 && d.seen >= 0.6 && d.ahead !== null && d.ahead >= lo && d.ahead <= hi) return d;
+        const d = weave.debug('boost') as { toZone: number | null; ringAttached: boolean };
+        if (d.ringAttached && d.toZone !== null && d.toZone >= lo && d.toZone <= hi) return d;
         rg.step(1 / 60, 1, false);
       }
       return weave.debug('boost');
     },
-    { lo: minAhead, hi: maxAhead },
+    { lo, hi },
   )) as unknown as BoostDebug;
-  expect(d.ringAttached, `beat on a pad ${minAhead}–${maxAhead} m ahead: ${JSON.stringify(d)}`).toBe(true);
-  expect(d.ahead!).toBeGreaterThanOrEqual(minAhead);
-  expect(d.ahead!).toBeLessThanOrEqual(maxAhead);
+  expect(d.ringAttached, `ring ${lo}–${hi} m ahead: ${JSON.stringify(d)}`).toBe(true);
   return d;
 }
 
 /**
- * Keep driving until the race counts the next pad; returns the boost calls the buggy got then.
- * `arrive` re-aims the beat every frame from the buggy's current speed (the autopilot brakes for
- * bends), so the buggy reaches the pad hot or cold.
+ * Autopilot until the buggy is `along` metres from the ring's pad, tap Emote there (keeping the
+ * autopilot's steering and throttle for that frame), then keep driving until the race counts the
+ * pad. Returns the buggy's boost calls at the pad and the driving mode after.
  */
-async function driveOverPad(arrive: 'hot' | 'cold'): Promise<{ calls: number[][]; padsHit: number }> {
-  return page.evaluate((arrive) => {
+async function tapAt(along: number): Promise<{ calls: number[][]; padsHit: number; mode: string }> {
+  return page.evaluate((along) => {
     const rg = window.__rg!;
     const weave = window.__rgGlasses!.weave!;
     const w = window as unknown as { __boostCalls: number[][] };
     const start = window.__rgRace!.state().padsHit;
-    w.__boostCalls.length = 0;
-    for (let i = 0; i < 60 * 4 && window.__rgRace!.state().padsHit === start; i++) {
-      weave.force('boost', { arrive });
+    for (let i = 0; i < 60 * 20; i++) {
+      const d = weave.debug('boost') as { along: number | null };
+      if (d.along !== null && d.along >= along && d.along < along + 1.5) break;
       rg.step(1 / 60, 1, false);
     }
+    w.__boostCalls.length = 0;
+    const s = rg.ctx.input.state;
+    rg.inject({ moveX: s.moveX, moveY: s.moveY, emotePressed: true });
+    rg.step(1 / 60, 1, false);
+    for (let i = 0; i < 60 * 4 && window.__rgRace!.state().padsHit === start; i++) rg.step(1 / 60, 1, false);
     const calls = w.__boostCalls.slice();
     rg.step(1 / 60, 2, false);
-    return { calls, padsHit: window.__rgRace!.state().padsHit - start };
-  }, arrive);
+    return { calls, padsHit: window.__rgRace!.state().padsHit - start, mode: rg.state().playerMode };
+  }, along);
 }
 
 test.beforeAll(async ({ browser }) => {
@@ -139,19 +157,14 @@ test.beforeAll(async ({ browser }) => {
     rg.step(1 / 60, 5, false);
     rg.setRemaining(9999);
     rg.ctx.profile.earn(50, 'mission');
-    const w = window as unknown as { __boost: unknown[]; __boostCalls: number[][]; __earn: number; __missionPaid: number };
+    const w = window as unknown as { __boost: unknown[]; __boostCalls: number[][]; __toasts: string[] };
     w.__boost = [];
     w.__boostCalls = [];
-    w.__earn = 0;
-    w.__missionPaid = 0;
+    w.__toasts = [];
     rg.ctx.events.on('glasses:result', (e) => w.__boost.push(e));
-    rg.ctx.events.on('mission:completed', (e) => (w.__missionPaid += e.mission.reward));
-    const profile = rg.ctx.profile;
-    const earn = profile.earn.bind(profile);
-    profile.earn = (n, reason) => {
-      if (reason === 'mission') w.__earn += n;
-      earn(n, reason);
-    };
+    rg.ctx.events.on('ui:toast', (e) => {
+      if (e.icon === 'gem' && /^\+\d+$/.test(e.text ?? '')) w.__toasts.push(e.text!);
+    });
     // Record every call of the buggy's boost (the race's pads and surge; the part must add none).
     const car = rg.ctx.vehicles.all.find((v) => v.kind === 'car') as unknown as { buggy: { boost(e: number, s: number, k?: number): void } };
     const orig = car.buggy.boost.bind(car.buggy);
@@ -173,89 +186,89 @@ test('boost: nothing attached and zero draws outside a race', async () => {
   expect(await draws()).toBe(0);
 });
 
-test('boost: in a race the beat stands on the next pad, weak channel only, ≤ 2 draws, answer-blind', async () => {
-  test.setTimeout(120_000);
-  const started = await page.evaluate(() => {
-    const rg = window.__rg!;
-    const race = window.__rgRace!;
-    race.setLaps(3);
-    const g = race.gridView();
-    rg.teleport(g[0] + 5, g[1] + 0.3, g[2] - 7);
-    rg.step(1 / 60, 10, false);
-    const ok = race.start();
-    rg.step(1 / 60, 30, false);
-    return ok;
-  });
-  expect(started).toBe(true);
-  // Countdown: nothing yet.
-  expect((await debug()).attached).toBe(0);
-  await page.evaluate(() => window.__rg!.step(1 / 30, 90, false));
-  expect((await debug()).phase).toBe('racing');
-  // Past the first pad, clear of the start gantry and the friends.
-  await page.evaluate(() => {
-    window.__rgRace!.autopilot(true);
-    window.__rg!.step(1 / 30, 120, false);
-  });
-  await driveToBeat(10, 16);
-  expect(await draws()).toBeGreaterThanOrEqual(1);
-  expect(await draws()).toBeLessThanOrEqual(2);
-  // Nothing of the part in the both-eye scene.
-  expect(await page.evaluate(() => ['boostBeat', 'boostFlash'].filter((n) => window.__rg!.ctx.scene.getObjectByName(n)))).toEqual([]);
-
-  await force({ phase: 0.3 });
-  await shots('boost-cold');
-  await force({ phase: 0.75 });
-  expect((await debug()).hot).toBe(true);
-  await shots('boost-hot');
+test('boost: a full autopilot race with no presses: ring shown, weak channel only, answer-blind, zero results, nothing paid', async () => {
+  test.setTimeout(180_000);
+  await results();
+  await toasts();
+  await startRace(1);
+  // ~50 m and ~25 m out, then on the pad (the frame is frozen while we look).
+  await driveToRing(47, 53);
+  expect(await draws()).toBe(1);
+  await shots('boost-50m');
+  await driveToRing(22, 28);
+  await shots('boost-25m');
+  expect(await page.evaluate(() => ['boostRing', 'boostFlash'].filter((n) => window.__rg!.ctx.scene.getObjectByName(n)))).toEqual([]);
   await expectLayerOnlyTouchesOwnChannel(page, { label: 'boost' });
   await expectAnswerBlindWithoutWeakEye(page, {
-    setA: () => force({ phase: 0.3 }),
-    setB: () => force({ phase: 0.75 }),
-    label: 'boost beat phase',
+    setA: () => force({ t: 0.2 }),
+    setB: () => force({ t: 0.8 }),
+    label: 'boost ring state',
   });
+  await driveToRing(-1, 1);
+  await shots('boost-pad');
+  // On to the finish, never pressing: nothing is reported, nothing is paid.
+  const end = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const weave = window.__rgGlasses!.weave!;
+    let maxDraws = 0;
+    for (let i = 0; i < 200 && window.__rgRace!.phase === 'racing'; i++) {
+      rg.step(1 / 30, 15, false);
+      maxDraws = Math.max(maxDraws, weave.draws('boost'));
+    }
+    return { phase: window.__rgRace!.phase, padsHit: window.__rgRace!.state().padsHit, maxDraws };
+  });
+  expect(end.phase).not.toBe('racing');
+  expect(end.padsHit).toBeGreaterThanOrEqual(3);
+  expect(end.maxDraws).toBeLessThanOrEqual(2);
+  const d = await debug();
+  expect([d.presses, d.hits, d.misses]).toEqual([0, 0, 0]);
+  expect(await results()).toEqual([]);
+  expect(await toasts()).toEqual([]);
+  expect(d.attached).toBe(0);
+  expect(await draws()).toBe(0);
 });
 
-test('boost: a turbo pad on the beat (hit, gems) and one off it (miss); the race boost is unchanged', async () => {
+test('boost: a turbo tap on the pad (hit, gems, flash) and a mistimed one (miss); the race boost is unchanged', async () => {
   test.setTimeout(120_000);
-  // From the driver's seat the beat shows early (35 m ahead), hot here.
-  await driveToBeat(30, 37);
-  await force({ phase: 0.75 });
-  await shots('boost-far');
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    window.__rgRace!.autopilot(false);
+    for (let i = 0; i < 40 && window.__rgRace!.phase !== 'result'; i++) rg.step(1 / 30, 15, false);
+    window.__rgRace!.exit();
+    rg.step(1 / 60, 30, false);
+  });
+  expect(await page.evaluate(() => window.__rgRace!.phase)).toBe('idle');
+  await startRace(3);
   await results();
-  await paid();
-  // Earlier pads were judged like any other (by luck); count from here.
-  const d0 = await debug();
-  await page.evaluate((i) => window.__rgGlasses!.weave!.force(i, { tier: 1 }), ID);
+  await toasts();
   const PAD = [5, 1.1, 3];
   const SURGE = [9, 2.4, 5];
   const okCalls = (calls: number[][]): boolean => JSON.stringify(calls) === JSON.stringify([PAD]) || JSON.stringify(calls) === JSON.stringify([PAD, SURGE]);
 
-  // Hit: the beat arrives hot as the buggy reaches the pad.
-  await driveToBeat(6, 11);
-  const hit = await driveOverPad('hot');
+  // Hit: tap in the middle of the tier-1 zone, as the buggy reaches the pad.
+  await driveToRing(30, 60);
+  const hit = await tapAt(-3.2);
   expect(hit.padsHit).toBe(1);
+  expect(hit.mode).toBe('driving');
   expect(okCalls(hit.calls), `race boost on a hit: ${JSON.stringify(hit.calls)}`).toBe(true);
   let d = await debug();
   expect(d.last?.outcome, JSON.stringify(d.last)).toBe('hit');
   expect(await results()).toEqual([{ mechanic: 'boost', kind: 'timeIt', tier: 1, hit: true }]);
-  expect(await paid()).toBe(1);
-  // The weak-eye flash plays on the layer; still ≤ 2 draws.
+  expect(await toasts()).toEqual(['+1']);
   expect(d.flashAttached).toBe(true);
   expect(await draws()).toBeLessThanOrEqual(2);
-  await page.evaluate(() => window.__rg!.step(1 / 60, 1));
-  await shots('boost-flash');
 
-  // Miss: the beat is cold when the buggy reaches the next pad.
-  await driveToBeat(6, 11);
-  const miss = await driveOverPad('cold');
+  // Miss: tap 12 m early at the next pad.
+  await driveToRing(30, 60);
+  const miss = await tapAt(-12);
   expect(miss.padsHit).toBe(1);
+  expect(miss.mode).toBe('driving');
   expect(okCalls(miss.calls), `race boost on a miss: ${JSON.stringify(miss.calls)}`).toBe(true);
   d = await debug();
   expect(d.last?.outcome, JSON.stringify(d.last)).toBe('miss');
   expect(await results()).toEqual([{ mechanic: 'boost', kind: 'timeIt', tier: 1, hit: false }]);
-  expect(await paid()).toBe(0);
-  expect(d.hits - d0.hits).toBe(1);
-  expect(d.misses - d0.misses).toBe(1);
+  expect(await toasts()).toEqual([]);
+  expect([d.hits, d.misses]).toEqual([1, 1]);
 });
 
 test('boost: leaving the race detaches everything (zero draws)', async () => {

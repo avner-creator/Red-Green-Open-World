@@ -66,8 +66,9 @@ describe('turbo tap rules', () => {
   it('the ring stands on the next unjudged pad and closes onto its target at the zone', () => {
     const pads = [100, 300];
     expect(ringPad(pads, 40, 400, () => false)).toEqual({ index: 0, toZone: 57 });
-    expect(ringPad(pads, 105, 400, () => false).index).toBe(0); // just past: still its window
-    expect(ringPad(pads, 105, 400, (i) => i === 0).index).toBe(1);
+    expect(ringPad(pads, 98, 400, () => false).index).toBe(0); // just past the zone centre: still on it
+    expect(ringPad(pads, 98, 400, (i) => i === 0).index).toBe(1);
+    expect(ringPad(pads, 105, 400, () => false).index).toBe(1); // past the zone: the next pad
     expect(ringPad(pads, 120, 400, () => false).index).toBe(1);
     expect(ringT(BOOST.span)).toBe(0);
     expect(ringT(0)).toBeCloseTo(BOOST.perfectAt);
