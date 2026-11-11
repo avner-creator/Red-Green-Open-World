@@ -128,8 +128,12 @@ const lastCam = new THREE.Vector3(1e9, 0, 0);
 const cam = new THREE.Vector3();
 const c = new THREE.Vector3();
 
+/** `?nofarlod` (debug, for before/after screenshots) turns the distance LOD off. */
+const DISABLED = typeof location !== 'undefined' && new URLSearchParams(location.search).has('nofarlod');
+
 /** Called by the world every frame (after the activities' updates). */
 export function updateFarLod(scene: THREE.Scene, camera: THREE.Camera, quality: Quality): void {
+  if (DISABLED) return;
   camera.getWorldPosition(cam);
   let force = false;
   if (++frame >= RESCAN) {
