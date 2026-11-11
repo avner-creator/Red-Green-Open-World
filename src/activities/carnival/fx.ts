@@ -105,6 +105,8 @@ export class CarnivalFx {
 
   constructor(private readonly ctx: GameContext) {
     this.confetti.group.visible = false;
+    this.puffs.mesh.name = 'carnival-puffs';
+    this.weakPuffs.mesh.name = 'carnival-weak-puffs';
     ctx.scene.add(this.confetti.group);
     ctx.scene.add(this.puffs.mesh);
     ctx.vision.add(this.weakPuffs.mesh, VisionLayer.WeakOnly);

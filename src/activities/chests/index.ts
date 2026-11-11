@@ -24,6 +24,7 @@ import { buildBadge, buildButtons, buildTrail, chestTrail } from './ringModel';
 import type { Badge, Trail } from './ringModel';
 import { ApproachHints, CHEST_RULES, ChestLock, Loadout, RING, buttonWorld, keyCandidates, nearestButton, pickKeySpot, ringButtons, rightSymbol, sideDirection } from './logic';
 import { OUTFITS, outfitForChest } from './outfits';
+import { addFarRoot } from '../../world/far-lod';
 
 export { OUTFITS } from './outfits';
 export { chestTrail, setChestTrailEnabled } from './ringModel';
@@ -168,10 +169,12 @@ export function createChests(ctx: GameContext): Chests {
     lockRoot.position.copy(model.group.position);
     lockRoot.rotation.y = spot.yaw;
     ctx.vision.add(lockRoot, VisionLayer.StrongOnly);
+    addFarRoot(lockRoot);
 
     const keyModel = buildKey(symbol);
     keyModel.group.visible = false; // until its spot is validated against the physics world
     ctx.vision.add(keyModel.group, VisionLayer.WeakOnly);
+    addFarRoot(keyModel.group);
 
     const trail = buildTrail();
     trail.mesh.visible = false;
