@@ -12,6 +12,10 @@ describe('glasses summary model', () => {
     expect(mechanicName('oddOneOut')).toBe('Odd one out');
     const table: Record<string, string> = { gems: 'Glow gems', chestKeys: 'Chest keys', chests: 'Chests', toys: "Pip's lost toys", lineup: 'Line-up bubbles', gates: 'Half-symbol gates', dotsigns: 'Dot pictures' };
     for (const [id, name] of Object.entries(table)) expect(mechanicName(id)).toBe(name);
+    const weave: Record<string, string> = { bounce: 'Perfect bounce', chute: 'Parachute ring and hoop', hero: 'Hero sparkles', boost: 'Turbo pads', fakes: 'Real gem among fakes', shack: 'Gear Shack prize' };
+    for (const [id, name] of Object.entries(weave)) expect(mechanicName(id)).toBe(name);
+    expect(mechanicName('vaultDoor')).toBe('Two-eye vault doors');
+    expect(mechanicName('balloonPrize')).toBe('Prize balloons');
     expect(mechanicName('some_new-thing')).toBe('Some New Thing');
     expect(mechanicName('chestKey')).toBe('Chest Key');
     expect(mechanicName('')).toBe('Other');
