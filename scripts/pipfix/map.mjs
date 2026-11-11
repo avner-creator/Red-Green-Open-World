@@ -16,7 +16,7 @@ await page.evaluate(() => {
   window.__rg.step(1 / 30, 3, false);
 });
 const out = await page.evaluate(
-  ([x0, z0, x1, z1, st]) => {
+  ([x0, z0, x1, z1, st, ups]) => {
     const ctx = window.__rg.ctx;
     const R = ctx.physics.rapier;
     const shape = new R.Ball(0.3);
@@ -37,7 +37,7 @@ const out = await page.evaluate(
         }
         const gy = ctx.world.heightAt(x, z);
         let hit = false;
-        for (const up of [0.45, 1.0]) {
+        for (const up of ups) {
           const h = ctx.physics.world.intersectionWithShape({ x, y: gy + up, z }, { x: 0, y: 0, z: 0, w: 1 }, shape, undefined, undefined, undefined, undefined, (c) => {
             if (c.isSensor() || c.shapeType() === R.ShapeType.HeightField) return false;
             const b = c.parent();
@@ -51,7 +51,7 @@ const out = await page.evaluate(
     }
     return { rows, marks: marks.filter((m) => m[1] >= x0 && m[1] <= x1 && m[2] >= z0 && m[2] <= z1) };
   },
-  [x0, z0, x1, z1, st],
+  [x0, z0, x1, z1, st, (process.env.UPS ?? "0.45,1.0").split(",").map(Number)],
 );
 console.log(`x from ${x0} to ${x1} step ${st}`);
 console.log(out.rows.join('\n'));

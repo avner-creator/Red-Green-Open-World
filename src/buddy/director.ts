@@ -949,6 +949,16 @@ export class Director {
 
   // ───────────── light-touch guide ─────────────
 
+  /** Test hook (`__rgBuddy.invite`): an invitation lead to `a` now, as the light guide makes one. */
+  testInvite(a: Attraction): boolean {
+    this.guiding = false;
+    this.step = 'done';
+    this.inviteBest = Infinity;
+    this.inviteT = 0;
+    this.lastInviteT = this.playT;
+    return this.leadToPlace(a, 'invite');
+  }
+
   /**
    * Idle time (no attraction game, no ride, no lead, little movement) and whether a child shown
    * the way by an invitation follows it: closer and closer = following; standing about (not
