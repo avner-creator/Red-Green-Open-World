@@ -66,9 +66,11 @@ test('the sites are the fixed table: on land, nothing standing on them, off anch
   });
   console.log(sites.map((s) => `${s.id} (${s.x}, ${s.y.toFixed(1)}, ${s.z}) yaw ${s.yaw} near ${s.near}`).join('\n'));
   for (const r of world.rows) expect(r.land, `${r.id} on land`).toBe(true);
+  // `valid` = the startup probe found no collider, trunk or building on the site (before its own
+  // props); `problem` says what blocks it. Re-site it with `__rgGlasses.search` (see sites.ts).
+  const blocked = sites.filter((s) => !s.valid).map((s) => `${s.id} at (${s.x}, ${s.z}): ${s.problem ?? '?'}`);
+  expect(blocked, `fixed glasses sites blocked by the world:\n${blocked.join('\n')}`).toEqual([]);
   for (const s of sites) {
-    // `valid` = the startup probe found no collider, trunk or building on the site (before its own props).
-    expect(s.valid, `${s.id}: nothing stands on the site`).toBe(true);
     for (const a of world.anchors) {
       expect(Math.hypot(s.x - a.x, s.z - a.z), `${s.id} vs anchor ${a.name}`).toBeGreaterThanOrEqual(a.r + s.radius);
       if (a.t) expect(Math.hypot(s.x - a.t.x, s.z - a.t.z), `${s.id} vs ${a.name} target`).toBeGreaterThanOrEqual(a.t.r + s.radius);
