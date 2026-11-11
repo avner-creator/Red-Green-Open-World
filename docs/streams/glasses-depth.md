@@ -3,8 +3,9 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 is done and ready to merge.** The branch contains `origin/main` as of
-`be5b4b2` (2026-11-11). Phase 2 has not started; it waits for the project owner's go-ahead.
+**Status: Phase 1 is merged into `integration/m1`. Phase 2 is in progress** (started
+2026-11-11 from `origin/integration/m1` at `da704d6`, with the owner's go-ahead; `main` is held
+until two batch 2 fixes land). The Phase 1 sections below describe what was merged.
 
 `npm run verify` is green on the final branch: 664 unit tests and 174 e2e tests passed (see "Test results" at the end).
 
@@ -246,14 +247,30 @@ summary's name for odd one out. Numbers: +51 KB gzip of JavaScript (+2.5 %); eac
 - Screenshots (full, R-only, G-only) are written by the specs to `test-results/glasses/` and
   `test-results/glasses-toolkit/`, `test-results/glasses-ui/`.
 
-## Phase 2 (not started)
+## Phase 2 (in progress)
 
-Waits for the project owner to say `main` has the economy and the merged attractions. Plan:
-weave the toolkit into what exists (trampoline perfect-bounce ring, parachute-open ring and
-gem-through-hoop bonus in the skydive, boost-pad timing on the buggy/race, skill-ready ring and
-combo number over the hero, "real gem among fakes" at a few gem spots, dot-picture prize codes
-at the Gear Shack), each as a small optional rewarded layer with the smallest diffs in other
-owners' folders.
+Base: `origin/integration/m1` (`da704d6`), which has the economy, every attraction, the sites and
+Phase 1. Pushed to `agent/glasses-depth` with plain pushes.
+
+Goal: weave the toolkit into what exists, each as a small, optional, clearly rewarded layer, with
+the smallest diffs in other owners' folders. All Phase 2 code lives in a new folder
+`src/activities/glasses/weave/<part>/`; every hook put into another owner's folder is listed in
+"Phase 2 edits to other owners' files" below.
+
+| Part (folder) | What it adds | Kind | State |
+|---|---|---|---|
+| skeleton + hook survey (`weave/`, `weave/README.md`) | part contract, registry, test API; what each part attaches to and the smallest hook it needs | — | building |
+| `bounce/` | weak-eye perfect-bounce timing ring on the giant trampoline | timeIt | waiting |
+| `chute/` | weak-eye parachute-open ring in the skydive; a weak-eye gem that only counts through a strong-eye hoop | timeIt / lineUp | waiting |
+| `hero/` | weak-eye skill-ready ring and combo number over the hero | onHero | waiting |
+| `boost/` | weak-eye boost-pad timing on the buggy race | timeIt | waiting |
+| `fakes/` | "real gem among fakes" at a few gem spots | tellApart | waiting |
+| `shack/` | dot-picture prize code at the Gear Shack | popOut | waiting |
+| results from existing twists | one-line `glasses:result` emits where other attractions already decide a weak-eye hit or miss, so the Auto challenge and the summary cover the whole game | — | waiting |
+
+### Phase 2 edits to other owners' files
+
+Filled in as each part lands (file, lines, why).
 
 ## Test results
 
