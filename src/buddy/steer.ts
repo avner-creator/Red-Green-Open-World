@@ -44,7 +44,8 @@ export function followSlot(hero: V2, heroYaw: number, heroSpeed: number, side: n
   const f = forward(heroYaw);
   const r = right(heroYaw);
   const moving = Math.min(1, Math.max(0, heroSpeed / 5));
-  const lead = -0.25 + (FOLLOW.lead + 0.25) * moving;
+  // Level with the hero or ahead, never behind (where he would stand between camera and hero).
+  const lead = 0.15 + (FOLLOW.lead - 0.15) * moving;
   const s = FOLLOW.side * (1 - 0.15 * moving) * Math.sign(side || 1);
   return { x: hero.x + f.x * lead + r.x * s, z: hero.z + f.z * lead + r.z * s };
 }
@@ -99,7 +100,8 @@ export function shouldTeleport(pip: V2, hero: V2, limit: number = FOLLOW.telepor
 export function teleportSpot(hero: V2, heroYaw: number, side: number): V2 {
   const f = forward(heroYaw);
   const r = right(heroYaw);
-  return { x: hero.x - f.x * 1.6 + r.x * 1.2 * side, z: hero.z - f.z * 1.6 + r.z * 1.2 * side };
+  // Beside the hero, never behind (that is between the camera and the hero).
+  return { x: hero.x + f.x * 0.3 + r.x * 1.5 * side, z: hero.z + f.z * 0.3 + r.z * 1.5 * side };
 }
 
 /** Shortest signed angle from a to b. */
