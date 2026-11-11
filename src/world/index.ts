@@ -107,6 +107,7 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       scatter.setQuality(q);
       shack.setQuality(q);
       beacons.setQuality(q);
+      outerLive.setQuality(q);
       ctx.vision.setPostPasses(post.passes(q));
     },
     update(dt) {

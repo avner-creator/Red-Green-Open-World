@@ -33,8 +33,8 @@ const MAX_DIST: Record<Quality, readonly number[]> = {
  * vertex-clustered stand-in (`simplify.ts`) beyond `STAND_IN_DIST` metres (Low and Medium; High
  * never). Up close they are the original mesh, so the close-up look never changes.
  */
-const STAND_IN = { minTris: 3000, minR: 2.5, cells: 28 } as const;
-const STAND_IN_DIST: Record<Quality, number> = { low: 25, medium: 70, high: Infinity };
+const STAND_IN = { minTris: 2000, minR: 2.5, cells: 28 } as const;
+const STAND_IN_DIST: Record<Quality, number> = { low: 22, medium: 70, high: Infinity };
 /** Stand-ins per source geometry (shared geometries share their stand-in); null = not worth one. */
 const standIns = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry | null>();
 
