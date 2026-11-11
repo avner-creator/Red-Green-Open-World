@@ -48,6 +48,16 @@ const CSS = `
 .rg-race .btn{all:unset;cursor:pointer;width:13vmin;height:11vmin;border-radius:2.6vmin;background:#2b3557;border:.55vmin solid #000;box-shadow:0 0 0 .5vmin #fff,0 .9vmin 0 .5vmin #000;display:grid;place-items:center;position:relative}
 .rg-race .btn svg{width:7.4vmin;height:7.4vmin;color:#fff}
 .rg-race .btn .key{position:absolute;right:-1.2vmin;top:-1.2vmin;min-width:4.4vmin;height:4.4vmin;border-radius:1vmin;background:#ffd93b;color:#15110a;border:.45vmin solid #000;display:grid;place-items:center;font-size:3vmin}
+.rg-race .reset{all:unset;pointer-events:auto;cursor:pointer;position:relative;width:max(44px,9vmin);height:max(44px,9vmin);border-radius:50%;background:#2b3557;border:.55vmin solid #000;box-shadow:0 0 0 .5vmin #fff,0 .7vmin 0 .5vmin #000;display:grid;place-items:center;touch-action:none}
+.rg-race .reset svg{width:62%;height:62%;color:#fff}
+.rg-race .reset .key{position:absolute;right:-1.2vmin;top:-1.2vmin;min-width:3.6vmin;height:3.6vmin;padding:0 .4vmin;border-radius:1vmin;background:#ffd93b;color:#15110a;border:.4vmin solid #000;display:grid;place-items:center;font-size:2.6vmin}
+.rg-race .reset .key:empty{display:none}
+.rg-race .reset.flash{animation:rg-race-spin .6s}
+.rg-race .poof{position:absolute;left:50%;top:40%;width:22vmin;height:22vmin;margin:-11vmin 0 0 -11vmin;border-radius:50%;background:#10142a;border:1vmin solid #fff;box-shadow:0 1.2vmin 0 #000;display:none;place-items:center}
+.rg-race .poof svg{width:70%;height:70%;color:#fff}
+.rg-race .poof.on{display:grid;animation:rg-race-poof .9s forwards}
+@keyframes rg-race-spin{0%{rotate:0deg;scale:1}50%{scale:1.25}100%{rotate:-360deg;scale:1}}
+@keyframes rg-race-poof{0%{scale:.4;opacity:1}30%{scale:1.1;opacity:1}100%{scale:1.3;opacity:0}}
 @keyframes rg-race-pop{0%{scale:.6}60%{scale:1.15}100%{scale:1}}
 `;
 
@@ -61,8 +71,13 @@ export interface RaceHud {
   /** Direction to steer back to the track, radians relative to the camera (null = on track). */
   lost(angle: number | null): void;
   result(r: { place: number; stars: number; gems: number; practice: boolean } | null, gamepad: boolean): void;
+  /** The buggy was popped back onto the track: spin the reset button, flash a big pictogram. */
+  resetFlash(): void;
+  /** Key cap on the reset button (R / Y). */
+  resetKey(key: string): void;
   onReplay: (() => void) | null;
   onExit: (() => void) | null;
+  onReset: (() => void) | null;
   dispose(): void;
 }
 
@@ -81,7 +96,9 @@ export function createRaceHud(root: HTMLElement): RaceHud {
   el.innerHTML = `
     <div class="bar"><div class="chip lap"><svg viewBox="0 0 24 24">${FLAG}</svg><span data-testid="race-lap">1/3</span></div>
       <div class="place" data-testid="race-place">1</div>
-      <div class="chain"><i></i><i></i><i></i></div></div>
+      <div class="chain"><i></i><i></i><i></i></div>
+      <button class="reset" data-testid="race-reset" aria-label="reset"><svg viewBox="0 0 24 24">${inner('restart')}</svg><span class="key">R</span></button></div>
+    <div class="poof" data-testid="race-poof"><svg viewBox="0 0 24 24">${inner('restart')}</svg></div>
     <div class="count" data-testid="race-count"></div>
     <div class="lost"><svg viewBox="0 0 24 24"><path d="M12 1.5l8.5 11h-5v10h-7v-10h-5z"/></svg></div>
     <div class="result" data-testid="race-result">
@@ -103,6 +120,8 @@ export function createRaceHud(root: HTMLElement): RaceHud {
   const stars = $<HTMLDivElement>('.stars');
   const prize = $<HTMLDivElement>('.prize');
   const keys = el.querySelectorAll<HTMLSpanElement>('.btn .key');
+  const resetBtn = $<HTMLButtonElement>('.reset');
+  const poof = $<HTMLDivElement>('.poof');
   let lastCount: string | null = null;
   let lastStatus = '';
   const api: RaceHud = {
@@ -110,6 +129,7 @@ export function createRaceHud(root: HTMLElement): RaceHud {
       el.classList.toggle('on', on);
       if (!on) {
         el.classList.remove('done');
+        poof.classList.remove('on');
         result.classList.remove('on');
         count.classList.remove('on');
         lastCount = null;
@@ -160,8 +180,19 @@ export function createRaceHud(root: HTMLElement): RaceHud {
       keys[0].textContent = gamepad ? 'A' : 'E';
       keys[1].textContent = gamepad ? 'Y' : 'R';
     },
+    resetFlash() {
+      for (const e of [resetBtn, poof]) {
+        e.classList.remove(e === poof ? 'on' : 'flash');
+        void e.offsetWidth;
+        e.classList.add(e === poof ? 'on' : 'flash');
+      }
+    },
+    resetKey(k) {
+      (resetBtn.querySelector('.key') as HTMLSpanElement).textContent = k;
+    },
     onReplay: null,
     onExit: null,
+    onReset: null,
     dispose() {
       el.remove();
     },
@@ -169,6 +200,11 @@ export function createRaceHud(root: HTMLElement): RaceHud {
   $<HTMLButtonElement>('.replay').addEventListener('click', (e) => {
     e.stopPropagation();
     api.onReplay?.();
+  });
+  resetBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    api.onReset?.();
   });
   $<HTMLButtonElement>('.exit').addEventListener('click', (e) => {
     e.stopPropagation();

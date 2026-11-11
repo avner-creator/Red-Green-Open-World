@@ -59,6 +59,18 @@ export interface BuggyHooks {
   heading(): number;
   /** Hold still (start grid countdown): the car stays put; throttle only revs the engine. */
   hold: boolean;
+  /**
+   * R while driving: return true to take the press (the race pops the car back onto the track)
+   * instead of the default "R releases the ride".
+   */
+  onRescue: (() => boolean) | null;
+  /**
+   * Pop the buggy upright at `position` (ground) facing `yaw`, with a comic hop, and make it a
+   * ghost (no collisions, blinking) for `ghostSeconds`.
+   */
+  popTo(position: THREE.Vector3Like, yaw: number, ghostSeconds: number): void;
+  /** Free driving: throttle held against something for a few seconds → a comic unstick hop (default on). */
+  autoUnstick: boolean;
 }
 
 /** VehiclesApi plus a way for activities to seat the player in a vehicle (race start). */

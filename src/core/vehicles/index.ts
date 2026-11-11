@@ -46,7 +46,7 @@ function hopOut(ctx: GameContext, to: THREE.Vector3, yaw: number): ExternalContr
 }
 
 export function createVehicles(ctx: GameContext, player: PlayerInternal, camera: CameraInternal, interactions: InteractionApi): VehiclesInternal {
-  const list: VehicleInternal[] = [createCar(ctx, 'buggy', () => camera.api)];
+  const list: VehicleInternal[] = [createCar(ctx, 'buggy', () => camera.api, (yaw) => camera.snap(yaw))];
   const ranch = ctx.world.anchors.ranch;
   HORSES.forEach((h, i) => {
     const x = ranch.position.x + h.dx;
@@ -142,7 +142,10 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
       for (const v of list) v.beforePlayer?.();
       if (!active || !playing) return;
       sinceEnter += dt;
-      if (input.respawnPressed) rescue();
+      // R: an activity may take it first (the race pops the buggy back onto the track).
+      if (input.respawnPressed) {
+        if (!active.api.buggy?.onRescue?.()) rescue();
+      }
       else if (input.usePressed && sinceEnter > 0.45) exit();
     },
     lateUpdate(dt) {

@@ -270,3 +270,127 @@ test('racing line and boost pads are weak-eye only (all 4 lens/eye combinations)
   expect(await page.evaluate(() => window.__rgRace!.phase)).toBe('idle');
   expect(consoleErrors).toEqual([]);
 });
+
+/** Start a race from the grid (walking up to it first) and run the countdown out. */
+async function startRacing(): Promise<void> {
+  const ok = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    race.autopilot(false);
+    if (race.phase !== 'idle') race.exit();
+    rg.step(1 / 60, 30, false);
+    if (rg.state().playerMode !== 'walk') {
+      rg.inject({ respawnPressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 20, false);
+    }
+    race.setLaps(3);
+    const g = race.gridView();
+    rg.teleport(g[0] + 5, g[1] + 0.3, g[2] - 7);
+    rg.step(1 / 60, 10, false);
+    const started = race.start();
+    rg.step(1 / 30, 120, false);
+    return started && race.phase === 'racing';
+  });
+  expect(ok).toBe(true);
+}
+
+test('race: a buggy driven off the track is popped back at the last checkpoint, facing on (QA5 M3)', async () => {
+  test.setTimeout(180_000);
+  await startRacing();
+  // Drive a lap's first stretch, then steer hard off into the scenery with the throttle down.
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    race.autopilot(true);
+    rg.step(1 / 30, 150, false);
+    race.autopilot(false);
+    const before = race.state();
+    rg.inject({ moveY: 1, moveX: 1 });
+    let t = 0;
+    let off = 0;
+    while (race.state().resets === 0 && t < 40) {
+      rg.step(1 / 30, 15, false);
+      t += 0.5;
+      const L = race.state().length;
+      const li = race.lineInfo(((race.state().progress % L) + L) % L);
+      const c = rg.ctx.vehicles.all[0];
+      off = Math.max(off, Math.hypot(c.position.x - li.x, c.position.z - li.z));
+    }
+    rg.inject({ moveY: 1 });
+    rg.step(1 / 60, 4, false);
+    const car = rg.ctx.vehicles.all[0];
+    const L = race.state().length;
+    const li = race.lineInfo(((race.state().progress % L) + L) % L);
+    const ahead = race.lineInfo(((race.state().progress % L) + L + 8) % L);
+    const q = car.object.quaternion;
+    const fx = 2 * (q.x * q.z + q.w * q.y);
+    const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
+    const dir = Math.atan2(ahead.x - li.x, ahead.z - li.z);
+    const h = Math.atan2(fx, fz);
+    const facing = Math.abs(Math.atan2(Math.sin(h - dir), Math.cos(h - dir)));
+    const dist = Math.hypot(car.position.x - li.x, car.position.z - li.z);
+    rg.step(1 / 30, 60, false);
+    rg.inject(null);
+    const after = race.state();
+    return { t, off, log: after.resetLog, resets: after.resets, dist, facing, phase: after.phase, gained: after.progress - before.progress, mode: rg.state().playerMode };
+  });
+  console.log('off-track reset', JSON.stringify(r));
+  expect(r.resets).toBeGreaterThanOrEqual(1);
+  expect(r.t).toBeLessThan(15); // QA waited 135 s
+  expect(r.dist).toBeLessThan(6); // back on the road
+  expect(r.facing).toBeLessThan(0.6); // pointing down the lap
+  expect(r.phase).toBe('racing');
+  expect(r.mode).toBe('driving');
+  await page.evaluate(() => window.__rg!.render());
+  await shots('race-reset');
+});
+
+test('race: R pops back onto the track; a second R within 2 s leaves the race', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    const n0 = race.state().resets;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    const one = { resets: race.state().resets - n0, phase: race.phase, mode: rg.state().playerMode };
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    return { one, two: { phase: race.phase, mode: rg.state().playerMode } };
+  });
+  expect(r.one).toEqual({ resets: 1, phase: 'racing', mode: 'driving' });
+  expect(r.two).toEqual({ phase: 'idle', mode: 'walk' });
+});
+
+test('race: three laps on autopilot finish in a 60-90 s round with friends close behind', async () => {
+  test.setTimeout(240_000);
+  await startRacing();
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    race.autopilot(true);
+    let maxGap = 0;
+    let t = 0;
+    while (race.phase === 'racing' && t < 200) {
+      rg.step(1 / 30, 30, false);
+      t += 1;
+      const st = race.state();
+      for (const p of st.rivals) maxGap = Math.max(maxGap, Math.abs(p - st.progress));
+    }
+    const st = race.state();
+    return { t, phase: st.phase, rivals: st.rivals.map((p) => Math.round(p - st.progress)), progress: Math.round(st.progress), length: Math.round(st.length), maxGap: Math.round(maxGap), resets: st.resets, log: st.resetLog, place: st.result?.place };
+  });
+  console.log('full race', JSON.stringify(r));
+  expect(['finishing', 'podium', 'result']).toContain(r.phase);
+  expect(r.t).toBeGreaterThanOrEqual(55);
+  expect(r.t).toBeLessThanOrEqual(95);
+  expect(r.maxGap).toBeLessThan(60);
+  await page.evaluate(() => window.__rg!.step(1 / 30, 75, false));
+  await page.evaluate(() => window.__rg!.render());
+  await shots('race-finish');
+});
