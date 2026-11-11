@@ -1,0 +1,16 @@
+await page.evaluate(() => { window.__rgGear.enablePreviews(true); window.__rg.freeze(true); });
+await st(2);
+await page.getByTestId('title-wardrobe').click();
+await page.waitForTimeout(10000);
+await st(5);
+log(await shot('t/09-wardrobe-fresh'));
+await page.getByTestId('shop-tab-hero').click();
+await page.waitForTimeout(10000);
+await st(5);
+log(await shot('t/10-wardrobe-fresh-hero'));
+await page.getByTestId('shop-tab-face').click();
+await page.waitForTimeout(6000);
+await st(5);
+log(await shot('t/10b-wardrobe-fresh-face'));
+await page.getByTestId('wardrobe-close').click();
+await st(5);
