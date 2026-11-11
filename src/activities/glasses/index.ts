@@ -40,6 +40,8 @@ export interface GlassesSiteInfo {
   radius: number;
   near: string;
   valid: boolean;
+  /** Why the startup probe found the fixed site blocked (null when `valid`). */
+  problem: string | null;
   board: { x: number; z: number };
 }
 
@@ -65,6 +67,8 @@ export interface GlassesTestApi {
   trySite(id: string, row: { x: number; z: number; yaw: number; slot: number }): Record<string, unknown>;
   /** DEV: what is wrong with a site centre right now (static rules, ground, board views by slot). */
   probe(x: number, z: number, yaw: number, playRadius?: number): { problems: string[]; ground: string | null; views: boolean[] };
+  /** DEV: what (if anything) blocks the straight line from `a` to `b`: a collider, a prop mesh or a merged batch (canopies included). */
+  sight(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): string | null;
   /** Phase 2 weave parts (./weave). */
   weave?: WeaveTestApi;
 }
@@ -75,9 +79,11 @@ declare global {
   }
 }
 
+type SiteState = GlassesSite & { valid: boolean; problem: string | null };
+
 interface Entry {
   def: MechanicDef;
-  site: GlassesSite & { valid: boolean };
+  site: SiteState;
   board: Board;
   mech: Mechanic;
   idle: FarIdle;
@@ -356,14 +362,18 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
     built = true;
     const sites = table.map((f, index) => {
       const board = boardOf(f);
-      const site: GlassesSite & { valid: boolean } = {
-        id: f.id, index, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: f.near, board, valid: true,
+      const site: SiteState = {
+        id: f.id, index, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: f.near, board, valid: true, problem: null,
       };
       // Fixed means fixed: a site that something now stands on is reported, never moved.
       const problem = groundProblem(probeWorld(), f.x, f.z);
       if (problem) {
         site.valid = false;
-        console.warn(`glasses: fixed site ${f.id} at (${f.x}, ${f.z}) is ${problem}; leaving it where it is`);
+        const why = problem === 'blocked' ? blockReason(f.x, f.z, GLASSES.siteRadius + 1.5) : null;
+        site.problem = why ? `${problem}: ${why}` : problem;
+        // Test mode reports it through `__rgGlasses.sites()` (the framework spec names the site and
+        // the blocker); the console stays clean so unrelated specs are not failed by it.
+        if (!ctx.testMode) console.warn(`glasses: fixed site ${f.id} at (${f.x}, ${f.z}) is ${site.problem}; leaving it where it is`);
       }
       return site;
     });
@@ -377,7 +387,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
   }
 
   /** Board + mechanic for one site. */
-  function makeEntry(def: MechanicDef, site: GlassesSite & { valid: boolean }): Entry {
+  function makeEntry(def: MechanicDef, site: SiteState): Entry {
     if (!boardMat) throw new Error('glasses: board material missing');
     const board = createBoard(ctx, boardMat, { x: site.board.x, y: ctx.world.heightAt(site.board.x, site.board.z), z: site.board.z, yaw: site.yaw }, def.pictos);
     const objects = new Map<THREE.Object3D, VisionLayer>();
@@ -450,7 +460,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
     window.__rgGlasses = {
       sites: () => {
         build();
-        return entries.map(({ site: s }) => ({ id: s.id, x: s.x, y: s.y, z: s.z, yaw: s.yaw, radius: s.radius, near: s.near, valid: s.valid, board: { ...s.board } }));
+        return entries.map(({ site: s }) => ({ id: s.id, x: s.x, y: s.y, z: s.z, yaw: s.yaw, radius: s.radius, near: s.near, valid: s.valid, problem: s.problem, board: { ...s.board } }));
       },
       goto(id) {
         const { site } = byId(id);
@@ -506,7 +516,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         const def = MECHANICS.find((m) => m.id === id);
         if (!def) throw new Error(`glasses: unknown mechanic ${id}`);
         const f: FixedSite = { id, near: '?', ...row };
-        const site = { id, index: -1, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: '?', board: boardOf(f), valid: true };
+        const site = { id, index: -1, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: '?', board: boardOf(f), valid: true, problem: null };
         const e = makeEntry(def, site);
         e.idle.active = true;
         setActive(e, true);
@@ -526,6 +536,16 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
           ground: groundProblem(w, x, z) && `${groundProblem(w, x, z)}: ${blockReason(x, z, GLASSES.siteRadius + 1.5) ?? ''}`,
           views: [0, 1, 2].map((slot) => view(x, z, yaw, boardOf({ id: '', x, z, yaw, slot, near: '' }))),
         };
+      },
+      sight(a, b) {
+        const from = new THREE.Vector3(a.x, a.y, a.z);
+        const d = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
+        const len = d.length();
+        if (len < 0.5) return null;
+        d.normalize();
+        const hit = ctx.physics.raycast(from, d, len - 0.3);
+        if (hit) return `collider at (${hit.point.x.toFixed(1)}, ${hit.point.y.toFixed(1)}, ${hit.point.z.toFixed(1)})`;
+        return sceneHitName(from, d, len - 0.3) ?? sceneHitName(from, d, len - 0.3, true);
       },
       boardRect(id) {
         const mesh = byId(id).board.mesh;
