@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { MatKey, Materials } from './materials';
+import { SURFACE, type MatKey, type Materials } from './materials';
 import type { Quality } from '../types';
 import { asShadowProxy, shadowProxyMaterial } from '../core/shadow-proxy';
 
@@ -174,12 +174,24 @@ export class Batcher {
   private lastShadow = new THREE.Vector3(1e9, 0, 0);
   private dirty = true;
   triangles = 0;
+  /**
+   * Added to the size class of every part added while set (1 = treat each part as one class smaller):
+   * decor that should drop out sooner with distance (the island fill).
+   */
+  lodShift = 0;
 
   add(key: MatKey, geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, matrix?: THREE.Matrix4, opts?: AddOpts): void {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (matrix) g.applyMatrix4(matrix);
     for (const name of Object.keys(g.attributes)) {
       if (name !== 'position' && name !== 'normal' && name !== 'color' && name !== 'aWave' && name !== 'aPivot' && name !== 'aAxis') g.deleteAttribute(name);
+    }
+    const surf = SURFACE[key];
+    if (surf) {
+      // Plain PBR keys share one mesh: the surface rides on the vertices.
+      const a = new Float32Array(g.attributes.position.count * 3);
+      for (let i = 0; i < a.length; i += 3) a.set(surf, i);
+      g.setAttribute('aSurf', new THREE.BufferAttribute(a, 3));
     }
     if (!g.attributes.normal) g.computeVertexNormals();
     const pos = g.attributes.position;
@@ -219,9 +231,11 @@ export class Batcher {
     const r = tmpS.length() / 2;
     let small = 0;
     while (small < CLASS_R.length && r < CLASS_R[CLASS_R.length - 1 - small]) small++;
+    small = Math.min(CLASSES - 1, small + this.lodShift);
     const part: Part = { geo: g, cell: cellOf(tmpV.x, tmpV.z), cls: small };
-    let b = this.buckets.get(key);
-    if (!b) this.buckets.set(key, (b = []));
+    const bucket: MatKey = surf ? 'surface' : key;
+    let b = this.buckets.get(bucket);
+    if (!b) this.buckets.set(bucket, (b = []));
     b.push(part);
     // Shadow proxy: big enough, not flat, on a material that casts.
     // Small detailed parts (posts, knobs, finials) cast through their oriented box: same footprint

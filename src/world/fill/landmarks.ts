@@ -494,14 +494,14 @@ export function festoon(
       if (!ok(x, z)) continue;
       const y = k.h(x, z);
       const c = colors[placed % colors.length];
-      for (let j = 0; j < 6; j++) k.b.add('paint', cylG(8), j % 2 ? CREAM : 0x2a3a6a, T(x, y + j * 0.55, z, 0, 0.07, 0.55, 0.07));
+      for (let j = 0; j < 3; j++) k.b.add('paint', cylG(6, 1, true), j % 2 ? CREAM : 0x2a3a6a, T(x, y + j * 1.1, z, 0, 0.07, 1.1, 0.07));
       k.b.add('metal', cylG(8), INK, T(x, y, z, 0, 0.15, 0.2, 0.15));
       for (let j = 0; j < 4; j++) {
         const ang = (j / 4) * Math.PI * 2 + placed;
         k.b.add('metal', boxG(), INK, T(x + Math.cos(ang) * 0.18, y + 3.25, z + Math.sin(ang) * 0.18, -ang, 0.36, 0.03, 0.03));
-        k.b.add('glow', sphereG(1), colors[(placed + j) % colors.length], T(x + Math.cos(ang) * 0.36, y + 3.15, z + Math.sin(ang) * 0.36, 0, 0.12, 0.15, 0.12));
+        k.b.add('glow', sphereG(0), colors[(placed + j) % colors.length], T(x + Math.cos(ang) * 0.36, y + 3.15, z + Math.sin(ang) * 0.36, 0, 0.12, 0.15, 0.12));
       }
-      k.b.add('gloss', sphereG(1), 0xf2c14e, T(x, y + 3.42, z, 0, 0.1, 0.1, 0.1));
+      k.b.add('gloss', sphereG(0), 0xf2c14e, T(x, y + 3.42, z, 0, 0.1, 0.1, 0.1));
       k.b.add('cloth', flagG(), c === 0xffe2b0 ? 0xc8433a : 0x2f5d7c, T(x + 0.04, y + 3.0, z, Math.atan2(ux, uz), 0.6, 0.38, 1));
       k.col.cyl(x, y, z, 1.7, 0.1);
       placed++;

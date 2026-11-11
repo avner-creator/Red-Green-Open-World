@@ -65,7 +65,26 @@ export function patch(
 }
 
 export type MatKey =
-  | 'paint' | 'matte' | 'gloss' | 'metal' | 'glass' | 'window' | 'glow' | 'paving' | 'road' | 'cloth' | 'rubber' | 'toy';
+  | 'paint' | 'matte' | 'gloss' | 'metal' | 'glass' | 'window' | 'glow' | 'paving' | 'road' | 'cloth' | 'rubber' | 'toy'
+  /** Batcher-only: paint, matte, gloss, metal, glass and rubber merged (per-vertex surface). */
+  | 'surface';
+
+/**
+ * Per-vertex surface of the keys the batcher merges into one 'surface' mesh (one draw call instead of
+ * nine): roughness, metalness and the kind (0 plain, 1 matte noise, 2 rubber noise, 3 paving pattern,
+ * 4 window: dark glass that lights up at sunset, 5 glow: unlit bulb, brighter at sunset).
+ */
+export const SURFACE: Partial<Record<MatKey, readonly [number, number, number]>> = {
+  paint: [0.62, 0, 0],
+  matte: [0.9, 0, 1],
+  gloss: [0.32, 0, 0],
+  metal: [0.38, 0.75, 0],
+  glass: [0.08, 0.2, 0],
+  rubber: [0.75, 0, 2],
+  paving: [0.85, 0, 3],
+  window: [0.12, 0.1, 4],
+  glow: [1, 0, 5],
+};
 
 export interface Materials {
   get(key: MatKey): THREE.Material;
@@ -161,7 +180,37 @@ export function createMaterials(): Materials {
   });
 
   const toy = createToyMaterial();
-  const map: Record<MatKey, THREE.Material> = { paint, matte, gloss, metal, glass, window, glow: glowBasic, paving, road, cloth, rubber, toy };
+  // The merged surface: roughness / metalness / noise from the vertex (`aSurf`, see SURFACE).
+  const surface = std({ roughness: 1, metalness: 1, emissive: new THREE.Color(1, 1, 1) });
+  patch(surface, 'rg-surface', {
+    vertexPre: 'attribute vec3 aSurf; varying vec3 vSurf;',
+    vertex: 'vSurf = aSurf;',
+    fragmentPre: 'varying vec3 vSurf; float rgLit; vec3 rgGlowC;',
+    fragment: `rgLit = 0.0; rgGlowC = vec3(0.0);
+      if (vSurf.z > 4.5) { rgGlowC = diffuseColor.rgb; diffuseColor.rgb = vec3(0.0); }
+      else if (vSurf.z > 3.5) { rgLit = diffuseColor.r; diffuseColor.rgb = vec3(0.05, 0.07, 0.1); }
+      else if (vSurf.z > 2.5) {
+        vec2 pp = vWorldPos.xz * vec2(1.7, 2.3);
+        vec2 cell = vec2(pp.x + 0.5 * floor(pp.y), pp.y);
+        vec2 f = fract(cell); vec2 id = floor(cell);
+        float e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+        float fw = fwidth(pp.x) + fwidth(pp.y);
+        float grout = mix(smoothstep(0.03, 0.09, e), 0.88, smoothstep(0.25, 0.7, fw));
+        float tone = 0.86 + 0.22 * rgHash(id) + 0.06 * rgNoise(vWorldPos.xz * 0.4);
+        diffuseColor.rgb *= mix(0.62, tone, grout);
+      }
+      else if (vSurf.z > 1.5) diffuseColor.rgb *= 0.94 + 0.08 * rgNoise(vWorldPos.xz * 9.0);
+      else if (vSurf.z > 0.5) diffuseColor.rgb *= 0.92 + 0.16 * rgNoise(vWorldPos.xz * 1.7 + vWorldPos.y * 1.3);`,
+    emissive: 'totalEmissiveRadiance = vec3(1.0, 0.62, 0.3) * rgLit * (0.08 + 2.4 * uGlow) + rgGlowC * (1.0 + 3.5 * uGlow);',
+  });
+  const base = surface.onBeforeCompile;
+  surface.onBeforeCompile = (shader, renderer) => {
+    base.call(surface, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor *= vSurf.x;')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor *= vSurf.y;');
+  };
+  const map: Record<MatKey, THREE.Material> = { paint, matte, gloss, metal, glass, window, glow: glowBasic, paving, road, cloth, rubber, toy, surface };
   return {
     get: (k) => map[k],
     foliage,

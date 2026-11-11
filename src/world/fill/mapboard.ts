@@ -77,21 +77,36 @@ export function mapBoard(k: Kit, d: Decals, roads: readonly ProcessedRoad[], zon
   const sand = shape(-5);
   k.b.add('paint', sand, 0xb8d8e8, M(m, T(0, yc, face - 0.004)));
   sand.dispose();
-  // Roads: dark strips.
-  for (const r of roads) {
-    const w = Math.max(0.035, r.def.width * sc * 1.4);
-    for (let i = 0; i < r.pts.length - 1; i += 2) {
-      const a = r.pts[i];
-      const b = r.pts[Math.min(i + 2, r.pts.length - 1)];
-      const ua = (a.x * rgt.x + a.z * rgt.y) * sc;
-      const va = (a.x * fwd.x + a.z * fwd.y) * sc;
-      const ub = (b.x * rgt.x + b.z * rgt.y) * sc;
-      const vb = (b.x * fwd.x + b.z * fwd.y) * sc;
-      const len = Math.hypot(ub - ua, vb - va);
-      if (len < 1e-4) continue;
-      const roll = Math.atan2(vb - va, ub - ua);
-      k.b.add('paint', boxG(), ROAD, M(m, T((ua + ub) / 2, yc + (va + vb) / 2, face + 0.004, 0, 1, 1, 1, 0, roll - Math.PI / 2).multiply(T(0, -len / 2 - w / 2, 0, 0, w, len + w, 0.012))));
+  // Roads: dark strips (flat quads, one every ~6 m of road).
+  {
+    const pos: number[] = [];
+    for (const r of roads) {
+      const w = Math.max(0.035, r.def.width * sc * 1.4) / 2;
+      const pts = r.pts.filter((_, i) => i % 6 === 0 || i === r.pts.length - 1);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        const ua = (a.x * rgt.x + a.z * rgt.y) * sc;
+        const va = (a.x * fwd.x + a.z * fwd.y) * sc;
+        const ub = (b.x * rgt.x + b.z * rgt.y) * sc;
+        const vb = (b.x * fwd.x + b.z * fwd.y) * sc;
+        const len = Math.hypot(ub - ua, vb - va);
+        if (len < 1e-4) continue;
+        const nu = (-(vb - va) / len) * w;
+        const nv = ((ub - ua) / len) * w;
+        const eu = ((ub - ua) / len) * w;
+        const ev = ((vb - va) / len) * w;
+        const q = [
+          [ua - eu - nu, va - ev - nv], [ub + eu - nu, vb + ev - nv], [ub + eu + nu, vb + ev + nv], [ua - eu + nu, va - ev + nv],
+        ];
+        for (const j of [0, 1, 2, 0, 2, 3]) pos.push(q[j][0], q[j][1], 0);
+      }
     }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    k.b.add('paint', g, ROAD, M(m, T(0, yc, face + 0.004)));
+    g.dispose();
   }
   // Pictogram badges: attractions, glasses sites (smaller), new zones.
   const badge = (wx: number, wz: number, icon: IconId, size: number): void => {

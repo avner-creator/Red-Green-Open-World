@@ -76,7 +76,10 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   keepouts.push(...buildSiteDressing(kit, wayfinding.decals), ...siteKeepouts());
   // Island fill last: it keeps clear of everything above (guard) and adds its own keepouts.
   const guard = makeGuard({ h: kit.h, roads: terrain.roads, keepouts, gemSpots, chestSpots, colliders: kit.col.circles });
+  // Fill decor drops out one size class sooner than the rest (keeps far views within budget).
+  kit.b.lodShift = 1;
   const fill = buildFill(kit, terrain.roads, wayfinding.decals, guard);
+  kit.b.lodShift = 0;
   keepouts.push(...fill.keepouts);
   // Nothing scattered (trees, rocks) on top of a gem or chest.
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });

@@ -26,29 +26,11 @@ import {
 } from './landmarks';
 import { mapBoard, MAP_BOARD } from './mapboard';
 import { buildFixes } from './fixes';
+import { FILL_ZONES } from './zone-data';
+
+export { FILL_ZONES, type Zone } from './zone-data';
 
 const CREAM = 0xf1ead8;
-
-export interface Zone {
-  id: string;
-  icon: IconId;
-  /** Arch / route colour (dark enough for cream to read on it in both channels). */
-  color: number;
-  /** Landmark position (map board, compass-free wayfinding). */
-  x: number;
-  z: number;
-}
-
-/** The new zones (landmark positions). */
-export const FILL_ZONES: readonly Zone[] = [
-  { id: 'funfair', icon: 'iWheel', color: 0xb8306e, x: 128, z: -64 },
-  { id: 'farm', icon: 'iWindmill', color: 0xa4372a, x: -86, z: 106 },
-  { id: 'cove', icon: 'iCastle', color: 0x2a6fa8, x: 96, z: 114 },
-  { id: 'lookout', icon: 'iLookout', color: 0x2f4f9a, x: 48, z: -132 },
-  { id: 'rainbow', icon: 'iRainbow', color: 0x7a3fb0, x: 10, z: 138 },
-  { id: 'huts', icon: 'iCastle', color: 0x1f7a8a, x: -138, z: 54 },
-  { id: 'picnic', icon: 'iPicnic', color: 0x3d7a2a, x: -48, z: -56 },
-];
 
 /** A trail: waypoints from a road (or a pad edge) to a zone or site; `icon` = where it leads. */
 export interface TrailDef {
@@ -107,6 +89,10 @@ export interface Fill {
   /** Candidates the guard refused (tests, debugging). */
   refused: { name: string; why: string }[];
 }
+
+/** Flat 16-gon of radius 1 lying on the ground (road paint roundels). */
+let disc: THREE.BufferGeometry | null = null;
+const discFlat = (): THREE.BufferGeometry => (disc ??= new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2));
 
 /** Sample a polyline every `step` metres: points with their unit direction. */
 function along(pts: readonly (readonly [number, number])[], step: number): { x: number; z: number; ux: number; uz: number }[] {
@@ -172,6 +158,18 @@ function trailRibbon(k: Kit, d: Decals, def: TrailDef, width = 2.4): [number, nu
       return [x, k.h(x, z) + 0.07, z];
     });
   };
+  // Chunks of ~7 m so the batcher culls and drops them with distance like any other part.
+  const flush = (): void => {
+    if (!pos.length) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    k.b.add('road', g, 0xffffff);
+    g.dispose();
+    pos.length = 0;
+    col.length = 0;
+  };
   for (let i = 0; i < samples.length - 1; i++) {
     const a = ring(samples[i]);
     const b = ring(samples[i + 1]);
@@ -182,26 +180,22 @@ function trailRibbon(k: Kit, d: Decals, def: TrailDef, width = 2.4): [number, nu
         col.push(c.r, c.g, c.b);
       }
     }
+    if (i % 8 === 7) flush();
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.computeVertexNormals();
-  k.b.add('road', g, 0xffffff);
-  g.dispose();
+  flush();
   // Pebbles along both edges and a ground icon roundel every ~22 m (top of the icon = the way on).
-  along(pts, 1.6).forEach((s, i) => {
+  along(pts, 3.2).forEach((s, i) => {
     const side = i % 2 ? 1 : -1;
     const x = s.x - s.uz * side * (half + 0.25);
     const z = s.z + s.ux * side * (half + 0.25);
     const y = k.h(x, z);
-    k.b.add('matte', cylG(7), i % 3 ? C.stone : 0xbcb29f, T(x, y - 0.06, z, i, 0.2, 0.14, 0.16), { aoY: y, aoH: 0.1, ao: 0.2 });
+    k.b.add('matte', cylG(5), i % 3 ? C.stone : 0xbcb29f, T(x, y - 0.06, z, i, 0.24, 0.14, 0.18), { aoY: y, aoH: 0.1, ao: 0.2 });
   });
   along(pts, 22).forEach((s, i) => {
     if (i === 0) return;
     const yaw = Math.atan2(s.ux, s.uz);
     const y = k.h(s.x, s.z);
-    k.b.add('road', cylG(20), CREAM, T(s.x, y + 0.05, s.z, 0, 0.62, 0.06, 0.62));
+    k.b.add('road', discFlat(), CREAM, T(s.x, y + 0.1, s.z, 0, 0.62, 1, 0.62));
     d.add(def.icon, T(s.x, y + 0.12, s.z, yaw + Math.PI, 1, 1, 1, -Math.PI / 2), 1.05);
   });
   return pts;
@@ -231,18 +225,25 @@ function routeLine(k: Kit, d: Decals, pts: readonly { x: number; z: number }[], 
       col.push(c.r, c.g, c.b);
     }
   };
+  const flush = (): void => {
+    if (!pos.length) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    k.b.add('road', g, 0xffffff);
+    g.dispose();
+    pos.length = 0;
+    col.length = 0;
+  };
   const samples = along(p2, 3);
   samples.forEach((s, i) => {
     if (i * 3 < from || !free(s.x, s.z)) return;
     dash(s, 0.62, 2.2, 1.9, cRim, 0.15);
     dash(s, 0.36, 1.9, 1.9, cLine, 0.17);
+    if (i % 2 === 1) flush();
   });
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.computeVertexNormals();
-  k.b.add('road', g, 0xffffff);
-  g.dispose();
+  flush();
   let n = 0;
   along(p2, 26).forEach((s, i) => {
     if (i * 26 < from || !free(s.x, s.z)) return;
@@ -250,8 +251,8 @@ function routeLine(k: Kit, d: Decals, pts: readonly { x: number; z: number }[], 
     const x = s.x - s.uz * 1.9;
     const z = s.z + s.ux * 1.9;
     const y = k.h(x, z);
-    k.b.add('road', cylG(24), CREAM, T(x, y + 0.13, z, 0, 0.85, 0.06, 0.85));
-    k.b.add('road', cylG(24), color, T(x, y + 0.14, z, 0, 0.78, 0.06, 0.78));
+    k.b.add('road', discFlat(), CREAM, T(x, y + 0.17, z, 0, 0.88, 1, 0.88));
+    k.b.add('road', discFlat(), color, T(x, y + 0.18, z, 0, 0.78, 1, 0.78));
     d.add(icons[n++ % icons.length], T(x, y + 0.22, z, yaw + Math.PI, 1, 1, 1, -Math.PI / 2), 1.3);
   });
 }
@@ -303,13 +304,21 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   // ── Playtest fixes (Scoops' back, the bubble pitch steps, village hedges) ──
   buildFixes(k, d, guard);
 
+  // Landmarks are seen from far away: they keep the normal distance classes (no LOD shift).
+  const far = (build: () => void): void => {
+    const shift = k.b.lodShift;
+    k.b.lodShift = 0;
+    build();
+    k.b.lodShift = shift;
+  };
+
   // ── Landmark zones ──
   const face = (x: number, z: number, tx: number, tz: number): number => Math.atan2(tx - x, tz - z);
   // Fun Fair: big wheel (seen from the plaza over Bouncy Park), carousel, striped tents.
   {
     const z0 = FILL_ZONES[0];
     const yaw = face(z0.x, z0.z, 0, 0);
-    if (place('landmark', 'big wheel', z0.x, z0.z, 7.5)) bigWheel(k, d, z0.x, z0.z, yaw);
+    if (place('landmark', 'big wheel', z0.x, z0.z, 7.5)) far(() => bigWheel(k, d, z0.x, z0.z, yaw));
     if (place('landmark', 'carousel', 115, -71, 5.2)) carousel(k, 115, -71);
     for (const [tx, tz, r, c] of [[136, -48, 2.6, 0xc8433a], [130, -79, 2.4, 0x2f5d7c], [121, -83, 2.2, 0xe0a030]] as const) {
       if (place('landmark', 'tent', tx, tz, r + 0.4)) tent(k, tx, tz, r, c);
@@ -320,7 +329,7 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   // Windmill Farm: windmill, barn, pumpkin patch, scarecrow, hay.
   {
     const z0 = FILL_ZONES[1];
-    if (place('landmark', 'windmill', z0.x, z0.z, 3.6)) windmill(k, d, z0.x, z0.z, face(z0.x, z0.z, -70, 80));
+    if (place('landmark', 'windmill', z0.x, z0.z, 3.6)) far(() => windmill(k, d, z0.x, z0.z, face(z0.x, z0.z, -70, 80)));
     if (place('landmark', 'barn', -66, 114, 5.2)) barn(k, -66, 114, face(-66, 114, -76, 100));
     let p = 0;
     for (let i = 0; i < 4; i++) {
@@ -342,7 +351,7 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   // Sandcastle Cove: castle, beach umbrellas, balls and a giant rubber duck.
   {
     const z0 = FILL_ZONES[2];
-    if (place('landmark', 'sandcastle', z0.x, z0.z, 7.2)) sandcastle(k, d, z0.x, z0.z, face(z0.x, z0.z, 72, 92));
+    if (place('landmark', 'sandcastle', z0.x, z0.z, 7.2)) far(() => sandcastle(k, d, z0.x, z0.z, face(z0.x, z0.z, 72, 92)));
     for (const [ux, uz, c] of [[84, 118, 0xe2483c], [104, 98, 0x3a72d8], [90, 124, 0xf08a24]] as const) {
       if (place('prop', 'umbrella', ux, uz, 1.6)) umbrella(k, ux, uz, c);
     }
@@ -351,7 +360,7 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   // Star Lookout: tower with the gold star, telescopes, picnic blanket tables.
   {
     const z0 = FILL_ZONES[3];
-    if (place('landmark', 'lookout', z0.x, z0.z, 2.8)) lookout(k, d, z0.x, z0.z, face(z0.x, z0.z, 0, -128));
+    if (place('landmark', 'lookout', z0.x, z0.z, 2.8)) far(() => lookout(k, d, z0.x, z0.z, face(z0.x, z0.z, 0, -128)));
     for (const [tx, tz] of [[54, -126], [56, -136]] as const) if (place('prop', 'telescope', tx, tz, 0.5)) telescope(k, tx, tz, face(tx, tz, 80, -100));
     if (place('prop', 'picnic', 42, -138, 1.3)) picnicTable(k, 42, -138, 0.4, 0xc8433a);
     cluster(40, -124, ['mushroom', 'pinwheel', 'spring'], 3, 11);
@@ -359,7 +368,7 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   // Rainbow Point: the big rainbow on the south cliff, a wishing well, toys.
   {
     const z0 = FILL_ZONES[4];
-    if (place('landmark', 'rainbow', z0.x, z0.z, 3)) rainbow(k, d, z0.x, z0.z, Math.PI);
+    if (place('landmark', 'rainbow', z0.x, z0.z, 3)) far(() => rainbow(k, d, z0.x, z0.z, Math.PI));
     if (place('prop', 'well', 18, 132, 1.2)) wishingWell(k, 18, 132);
     cluster(1, 139, ['mushroom', 'mushroom', 'spring', 'pinwheel'], 3.2, 13);
   }

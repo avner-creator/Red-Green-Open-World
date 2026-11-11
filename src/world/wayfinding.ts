@@ -67,21 +67,21 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
     rows: [['toys', 'glowflies', 'lineup'], ['oddone', 'gates', 'dotsigns']],
     hang: ['toys'],
   },
-  { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon', 'raceStart'] },
+  { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon', 'raceStart', 'funfair'] },
   { x: 57.5, z: 32, scale: 0.85, targets: ['launchPads', 'balloon', 'landingRings', 'garage'] },
-  { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads'] },
-  { x: 1.5, z: 78.5, scale: 0.85, targets: ['balloon', 'landingRings', 'sillyZone', 'dinoRing', 'bubbleArena'] },
+  { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads', 'cove'] },
+  { x: 1.5, z: 78.5, scale: 0.85, targets: ['balloon', 'landingRings', 'sillyZone', 'dinoRing', 'bubbleArena', 'rainbow', 'farm'] },
   // Carnival Island junctions: where each footpath leaves its road.
   { x: 16.2, z: -16.4, scale: 0.85, targets: ['carnivalRow', 'trampoline', 'iceCream'] },
   { x: 10.6, z: 42, scale: 0.85, targets: ['dinoRing', 'bubbleArena', 'airstrip', 'balloon'] },
   // North end of the village street (outer roads + Carnival Island paths share this junction).
   { x: -6.5, z: -61, scale: 0.85, targets: ['bungee', 'lighthouse', 'dragonRoost', 'carnivalRow', 'foamCourse'] },
   // The bridge's far end, the roost path, the ranch approach.
-  { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee'] },
+  { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee', 'lookout'] },
   { x: 4.6, z: -133, scale: 0.85, targets: ['dragonRoost'] },
   // Where the roost footpath leaves the north road (QA round 3: make the way up to the roost obvious).
   { x: -22, z: -135.8, scale: 0.85, targets: ['dragonRoost', 'lighthouse', 'bungee'] },
-  { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform'] },
+  { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform', 'farm', 'huts'] },
 ];
 
 /** Roads that get painted chevrons, all pointing forward along the road (towards attractions). */

@@ -9,6 +9,7 @@ import { FIXED_SITES } from '../activities/glasses/sites';
 import { GLASSES } from '../activities/glasses/constants';
 import { ANCHORS } from './layout';
 import type { IconId, PanelId } from './pictograms';
+import { FILL_ZONES, type FillZoneId } from './fill/zone-data';
 
 export interface Attraction {
   anchor: AnchorName;
@@ -86,7 +87,7 @@ export const ATTRACTIONS: readonly Attraction[] = [
  */
 export type GlassesSiteId = 'glowflies' | 'oddone' | 'lineup' | 'toys' | 'gates' | 'dotsigns';
 /** Anything a fingerpost arm can point at. */
-export type WayTarget = AnchorName | GlassesSiteId;
+export type WayTarget = AnchorName | GlassesSiteId | FillZoneId;
 
 export interface GlassesWay {
   id: GlassesSiteId;
@@ -146,13 +147,15 @@ const isGlasses = (t: WayTarget): t is GlassesSiteId => t in GLASSES_STYLE;
 
 /** Position, icon and arm colour of anything a fingerpost can point at. */
 export function wayTarget(t: WayTarget): { x: number; z: number; icon: IconId; arm: number } {
+  const zone = FILL_ZONES.find((q) => q.id === t);
+  if (zone) return { x: zone.x, z: zone.z, icon: zone.icon, arm: zone.color };
   if (isGlasses(t)) {
     const g = GLASSES_WAY.find((q) => q.id === t);
     if (!g) throw new Error(`no glasses site ${t}`);
     return g;
   }
-  const a = attractionFor(t);
-  return { x: ANCHORS[t].x, z: ANCHORS[t].z, icon: a.icon, arm: a.arm };
+  const a = attractionFor(t as AnchorName);
+  return { x: ANCHORS[t as AnchorName].x, z: ANCHORS[t as AnchorName].z, icon: a.icon, arm: a.arm };
 }
 
 export function attractionFor(a: AnchorName): Attraction {
