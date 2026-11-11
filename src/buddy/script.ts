@@ -174,36 +174,37 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
     { text: 'Beat your friends to win prizes and gems!', icon: 'star', extra: 'gem', mood: 'proud' },
   ],
   'booth:balloonPop': [
-    { text: 'Throw beanbags at the balloons! Look around to aim.', icon: 'balloon', action: 'use', mood: 'excited' },
+    { text: 'Aim at a balloon and throw! Misses make you wait.', icon: 'balloon', action: 'use', mood: 'excited' },
     { text: "Magic glasses show prize balloons. They're worth triple!", icon: 'glasses', extra: 'balloon', mood: 'curious' },
   ],
   'booth:ringToss': [
-    { text: 'Hold to power up, let go to toss the ring!', icon: 'target', action: 'use', mood: 'excited' },
+    { text: 'Hold, then let go when the bar is right. Ring a peg!', icon: 'target', action: 'use', mood: 'excited' },
     { text: 'Magic glasses show a gold star peg. It counts double!', icon: 'glasses', extra: 'star', mood: 'curious' },
   ],
   'booth:duckPond': [
-    { text: 'Aim the net over a duck and scoop it up!', icon: 'target', action: 'use', mood: 'happy' },
+    { text: 'Put the net over a duck, then scoop!', icon: 'target', action: 'use', mood: 'happy' },
     { text: 'Magic glasses show lucky ducks with stars. Worth three!', icon: 'glasses', extra: 'star', mood: 'curious' },
   ],
   'booth:strengthBell': [
-    { text: 'Watch the swinging needle and stomp to ring the bell!', icon: 'star', action: 'jump', mood: 'excited' },
-    { text: 'Magic glasses show the perfect spot on the dial!', icon: 'glasses', extra: 'target', mood: 'curious' },
+    { text: 'Stomp when the needle is in the glowing spot!', icon: 'star', action: 'jump', mood: 'excited' },
+    { text: 'Magic glasses show where the glowing spot is on the dial!', icon: 'glasses', extra: 'target', mood: 'curious' },
   ],
   'booth:glowDodge': [
-    { text: 'Foam balls roll at you! Jump over, or step aside!', icon: 'bubble', action: 'jump', mood: 'silly' },
+    { text: 'Hop over rolling balls, and step away from flying ones!', icon: 'bubble', action: 'jump', mood: 'silly' },
     { text: 'In the dark, magic glasses show the glowing balls!', icon: 'glasses', extra: 'bubble', mood: 'curious' },
   ],
   iceCream: [
     { text: 'Build your own ice cream! Pick with left and right!', icon: 'cone', action: 'move', mood: 'happy' },
-    { text: 'Jump adds it. Then eat it for a silly power!', icon: 'cone', action: 'jump', mood: 'silly' },
+    { text: 'Add a scoop when the tower stands straight, or it topples!', icon: 'cone', action: 'jump', mood: 'silly' },
+    { text: 'Then eat it for a silly power!', icon: 'cone', action: 'use', mood: 'excited' },
   ],
   bubbleArena: [
-    { text: 'Bubble soccer! Roll the big ball into the other goal!', icon: 'bubble', action: 'use', mood: 'excited' },
-    { text: 'Jump to dash and kick the ball super hard!', icon: 'bubble', action: 'jump', mood: 'excited' },
+    { text: 'Bubble soccer! Push the big ball into the far goal!', icon: 'bubble', action: 'move', mood: 'excited' },
+    { text: 'Near the ball, dash to kick it hard!', icon: 'bubble', action: 'jump', mood: 'excited' },
   ],
   dinoRing: [
-    { text: 'Dino sumo! Bump the other dinos out of the ring!', icon: 'dragon', action: 'use', mood: 'silly' },
-    { text: 'Jump for a big belly charge! Boing!', icon: 'dragon', action: 'jump', mood: 'silly' },
+    { text: 'Dino sumo! Belly-bump the dinos out of the ring!', icon: 'dragon', action: 'jump', mood: 'silly' },
+    { text: 'On the edge? Mash the button to hop back! First to three wins.', icon: 'dragon', action: 'jump', mood: 'excited' },
   ],
   foamCourse: [
     { text: 'Race a friend across the foam on floats and blocks!', icon: 'bubble', action: 'use', mood: 'excited' },

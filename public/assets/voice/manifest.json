@@ -38,17 +38,23 @@
    "spoken": "A treasure chest! Its hidden key is inside the dotted circle.",
    "dur": 3.46
   },
+  "add-a-scoop-when-the-tower-stands-straight-or-it-topples": {
+   "file": "add-a-scoop-when-the-tower-stands-straight-or-it-topples.mp3",
+   "text": "Add a scoop when the tower stands straight, or it topples!",
+   "spoken": "Add a scoop when the tower stands straight, or it topples!",
+   "dur": 2.76
+  },
   "again-again": {
    "file": "again-again.mp3",
    "text": "Again, again!",
    "spoken": "Again, again!",
    "dur": 0.96
   },
-  "aim-the-net-over-a-duck-and-scoop-it-up": {
-   "file": "aim-the-net-over-a-duck-and-scoop-it-up.mp3",
-   "text": "Aim the net over a duck and scoop it up!",
-   "spoken": "Aim the net over a duck and scoop it up!",
-   "dur": 1.94
+  "aim-at-a-balloon-and-throw-misses-make-you-wait": {
+   "file": "aim-at-a-balloon-and-throw-misses-make-you-wait.mp3",
+   "text": "Aim at a balloon and throw! Misses make you wait.",
+   "spoken": "Aim at a balloon and throw! Misses make you wait.",
+   "dur": 2.64
   },
   "almost-there-follow-me": {
    "file": "almost-there-follow-me.mp3",
@@ -140,11 +146,11 @@
    "spoken": "Bring the key back and step on the shape the chest shows!",
    "dur": 2.71
   },
-  "bubble-soccer-roll-the-big-ball-into-the-other-goal": {
-   "file": "bubble-soccer-roll-the-big-ball-into-the-other-goal.mp3",
-   "text": "Bubble soccer! Roll the big ball into the other goal!",
-   "spoken": "Bubble soccer! Roll the big ball into the other goal!",
-   "dur": 2.69
+  "bubble-soccer-push-the-big-ball-into-the-far-goal": {
+   "file": "bubble-soccer-push-the-big-ball-into-the-far-goal.mp3",
+   "text": "Bubble soccer! Push the big ball into the far goal!",
+   "spoken": "Bubble soccer! Push the big ball into the far goal!",
+   "dur": 2.81
   },
   "build-your-own-ice-cream-pick-with-left-and-right": {
    "file": "build-your-own-ice-cream-pick-with-left-and-right.mp3",
@@ -218,11 +224,11 @@
    "spoken": "Did you see that?",
    "dur": 0.98
   },
-  "dino-sumo-bump-the-other-dinos-out-of-the-ring": {
-   "file": "dino-sumo-bump-the-other-dinos-out-of-the-ring.mp3",
-   "text": "Dino sumo! Bump the other dinos out of the ring!",
-   "spoken": "Dino sumo! Bump the other dinos out of the ring!",
-   "dur": 2.71
+  "dino-sumo-belly-bump-the-dinos-out-of-the-ring": {
+   "file": "dino-sumo-belly-bump-the-dinos-out-of-the-ring.mp3",
+   "text": "Dino sumo! Belly-bump the dinos out of the ring!",
+   "spoken": "Dino sumo! Belly-bump the dinos out of the ring!",
+   "dur": 2.74
   },
   "done-and-done": {
    "file": "done-and-done.mp3",
@@ -325,12 +331,6 @@
    "text": "Fly the stunt plane! Zoom through hoops and pop cloud balloons!",
    "spoken": "Fly the stunt plane! Zoom through hoops and pop cloud balloons!",
    "dur": 3.48
-  },
-  "foam-balls-roll-at-you-jump-over-or-step-aside": {
-   "file": "foam-balls-roll-at-you-jump-over-or-step-aside.mp3",
-   "text": "Foam balls roll at you! Jump over, or step aside!",
-   "spoken": "Foam balls roll at you! Jump over, or step aside!",
-   "dur": 2.9
   },
   "follow-me": {
    "file": "follow-me.mp3",
@@ -452,11 +452,11 @@
    "spoken": "Hmm, where next?",
    "dur": 0.98
   },
-  "hold-to-power-up-let-go-to-toss-the-ring": {
-   "file": "hold-to-power-up-let-go-to-toss-the-ring.mp3",
-   "text": "Hold to power up, let go to toss the ring!",
-   "spoken": "Hold to power up, let go to toss the ring!",
-   "dur": 2.26
+  "hold-then-let-go-when-the-bar-is-right-ring-a-peg": {
+   "file": "hold-then-let-go-when-the-bar-is-right-ring-a-peg.mp3",
+   "text": "Hold, then let go when the bar is right. Ring a peg!",
+   "spoken": "Hold, then let go when the bar is right. Ring a peg!",
+   "dur": 2.76
   },
   "hop-in-the-buggy-and-drive-bumps-are-bouncy-and-fun": {
    "file": "hop-in-the-buggy-and-drive-bumps-are-bouncy-and-fun.mp3",
@@ -469,6 +469,12 @@
    "text": "Hop on a pony and gallop around the island!",
    "spoken": "Hop on a pony and gallop around the island!",
    "dur": 2.4
+  },
+  "hop-over-rolling-balls-and-step-away-from-flying-ones": {
+   "file": "hop-over-rolling-balls-and-step-away-from-flying-ones.mp3",
+   "text": "Hop over rolling balls, and step away from flying ones!",
+   "spoken": "Hop over rolling balls, and step away from flying ones!",
+   "dur": 3.12
   },
   "hop-up-the-stones-and-climb-to-win-the-star": {
    "file": "hop-up-the-stones-and-climb-to-win-the-star.mp3",
@@ -542,12 +548,6 @@
    "spoken": "Jingle jangle!",
    "dur": 1.06
   },
-  "jump-adds-it-then-eat-it-for-a-silly-power": {
-   "file": "jump-adds-it-then-eat-it-for-a-silly-power.mp3",
-   "text": "Jump adds it. Then eat it for a silly power!",
-   "spoken": "Jump adds it. Then eat it for a silly power!",
-   "dur": 2.52
-  },
   "jump-again-to-open-your-parachute-land-on-the-rings": {
    "file": "jump-again-to-open-your-parachute-land-on-the-rings.mp3",
    "text": "Jump again to open your parachute. Land on the rings!",
@@ -560,12 +560,6 @@
    "spoken": "Jump flaps the wings. Your power button blows bubbles!",
    "dur": 3.14
   },
-  "jump-for-a-big-belly-charge-boing": {
-   "file": "jump-for-a-big-belly-charge-boing.mp3",
-   "text": "Jump for a big belly charge! Boing!",
-   "spoken": "Jump for a big belly charge! Boing!",
-   "dur": 2.35
-  },
   "jump-on-the-trampoline-hold-jump-to-bounce-higher": {
    "file": "jump-on-the-trampoline-hold-jump-to-bounce-higher.mp3",
    "text": "Jump on the trampoline! Hold jump to bounce higher!",
@@ -577,12 +571,6 @@
    "text": "Jump the gaps! If you fall in, try again from the checkpoint.",
    "spoken": "Jump the gaps! If you fall in, try again from the checkpoint.",
    "dur": 3.24
-  },
-  "jump-to-dash-and-kick-the-ball-super-hard": {
-   "file": "jump-to-dash-and-kick-the-ball-super-hard.mp3",
-   "text": "Jump to dash and kick the ball super hard!",
-   "spoken": "Jump to dash and kick the ball super hard!",
-   "dur": 2.35
   },
   "jump-when-the-board-bounces-up-for-a-deeper-dive": {
    "file": "jump-when-the-board-bounces-up-for-a-deeper-dive.mp3",
@@ -692,11 +680,11 @@
    "spoken": "Magic glasses show prize balloons. They're worth triple!",
    "dur": 3.12
   },
-  "magic-glasses-show-the-perfect-spot-on-the-dial": {
-   "file": "magic-glasses-show-the-perfect-spot-on-the-dial.mp3",
-   "text": "Magic glasses show the perfect spot on the dial!",
-   "spoken": "Magic glasses show the perfect spot on the dial!",
-   "dur": 2.66
+  "magic-glasses-show-where-the-glowing-spot-is-on-the-dial": {
+   "file": "magic-glasses-show-where-the-glowing-spot-is-on-the-dial.mp3",
+   "text": "Magic glasses show where the glowing spot is on the dial!",
+   "spoken": "Magic glasses show where the glowing spot is on the dial!",
+   "dur": 3.17
   },
   "mega-sparkle": {
    "file": "mega-sparkle.mp3",
@@ -727,6 +715,12 @@
    "text": "Nailed it!",
    "spoken": "Nailed it!",
    "dur": 0.79
+  },
+  "near-the-ball-dash-to-kick-it-hard": {
+   "file": "near-the-ball-dash-to-kick-it-hard.mp3",
+   "text": "Near the ball, dash to kick it hard!",
+   "spoken": "Near the ball, dash to kick it hard!",
+   "dur": 1.99
   },
   "need-1-more-gems": {
    "file": "need-1-more-gems.mp3",
@@ -842,6 +836,12 @@
    "spoken": "Okay! Have fun!",
    "dur": 1.1
   },
+  "on-the-edge-mash-the-button-to-hop-back-first-to-three-wins": {
+   "file": "on-the-edge-mash-the-button-to-hop-back-first-to-three-wins.mp3",
+   "text": "On the edge? Mash the button to hop back! First to three wins.",
+   "spoken": "On the edge? Mash the button to hop back! First to three wins.",
+   "dur": 3.43
+  },
   "one": {
    "file": "one.mp3",
    "text": "One!",
@@ -913,6 +913,12 @@
    "text": "Prize time!",
    "spoken": "Prize time!",
    "dur": 0.89
+  },
+  "put-the-net-over-a-duck-then-scoop": {
+   "file": "put-the-net-over-a-duck-then-scoop.mp3",
+   "text": "Put the net over a duck, then scoop!",
+   "spoken": "Put the net over a duck, then scoop!",
+   "dur": 1.68
   },
   "race-a-friend-across-the-foam-on-floats-and-blocks": {
    "file": "race-a-friend-across-the-foam-on-floats-and-blocks.mp3",
@@ -1076,6 +1082,12 @@
    "spoken": "Step on the matching symbol!",
    "dur": 1.39
   },
+  "stomp-when-the-needle-is-in-the-glowing-spot": {
+   "file": "stomp-when-the-needle-is-in-the-glowing-spot.mp3",
+   "text": "Stomp when the needle is in the glowing spot!",
+   "spoken": "Stomp when the needle is in the glowing spot!",
+   "dur": 2.21
+  },
   "super-job": {
    "file": "super-job.mp3",
    "text": "Super job!",
@@ -1172,6 +1184,12 @@
    "spoken": "The tool cart gives your buggy silly new parts!",
    "dur": 2.57
   },
+  "then-eat-it-for-a-silly-power": {
+   "file": "then-eat-it-for-a-silly-power.mp3",
+   "text": "Then eat it for a silly power!",
+   "spoken": "Then eat it for a silly power!",
+   "dur": 1.68
+  },
   "this-balloon-flies-you-sky-high-walk-into-the-basket-and-wait": {
    "file": "this-balloon-flies-you-sky-high-walk-into-the-basket-and-wait.mp3",
    "text": "This balloon flies you sky-high! Walk into the basket and wait.",
@@ -1201,12 +1219,6 @@
    "text": "Three shapes, one is different. Push that one's button!",
    "spoken": "Three shapes, one is different. Push that one's button!",
    "dur": 2.76
-  },
-  "throw-beanbags-at-the-balloons-look-around-to-aim": {
-   "file": "throw-beanbags-at-the-balloons-look-around-to-aim.mp3",
-   "text": "Throw beanbags at the balloons! Look around to aim.",
-   "spoken": "Throw beanbags at the balloons! Look around to aim.",
-   "dur": 2.78
   },
   "treasure-hunter": {
    "file": "treasure-hunter.mp3",
@@ -1399,12 +1411,6 @@
    "text": "Wanna race? Go go go!",
    "spoken": "Wanna race? Go go go!",
    "dur": 1.58
-  },
-  "watch-the-swinging-needle-and-stomp-to-ring-the-bell": {
-   "file": "watch-the-swinging-needle-and-stomp-to-ring-the-bell.mp3",
-   "text": "Watch the swinging needle and stomp to ring the bell!",
-   "spoken": "Watch the swinging needle and stomp to ring the bell!",
-   "dur": 2.64
   },
   "we-cracked-it": {
    "file": "we-cracked-it.mp3",

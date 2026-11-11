@@ -92,11 +92,14 @@ test.describe('how-to at an attraction', () => {
     for (let i = 0; i < 40 && (await bubble.getAttribute('data-id')) !== 'howto:dinoRing:0'; i++) await step(page, 0.25);
     await expect(bubble).toHaveAttribute('data-id', 'howto:dinoRing:0');
     await expect(bubble).toHaveAttribute('data-mode', 'compact');
-    await expect(bubble).toHaveAttribute('data-action', 'use');
+    await expect(bubble).toHaveAttribute('data-action', 'jump');
     await shot(page, 'howto-compact-desktop');
     for (let i = 0; i < 40 && (await bubble.getAttribute('data-id')) !== 'howto:dinoRing:1'; i++) await step(page, 0.25);
     await expect(bubble).toHaveAttribute('data-action', 'jump');
-    const voice = await page.evaluate(() => window.__rgBuddy!.voice().filter((v) => v.text.includes('dino') || v.text.includes('belly')));
+    const voice = await page.evaluate(() => {
+      const texts = new Set(window.__rgBuddy!.history().filter((h) => h.id.startsWith('howto:dinoRing')).map((h) => h.text));
+      return window.__rgBuddy!.voice().filter((v) => texts.has(v.text));
+    });
     expect(voice.length).toBe(2);
     expect(voice.every((v) => v.source === 'clip')).toBe(true);
 
