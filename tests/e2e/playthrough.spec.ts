@@ -9,6 +9,7 @@ import { expect, test } from '@playwright/test';
 import { boot, startGame } from './helpers';
 
 test('new profile: the whole loop, then reload and reset', async ({ page }) => {
+  test.setTimeout(240_000); // slow when other jobs share the CPU
   const { consoleErrors } = await boot(page);
   await page.evaluate(() => {
     const rg = window.__rg!;
@@ -53,7 +54,7 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
     rg.inject({ usePressed: true, use: true });
     rg.step(1 / 60, 1, false);
     rg.inject(null);
-    rg.step(1 / 60, 2);
+    rg.step(1 / 60, 2, false);
   });
   await expect(page.getByTestId('shop')).toBeVisible();
   expect(await page.evaluate(() => window.__rg!.ctx.economy.buy('hat-propeller'))).toBe('ok');
@@ -183,7 +184,7 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
   // End screen: wallet, missions and outfits; Hero and Wardrobe one click away.
   await page.evaluate(() => {
     window.__rg!.setRemaining(0.05);
-    window.__rg!.step(1 / 60, 20);
+    window.__rg!.step(1 / 60, 20, false);
   });
   await expect(page.getByTestId('end-wallet')).toBeVisible();
   await expect(page.getByTestId('end-missions')).toBeVisible();

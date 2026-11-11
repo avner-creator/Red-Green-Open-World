@@ -8,7 +8,7 @@ test.describe('ui wayfinding', () => {
       window.__rg!.freeze(true);
       window.__rg!.start();
       window.__rg!.step(1 / 60, 30, false);
-      window.__rg!.step(1 / 60, 1);
+      window.__rg!.step(1 / 60, 1, false);
     });
 
     // Compass: attraction markers only, and they move with the camera yaw.
@@ -23,7 +23,7 @@ test.describe('ui wayfinding', () => {
       const p = rg.ctx.player.position;
       rg.teleport(p.x, p.y + 0.2, p.z, Math.PI / 2 + rg.ctx.cameraRig.yaw);
       rg.step(1 / 60, 120, false);
-      rg.step(1 / 60, 1);
+      rg.step(1 / 60, 1, false);
     });
     const after = await lefts();
     expect(after.join('|')).not.toBe(before.join('|'));
@@ -61,7 +61,7 @@ test.describe('ui wayfinding', () => {
 
     // The pause menu has a Controls button that opens the same card.
     await page.evaluate(() => window.__rg!.ctx.session.pause());
-    await page.evaluate(() => window.__rg!.step(1 / 60, 2));
+    await page.evaluate(() => window.__rg!.step(1 / 60, 2, false));
     await page.getByTestId('pause-controls').click();
     await expect(page.locator('[data-screen="controls"]')).toHaveClass(/on/);
     expect(consoleErrors).toEqual([]);
