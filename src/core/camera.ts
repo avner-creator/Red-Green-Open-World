@@ -39,6 +39,11 @@ export interface ChaseSource {
   /** Base follow distance and FOV for this vehicle. */
   readonly distance: number;
   readonly height: number;
+  /**
+   * How far below the rider's head the camera aims (m; default 0.35 frames the whole vehicle).
+   * Lower = the driver's head and shoulders stay in the picture (QA5 M2).
+   */
+  readonly lookDrop?: number;
 }
 
 const BASE_PITCH = Math.atan2(CAMERA.height, CAMERA.distance);
@@ -318,7 +323,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       if (tmp.length() > 20) tmp.setLength(20);
       lookAt.addScaledVector(tmp, lookAhead * 0.1);
     }
-    if (chaseK > 0.001) lookAt.y -= 0.35 * chaseK; // frame the whole vehicle, not just the driver
+    if (chaseK > 0.001) lookAt.y -= (chase?.lookDrop ?? 0.35) * chaseK; // frame the vehicle and its driver
     camera.lookAt(lookAt);
 
     if (trauma > 0) {

@@ -379,8 +379,11 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       speed: () => sim.forwardSpeed,
       topSpeed: DRIVE.topSpeedRoad,
       yawRate: () => sim.visualYawRate,
-      distance: 4.6,
-      height: 2.0,
+      // High enough to look over the seat back and Pip on the rear deck onto the driver's head
+      // and shoulders (QA5 M2: the hero was hidden in every driving frame).
+      distance: 4.8,
+      height: 3.0,
+      lookDrop: 0.05,
     },
     promptPosition: () => prompt.copy(sim.visualPosition).setY(sim.visualPosition.y + 0.9),
     update,
