@@ -20,6 +20,7 @@ import { dressPaths } from './outer/paths';
 import { buildSiteDressing, inSiteClearZone, raceCutDistance, siteKeepouts } from './sites';
 import { GLASSES_WAY } from './attractions';
 import { makeGuard } from './fill/guard';
+import { inSightline } from './sightlines';
 import { buildFill, type Fill } from './fill/zones';
 
 /** Inside a glasses-play site's clear circle (+ margin): the mini-games' startup probe wants it empty. */
@@ -85,7 +86,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });
   // Hand-placed trees, bushes and rocks give way to the sites and stay off the roads (race line).
   const trees = [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...outer.trees, ...roadTrees, ...pathTrees].filter(
-    (t) => !inSiteClearZone(t.x, t.z, 1) && !inGlassesSite(t.x, t.z, 3) && roadEdgeDistance(terrain.roads, t.x, t.z) > 1,
+    (t) => !inSiteClearZone(t.x, t.z, 1) && !inGlassesSite(t.x, t.z, 3) && roadEdgeDistance(terrain.roads, t.x, t.z) > 1 && !inSightline(t.x, t.z, t.kind === 'bush' || t.kind === 'rock' ? 0 : 1.6),
   );
   return { trees, keepouts, gemSpots, chestSpots, wayfinding, outer, fill };
 }
