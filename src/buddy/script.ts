@@ -220,13 +220,33 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
     { text: 'Give the dragon a snack, then stand on the glowing ring!', icon: 'dragon', action: 'use', mood: 'excited' },
     { text: 'Jump flaps the wings. Pop more clouds than the pink dragon!', icon: 'dragon', action: 'jump', mood: 'silly' },
   ],
-  // The six magic-glasses games: one rule-neutral line each (their rounds are being reworked).
-  glowflies: [{ text: 'Catch the glow-flies! Run or jump right through them!', icon: 'glasses', action: 'jump', mood: 'excited' }],
-  oddone: [{ text: "Three shapes, one is different. Push that one's button!", icon: 'glasses', action: 'use', mood: 'curious' }],
-  lineup: [{ text: 'Move the magic ring onto a bubble, then pop it!', icon: 'glasses', action: 'use', mood: 'curious' }],
-  toys: [{ text: 'I lost my toys! Follow the glowing paw prints to find them!', icon: 'paw', extra: 'glasses', mood: 'curious' }],
-  gates: [{ text: 'Each eye sees half a shape. Run through the matching arch!', icon: 'glasses', mood: 'curious' }],
-  dotsigns: [{ text: 'Find the shape hidden in the dots. Push its button!', icon: 'glasses', action: 'use', mood: 'curious' }],
+  // The six magic-glasses games (rounds, glowing start pad, 3-2-1). Never says where anything hidden is.
+  glowflies: [
+    { text: 'Step on the pad, then jump right through the glow-flies!', icon: 'glasses', action: 'jump', mood: 'excited' },
+    { text: 'Catch five in thirty seconds!', icon: 'glasses', action: 'jump', mood: 'excited' },
+  ],
+  oddone: [
+    { text: 'Stand on the glowing pad and start the round!', icon: 'glasses', action: 'use', mood: 'curious' },
+    { text: 'Five times, pick the picture that is different!', icon: 'glasses', action: 'use', mood: 'curious' },
+  ],
+  lineup: [
+    { text: 'Step on the glowing pad.', icon: 'glasses', mood: 'curious' },
+    { text: 'Slide the magic ring over the bubble, then pop it!', icon: 'glasses', action: 'use', mood: 'curious' },
+  ],
+  toys: [
+    { text: "Step on the glowing pad by Pip's basket.", icon: 'paw', extra: 'glasses', mood: 'curious' },
+    { text: 'Follow the glowing paw prints to find his lost toys!', icon: 'paw', extra: 'glasses', mood: 'curious' },
+    { text: 'There are three!', icon: 'paw', mood: 'excited' },
+  ],
+  gates: [
+    { text: 'Step on the pad. Join the two halves with both eyes!', icon: 'glasses', mood: 'curious' },
+    { text: 'Run through the arch with that whole shape!', icon: 'glasses', mood: 'excited' },
+    { text: 'Three runs. Get two right to win gems!', icon: 'glasses', mood: 'excited' },
+  ],
+  dotsigns: [
+    { text: 'Stand on the glowing pad and start the round!', icon: 'glasses', action: 'use', mood: 'curious' },
+    { text: 'Five times, find the shape that pops out of the dots!', icon: 'glasses', action: 'use', mood: 'curious' },
+  ],
   vault: [
     { text: 'A secret vault! Look at its three round windows with your glasses.', icon: 'lock', extra: 'glasses', mood: 'curious' },
     { text: 'Step on the floor pads with those shapes, in that order!', icon: 'lock', action: 'move', mood: 'excited' },
