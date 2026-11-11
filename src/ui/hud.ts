@@ -6,6 +6,7 @@ import { formatTime, timeFraction } from './format';
 import { createFunPass } from './funPass';
 import type { FunPass } from './funPass';
 import { createHudEcon } from './hudEcon';
+import { createHudExplain } from './hudExplain';
 import { outfitIcon, stuntIcon, useKey } from './glyphs';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
@@ -69,6 +70,7 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
   const pass = createFunPass(ctx, { goals: econ.missions });
   el.append(glow, econ.top, pass.chip, timer, prompt, toasts, econ.moments, pass.overlay);
   ctx.uiRoot.append(el);
+  const explain = createHudExplain(ctx, el);
 
   let lastStars = -1;
   let lastSecond = -1;
@@ -145,6 +147,7 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
       const s = ctx.session.state;
       econ.update(dt);
       pass.update(dt);
+      explain.update(dt);
       if (s.stars !== lastStars) {
         lastStars = s.stars;
         starText.textContent = String(s.stars);

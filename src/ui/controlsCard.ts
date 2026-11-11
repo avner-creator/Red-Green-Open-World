@@ -49,7 +49,7 @@ const DEVICE_ICON: Record<Device, UiIconName> = { keyboard: 'mouse', gamepad: 's
 /** Device picker on the card: keyboard, gamepad, touch (the active device is preselected). */
 function deviceTabs(pick: (d: Device) => void): { el: HTMLElement; set(d: Device): void } {
   const btns = (['keyboard', 'gamepad', 'touch'] as Device[]).map((d) => {
-    const b = h('button', 'b d sm wf-dev', { type: 'button', 'aria-label': d, 'aria-pressed': 'false', 'data-testid': `controls-${d}` }, d === 'keyboard' ? cap('W') : null, icon(DEVICE_ICON[d]));
+    const b = h('button', 'b d sm wf-dev', { type: 'button', 'aria-label': d, 'aria-pressed': 'false', 'data-testid': `controls-${d}` }, d === 'keyboard' ? cap('W') : d === 'gamepad' ? padButton('A') : null, icon(DEVICE_ICON[d]));
     b.addEventListener('click', () => pick(d));
     return b;
   });
@@ -72,7 +72,7 @@ function panel(
   const tabs = deviceTabs(pick);
   tabs.set(device);
   return {
-    panel: h('div', 'wf-panel', {}, tabs.el, body, close),
+    panel: h('div', 'wf-panel', {}, body, h('div', 'wf-foot', {}, tabs.el, close)),
     body,
     close,
     tabs,

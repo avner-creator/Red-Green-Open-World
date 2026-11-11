@@ -178,10 +178,10 @@ test.describe('ui', () => {
       rg.step(1 / 60, 30, false);
     });
     await expect(page.getByTestId('play-again')).toBeVisible();
-    // 2 stars earned this run: exactly one gold header star, the rest dotted; the hat shows.
+    // 2 stars earned this run: exactly one gold header star, the rest dotted; the Fun Pass card shows.
     expect(await page.locator('[data-testid="end-stars"] .hstar.earned').count()).toBe(1);
     expect(await page.locator('[data-testid="end-stars"] .hstar.empty').count()).toBe(2);
-    expect(await page.locator('.stk.outfit.earned').count()).toBe(1);
+    await expect(page.getByTestId('end-funpass')).toBeVisible();
     await save(page, 'end');
     await page.getByTestId('play-again').click();
     expect(await page.evaluate(() => window.__rg!.state().phase)).toBe('playing');
@@ -208,8 +208,10 @@ test.describe('ui', () => {
       rg.step(1 / 60, 30, false);
     });
     await expect(page.getByTestId('play-again')).toBeVisible();
-    expect(await page.locator('.stk.outfit.earned').count()).toBe(2);
-    expect(await page.locator('.stk.outfit.empty').count()).toBe(2);
+    // Fun Pass on the end screen: the chest and the trampoline are stamped, the rest are empty.
+    await expect(page.getByTestId('end-funpass')).toHaveAttribute('data-count', '2');
+    await expect(page.locator('[data-testid="end-funpass"] .pslot.on[data-stamp="chest"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="end-funpass"] .pslot.on[data-stamp="trampoline"]')).toHaveCount(1);
     await expect(page.getByTestId('stickers').locator('.stk').nth(1)).toContainText('2/');
     await save(page, 'end-earned');
   });
@@ -226,20 +228,24 @@ test.describe('ui', () => {
 
   // 1080p screenshots live in scripts/shots-ui-1080.mjs (npm run shots:ui1080): minutes on SwiftShader.
 
-  test('keyboard navigation and credits', async () => {
+  test('keyboard navigation and help', async () => {
     await freshTitle();
     await page.evaluate(() => window.__rg!.freeze(true));
     await step(page);
-    // Play is focused; arrow moves to a corner button; Enter opens credits.
-    await page.keyboard.press('ArrowDown');
+    // Play is focused; an arrow moves to another big title button.
+    await page.keyboard.press('ArrowLeft');
     const id = await page.evaluate(() => (document.activeElement as HTMLElement).dataset.testid);
-    // Below Play: the wardrobe button (title), then the corner buttons.
-    expect(['title-wardrobe', 'grownups', 'credits']).toContain(id);
-    await page.getByTestId('credits').focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByTestId('credits-back')).toBeVisible();
-    await save(page, 'credits');
+    expect(['title-wardrobe', 'title-help', 'title-hero', 'grownups']).toContain(id);
+    // Help (controls card) is one key away on the title: H.
+    const close = page.locator('[data-screen="controls"] [data-testid="controls-close"]');
+    await page.keyboard.press('KeyH');
+    await expect(close).toBeVisible();
+    await expect(page.locator('[data-screen="controls"] [data-testid="controls-keyboard"]')).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
+    await expect(page.getByTestId('play')).toBeVisible();
+    await page.getByTestId('title-help').click();
+    await expect(close).toBeVisible();
+    await close.click();
     await expect(page.getByTestId('play')).toBeVisible();
   });
 
@@ -261,5 +267,11 @@ test.describe('ui', () => {
     await page.evaluate(() => window.__rg!.step(1 / 60, 40, false));
     await expect(page.getByTestId('settings')).toBeVisible();
     await page.mouse.up();
+    // Credits live behind the gate (no unexplained button on the title).
+    await page.getByTestId('credits').click();
+    await expect(page.getByTestId('credits-back')).toBeVisible();
+    await save(page, 'credits');
+    await page.getByTestId('credits-back').click();
+    await expect(page.getByTestId('settings')).toBeVisible();
   });
 });

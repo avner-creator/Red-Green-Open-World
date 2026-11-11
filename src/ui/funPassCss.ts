@@ -26,6 +26,19 @@ const CSS = `
 .rg .passprize .g{display:flex;align-items:center;gap:.1em}
 .rg .passprize .t{-webkit-text-stroke:0;text-shadow:none}
 
+/* HUD picture explanations (hover / tap / first time) */
+.rg .xbub{position:absolute;z-index:20;display:none;flex-direction:column;gap:calc(var(--u)*.8);padding:calc(var(--u)*1.1) calc(var(--u)*1.6);border-radius:calc(var(--u)*2.4);
+  background:#fff;color:#15110a;border:calc(var(--u)*.6) solid #000;box-shadow:0 0 0 calc(var(--u)*.45) #fff,0 calc(var(--u)*1) calc(var(--u)*2.4) rgba(0,0,0,.55);pointer-events:none}
+.rg .xbub.on{display:flex;animation:rg-in .2s ease-out}
+.rg .xbub::before{content:"";position:absolute;left:var(--tx,50%);top:calc(var(--u)*-2.2);width:0;height:0;transform:translateX(-50%);
+  border:calc(var(--u)*1.4) solid transparent;border-bottom:calc(var(--u)*1.6) solid #000}
+.rg .xrow{display:flex;align-items:center;gap:calc(var(--u)*.7);font-size:calc(var(--u)*4.4)}
+.rg .xrow .ic{color:#15110a;--out:#fff}
+.rg .xrow .ic.xar{color:var(--y);--out:#000;font-size:.8em}
+.rg .xrow .xt{font-size:.8em;color:#fff}
+.rg .hud .xpulse{animation:rg-xpulse 1s ease-in-out 4}
+@keyframes rg-xpulse{0%,100%{filter:none}50%{filter:brightness(1.5) drop-shadow(0 0 calc(var(--u)*1.6) #fff)}}
+
 /* the card overlay */
 .rg .pass-over{--u:clamp(3.6px,.92vmin,20px);position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;pointer-events:auto;background:rgba(6,8,20,.55)}
 .rg .pass-over.on{display:flex}
@@ -62,7 +75,8 @@ const CSS = `
 /* end screen */
 .rg .pass-endcard{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.6);padding:calc(var(--u)*1) calc(var(--u)*2);border-radius:calc(var(--u)*2);background:#ffffff12}
 .rg .pass-endhead{font-size:calc(var(--u)*3.4)}
-.rg .pass-endcard .ptrack{min-width:calc(var(--u)*50);height:calc(var(--u)*1.6);margin:calc(var(--u)*1.8) 0 calc(var(--u)*3)}
+.rg .pass-endrow{display:flex;align-items:center;gap:calc(var(--u)*3);width:100%}
+.rg .pass-endcard .ptrack{flex:1;min-width:calc(var(--u)*40);height:calc(var(--u)*1.6);margin:calc(var(--u)*.6) calc(var(--u)*2) calc(var(--u)*2.6)}
 .rg .pass-endcard .ptrack .pm{width:calc(var(--u)*4.4)}
 .rg .pass-endcard .ptrack .pm>.ic{font-size:calc(var(--u)*3.8)}
 .rg .pass-endcard .ptrack .pm .g{font-size:calc(var(--u)*1.9)}

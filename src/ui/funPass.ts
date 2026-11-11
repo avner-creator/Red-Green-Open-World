@@ -81,6 +81,7 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
   const pops = h('div', 'passpops');
 
   // ── overlay card ──
+  const headCount = h('span', 't cnt', { 'data-testid': 'funpass-count' }, '0');
   const grid = h('div', 'pass-grid');
   const track = h('div', 'pass-track');
   const closeBtn = h('button', 'b pass-close', { type: 'button', 'aria-label': 'Close', 'data-testid': 'funpass-close' }, icon('back'));
@@ -89,7 +90,7 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
     'div',
     'pass-panel',
     {},
-    h('div', 'pass-head', {}, passIcon('big'), h('span', 't cnt', { 'data-testid': 'funpass-count' }, '0'), h('span', 't of', {}, `/${total}`)),
+    h('div', 'pass-head', {}, passIcon('big'), headCount, h('span', 't of', {}, `/${total}`)),
     hooks.goals,
     track,
     grid,
@@ -129,6 +130,7 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
   };
 
   const renderCard = (): void => {
+    headCount.textContent = String(got.size);
     grid.replaceChildren(...PASS_SLOTS.map((s, i) => slotEl(s, got.has(s.id), i)));
     track.replaceChildren(trackEl());
   };
@@ -247,8 +249,7 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
         'div',
         'pass-endcard',
         { 'data-testid': 'end-funpass', 'data-count': String(got.size) },
-        h('div', 'pass-endhead', {}, passIcon('big'), h('span', 't', {}, `${got.size}/${total}`)),
-        trackEl(),
+        h('div', 'pass-endrow', {}, h('div', 'pass-endhead', {}, passIcon('big'), h('span', 't', {}, `${got.size}/${total}`)), trackEl()),
         g,
       );
     },
