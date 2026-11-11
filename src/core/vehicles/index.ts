@@ -4,12 +4,12 @@
  * `VehicleInternal` (the buggy, the two ranch horses) plugs in here.
  */
 import * as THREE from 'three';
-import type { ExternalController, GameContext, InteractionApi, VehiclesApi } from '../../types';
+import type { ExternalController, GameContext, InteractionApi } from '../../types';
 import type { CameraInternal } from '../camera';
 import type { PlayerInternal } from '../player';
 import { createCar } from './car';
 import { createHorse } from './horse';
-import type { VehicleInternal } from './types';
+import type { VehicleInternal, VehiclesPublic } from './types';
 
 /**
  * The two paddock horses: offsets from the ranch anchor (metres, world axes), yaw offset, coat,
@@ -22,7 +22,7 @@ const HORSES = [
 ] as const;
 
 export interface VehiclesInternal {
-  api: VehiclesApi;
+  api: VehiclesPublic;
   update(dt: number): void;
   /** After the player's update: rider posing (legs around the horse, hands on the reins). */
   lateUpdate(dt: number): void;
@@ -58,14 +58,15 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
   let active: VehicleInternal | null = null;
   let sinceEnter = 0;
 
-  const enter = (v: VehicleInternal): void => {
-    if (active || ctx.player.mode !== 'walk') return;
+  const enter = (v: VehicleInternal): boolean => {
+    if (active || ctx.player.mode !== 'walk') return false;
     active = v;
     sinceEnter = 0;
     player.setVehicle(v.api, v.mode, v.seat, v.seatAnim);
     v.onEnter();
     camera.setChase(v.chase);
     ctx.audio.play('jump');
+    return true;
   };
 
   /** Detach from the active vehicle (camera, engine); the player is handled by the caller. */
@@ -89,12 +90,8 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
 
   /** R while driving: vehicle upright on the nearest road, player standing beside it. */
   const rescue = (): void => {
-    if (active?.rescueKeepsRider) {
-      // Horse: horse and rider together on the last safe spot; the rider stays in the saddle.
-      active.rescue();
-      ctx.events.emit('player:respawn', {});
-      return;
-    }
+    // R always lets go (every ride, the horse too): the vehicle goes back to a safe spot and the
+    // rider stands beside it. (The horse used to keep its rider on R; batch-2 rule: R releases.)
     const v = detach();
     if (!v) return;
     player.setVehicle(null);
@@ -129,7 +126,13 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
   );
 
   return {
-    api: { all: list.map((v) => v.api) },
+    api: {
+      all: list.map((v) => v.api),
+      board(id) {
+        const v = list.find((c) => c.api.id === id);
+        return v ? enter(v) : false;
+      },
+    },
     update(dt) {
       // Something else took the player out (respawn, session end, an activity): let go cleanly.
       if (active && ctx.player.vehicle !== active.api) detach();

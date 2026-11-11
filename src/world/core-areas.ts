@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { M, T } from './batch';
 import { C, barrel, bench, box, bunting, crate, cone, fence, flagpole, hayBale, icon, lamp, planter, type Kit } from './props';
 import { boxG, blobG, cylG, rbox, sphereG, torusG } from './shapes';
-import { ANCHORS } from './layout';
+import { ANCHORS, ROADS } from './layout';
 import type { Keepout, ManualTree } from './scatter';
 
 export interface CoreAreas {
@@ -252,16 +252,17 @@ function garage(k: Kit): CoreAreas {
   b.add('rubber', torusG(0.035, 16, Math.PI * 2, 0.22), 0x1e1e20, T(px + 0.3, py + 0.75, pz, 0, 1, 1, 1, 0, Math.PI / 2));
   k.col.box(T(px, py, pz), 0, 0.75, 0, 0.3, 0.75, 0.22);
   for (const [cx, cz] of [[-9.6, -4.6], [-10.4, -3.8], [9.8, -4.4]]) cone(b, a.x + cx, k.h(a.x + cx, a.z + cz) + 0.02, a.z + cz);
-  lamp(k, a.x - 13.6, a.z - 5.5);
-  lamp(k, a.x + 13.6, a.z - 3.4);
+  // (The lamp at the forecourt's road corner went: the race cuts across the grass there.)
+  lamp(k, a.x + 12.5, a.z + 1.5);
   lamp(k, a.x - 13.6, a.z + 6.5);
   // Planters along the building front between the piers' outer ends.
   planter(k, a.x - 12.5, a.z + 1.2, 2.4, 0.9, Math.PI / 2, 11);
   planter(k, a.x + 12.5, a.z + 1.2, 2.4, 0.9, Math.PI / 2, 12);
   bench(k, a.x + 16.4, a.z + 10.8, Math.PI);
   // Pylon sign by the road: tall pole with a double-sided icon box.
-  const sx = a.x - 14.5;
-  const sz = a.z - 7.8;
+  // (Set back from the east road: the race line runs along that verge.)
+  const sx = a.x - 15.5;
+  const sz = a.z - 3;
   const sy = k.h(sx, sz);
   b.add('metal', cylG(10), slate, T(sx, sy, sz, 0, 0.14, 4.4, 0.14));
   b.add('matte', cylG(10), C.stoneDark, T(sx, sy, sz, 0, 0.35, 0.3, 0.35));
@@ -290,6 +291,22 @@ function garage(k: Kit): CoreAreas {
 
 // ───────────────────────────── Balloon launch field ─────────────────────────────
 
+/** Distance from (x, z) to the nearest road edge (raw road polylines; negative = on the road). */
+function roadEdge(x: number, z: number): number {
+  let best = Infinity;
+  for (const r of ROADS) {
+    for (let i = 0; i < r.points.length - 1; i++) {
+      const [ax, az] = r.points[i];
+      const [bx, bz] = r.points[i + 1];
+      const dx = bx - ax;
+      const dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+      best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t) - r.width / 2);
+    }
+  }
+  return best;
+}
+
 function balloonField(k: Kit): CoreAreas {
   const a = ANCHORS.balloon;
   const y = k.h(a.x, a.z);
@@ -316,21 +333,25 @@ function balloonField(k: Kit): CoreAreas {
   }
   // Flag poles around the circle with bunting strung between neighbours.
   const cols = [0xc8433a, 0xf2c14e, 0x2f5d7c, 0xf4efe6, 0x3b6b45];
-  const poles: THREE.Vector3[] = [];
+  const poles: (THREE.Vector3 | null)[] = [];
   const n = 8;
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI * 2 + 0.25;
-    // Leave the side facing the road (south-west, towards the camera approach) open.
     const px = a.x + Math.cos(ang) * 17.2;
     const pz = a.z + Math.sin(ang) * 17.2;
+    // The loop and east roads skirt the field: no pole on or next to them (race line, cars).
+    if (roadEdge(px, pz) < 1.5) {
+      poles.push(null);
+      continue;
+    }
     flagpole(k, px, pz, 6.6, cols[i % cols.length], 1.3);
     poles.push(new THREE.Vector3(px, k.h(px, pz) + 6.1, pz));
   }
   for (let i = 0; i < n; i++) {
     const p = poles[i];
     const q = poles[(i + 1) % n];
-    // Skip the span across the entrance (the one facing the road).
-    if (i === 5) continue;
+    // Skip the span across the entrance (the one facing the road) and spans over a road.
+    if (i === 5 || !p || !q) continue;
     bunting(b, p, q, [0xc8433a, 0xf4efe6, 0x2f5d7c, 0xf2c14e], 0.8);
   }
   // Windsock on a striped mast.
@@ -346,10 +367,11 @@ function balloonField(k: Kit): CoreAreas {
   k.col.cyl(wx, wy, wz, 3.4, 0.12);
 
   // Kiosk: striped awning, counter hatch, balloon icon on the roof (no text).
-  const hx = a.x - 20;
-  const hz = a.z + 9;
+  // West of the loop road (it used to stand on it), its hatch facing the road and the field.
+  const hx = a.x - 27;
+  const hz = a.z + 2.5;
   const hy = k.h(hx, hz);
-  const hm = T(hx, hy, hz, Math.PI * 0.62);
+  const hm = T(hx, hy, hz, Math.PI / 2 + 0.25);
   box(b, 'matte', hm, 0, -0.6, 0, 3.6, 0.7, 2.9, 0xa8a49c);
   b.add('paint', rbox(3.2, 2.5, 2.6, 0.06), 0xf2e6cf, hm, { aoY: hy, aoH: 0.6 });
   box(b, 'paint', hm, 0, 0, 0, 3.24, 0.7, 2.64, 0x2f5d7c);
@@ -363,23 +385,24 @@ function balloonField(k: Kit): CoreAreas {
   for (const f of [1, -1]) icon(b, M(im, T(0, 0.6, f * 0.06, f > 0 ? 0 : Math.PI, 1.3, 1.3, 1)), 'balloon');
   k.col.box(hm, 0, 1.3, 0, 1.6, 1.3, 1.35);
   // Burner gas bottles in a cage, sandbags, crates, a picnic table.
-  const gm = T(hx + 4.5, k.h(hx + 4.5, hz - 2), hz - 2, 0.4);
+  const gm = T(hx - 1.2, k.h(hx - 1.2, hz - 4.2), hz - 4.2, 0.4);
   for (let i = 0; i < 4; i++) b.add('gloss', cylG(12), 0xd8d8d8, M(gm, T(-0.6 + i * 0.4, 0, 0, 0, 0.17, 1.1, 0.17)));
   for (let i = 0; i < 4; i++) b.add('gloss', sphereG(1), 0xd8d8d8, M(gm, T(-0.6 + i * 0.4, 1.1, 0, 0, 0.17, 0.12, 0.17)));
   for (const sx of [-0.85, 0.85]) box(b, 'metal', gm, sx, 0, 0, 0.06, 1.3, 0.6, 0x3b6b45);
   box(b, 'metal', gm, 0, 1.25, 0, 1.76, 0.06, 0.6, 0x3b6b45);
   k.col.box(gm, 0, 0.65, 0, 0.9, 0.65, 0.3);
-  sandbags(k, hx + 3.5, hz + 2.6, 5, 0.3);
+  sandbags(k, hx - 0.8, hz + 3.6, 5, 0.3);
   sandbags(k, a.x + 13, a.z - 15, 5, -0.8);
-  crate(k, hx + 2.2, hz + 4.0, 1.0, 0.4);
-  crate(k, hx + 3.3, hz + 4.4, 0.8, 0.9);
-  crate(k, hx + 2.6, hz + 4.2, 0.6, 0.2, k.h(hx + 2.2, hz + 4.0) + 1.0);
+  crate(k, hx - 3.0, hz + 1.6, 1.0, 0.4);
+  crate(k, hx - 3.4, hz + 2.8, 0.8, 0.9);
+  crate(k, hx - 3.1, hz + 2.1, 0.6, 0.2, k.h(hx - 3.0, hz + 1.6) + 1.0);
   barrel(k, a.x + 17, a.z - 11, 0x2f5d7c);
   bench(k, a.x - 6, a.z + 20.5, Math.PI);
   bench(k, a.x + 4, a.z + 21, Math.PI);
-  bench(k, a.x - 19.5, a.z - 2, -Math.PI / 2 + 0.3);
+  // Bench and lamp off the loop road (they stood on its edge), on its far verge facing the field.
+  bench(k, a.x - 23.2, a.z - 6.5, Math.PI / 2);
   shrubBed(k, a.x - 1, a.z + 22.6, 7, 0, 31);
-  lamp(k, a.x - 14, a.z - 14.5);
+  lamp(k, a.x - 23.2, a.z - 9.2);
   lamp(k, a.x + 14.5, a.z - 14.5);
 
   const trees: ManualTree[] = [
@@ -390,7 +413,10 @@ function balloonField(k: Kit): CoreAreas {
     { x: a.x - 22, z: a.z + 21, kind: 'bush', scale: 1.2 },
     { x: a.x + 22, z: a.z - 6, kind: 'bush', scale: 1.1 },
   ];
-  return { trees, keepouts: [{ x: a.x, z: a.z, r: 16.5, mown: true }, { x: a.x, z: a.z, r: 15 }, { x: hx, z: hz, r: 3.5 }] };
+  return {
+    trees,
+    keepouts: [{ x: a.x, z: a.z, r: 16.5, mown: true }, { x: a.x, z: a.z, r: 15 }, { x: hx - 1.5, z: hz, r: 5.5 }, { x: a.x - 23.2, z: a.z - 7.8, r: 2.5 }],
+  };
 }
 
 // ───────────────────────────── Landing meadow ─────────────────────────────

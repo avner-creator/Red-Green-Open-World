@@ -93,6 +93,7 @@ try {
           const z = a.position.z + (dz / l) * dist;
           rg.teleport(x, ctx.world.heightAt(x, z) + 0.2, z, Math.atan2(a.position.x - x, a.position.z - z));
         };
+        const at = (x, z, tx, tz, y) => rg.teleport(x, y ?? ctx.world.heightAt(x, z) + 0.2, z, Math.atan2(tx - x, tz - z));
         const buggyRoot = ctx.scene.getObjectByName('buggy');
         const views = {
           spawn: () => rg.teleport(A.spawn.position.x, ctx.world.heightAt(A.spawn.position.x, A.spawn.position.z) + 0.2, A.spawn.position.z, A.spawn.yaw),
@@ -103,6 +104,11 @@ try {
           ranch: () => lookAt(A.ranch, A.spawn.position, 14),
           bungee: () => lookAt(A.bungee, A.bungeeLanding.position, 18),
           silly: () => lookAt(A.sillyZone, A.spawn.position, 16),
+          // Outer-area views (stream G's worst cases).
+          'silly-side': () => at(-22, 88, 8, 98),
+          'road-west': () => at(-20, 9, -52, 30),
+          lighthouse: () => at(-43, -127, -62, -134),
+          'lh-top': () => at(-65.6, -134.6, -62, -134, ctx.world.heightAt(-62, -134) + 1.1 + 13.2 + 0.25 + 0.3),
           vault: () => {
             const d = window.__rgSecrets?.info().doors[0];
             if (d) lookAt({ position: { x: d.x, z: d.z } }, { x: d.x + Math.sin(d.yaw) * 20, z: d.z + Math.cos(d.yaw) * 20 }, 12);
@@ -171,10 +177,10 @@ try {
   const cell = (c) => `${String(c.main).padStart(3)}/${k(c.mainTris).padStart(5)} ${String(c.shadow).padStart(3)}/${k(c.shadowTris).padStart(5)}`;
   const cols = ['total', ...Object.keys(GROUPS), 'world'];
   console.log('\nDraws/triangles per frame: main pass | shadow pass (attributed by hiding each group)');
-  console.log(`${'quality'.padEnd(7)} ${'view'.padEnd(8)} ${cols.map((c) => c.padEnd(21)).join(' ')}`);
+  console.log(`${'quality'.padEnd(7)} ${'view'.padEnd(10)} ${cols.map((c) => c.padEnd(21)).join(' ')}`);
   for (const r of rows) {
     const cells = cols.map((c) => cell(c === 'total' ? r.total : r.parts[c]).padEnd(21));
-    console.log(`${r.quality.padEnd(7)} ${r.view.padEnd(8)} ${cells.join(' ')}`);
+    console.log(`${r.quality.padEnd(7)} ${r.view.padEnd(10)} ${cells.join(' ')}`);
   }
 } finally {
   await browser?.close();

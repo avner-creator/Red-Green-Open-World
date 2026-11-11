@@ -1,20 +1,19 @@
-/** Boot + frame loop. Only the orchestrator edits this file. */
-import * as THREE from 'three';
+/**
+ * Boot + frame loop. Only the orchestrator edits this file; the loader/boot-stage parts belong to
+ * Stream I (`src/boot/`). Only the small pieces needed to paint the loading screen are static
+ * imports; every heavy system is a separate chunk, downloaded in parallel and awaited in boot order.
+ */
 import { CAMERA, FIXED_DT, MAX_FRAME_DT, SETTINGS_KEY } from './config';
 import { createEventBus } from './events';
 import { createSettings } from './settings';
 import { createSession } from './session';
-import { createAudio } from './audio';
-import { createVision } from './vision';
-import { createInput, createPhysics, createPlayerSystems } from './core';
 import { isPhoneViewport, touchPixelRatioCap } from './core/input-touch-math';
-import { createWorld } from './world';
-import { createActivities } from './activities';
-import { createEconomy } from './activities/economy';
 import { createProfile } from './profile';
-import { createUi } from './ui';
 import { VisionLayer } from './types';
-import type { GameContext, TestApi } from './types';
+import type { Object3D } from 'three';
+import { createBootLoader, hasWebGL2, nextPaint, showContextLost, watchContextLoss, watchVisibility, whenVisible } from './boot';
+import type { FailureScreen } from './boot';
+import type { GameContext, Interactable, TestApi } from './types';
 
 const params = new URLSearchParams(location.search);
 const testMode = params.get('test') === '1';
@@ -47,10 +46,34 @@ function hasSavedSettings(): boolean {
   }
 }
 
+const loader = createBootLoader(document.getElementById('boot'), { still: testMode });
+
 async function boot(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const uiRoot = document.getElementById('ui-root') as HTMLElement;
-  const bootEl = document.getElementById('boot');
+
+  if (!hasWebGL2()) {
+    loader.fail('webgl');
+    return;
+  }
+
+  // Start every download now (they arrive in parallel; Vite adds modulepreload for their shared
+  // chunks, and index.html already preloads the physics WASM). They are awaited in boot order.
+  loader.stage('code');
+  const chunks = {
+    three: import('three'),
+    audio: import('./audio'),
+    vision: import('./vision'),
+    core: import('./core'),
+    world: import('./world'),
+    activities: import('./activities'),
+    economy: import('./activities/economy'),
+    ui: import('./ui'),
+    buddy: import('./buddy'),
+  };
+  // A failure is reported where the chunk is awaited (below), not as an unhandled rejection.
+  for (const p of Object.values(chunks)) p.catch(() => undefined);
+  const [THREE, { createAudio }, { createVision }] = await Promise.all([chunks.three, chunks.audio, chunks.vision]);
 
   const events = createEventBus();
   const firstRun = !hasSavedSettings();
@@ -79,7 +102,7 @@ async function boot(): Promise<void> {
 
   ctx.vision = createVision(ctx);
   // Test mode: remember what goes on the vision layers, so channel tests can toggle one feature.
-  const layerObjects: { object: THREE.Object3D; layer: VisionLayer }[] = [];
+  const layerObjects: { object: Object3D; layer: VisionLayer }[] = [];
   if (testMode) {
     const add = ctx.vision.add.bind(ctx.vision);
     const remove = ctx.vision.remove.bind(ctx.vision);
@@ -93,18 +116,59 @@ async function boot(): Promise<void> {
       remove(object);
     };
   }
+  const { createInput, createPhysics, createPlayerSystems } = await chunks.core;
   ctx.input = createInput(ctx);
+  loader.stage('physics');
+  await nextPaint();
   ctx.physics = await createPhysics(ctx);
+  const { createWorld } = await chunks.world;
+  loader.stage('world');
+  await nextPaint();
   ctx.world = await createWorld(ctx);
+  loader.stage('player');
+  await nextPaint();
   const core = await createPlayerSystems(ctx);
   ctx.player = core.player;
   ctx.cameraRig = core.cameraRig;
   ctx.interactions = core.interactions;
   ctx.vehicles = core.vehicles;
+  // Test mode: record what rides leave behind (camera override, sound loops) and every E target.
+  const probe = { override: false, loops: new Map<string, number>(), targets: [] as Interactable[] };
+  if (testMode) {
+    const setOverride = ctx.cameraRig.setOverride.bind(ctx.cameraRig);
+    ctx.cameraRig.setOverride = (o) => {
+      probe.override = o !== null;
+      setOverride(o);
+    };
+    const setLoop = audio.setLoop.bind(audio);
+    audio.setLoop = (name, intensity, pitch) => {
+      probe.loops.set(name, intensity);
+      setLoop(name, intensity, pitch);
+    };
+    const add = ctx.interactions.add.bind(ctx.interactions);
+    ctx.interactions.add = (t) => {
+      probe.targets.push(t);
+      const off = add(t);
+      return () => {
+        const i = probe.targets.indexOf(t);
+        if (i >= 0) probe.targets.splice(i, 1);
+        off();
+      };
+    };
+  }
+  const { createActivities } = await chunks.activities;
+  loader.stage('activities');
+  await nextPaint();
+  const { createEconomy } = await chunks.economy;
   const economy = createEconomy(ctx);
   ctx.economy = economy;
   const activities = await createActivities(ctx);
+  const { createUi } = await chunks.ui;
+  loader.stage('ui');
+  await nextPaint();
   ctx.ui = createUi(ctx);
+  const { createBuddy } = await chunks.buddy;
+  const buddy = createBuddy(ctx);
 
   const resize = (): void => {
     const w = Math.max(1, window.innerWidth);
@@ -150,6 +214,7 @@ async function boot(): Promise<void> {
     }
     ctx.world.update(dt);
     ctx.ui.update(dt);
+    buddy.update(dt);
     audio.update(dt);
   };
   const render = (dt: number): void => {
@@ -159,15 +224,46 @@ async function boot(): Promise<void> {
   };
 
   let frozen = false;
+  /** True while the GPU context is lost: nothing is updated or drawn until it is restored. */
+  let contextLost = false;
   let last = performance.now();
   const loop = (now: number): void => {
     requestAnimationFrame(loop);
     const dt = Math.min((now - last) / 1000, MAX_FRAME_DT);
     last = now;
-    if (frozen) return;
+    if (frozen || contextLost) return;
     update(dt);
     render(dt);
   };
+
+  // Lost GPU context (driver reset, too many tabs, phone sleep): wordless "picture is coming back"
+  // screen, then carry on without reloading once three.js has rebuilt its GPU state.
+  let lostScreen: FailureScreen | null = null;
+  watchContextLoss(canvas, {
+    onLost() {
+      contextLost = true;
+      if (session.state.phase === 'playing') session.pause();
+      lostScreen = showContextLost();
+    },
+    onRestored() {
+      contextLost = false;
+      lostScreen?.close();
+      lostScreen = null;
+      resize();
+      last = performance.now();
+    },
+  });
+  // Background tab: pause the game and fade the music out; the pause menu greets the player back.
+  watchVisibility({
+    onHidden() {
+      if (session.state.phase === 'playing') session.pause();
+      audio.setMusic(false);
+    },
+    onVisible() {
+      audio.setMusic(true);
+      last = performance.now();
+    },
+  });
 
   let api: TestApi | undefined;
   if (testMode) {
@@ -223,6 +319,18 @@ async function boot(): Promise<void> {
       setRemaining(seconds) {
         session.setRemaining(seconds);
       },
+      interactables() {
+        return probe.targets.map((t) => {
+          const p = t.position();
+          return { id: t.id, position: [p.x, p.y, p.z] as [number, number, number] };
+        });
+      },
+      cameraOverridden() {
+        return probe.override;
+      },
+      audioLoops() {
+        return [...probe.loops].filter(([, v]) => v > 0).map(([k]) => k);
+      },
       inject(patch) {
         ctx.input.inject(patch);
       },
@@ -234,19 +342,20 @@ async function boot(): Promise<void> {
     window.__rg = api;
   }
 
+  loader.stage('frame');
+  await nextPaint();
   update(FIXED_DT);
   render(FIXED_DT);
   if (api) api.ready = true;
-  if (bootEl) {
-    bootEl.style.opacity = '0';
-    setTimeout(() => bootEl.remove(), 450);
-  }
   requestAnimationFrame(loop);
+  // A tab opened in the background keeps the reveal for when the player looks at it.
+  await whenVisible();
+  await loader.done();
 }
 
 boot().catch((err: unknown) => {
   console.error(err);
   errors.push(String(err));
-  const bootEl = document.getElementById('boot');
-  if (bootEl) bootEl.textContent = '⚠️';
+  // A chunk, the physics WASM or a model did not download (or boot broke): wordless retry screen.
+  loader.fail('load');
 });

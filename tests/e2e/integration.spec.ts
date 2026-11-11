@@ -309,14 +309,13 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
     const keyState = window.__rgChests!.info()[0].keyState;
     const ride1 = ride();
 
-    // Open chest 0 from its keyhole side.
-    const [rx, rz] = window.__rgChests!.sidePoint(0, c0.keyholeSide);
-    rg.teleport(rx, ctx.world.heightAt(rx, rz) + 0.1, rz, Math.atan2(c0.position[0] - rx, c0.position[2] - rz));
+    // Open chest 0 by stepping on a button with its symbol.
+    const rb = c0.buttons.find((b) => b.symbol === c0.symbol)!;
+    const [ox, oz] = window.__rgChests!.sidePoint(0, 1, 4);
+    rg.teleport(ox, ctx.world.heightAt(ox, oz) + 0.1, oz, Math.atan2(c0.position[0] - ox, c0.position[2] - oz));
     rg.step(1 / 60, 24, false);
     const chestFocus = ctx.interactions.focused?.id ?? null;
-    rg.inject({ usePressed: true, use: true });
-    rg.step(1 / 60, 1, false);
-    rg.inject(null);
+    rg.teleport(rb.x, ctx.world.heightAt(rb.x, rb.z) + 0.1, rb.z, Math.atan2(c0.position[0] - rb.x, c0.position[2] - rb.z));
     rg.step(1 / 60, 40, false);
     const afterOpen = rg.state();
     const hatWorn = head.children.length > 0;
@@ -345,7 +344,7 @@ test('balloon ride with a carried key, open the chest, ride again wearing the ha
   expect(r.ride1.maxKeyDist).toBeGreaterThan(1);
   expect(r.ride1.maxKeyDist).toBeLessThan(2.6);
   expect(r.keyInMainScene).toBe(false);
-  expect(r.chestFocus).toBe('chest0-key');
+  expect(r.chestFocus).toBe('chest0-lock');
   expect(r.chests).toBe(1);
   expect(r.outfits).toEqual(['hat-explorer']);
   expect(r.hatWorn).toBe(true);

@@ -37,6 +37,11 @@ export interface CarModel {
   setLights(on: boolean): void;
   /** Full geometry (true) or the lighter far set (false). */
   setDetail(high: boolean): void;
+  /**
+   * Visual wheel size (1 = stock; workshop "monster wheels"). Bigger wheels lift the body and the
+   * hubs so the tyres still touch the ground; physics is unchanged.
+   */
+  setWheelScale(scale: number): void;
   dispose(): void;
 }
 
@@ -636,6 +641,9 @@ export function createCarModel(): CarModel {
     im.setMatrixAt(i, mat);
   };
   let high = true;
+  let wheelScale = 1;
+  let lift = 0;
+  const wheelS = new THREE.Matrix4();
 
   const model: CarModel = {
     root,
@@ -659,13 +667,18 @@ export function createCarModel(): CarModel {
       fenders.geometry = set.fender;
       springs.geometry = set.spring;
     },
+    setWheelScale(sc) {
+      wheelScale = Math.max(0.5, Math.min(2, sc));
+      lift = (wheelScale - 1) * CAR.wheelRadius;
+      wheelS.makeScale(wheelScale, wheelScale, wheelScale);
+    },
     update(wheelState, pitch, roll, heave) {
       body.rotation.set(pitch, 0, roll);
-      body.position.y = heave;
+      body.position.y = heave + lift;
       for (let i = 0; i < corners.length; i++) {
         const c = corners[i];
         const w = wheelState[i];
-        c.group.position.y = CAR.hardY - w.length;
+        c.group.position.y = CAR.hardY - w.length + lift;
         c.steer.rotation.y = w.steer;
         c.spin.rotation.x = w.spin * c.side;
         // Instance matrices in root space: group · steer (· flip · spin | · fender).
@@ -675,21 +688,23 @@ export function createCarModel(): CarModel {
         steerM.multiplyMatrices(c.group.matrix, c.steer.matrix);
         cornerProxy.setMatrixAt(i, steerM);
         mat.multiplyMatrices(steerM, c.fender.matrix);
+        if (wheelScale !== 1) mat.multiply(wheelS);
         fenders.setMatrixAt(i, mat);
         mat.multiplyMatrices(steerM, c.flip.matrix).multiply(c.spin.matrix);
+        if (wheelScale !== 1) mat.multiply(wheelS);
         wheels.setMatrixAt(i, mat);
         // A-arms: chassis pivots → knuckle (upper and lower).
         const hubY = c.group.position.y;
         const inX = c.side * 0.5;
         const outX = c.x - c.side * (CAR.wheelWidth / 2 + 0.04);
-        a.set(inX, -0.08, c.z);
+        a.set(inX, -0.08 + lift, c.z);
         b.set(outX, hubY + 0.1, c.z);
         placeStrut(arms, i * 2, a, b);
-        a.set(inX, -0.3, c.z);
+        a.set(inX, -0.3 + lift, c.z);
         b.set(outX, hubY - 0.1, c.z);
         placeStrut(arms, i * 2 + 1, a, b);
         // Coil-over: from a high chassis mount down to the lower arm near the hub.
-        a.set(c.side * 0.55, 0.36, c.z + (c.front ? -0.14 : 0.14));
+        a.set(c.side * 0.55, 0.36 + lift, c.z + (c.front ? -0.14 : 0.14));
         b.set(outX - c.side * 0.06, hubY - 0.06, c.z);
         placeStrut(springs, i, b, a);
       }

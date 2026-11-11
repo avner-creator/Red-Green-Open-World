@@ -227,8 +227,9 @@ test.describe('economy ui', () => {
       window.__rg!.ctx.events.emit('ticket:denied', { kind: 'balloon', price: 50, wallet: 3 });
       window.__rg!.step(1 / 60, 2);
     });
-    await expect(page.getByTestId('combo')).toBeHidden();
+    // The toast lives ~3 s of real time: check it first (a busy machine can be slow to hide the badge).
     await expect(page.locator('.toast.deny')).toContainText('50');
+    await expect(page.getByTestId('combo')).toBeHidden();
 
     // Walk up to the Gear Shack kiosk and press use: session paused, shop on top.
     await page.evaluate(() => {

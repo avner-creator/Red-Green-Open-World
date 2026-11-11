@@ -14,7 +14,10 @@ import { buildGearShack } from './gear-shack';
 import { buildChestSpots, buildGemSpots, type ChestSpot, type Spot } from './spots';
 import { LOTS } from './village-data';
 import type { Keepout, ManualTree } from './scatter';
-import { buildWayfinding, type Wayfinding } from './wayfinding';
+import { buildWayfinding, roadEdgeDistance, type Wayfinding } from './wayfinding';
+import { buildOuterAreas, type OuterAreas } from './outer';
+import { dressPaths } from './outer/paths';
+import { buildSiteDressing, inSiteClearZone, raceCutDistance, siteKeepouts } from './sites';
 
 export interface Content {
   trees: ManualTree[];
@@ -22,6 +25,7 @@ export interface Content {
   gemSpots: Spot[];
   chestSpots: ChestSpot[];
   wayfinding: Wayfinding;
+  outer: OuterAreas;
 }
 
 export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m: THREE.Mesh) => void): Content {
@@ -31,6 +35,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   const areas = buildAreas(kit);
   const core = buildCoreAreas(kit);
   const shack = buildGearShack(kit);
+  const outer = buildOuterAreas(kit, terrain.roads);
   const keepouts: Keepout[] = [
     { x: PLAZA.x, z: PLAZA.z, r: PLAZA.r + 1, paved: true },
     { x: 0, z: -37, hx: 8.5, hz: 22, paved: true },
@@ -39,6 +44,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
     ...areas.keepouts,
     ...core.keepouts,
     ...shack,
+    ...outer.keepouts,
   ];
   const gemSpots = buildGemSpots(kit.h, terrain.roads);
   const chestSpots = buildChestSpots(kit.h);
@@ -47,13 +53,23 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   // Road dressing stays off paved areas, area footprints and gem/chest spots.
   const blocked = (x: number, z: number): boolean =>
     near(x, z, 2) ||
+    raceCutDistance(x, z) < 3 ||
     keepouts.some((k) =>
       k.r !== undefined ? Math.hypot(x - k.x, z - k.z) < k.r + 0.5 : Math.abs(x - k.x) < (k.hx ?? 0) + 0.5 && Math.abs(z - k.z) < (k.hz ?? 0) + 0.5,
     );
   const wayfinding = buildWayfinding(kit, terrain.roads, blocked);
   keepouts.push(...wayfinding.keepouts);
   const roadTrees = buildRoadDressing(kit, terrain.roads, blocked);
+  // Outer path dressing (lamps, posts, shrubs) also gives way to the Carnival Island sites.
+  const pathTrees = dressPaths(kit, terrain.roads, (x, z) => blocked(x, z) || inSiteClearZone(x, z, 1), (x, z) => roadEdgeDistance(terrain.roads, x, z));
+  // Carnival Island sites: entrance dressing, then their footprints and flight/race corridors keep
+  // the scatter out (added after the road dressing so kerbs and dashes still run through them).
+  keepouts.push(...buildSiteDressing(kit, wayfinding.decals), ...siteKeepouts());
   // Nothing scattered (trees, rocks) on top of a gem or chest.
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });
-  return { trees: [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...roadTrees], keepouts, gemSpots, chestSpots, wayfinding };
+  // Hand-placed trees, bushes and rocks give way to the sites and stay off the roads (race line).
+  const trees = [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...outer.trees, ...roadTrees, ...pathTrees].filter(
+    (t) => !inSiteClearZone(t.x, t.z, 1) && roadEdgeDistance(terrain.roads, t.x, t.z) > 1,
+  );
+  return { trees, keepouts, gemSpots, chestSpots, wayfinding, outer };
 }

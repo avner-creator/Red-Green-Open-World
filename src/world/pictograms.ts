@@ -8,41 +8,61 @@
  */
 import * as THREE from 'three';
 
-export type IconId = 'iTrampoline' | 'iBounce' | 'iCar' | 'iBalloon' | 'iTarget' | 'iRocket';
+export type IconId =
+  | 'iTrampoline' | 'iBounce' | 'iCar' | 'iBalloon' | 'iTarget' | 'iRocket'
+  | 'iHorse' | 'iBungee' | 'iSilly' | 'iLake' | 'iLighthouse'
+  // Carnival Island attractions.
+  | 'iCarnival' | 'iIceCream' | 'iBubble' | 'iDino' | 'iFlag' | 'iFoam' | 'iPlane' | 'iDragon';
 export type PanelId =
   | 'tramp1' | 'tramp2' | 'tramp3'
   | 'bounce1' | 'bounce2'
   | 'car1' | 'car2' | 'car3'
   | 'balloon1' | 'balloon2' | 'balloon3'
-  | 'rocket1' | 'rocket2' | 'rocket3';
+  | 'rocket1' | 'rocket2' | 'rocket3'
+  | 'horse1' | 'horse2' | 'horse3'
+  | 'bungee1' | 'bungee2'
+  | 'silly1' | 'silly2';
 export type PictoId = IconId | PanelId;
 
+/**
+ * Atlas width (and the unit for UV maths); the atlas is ATLAS_SIZE × ATLAS_H pixels: six 512 px
+ * rows of panels and icons, plus one 256 px row of Carnival Island icons at the bottom.
+ */
 export const ATLAS_SIZE = 2048;
+export const ATLAS_H = 3328;
 const CELL = 512;
+const COLS = ATLAS_SIZE / CELL;
 
 const PANEL_ORDER: PanelId[] = [
   'tramp1', 'tramp2', 'tramp3', 'bounce1', 'bounce2', 'car1', 'car2', 'car3',
   'balloon1', 'balloon2', 'balloon3', 'rocket1', 'rocket2', 'rocket3',
+  'horse1', 'horse2', 'horse3', 'bungee1', 'bungee2', 'silly1', 'silly2',
 ];
-const ICON_ORDER: IconId[] = ['iTrampoline', 'iBounce', 'iCar', 'iBalloon', 'iTarget', 'iRocket'];
+const ICON_ORDER: IconId[] = [
+  'iTrampoline', 'iBounce', 'iCar', 'iBalloon', 'iTarget', 'iRocket', 'iHorse', 'iBungee', 'iSilly', 'iLake', 'iLighthouse',
+];
+/** Carnival Island icons: one 256 px row under the 512 px grid. */
+const ICON_ROW2: IconId[] = ['iCarnival', 'iIceCream', 'iBubble', 'iDino', 'iFlag', 'iFoam', 'iPlane', 'iDragon'];
+const GRID_H = 6 * CELL;
 
 /** Pixel rectangles [x, y, size] in the atlas (y down, canvas convention). */
 export const PICTO_RECTS: Readonly<Record<PictoId, readonly [number, number, number]>> = (() => {
   const r = {} as Record<PictoId, [number, number, number]>;
-  PANEL_ORDER.forEach((id, i) => (r[id] = [(i % 4) * CELL, Math.floor(i / 4) * CELL, CELL]));
-  // Icons: 256 px badges in the last two cells (row 3, columns 2 and 3).
+  PANEL_ORDER.forEach((id, i) => (r[id] = [(i % COLS) * CELL, Math.floor(i / COLS) * CELL, CELL]));
+  // Icons: 256 px badges, four per cell, in the cells after the panels.
   ICON_ORDER.forEach((id, i) => {
-    const cx = 2 + Math.floor(i / 4);
+    const cell = PANEL_ORDER.length + Math.floor(i / 4);
     const j = i % 4;
-    r[id] = [cx * CELL + (j % 2) * 256, 3 * CELL + Math.floor(j / 2) * 256, 256];
+    r[id] = [(cell % COLS) * CELL + (j % 2) * 256, Math.floor(cell / COLS) * CELL + Math.floor(j / 2) * 256, 256];
   });
+  ICON_ROW2.forEach((id, i) => (r[id] = [i * 256, GRID_H, 256]));
   return r;
 })();
 
 /** UV rectangle (u0, v0, du, dv) of a pictogram; v is bottom-up (texture flipY). */
 export function pictoUv(id: PictoId): [number, number, number, number] {
   const [x, y, s] = PICTO_RECTS[id];
-  return [x / ATLAS_SIZE, 1 - (y + s) / ATLAS_SIZE, s / ATLAS_SIZE, s / ATLAS_SIZE];
+  return [x / ATLAS_SIZE, 1 - (y + s) / ATLAS_H, s / ATLAS_SIZE, s / ATLAS_H];
 }
 
 // ───────────────────────────── drawing ─────────────────────────────
@@ -350,6 +370,118 @@ function speedLines(c: C2, x: number, y: number): void {
   for (let i = 0; i < 3; i++) line(c, [x - 16 + i * 3, y - 8 + i * 7, x - 4 + i * 3, y - 8 + i * 7], 3, WHITE);
 }
 
+/** Horse in profile facing right; (x, y) is the middle of the body. `jump` tucks the legs. */
+function horse(c: C2, x: number, y: number, s: number, opts: { jump?: boolean; rider?: boolean; col?: string } = {}): void {
+  const col = opts.col ?? WHITE;
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Tail and legs first (behind the body).
+  line(c, [-19, -4, -27, 2, -29, 12], 4.5, col);
+  const legs = opts.jump
+    ? [[-15, 5, -24, 12, -30, 14], [-10, 5, -18, 14, -25, 18], [11, 5, 20, 10, 18, 18], [16, 4, 26, 4, 25, 12]]
+    : [[-15, 5, -17, 15, -16, 24], [-9, 6, -8, 15, -8, 24], [11, 6, 12, 15, 11, 24], [16, 5, 18, 14, 19, 24]];
+  for (const l of legs) line(c, l, 4.6, col);
+  ellipse(c, 0, 0, 20, 9.5, col);
+  // Neck and head.
+  poly(c, [10, -5, 17, -21, 24, -25, 28, -22, 21, -8, 18, 2], col);
+  poly(c, [21, -25, 35, -17, 34, -12, 22, -16], col);
+  poly(c, [21, -24, 22, -31, 25, -25], col);
+  // Mane (yellow), eye (dark).
+  line(c, [11, -9, 15, -19, 21, -25], 3.2, YEL);
+  disc(c, 27, -20, 1.6, INK);
+  if (opts.rider) {
+    disc(c, -1, -27, 4.6, YEL);
+    line(c, [-1, -22, -2, -11], 4.4, YEL);
+    line(c, [-2, -18, 10, -14], 3.6, YEL);
+    line(c, [-2, -11, 4, -4], 3.6, YEL);
+  }
+  c.restore();
+}
+
+/** A striped show-jump fence: two posts and two rails. */
+function jumpFence(c: C2, x: number, y: number, w: number, h: number): void {
+  line(c, [x - w / 2, y, x - w / 2, y - h], 4);
+  line(c, [x + w / 2, y, x + w / 2, y - h], 4);
+  for (const ry of [h * 0.45, h * 0.9]) {
+    line(c, [x - w / 2, y - ry, x + w / 2, y - ry], 4.2, WHITE);
+    for (let i = 0; i < 3; i++) line(c, [x - w / 2 + (i + 0.25) * (w / 3), y - ry, x - w / 2 + (i + 0.6) * (w / 3), y - ry], 4.2, YEL);
+  }
+}
+
+/** Zig-zag spring cord from (x0,y0) to (x1,y1). */
+function cord(c: C2, x0: number, y0: number, x1: number, y1: number, n = 7, amp = 4): void {
+  const pts: number[] = [x0, y0];
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const l = Math.hypot(dx, dy) || 1;
+  const px = -dy / l;
+  const py = dx / l;
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const o = (i % 2 ? 1 : -1) * amp;
+    pts.push(x0 + dx * t + px * o, y0 + dy * t + py * o);
+  }
+  pts.push(x1, y1);
+  line(c, pts, 3, YEL);
+}
+
+/** Bridge deck stub with a jump platform sticking out to the right; returns the platform tip. */
+function deck(c: C2, x: number, y: number, w: number): void {
+  c.fillStyle = GREY;
+  c.fillRect(x - w / 2, y, w, 7);
+  line(c, [x - w / 2, y, x + w / 2, y], 3, WHITE);
+  line(c, [x - w / 2 + 4, y, x - w / 2 + 4, y - 12, x + w / 2 - 10, y - 12], 2.5, WHITE);
+}
+
+/** Giant striped beach ball. */
+function beachBall(c: C2, x: number, y: number, r: number): void {
+  disc(c, x, y, r, WHITE);
+  c.save();
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.clip();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3 - 0.4;
+    c.beginPath();
+    c.moveTo(x, y);
+    c.arc(x, y, r, a, a + Math.PI / 3);
+    c.closePath();
+    c.fillStyle = [YEL, WHITE, DARK][i % 3];
+    c.fill();
+  }
+  c.restore();
+  disc(c, x, y, r * 0.16, WHITE);
+  ellipse(c, x - r * 0.42, y - r * 0.45, r * 0.22, r * 0.12, WHITE);
+  ellipse(c, x, y, r, r, null, WHITE, 3);
+}
+
+/** Lighthouse tower with a lit lantern and two beams. */
+function tower(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  poly(c, [-28, -26, -6, -30, -6, -24], YEL);
+  poly(c, [28, -26, 6, -30, 6, -24], YEL);
+  poly(c, [-9, 26, -6, -18, 6, -18, 9, 26], WHITE);
+  poly(c, [-8.2, 12, -7.4, 0, 7.4, 0, 8.2, 12], DARK);
+  poly(c, [-6.8, -6, -6.4, -12, 6.4, -12, 6.8, -6], DARK);
+  c.fillStyle = WHITE;
+  c.fillRect(-9, -20, 18, 3);
+  disc(c, 0, -26, 5.5, YEL);
+  poly(c, [-7, -31, 0, -38, 7, -31], WHITE);
+  c.restore();
+}
+
+/** Two rows of waves. */
+function waves(c: C2, x0: number, x1: number, y: number, col = WHITE): void {
+  for (const [dy, w] of [[0, 3.2], [8, 2.6]] as const) {
+    const pts: number[] = [];
+    for (let px = x0; px <= x1; px += 2) pts.push(px, y + dy + Math.sin((px - x0) * 0.42) * 2.4);
+    line(c, pts, w, col);
+  }
+}
+
 function panelBg(c: C2, step: number): void {
   roundRect(c, 2.5, 2.5, 95, 95, 9);
   c.fillStyle = INK;
@@ -365,6 +497,223 @@ function panelBg(c: C2, step: number): void {
 function iconBg(c: C2): void {
   disc(c, 50, 50, 48.5, WHITE);
   disc(c, 50, 50, 43, INK);
+}
+
+
+// ── Carnival Island figures ──
+
+function bigTop(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Walls with a dark doorway, a striped roof cone and a pennant on the pole.
+  poly(c, [-28, 2, 28, 2, 26, 26, -26, 26], WHITE);
+  c.beginPath();
+  c.moveTo(-8, 26);
+  c.quadraticCurveTo(0, 6, 8, 26);
+  c.closePath();
+  c.fillStyle = INK;
+  c.fill();
+  for (const sx of [-17, 17]) line(c, [sx, 4, sx, 25], 3.2, YEL);
+  c.beginPath();
+  c.moveTo(-32, 4);
+  c.lineTo(0, -24);
+  c.lineTo(32, 4);
+  c.quadraticCurveTo(0, 10, -32, 4);
+  c.closePath();
+  c.fillStyle = WHITE;
+  c.fill();
+  c.save();
+  c.clip();
+  for (const xb of [-22, 0, 22]) poly(c, [0, -24, xb - 6, 12, xb + 6, 12], YEL);
+  c.restore();
+  line(c, [0, -24, 0, -36], 2.6);
+  poly(c, [0, -36, 12, -32, 0, -28], YEL);
+  c.restore();
+}
+
+function cone2(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Waffle cone with a dark criss-cross, two scoops and a drip.
+  poly(c, [-14, -6, 14, -6, 0, 30], YEL);
+  c.save();
+  c.beginPath();
+  c.moveTo(-14, -6);
+  c.lineTo(14, -6);
+  c.lineTo(0, 30);
+  c.closePath();
+  c.clip();
+  for (let i = -3; i <= 3; i++) {
+    line(c, [i * 8 - 12, -8, i * 8 + 12, 32], 2, INK);
+    line(c, [i * 8 + 12, -8, i * 8 - 12, 32], 2, INK);
+  }
+  c.restore();
+  disc(c, 0, -10, 13, WHITE);
+  disc(c, -9, -6, 8, WHITE);
+  disc(c, 9, -6, 8, WHITE);
+  disc(c, 0, -27, 10, WHITE);
+  line(c, [-6, -30, -2, -33], 2.6, INK);
+  disc(c, 2, -38, 3.6, YEL);
+  line(c, [2, -41, 6, -45], 2, YEL);
+  c.restore();
+}
+
+function bubbleBall(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // A see-through bubble (white ring + shine) with a hero inside, rolling a big ball.
+  ellipse(c, -8, 0, 25, 25, null, WHITE, 5);
+  line(c, [-24, -8, -20, -16], 3.4, WHITE);
+  line(c, [-17, -21, -12, -24], 3.4, WHITE);
+  person(c, -8, 4, 0.58, 'walk');
+  line(c, [-34, 27, 38, 27], 3.4, YEL);
+  disc(c, 27, 14, 11, WHITE);
+  poly(c, [27, 9, 31.5, 12.5, 29.8, 18, 24.2, 18, 22.5, 12.5], INK);
+  for (const a of [0.3, 1.55, 2.8, 4.05, 5.3]) line(c, [27 + Math.cos(a - 1.57) * 6, 14 + Math.sin(a - 1.57) * 6, 27 + Math.cos(a - 1.57) * 11, 14 + Math.sin(a - 1.57) * 11], 1.8, INK);
+  c.restore();
+}
+
+function dino(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Round, friendly dinosaur: big body, tail, little arms, a big eye and back spikes.
+  for (let i = 0; i < 4; i++) {
+    const a = -2.5 + i * 0.42;
+    const px = -2 + Math.cos(a) * 20;
+    const py = 2 + Math.sin(a) * 20;
+    poly(c, [px - 4, py + 2, px + Math.cos(a) * 9, py + Math.sin(a) * 9, px + 4, py + 2], YEL);
+  }
+  c.beginPath();
+  c.moveTo(-18, 10);
+  c.quadraticCurveTo(-34, 16, -40, 4);
+  c.quadraticCurveTo(-30, 22, -10, 22);
+  c.closePath();
+  c.fillStyle = WHITE;
+  c.fill();
+  ellipse(c, -2, 6, 20, 17, WHITE);
+  ellipse(c, 16, -14, 13, 11, WHITE);
+  line(c, [14, 0, 20, 4], 4, WHITE);
+  line(c, [-10, 20, -10, 28], 6, WHITE);
+  line(c, [6, 20, 6, 28], 6, WHITE);
+  disc(c, 19, -17, 3.6, INK);
+  disc(c, 20, -18, 1.2, WHITE);
+  line(c, [20, -8, 27, -9], 2.2, INK);
+  ellipse(c, -2, 10, 10, 8, YEL);
+  c.restore();
+}
+
+function chequerFlag(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  line(c, [-20, -30, -20, 34], 5, YEL);
+  // A waving chequered flag: 5 × 4 squares along a gentle wave.
+  const S = 9;
+  for (let i = 0; i < 5; i++) {
+    for (let j = 0; j < 4; j++) {
+      const x0 = -18 + i * S;
+      const w0 = Math.sin(i * 0.9) * 3;
+      const w1 = Math.sin((i + 1) * 0.9) * 3;
+      const y0 = -30 + j * S;
+      poly(c, [x0, y0 + w0, x0 + S, y0 + w1, x0 + S, y0 + S + w1, x0, y0 + S + w0], (i + j) % 2 ? INK : WHITE);
+    }
+  }
+  c.beginPath();
+  c.moveTo(-18, -30);
+  for (let i = 0; i <= 5; i++) c.lineTo(-18 + i * S, -30 + Math.sin(i * 0.9) * 3);
+  for (let i = 5; i >= 0; i--) c.lineTo(-18 + i * S, 6 + Math.sin(i * 0.9) * 3);
+  c.closePath();
+  c.lineWidth = 2.6;
+  c.strokeStyle = WHITE;
+  c.stroke();
+  c.restore();
+}
+
+function foam(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Foam "lava" (bubbly heap) with a hero hopping across a float above it.
+  c.beginPath();
+  c.moveTo(-34, 30);
+  for (const [bx, r] of [[-26, 9], [-12, 11], [3, 9], [17, 11], [30, 8]] as [number, number][]) c.arc(bx, 18, r, Math.PI, 0);
+  c.lineTo(38, 30);
+  c.closePath();
+  c.fillStyle = WHITE;
+  c.fill();
+  for (const [bx, by, r] of [[-20, 22, 3], [-4, 24, 2.4], [12, 21, 3], [26, 24, 2.2]] as [number, number, number][]) ellipse(c, bx, by, r, r, null, GREY, 1.6);
+  roundRect(c, -8, 2, 22, 7, 3);
+  c.fillStyle = YEL;
+  c.fill();
+  person(c, 4, -14, 0.62, 'jump');
+  for (const [bx, by, r] of [[-26, -18, 5], [-20, -28, 3], [26, -24, 4.5], [32, -12, 3]] as [number, number, number][]) ellipse(c, bx, by, r, r, null, WHITE, 2.4);
+  c.restore();
+}
+
+function biplane(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Front-three-quarter toy biplane: two wings with struts, round body, spinning prop.
+  roundRect(c, -40, -16, 80, 9, 4);
+  c.fillStyle = WHITE;
+  c.fill();
+  for (const sx of [-26, 26]) line(c, [sx, -8, sx, 8], 3, WHITE);
+  roundRect(c, -36, 6, 72, 8, 4);
+  c.fillStyle = YEL;
+  c.fill();
+  ellipse(c, 0, 2, 13, 13, WHITE);
+  disc(c, 0, 2, 6.5, INK);
+  disc(c, 0, 2, 3, YEL);
+  // Propeller blur + blades.
+  ellipse(c, 0, 2, 5, 22, null, GREY, 2);
+  line(c, [0, -16, 0, 20], 4, YEL);
+  // Tail fin peeking above, wheels below.
+  poly(c, [-3, -12, 0, -24, 3, -12], WHITE);
+  for (const sx of [-10, 10]) {
+    line(c, [sx * 0.6, 14, sx, 24], 2.6, WHITE);
+    disc(c, sx, 26, 4.2, WHITE);
+    disc(c, sx, 26, 1.8, INK);
+  }
+  c.restore();
+}
+
+function dragon(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // Round friendly dragon in profile: yellow wing, curly tail, big eye, blowing bubbles.
+  c.beginPath();
+  c.moveTo(-6, -4);
+  c.quadraticCurveTo(-14, -34, -34, -26);
+  c.quadraticCurveTo(-26, -20, -28, -12);
+  c.quadraticCurveTo(-20, -14, -18, -4);
+  c.closePath();
+  c.fillStyle = YEL;
+  c.fill();
+  c.beginPath();
+  c.moveTo(-14, 14);
+  c.quadraticCurveTo(-38, 24, -36, 6);
+  c.quadraticCurveTo(-34, 0, -28, 4);
+  c.lineWidth = 6;
+  c.strokeStyle = WHITE;
+  c.lineCap = 'round';
+  c.stroke();
+  ellipse(c, -4, 8, 18, 14, WHITE);
+  ellipse(c, 14, -10, 13, 11, WHITE);
+  poly(c, [6, -20, 8, -30, 13, -20], YEL);
+  poly(c, [14, -20, 18, -29, 20, -18], YEL);
+  disc(c, 17, -12, 3.4, INK);
+  disc(c, 18, -13, 1.1, WHITE);
+  line(c, [-10, 20, -10, 26], 5, WHITE);
+  line(c, [4, 20, 4, 26], 5, WHITE);
+  ellipse(c, -2, 12, 9, 6, YEL);
+  for (const [bx, by, r] of [[31, -6, 4], [39, -14, 3], [36, 2, 2.6]] as [number, number, number][]) ellipse(c, bx, by, r, r, null, WHITE, 2.2);
+  c.restore();
 }
 
 const DRAW: Record<PictoId, (c: C2) => void> = {
@@ -392,6 +741,38 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
     iconBg(c);
     hotAirBalloon(c, 50, 52, 1.0);
   },
+  iCarnival: (c) => {
+    iconBg(c);
+    bigTop(c, 50, 54, 1.02);
+  },
+  iIceCream: (c) => {
+    iconBg(c);
+    cone2(c, 50, 50, 1.0);
+  },
+  iBubble: (c) => {
+    iconBg(c);
+    bubbleBall(c, 50, 50, 0.95);
+  },
+  iDino: (c) => {
+    iconBg(c);
+    dino(c, 52, 50, 1.0);
+  },
+  iFlag: (c) => {
+    iconBg(c);
+    chequerFlag(c, 53, 48, 1.0);
+  },
+  iFoam: (c) => {
+    iconBg(c);
+    foam(c, 50, 50, 0.95);
+  },
+  iPlane: (c) => {
+    iconBg(c);
+    biplane(c, 50, 50, 0.92);
+  },
+  iDragon: (c) => {
+    iconBg(c);
+    dragon(c, 52, 52, 1.0);
+  },
   iTarget: (c) => {
     iconBg(c);
     target(c, 50, 50, 34, 34);
@@ -399,6 +780,44 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
   iRocket: (c) => {
     iconBg(c);
     rocket(c, 52, 48, 1.15, Math.PI / 4);
+  },
+  iHorse: (c) => {
+    iconBg(c);
+    horse(c, 50, 54, 1.08);
+  },
+  iBungee: (c) => {
+    iconBg(c);
+    deck(c, 38, 32, 34);
+    cord(c, 50, 32, 54, 56, 5, 4);
+    person(c, 54, 72, 0.68, 'jump', Math.PI);
+    line(c, [76, 40, 76, 72], 3, WHITE);
+    poly(c, [70, 44, 76, 34, 82, 44], WHITE);
+    poly(c, [70, 68, 76, 78, 82, 68], WHITE);
+  },
+  iSilly: (c) => {
+    iconBg(c);
+    disc(c, 50, 52, 30, YEL);
+    disc(c, 39, 44, 8, WHITE);
+    disc(c, 61, 44, 8, WHITE);
+    disc(c, 42, 46, 4, INK);
+    disc(c, 58, 42, 4, INK);
+    c.beginPath();
+    c.arc(50, 56, 15, 0.15, Math.PI - 0.15);
+    c.fillStyle = INK;
+    c.fill();
+    ellipse(c, 54, 68, 6, 5, WHITE);
+  },
+  iLake: (c) => {
+    iconBg(c);
+    poly(c, [50, 18, 50, 58, 74, 58], WHITE);
+    poly(c, [46, 26, 46, 58, 30, 58], YEL);
+    line(c, [48, 16, 48, 62], 3, WHITE);
+    poly(c, [26, 62, 74, 62, 66, 72, 34, 72], WHITE);
+    waves(c, 16, 84, 78);
+  },
+  iLighthouse: (c) => {
+    iconBg(c);
+    tower(c, 50, 56, 1.15);
   },
   // ── trampoline: walk on → hold jump → go higher ──
   tramp1: (c) => {
@@ -521,6 +940,65 @@ const DRAW: Record<PictoId, (c: C2) => void> = {
     star(c, 82, 26, 7);
     star(c, 24, 52, 5);
   },
+  // ── horse: E next to a horse → gallop → jump the fences ──
+  horse1: (c) => {
+    panelBg(c, 1);
+    person(c, 16, 58, 0.9, 'walk');
+    key(c, 34, 30, 20, 20, 'E');
+    horse(c, 64, 60, 0.95);
+  },
+  horse2: (c) => {
+    panelBg(c, 2);
+    horse(c, 56, 60, 0.95, { rider: true });
+    speedLines(c, 26, 52);
+    line(c, [8, 86, 92, 86], 2.4, GREY);
+    arrow(c, 66, 92, 90, 92, 3.5);
+  },
+  horse3: (c) => {
+    panelBg(c, 3);
+    jumpFence(c, 50, 88, 26, 22);
+    dashedCurve(c, 14, 82, 48, 20, 86, 82, 3);
+    horse(c, 50, 42, 0.78, { rider: true, jump: true });
+    star(c, 84, 22, 7);
+  },
+  // ── bungee: E on the platform → dive → boing ──
+  bungee1: (c) => {
+    panelBg(c, 1);
+    deck(c, 44, 48, 64);
+    person(c, 62, 34, 0.8, 'stand');
+    cord(c, 40, 22, 60, 46, 5, 3);
+    line(c, [30, 22, 40, 22], 3, WHITE);
+    key(c, 26, 78, 22, 22, 'E');
+    arrow(c, 66, 70, 66, 92, 4);
+  },
+  bungee2: (c) => {
+    panelBg(c, 2);
+    deck(c, 30, 30, 40);
+    cord(c, 46, 30, 54, 58, 6, 4);
+    person(c, 54, 74, 0.72, 'jump', Math.PI);
+    line(c, [82, 34, 82, 76], 3.2, WHITE);
+    poly(c, [76, 38, 82, 28, 88, 38], YEL);
+    poly(c, [76, 72, 82, 82, 88, 72], YEL);
+    star(c, 20, 56, 6);
+  },
+  // ── Silly Zone: push the giant ball → FLOP ──
+  silly1: (c) => {
+    panelBg(c, 1);
+    person(c, 22, 62, 0.95, 'walk');
+    arrow(c, 32, 54, 44, 54, 4.5);
+    beachBall(c, 68, 62, 22);
+    line(c, [60, 92, 88, 92], 3, WHITE);
+  },
+  silly2: (c) => {
+    panelBg(c, 2);
+    line(c, [10, 82, 90, 82], 3, GREY);
+    person(c, 54, 74, 0.95, 'jump', Math.PI / 2 - 0.15);
+    star(c, 24, 50, 6);
+    star(c, 40, 38, 4.5);
+    star(c, 18, 32, 4);
+    ellipse(c, 74, 38, 13, 6, GREY);
+    ellipse(c, 74, 34, 13, 6, YEL, WHITE, 3);
+  },
 };
 
 /** Draw one pictogram into a 2D canvas at (x, y) with the given pixel size. */
@@ -536,7 +1014,7 @@ export function drawPictogram(c: C2, id: PictoId, x: number, y: number, size: nu
 export function createPictogramAtlas(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = ATLAS_SIZE;
-  canvas.height = ATLAS_SIZE;
+  canvas.height = ATLAS_H;
   const c = canvas.getContext('2d');
   if (!c) throw new Error('2D canvas unavailable');
   for (const [id, [x, y, s]] of Object.entries(PICTO_RECTS) as [PictoId, readonly [number, number, number]][]) drawPictogram(c, id, x, y, s);

@@ -10,6 +10,7 @@ import type { Quality } from '../types';
 import { createSky } from './sky';
 import type { Sky, SkyState } from './sky';
 import { U } from './materials';
+import { SHADOW_PROXY_LAYER } from '../core/shadow-proxy';
 
 /** Height (m) at which the fog has its nominal density, and how fast it thins above (1/m). */
 const FOG_BASE = 18;
@@ -80,8 +81,9 @@ function sample(t: number): Key {
 // Tighter boxes than before (crisper contact shadows); radius is the PCF blur in texels.
 const SHADOW: Record<Quality, { size: number; extent: number; radius: number } | null> = {
   low: null,
-  medium: { size: 2048, extent: 44, radius: 1.6 },
-  high: { size: 4096, extent: 66, radius: 2.2 },
+  // Medium: a box that just covers what the gameplay camera sees near the player (≈ 60 m ahead).
+  medium: { size: 2048, extent: 36, radius: 1.6 },
+  high: { size: 4096, extent: 60, radius: 2.2 },
 };
 
 export interface Lighting {
@@ -106,6 +108,9 @@ export function createLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer
   sun.shadow.radius = 3;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 420;
+  // The shadow map also draws the low-poly shadow proxies (static batches, trees, hero objects).
+  sun.shadow.camera.layers.enable(0);
+  sun.shadow.camera.layers.enable(SHADOW_PROXY_LAYER);
   scene.add(sun);
   scene.add(sun.target);
 

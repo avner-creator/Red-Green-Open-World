@@ -85,6 +85,8 @@ export class Flight {
   private lineOpacity = 0;
   private readonly last = new THREE.Vector3();
   private hasLast = false;
+  /** R was pressed mid-flight: let go, then respawn once the controller is released. */
+  private respawnAfter = false;
 
   constructor(private readonly ctx: GameContext) {
     this.visual = new PlayerVisual(ctx.player);
@@ -153,6 +155,12 @@ export class Flight {
     if (!this.active || !hooks) return false;
     const player = this.ctx.player;
     const p = player.position;
+    // R always lets go of the player (every ride): hand control back and respawn after.
+    if (input.respawnPressed) {
+      this.hasLast = false;
+      this.respawnAfter = true;
+      return false;
+    }
     // Someone moved the player under us (teleport, test hook): give control back.
     if (this.hasLast && p.distanceToSquared(this.last) > 4) {
       this.hasLast = false;
@@ -251,6 +259,10 @@ export class Flight {
   update(dt: number): void {
     const ctx = this.ctx;
     const hooks = this.hooks;
+    if (this.respawnAfter && ctx.player.mode !== 'external') {
+      this.respawnAfter = false;
+      ctx.player.respawn();
+    }
     if (this.active && hooks) {
       this.visual.setTrick(this.tricks.pitch, this.tricks.yaw);
       const cam = hooks.camera?.(this) ?? null;

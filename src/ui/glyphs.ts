@@ -13,7 +13,18 @@ export const STUNT_ICON: Record<StuntKind, IconName> = {
   bigAir: 'balloon',
   bungee: 'bungee',
   launch: 'rocket',
+  carnival: 'tent',
+  scoops: 'cone',
+  race: 'flag',
+  sky: 'plane',
+  bumper: 'bubble',
+  foam: 'bubble',
 };
+
+/** Icon for a stunt kind; a kind this build does not know yet gets the star (never undefined). */
+export function stuntIcon(kind: string): IconName {
+  return (STUNT_ICON as Record<string, IconName | undefined>)[kind] ?? 'star';
+}
 
 /** Best guess of an outfit's icon from its id (the UI only receives ids). */
 export function outfitIcon(id: string): IconName {

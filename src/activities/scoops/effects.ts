@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { PLAYER } from '../../config';
-import type { GameContext } from '../../types';
+import type { GameContext, MoveModifier } from '../../types';
 import { SCOOPS } from './logic';
 import type { EffectId } from './logic';
 
@@ -203,13 +203,17 @@ export function createEffects(ctx: GameContext): Effects {
     bubbles.instanceMatrix.needsUpdate = true;
   }
 
-  // ── moon-jump: big launch on every jump ──
+  // ── super speed and moon jump: through the player's movement-modifier hook ──
+  // Moon: lighter gravity and a matching jump boost, so a moon jump reaches the old moon-jump
+  // height (v²/2g with jumpSpeed × 1.75 at full gravity) but floats down slowly.
+  const MOON_GRAVITY = 1 - EFFECT_TUNING.moonFloat / PLAYER.gravity;
+  const MOON_JUMP = (EFFECT_TUNING.moonJump / PLAYER.jumpSpeed) * Math.sqrt(MOON_GRAVITY);
+  const speedMod: MoveModifier = { speed: 1 };
+  const moonMod: MoveModifier = { gravity: 1, jump: 1 };
+  let offSpeed: (() => void) | null = null;
+  let offMoon: (() => void) | null = null;
   const offJump = ctx.events.on('player:jump', () => {
-    if (!remaining.has('moon') || ctx.player.mode !== 'walk') return;
-    const v = ctx.player.velocity;
-    const k = effectLevel(remaining.get('moon') ?? 0, total.get('moon') ?? 1);
-    ctx.player.launch(new THREE.Vector3(v.x, PLAYER.jumpSpeed + (EFFECT_TUNING.moonJump - PLAYER.jumpSpeed) * k, v.z));
-    ctx.audio.play('boing', { pitch: 1.3, volume: 0.6 });
+    if (remaining.has('moon') && ctx.player.mode === 'walk') ctx.audio.play('boing', { pitch: 1.3, volume: 0.6 });
   });
 
   function restore(id: EffectId): void {
@@ -229,6 +233,14 @@ export function createEffects(ctx: GameContext): Effects {
         break;
       case 'burps':
         if (ctx.player.mode === 'walk') ctx.player.setVisualStretch(0);
+        break;
+      case 'speed':
+        offSpeed?.();
+        offSpeed = null;
+        break;
+      case 'moon':
+        offMoon?.();
+        offMoon = null;
         break;
       default:
         break;
@@ -282,23 +294,16 @@ export function createEffects(ctx: GameContext): Effects {
       }
       if (remaining.has('tiny')) ctx.player.object.scale.setScalar(1 + (EFFECT_TUNING.tinyScale - 1) * lvl('tiny'));
 
-      // Super speed: on the ground in walk mode while the stick is pushed.
-      const inp = ctx.input.state;
-      const pushing = Math.hypot(inp.moveX, inp.moveY) > 0.2;
-      if (remaining.has('speed') && ctx.player.mode === 'walk' && ctx.player.grounded && pushing && !ctx.player.skill.active) {
-        // NB: PlayerApi.velocity is documented read-only; there is no speed hook yet (see
-        // docs/streams/ice-cream.md). The walk controller reads it back as its starting speed.
-        const v = ctx.player.velocity;
-        const h = Math.hypot(v.x, v.z);
-        const want = PLAYER.walkSpeed + (EFFECT_TUNING.speedTop - PLAYER.walkSpeed) * lvl('speed');
-        if (h > 1 && h < want) {
-          v.x *= want / h;
-          v.z *= want / h;
-        }
+      // Super speed (sprint reaches speedTop at full strength) and moon gravity, eased in and out.
+      if (remaining.has('speed')) {
+        offSpeed ??= ctx.player.addMoveModifier(speedMod);
+        speedMod.speed = 1 + (EFFECT_TUNING.speedTop / PLAYER.sprintSpeed - 1) * lvl('speed');
       }
-      // Moon float: gentler gravity while falling.
-      if (remaining.has('moon') && ctx.player.mode === 'walk' && !ctx.player.grounded && ctx.player.velocity.y < 2) {
-        ctx.player.velocity.y += EFFECT_TUNING.moonFloat * lvl('moon') * dt;
+      if (remaining.has('moon')) {
+        offMoon ??= ctx.player.addMoveModifier(moonMod);
+        const k = lvl('moon');
+        moonMod.gravity = 1 + (MOON_GRAVITY - 1) * k;
+        moonMod.jump = 1 + (MOON_JUMP - 1) * k;
       }
 
       // Rainbow trail.

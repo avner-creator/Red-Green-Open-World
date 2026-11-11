@@ -22,6 +22,8 @@ import { createPictogramAtlas } from './pictograms';
 import { createDecalMesh, pictoMaterial } from './decals';
 import { createBeacons } from './beacons';
 import { LAUNCH_NET } from './layout';
+import { installLife } from './life';
+import { createOuterLive } from './outer/live';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -58,6 +60,8 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
   root.add(createDecalMesh(content.wayfinding.decals, pictoMaterial(atlas)));
   const beacons = createBeacons(content.wayfinding.beacons, atlas);
   root.add(beacons.group);
+  const outerLive = createOuterLive(content.outer.live);
+  root.add(outerLive.group);
 
   const post = createPost(ctx.camera);
 
@@ -89,6 +93,8 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       if (q === quality) return;
       quality = q;
       lighting.setQuality(q);
+      terrainMesh.setQuality(q);
+      b.setQuality(q);
       scatter.setQuality(q);
       shack.setQuality(q);
       ctx.vision.setPostPasses(post.passes(q));
@@ -97,12 +103,16 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
       U.time.value += dt;
       mats.update();
       lighting.update(ctx.camera);
+      terrainMesh.update(ctx.camera);
+      b.update(ctx.camera, lighting.sun);
       water.update(ctx.camera);
       scatter.update(ctx.camera);
       shack.update(dt);
       beacons.update(U.time.value, ctx.camera);
+      outerLive.update(U.time.value);
     },
   };
+  installLife(api, ctx, root);
   api.setQuality(ctx.settings.get().quality);
   api.setTimeOfDay(0);
   if (ctx.testMode) {
