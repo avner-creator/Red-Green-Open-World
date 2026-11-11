@@ -1,5 +1,7 @@
 # Handoff: how another Claude session (any account) picks this up
 
+> **Update 2026-11-12 ~03:00 UTC:** `main` now has batch 2 (Pip, symbol chests, loading screen, living + outer island, bumper arena, carnival, foam lava, sky rides, buggy race, sites) and Stream P Phase 1 (six weaker-eye mini-games). Verify green at 438b801. In flight: `agent/world-finish`, `agent/e2e-speed`, `agent/glasses-depth` (Phase 2). See the end of docs/PROGRESS.md; older state below may be stale.
+
 Everything needed is in this GitHub repo. No chat history is required. The orchestrator keeps
 this file current at every milestone and whenever work is in flight.
 
