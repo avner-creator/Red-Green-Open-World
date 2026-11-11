@@ -577,8 +577,9 @@ export function createScoops(ctx: GameContext): Scoops {
       const near = local.lengthSq() < 45 * 45 || phase !== 'idle';
       effects.update(dt);
       ui.setEffects(effects.active());
-      // The friends' character models load only once the game is on (not behind the title screen).
-      friends.update(dt, local, near && ctx.session.state.phase !== 'title');
+      // The friends' character models load only once the game is on (not behind the title screen),
+      // except in test mode, where they load at boot so no model pops in between two compared frames.
+      friends.update(dt, local, near && (ctx.testMode || ctx.session.state.phase !== 'title'));
       if (!near) return;
 
       for (let i = timers.length - 1; i >= 0; i--) {
