@@ -161,6 +161,17 @@ test('hints once, boing without key, wrong shape sinks, right shape opens; resta
   await page.evaluate(() => window.__rg!.step(1 / 60, 60, false));
   expect(await log()).toEqual(['toast:key:Find the key!']);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.icon ?? null)).toBe('key');
+  // Both-eye hints: the key badge over the chest and the dotted area hint; no key chip yet.
+  let ci = (await info())[0];
+  expect(ci.badge).toBe('find');
+  expect(ci.dots.shown).toBe(true);
+  expect(ci.dots.count).toBeGreaterThan(8);
+  expect(ci.carriedKeyVisible).toBe(false);
+  expect((await page.evaluate(() => window.__rgChests!.hud())).keyChip).toBe(false);
+  // The key is inside the dotted circle, but not at its centre.
+  const fromCentre = Math.hypot(ci.key[0] - ci.area[0], ci.key[2] - ci.area[1]);
+  expect(fromCentre).toBeGreaterThan(1);
+  expect(fromCentre).toBeLessThan(ci.area[2]);
 
   // Without the key, buttons just boing: right shape included.
   await stand(right[0].x, right[0].z, 0, false);
@@ -169,10 +180,17 @@ test('hints once, boing without key, wrong shape sinks, right shape opens; resta
   expect((await info())[0].open).toBe(false);
   expect((await info())[0].wrongTries).toBe(0);
 
-  // Walk into the key.
+  // Walk into the key: it bobs over the hero for both eyes, the HUD shows a key chip and a
+  // key → chest pictogram; the dots go away.
   await stand(c.key[0], c.key[2], 0, false);
   expect((await info())[0].keyState).toBe('carried');
   expect(await log()).toContain('key:chest0');
+  ci = (await info())[0];
+  expect(ci.carriedKeyVisible).toBe(true);
+  expect(ci.dots.shown).toBe(false);
+  expect(await page.evaluate(() => window.__rgChests!.hud())).toEqual({ keyChip: true, picto: 'key>chest' });
+  const overHead = await page.evaluate(() => window.__rg!.ctx.player.position.y);
+  expect(ci.keyNow[1] - overHead).toBeGreaterThan(1.8);
 
   // Back at the chest with the key: "Step on the right shape!" once; the prompt shows the lock.
   await stand(ax, az, 0, false);
@@ -180,6 +198,7 @@ test('hints once, boing without key, wrong shape sinks, right shape opens; resta
   expect((await log()).filter((l) => l.startsWith('toast:lock'))).toEqual(['toast:lock:Step on the right shape!']);
   expect((await log()).filter((l) => l.startsWith('toast:key'))).toEqual(['toast:key:Find the key!']);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.icon ?? null)).toBe('lock');
+  expect((await info())[0].badge).toBe('use');
 
   // A wrong shape: friendly wobble, the button sinks for 2 s, nothing opens, no penalty, try again.
   await stand(wrong[0].x, wrong[0].z, 0, false);
@@ -204,6 +223,8 @@ test('hints once, boing without key, wrong shape sinks, right shape opens; resta
   expect(st.chests).toBe(1);
   expect(st.outfits).toEqual(['hat-explorer']);
   expect((await info())[0].open).toBe(true);
+  expect((await info())[0].badge).toBe(null);
+  expect(await page.evaluate(() => window.__rgChests!.hud())).toEqual({ keyChip: false, picto: 'chest>hat' });
   expect(await log()).toEqual([
     'toast:key:Find the key!',
     'key:chest0',

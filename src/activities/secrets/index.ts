@@ -7,9 +7,15 @@
  *     land on them and the one you stand on lights up (still weak-eye only).
  *  2. Weak-eye arrows: trails of arrows on the ground from the nearest road to each path start and to
  *     each chest key that is still waiting to be found.
- *  3. Two-eye vault doors: the weak eye sees a floating sequence of three shapes; the strong eye sees
- *     shape buttons on the door (and matching floor tiles). Press them in the weak eye's order (E on
- *     each). A wrong press is a friendly wobble and a restart. Inside: a both-eye treasure pile.
+ *  3. Two-eye vault doors: the weak eye sees three shapes in the door's three round windows; the
+ *     strong eye sees which shape belongs to each of four big floor pads (both eyes see the pads).
+ *     Step on the pads in the weak eye's order (E re-presses the pad you stand on). A right step
+ *     lights its pad and window ring; a wrong one darkens the pads, wobbles the door and starts over.
+ *     When it opens, the door sinks, gold bursts out and the treasure star flies out to the hero.
+ *
+ * Wordless clarity (both eyes): each vault has a treasure window over the door (what's inside) and an
+ * animated board showing the rule with other shapes (never the answer). Each path start has a
+ * glowing ring and a floating sign: glasses → stones going up → gold star.
  *
  * Nothing on a layer leaks into the main scene, HUD or audio: prompts sit on both-eye objects (the
  * pedestal, the door) and sounds are not positional.
@@ -24,11 +30,18 @@ import { Confetti } from '../chests/confetti';
 import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from './arrowLogic';
 
 import type { ArrowPlace } from './arrowLogic';
-import { DOOR_RULES, DoorLock, SHAPES, buttonAt, fromDoorLocal, makeSequence, toDoorLocal } from './doorLogic';
+import { DOOR_RULES, DoorLock, SHAPES, fromDoorLocal, makeSequence, padAt, padLocal, toDoorLocal } from './doorLogic';
 import { STONE, onStone } from './pathLogic';
 import type { Stone } from './pathLogic';
 import { TREASURE_STAR_Y, VAULT, arrowGeometry, buildButtons, buildPedestal, buildSign, buildVault, haloGeometry, layerBasic, stoneGeometry } from './models';
-import type { ButtonsModel, PedestalModel, SignModel, VaultModel } from './models';
+import type { BoardPlace, ButtonsModel, PadLook, PadPlace, PedestalModel, SignModel, VaultModel } from './models';
+import { BOARD } from './models';
+import { buildDemoBoard, boardPhase } from './board';
+import type { DemoBoard } from './board';
+import { buildStartMarker } from './startSign';
+import type { StartMarker } from './startSign';
+import { createChestHud } from '../chests/hud';
+import { keepNear } from '../../world/far-lod';
 import { RING_GLOW } from './models';
 import { distanceCull, surfaceMaterial } from './batch';
 import { buildRoutes, buildVaults } from './routes';
@@ -78,7 +91,17 @@ export interface SecretsInfo {
     treasure: boolean;
     misses: number;
     selected: number;
+    /** World x,z of each floor pad. */
+    pads: [number, number][];
+    /** Pad looks right now: 'idle' | 'lit' | 'dark'. */
+    padLooks: string[];
+    /** The rule-demo board's step at this moment ('show', 'step1'..'step3', 'open'). */
+    board: string;
+    /** 0..1 while the treasure star flies out to the hero (1 = arrived). */
+    starFly: number;
   }[];
+  /** Path start markers (world x, y, z). */
+  starts: [number, number, number][];
   arrows: number;
   trails: { target: string; count: number; visible: boolean; first: [number, number, number] | null; last: [number, number, number] | null }[];
 }
@@ -88,7 +111,10 @@ export interface SecretsTestApi {
   info(): SecretsInfo;
   /** Our colliders that intersect other colliders (terrain excluded for the vaults). */
   overlaps(): string[];
-  /** World x,z to stand on to press button `button` of door `door`. */
+  /**
+   * World x,z of floor pad `button` of door `door` (stand there to press it). With `dist`, a point
+   * that far straight out from the door in line with the pad (off the pads: for views and walks).
+   */
   standPoint(door: number, button: number, dist?: number): [number, number];
   /** World x,z inside the vault chamber (by the treasure). */
   insidePoint(door: number): [number, number];
@@ -111,6 +137,8 @@ interface PathRt {
   lastOn: number;
   pedestal: PedestalModel;
   pedestalCull: THREE.LOD;
+  start: StartMarker;
+  startCull: THREE.LOD;
   claimed: boolean;
   pop: number;
   spin: number;
@@ -130,6 +158,20 @@ interface DoorRt {
   /** Holds the current sign (it is rebuilt with each new sequence). */
   signHolder: THREE.Group;
   buttons: ButtonsModel;
+  board: DemoBoard;
+  boardCull: THREE.LOD;
+  boardRoot: THREE.Group;
+  /** Door-local floor pads. */
+  pads: PadPlace[];
+  padLook: PadLook[];
+  /** Pad push (0..1) and shake (0..1) per pad. */
+  padPush: Float32Array;
+  padShake: Float32Array;
+  /** The pad the player stood on last frame (-1 none): a step is pressing a pad you were not on. */
+  lastPad: number;
+  /** 0..1 star flight out of the vault (starts once the door is mostly down). */
+  starFly: number;
+  starFrom: THREE.Vector3;
   starSpin: number;
   /** Last door pose written (x, y), to skip uploads while it rests. */
   doorPose: [number, number];
@@ -159,9 +201,9 @@ interface Trail {
 const UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const MAX_ARROWS = 260;
-/** The weak-eye sequence floats in front of the rock, just above the door's lintel. */
-const SIGN_Y = VAULT.doorH + 1.75;
-const SIGN_Z = 2.3;
+/** The weak-eye sequence sits in the door's three round windows (just in front of the glass). */
+const SIGN_Y = VAULT.screenY;
+const SIGN_Z = 0.3;
 /**
  * Draw distances (camera to object, metres; the fog keeps 100–180 m clear, so the big pieces stay
  * on longer). Stones: beyond the path's own radius. The vault's small layer parts (sign, buttons)
@@ -186,6 +228,7 @@ export function createSecrets(ctx: GameContext): Secrets {
   const vaultDefs = buildVaults(h);
   const confetti = new Confetti();
   ctx.scene.add(confetti.group);
+  const hud = createChestHud(ctx.uiRoot);
   const mine = new Set<number>();
   let time = 0;
   let sessionCount = 0;
@@ -275,7 +318,17 @@ export function createSecrets(ctx: GameContext): Secrets {
     secretRewardSpots.push({ position: new THREE.Vector3(p.x, p.y + 1.3, p.z), tag: `secret-${def.id}-top` });
     secretRewardSpots.push({ position: new THREE.Vector3(mid.x, mid.y + 1.2, mid.z), tag: `secret-${def.id}-mid` });
 
-    const rt: PathRt = { def, group, stones, halos, lit: new Float32Array(n), lastOn: -1, pedestal, pedestalCull, claimed: false, pop: 0, spin: 0, center, reach, colliders };
+    // Start marker (both eyes): a ring on the ground where the arrow trail ends, and a picture sign.
+    const sx = def.start.x;
+    const sz = def.start.z;
+    const start = buildStartMarker(0, 0, 0, surfMat);
+    const startCull = distanceCull(start.root, DRAW.pedestal);
+    startCull.name = 'secret-start';
+    startCull.position.set(sx, Math.max(world.waterLevel, h(sx, sz)), sz);
+    keepNear(startCull); // its own 140 m cull: the start sign is meant to be seen from afar
+    ctx.scene.add(startCull);
+
+    const rt: PathRt = { def, group, stones, halos, lit: new Float32Array(n), lastOn: -1, pedestal, pedestalCull, start, startCull, claimed: false, pop: 0, spin: 0, center, reach, colliders };
     poseStar(rt);
     return rt;
   });
@@ -286,7 +339,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     const popScale = popping ? 1 + 0.6 * Math.sin(Math.PI * Math.min(1, p.pop * 2)) : 1;
     const y = 1.45 + Math.sin(time * 2 + p.def.stones.length) * 0.08 + (popping ? 0.6 * Math.sin(Math.PI * p.pop) : 0);
     const b = p.pedestal.batch;
-    b.setMatrix(p.pedestal.star, tmpM.compose(tmpP.set(0, y, 0), tmpQ.setFromAxisAngle(UP, p.spin), tmpS.setScalar(popScale)));
+    b.setMatrix(p.pedestal.star, tmpM.compose(tmpP.set(0, y + 0.2, 0), tmpQ.setFromAxisAngle(UP, p.spin), tmpS.setScalar(popScale * 1.5)));
     if (p.pedestal.ring >= 0) b.setSurface(p.pedestal.ring, { ...RING_GLOW, glow: RING_GLOW.glow + 0.25 * Math.sin(time * 3) });
     b.commit();
   }
@@ -302,6 +355,8 @@ export function createSecrets(ctx: GameContext): Secrets {
     ctx.audio.play('star', { pitch: 1.2 });
     ctx.cameraRig.shake(0.15);
     ctx.events.emit('glasses:result', { mechanic: 'secretPath', kind: 'follow', tier: 2, hit: true });
+    ctx.events.emit('stamp:earned', { id: 'secrets' });
+    hud.flash({ icon: 'gem' }, [{ icon: 'hat' }, { icon: 'balloon' }]);
   }
 
   function updatePaths(dt: number, playing: boolean): void {
@@ -358,6 +413,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       if (p.pop > 0 && p.pop < 1) p.pop = Math.min(1, p.pop + dt / 1.6);
       p.spin += dt * (p.pop > 0 && p.pop < 1 ? 9 * (1 - p.pop) + 1.2 : 1.2);
       if (cam.distanceTo(p.pedestalCull.position) < ANIMATE_DIST) poseStar(p);
+      if (cam.distanceTo(p.startCull.position) < ANIMATE_DIST) p.start.update(time + p.def.stones.length, p.claimed);
     }
   }
 
@@ -365,14 +421,44 @@ export function createSecrets(ctx: GameContext): Secrets {
 
   const seqSeed = (i: number): number => (ctx.testMode ? 7 + i * 101 + sessionCount * 13 : (Date.now() & 0xffffff) + i * 7919);
 
+  /** Door-local floor pads on the ground (y relative to the door base). */
+  const padPlaces = (def: VaultDef): PadPlace[] =>
+    SHAPES.map((_s, i) => {
+      const l = padLocal(i);
+      const o = fromDoorLocal(def.yaw, l.x, l.z);
+      return { x: l.x, y: h(def.x + o.x, def.z + o.z) - def.y, z: l.z };
+    });
+  /** The rule board stands left of the pads, turned a little toward the approach. */
+  const boardPlace = (def: VaultDef): BoardPlace => {
+    const lx = -(DOOR_RULES.padArc + 0.9);
+    const lz = 3.3;
+    const o = fromDoorLocal(def.yaw, lx, lz);
+    return { x: lx, y: h(def.x + o.x, def.z + o.z) - def.y, z: lz, yaw: 0.55 };
+  };
+
   const doors: DoorRt[] = vaultDefs.map((def, index) => {
     const yawQ = new THREE.Quaternion().setFromAxisAngle(UP, def.yaw);
-    const model = buildVault(index + 3, def.crag, surfMat);
+    const pads = padPlaces(def);
+    const bp = boardPlace(def);
+    const model = buildVault(index + 3, def.crag, surfMat, pads, bp);
     const cull = distanceCull(model.mesh, DRAW.vault);
     cull.name = 'secret-vault';
     cull.position.set(def.x, def.y, def.z);
     cull.rotation.y = def.yaw;
     ctx.scene.add(cull);
+
+    // Rule-demo board picture (both eyes), on the frame baked into the vault mesh.
+    const board = buildDemoBoard();
+    board.mesh.position.set(bp.x, bp.y + BOARD.bottom + BOARD.h / 2, bp.z);
+    board.mesh.rotation.y = bp.yaw;
+    const boardRoot = new THREE.Group();
+    boardRoot.position.copy(cull.position);
+    boardRoot.rotation.y = def.yaw;
+    const boardCull = distanceCull(board.mesh, DRAW.vaultLayer);
+    boardCull.name = 'vault-board';
+    boardRoot.name = 'vault-board';
+    boardRoot.add(boardCull);
+    ctx.scene.add(boardRoot);
 
     const lock = new DoorLock(makeSequence(seqSeed(index)));
     const weak = new THREE.Group();
@@ -390,11 +476,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     strong.name = `vault-${def.id}-strong`;
     strong.position.copy(cull.position);
     strong.rotation.y = def.yaw;
-    const tiles = DOOR_RULES.buttonX.map((lx) => {
-      const o = fromDoorLocal(def.yaw, lx, 1.75);
-      return { x: lx, y: h(def.x + o.x, def.z + o.z) - def.y + 0.1, z: 1.75 };
-    });
-    const buttons = buildButtons(DOOR_RULES.buttonX, SHAPES, VAULT.buttonY, tiles);
+    const buttons = buildButtons(pads, DOOR_RULES.padAngles, SHAPES, VAULT.padCapH);
     strong.add(distanceCull(buttons.root, DRAW.vaultLayer));
     ctx.vision.add(strong, VisionLayer.StrongOnly);
 
@@ -425,6 +507,16 @@ export function createSecrets(ctx: GameContext): Secrets {
       sign,
       signHolder,
       buttons,
+      board,
+      boardCull,
+      boardRoot,
+      pads,
+      padLook: pads.map(() => 'idle' as PadLook),
+      padPush: new Float32Array(pads.length),
+      padShake: new Float32Array(pads.length),
+      lastPad: -1,
+      starFly: 0,
+      starFrom: new THREE.Vector3(),
       starSpin: 0,
       doorPose: [0, 0],
       buttonScale: new Float32Array(DOOR_RULES.buttons).fill(1),
@@ -442,16 +534,18 @@ export function createSecrets(ctx: GameContext): Secrets {
       off: () => {},
     };
 
+    // E re-presses the pad you stand on (stepping on a pad already presses it).
     const prompt: Interactable = {
       id: `vault-${def.id}`,
       position: () => {
-        const o = fromDoorLocal(def.yaw, 0, 0.9);
-        return new THREE.Vector3(def.x + o.x, def.y + 1.6, def.z + o.z);
+        const l = padLocal(Math.max(0, rt.selected));
+        const o = fromDoorLocal(def.yaw, l.x, l.z);
+        return new THREE.Vector3(def.x + o.x, def.y + 1.4, def.z + o.z);
       },
-      radius: 4.2,
+      radius: 1.6,
       icon: 'hand',
       enabled: () => !rt.lock.opened && rt.selected >= 0 && ctx.session.state.phase === 'playing',
-      onUse: () => press(rt),
+      onUse: () => press(rt, rt.selected),
     };
     rt.off = ctx.interactions.add(prompt);
 
@@ -465,42 +559,74 @@ export function createSecrets(ctx: GameContext): Secrets {
     d.model.commit();
   }
 
-  function press(d: DoorRt): void {
-    const b = d.selected;
+  /** Pads lit for the right steps so far (each pad's place in the sequence). */
+  function relight(d: DoorRt): void {
+    for (let i = 0; i < d.padLook.length; i++) {
+      const order = d.lock.sequence.indexOf(i);
+      d.padLook[i] = d.lock.opened || (order >= 0 && order < d.lock.progress) ? 'lit' : 'idle';
+    }
+  }
+
+  function press(d: DoorRt, b: number): void {
     const r = d.lock.press(b);
     if (r === 'ignored') return;
     d.flash[b] = 1;
+    d.padPush[b] = 1;
+    const l = padLocal(b);
+    const o = fromDoorLocal(d.def.yaw, l.x, l.z);
+    tmpP.set(d.def.x + o.x, d.def.y + d.pads[b].y + 0.4, d.def.z + o.z);
     if (r === 'correct') {
+      relight(d);
       ctx.audio.play('star', { pitch: 0.9 + 0.2 * d.lock.progress, volume: 0.8 });
       ctx.audio.play('click');
+      confetti.burst(tmpP, 30);
       ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 1, hit: true });
     } else if (r === 'wrong') {
       d.wobble = 1;
+      // Every pad goes dark for a moment and shakes: "nope, start again".
+      for (let i = 0; i < d.padLook.length; i++) {
+        d.padLook[i] = 'dark';
+        d.padShake[i] = 1;
+      }
       ctx.audio.play('click');
       ctx.audio.play('boing', { pitch: 0.7, volume: 0.6 });
       ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 1, hit: false });
     } else if (r === 'opened') {
+      relight(d);
       d.openT = 0.001;
       removeCollider(d.doorCollider);
       d.doorCollider = null;
+      ctx.audio.play('star', { pitch: 1.5, volume: 0.9 });
       ctx.audio.play('chest');
       ctx.audio.play('fanfare');
-      ctx.cameraRig.shake(0.25);
+      ctx.cameraRig.shake(0.3);
+      confetti.burst(tmpP, 40);
       ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 3, hit: true });
     }
     setLamps(d);
   }
 
+  /** The prize reaches the hero: stars, toast, stamp, and what the gems inside are for. */
   function claimTreasure(d: DoorRt): void {
     d.treasure = true;
     d.treasureT = 0.001;
-    const o = fromDoorLocal(d.def.yaw, 0, -VAULT.depth * 0.58);
-    confetti.burst(tmpP.set(d.def.x + o.x, d.def.y + 1.4, d.def.z + o.z), 180);
     ctx.events.emit('stunt', { kind: 'bullseye', value: 1, stars: 3 });
     ctx.events.emit('ui:toast', { icon: 'chest' });
+    ctx.events.emit('stamp:earned', { id: 'secrets' });
     ctx.audio.play('fanfare');
     ctx.audio.play('gem', { pitch: 1.3 });
     ctx.cameraRig.shake(0.2);
+    confetti.burst(tmpP.copy(ctx.player.position).setY(ctx.player.position.y + 2), 120);
+    hud.flash({ icon: 'gem' }, [{ icon: 'hat' }, { icon: 'balloon' }]);
+  }
+
+  /** Where the flying star is headed: over the hero's head, door-local, kept near the door. */
+  function starTarget(d: DoorRt, out: THREE.Vector3): THREE.Vector3 {
+    const pp = ctx.player.position;
+    const l = toDoorLocal(d.def.x, d.def.z, d.def.yaw, pp.x, pp.z);
+    const len = Math.hypot(l.x, l.z);
+    const k = len > 7 ? 7 / len : 1;
+    return out.set(l.x * k, Math.min(6, Math.max(0, pp.y - d.def.y)) + 2.6, Math.max(0.5, l.z * k));
   }
 
   function updateDoors(dt: number, playing: boolean): void {
@@ -508,59 +634,109 @@ export function createSecrets(ctx: GameContext): Secrets {
     for (const d of doors) {
       const def = d.def;
       const l = toDoorLocal(def.x, def.z, def.yaw, pp.x, pp.z);
-      const levelOk = Math.abs(pp.y - (def.y + 0.0)) < 1.6;
-      d.selected = playing && !d.lock.opened && levelOk ? buttonAt(l.x, l.z) : -1;
+      const levelOk = Math.abs(pp.y - def.y) < 2;
+      const on = playing && !d.lock.opened && levelOk && ctx.player.mode === 'walk' ? padAt(l.x, l.z) : -1;
+      // A step = standing on a pad you were not on last frame.
+      if (on >= 0 && on !== d.lastPad) press(d, on);
+      d.lastPad = on;
+      d.selected = on;
 
       // Door wobble (wrong press) and opening.
-      if (d.openT > 0 && d.openT < 1) d.openT = Math.min(1, d.openT + dt / 1.5);
-      if (d.wobble > 0) d.wobble = Math.max(0, d.wobble - dt * 2.4);
+      if (d.openT > 0 && d.openT < 1) {
+        const before = d.openT;
+        d.openT = Math.min(1, d.openT + dt / 1.5);
+        if (before < 0.45 && d.openT >= 0.45) {
+          // Gold bursts out of the doorway as it clears.
+          const o = fromDoorLocal(def.yaw, 0, 0.6);
+          confetti.burst(tmpP.set(def.x + o.x, def.y + 1.6, def.z + o.z), 200);
+          ctx.audio.play('gem', { pitch: 0.9 });
+          ctx.cameraRig.shake(0.2);
+        }
+      }
+      if (d.wobble > 0) {
+        d.wobble = Math.max(0, d.wobble - dt * 2.4);
+        if (d.wobble === 0) relight(d); // the dark "nope" ends
+      }
       const w = d.wobble * d.wobble;
       // Opening: a little shudder, then the door sinks into the floor like a portcullis.
       const wob = Math.sin(time * 38) * 0.06 * w + (d.openT > 0 && d.openT < 0.2 ? Math.sin(time * 60) * 0.03 : 0);
       const sink = -VAULT.sink * easeInOut(Math.max(0, (d.openT - 0.12) / 0.88));
-      d.signHolder.visible = !d.lock.opened;
-      d.signHolder.position.y = SIGN_Y + Math.sin(time * 1.4 + d.index) * 0.06;
+      // (The holder's own `visible` belongs to its distance cull, which sets it every frame.)
+      d.sign.root.visible = !d.lock.opened;
+      d.signHolder.position.y = SIGN_Y + Math.sin(time * 1.4 + d.index) * 0.03;
 
-      // Treasure: claim when the player steps inside.
+      // The treasure star flies out to the hero once the door is mostly down; the prize is theirs
+      // when it arrives (walking in is not needed).
+      if (d.lock.opened && d.openT > 0.55 && d.starFly === 0) {
+        d.starFly = 0.001;
+        d.starFrom.set(0, TREASURE_STAR_Y, -VAULT.depth * 0.58);
+      }
+      if (d.starFly > 0 && d.starFly < 1) {
+        d.starFly = Math.min(1, d.starFly + dt / 1.3);
+        if (d.starFly >= 1 && playing && !d.treasure) claimTreasure(d);
+      }
+      // Walking in before it arrives also counts.
       const inside = d.lock.opened && d.openT > 0.5 && l.z < -0.9 && l.z > -VAULT.depth && Math.abs(l.x) < VAULT.halfW && Math.abs(pp.y - def.y) < 2;
-      if (playing && inside && !d.treasure) claimTreasure(d);
+      if (playing && inside && !d.treasure) {
+        d.starFly = Math.max(d.starFly, 0.999);
+        claimTreasure(d);
+      }
       if (d.treasureT > 0 && d.treasureT < 1) d.treasureT = Math.min(1, d.treasureT + dt / 1.4);
-      const popping = d.treasureT > 0 && d.treasureT < 1;
-      d.starSpin += dt * (popping ? 10 : 1.4);
-      for (let i = 0; i < d.flash.length; i++) if (d.flash[i] > 0) d.flash[i] = Math.max(0, d.flash[i] - dt * 2.5);
+      d.starSpin += dt * (d.starFly > 0 && d.starFly < 1 ? 12 : d.treasureT > 0 && d.treasureT < 1 ? 10 : 1.4);
+      for (let i = 0; i < d.flash.length; i++) {
+        if (d.flash[i] > 0) d.flash[i] = Math.max(0, d.flash[i] - dt * 2.5);
+        if (d.padPush[i] > 0) d.padPush[i] = Math.max(0, d.padPush[i] - dt * 2.2);
+        if (d.padShake[i] > 0) d.padShake[i] = Math.max(0, d.padShake[i] - dt * 2.4);
+      }
 
       // Everything below only re-poses vertices: skip it while the camera is far away.
-      if (ctx.camera.position.distanceTo(d.cull.position) > ANIMATE_DIST) continue;
+      const camD = ctx.camera.position.distanceTo(d.cull.position);
+      d.board.update(time + d.index * 1.7, camD < DRAW.vaultLayer);
+      if (camD > ANIMATE_DIST) continue;
+      // Door-local yaw toward the camera: the pad shapes turn to face it (never seen edge-on).
+      const cl = toDoorLocal(def.x, def.z, def.yaw, ctx.camera.position.x, ctx.camera.position.z);
+      const camYaw = Math.atan2(cl.x, cl.z);
       if (wob !== d.doorPose[0] || sink !== d.doorPose[1]) {
         d.model.setDoor(wob, sink);
         d.doorPose[0] = wob;
         d.doorPose[1] = sink;
       }
-      d.model.setStar(d.starSpin, TREASURE_STAR_Y + Math.sin(time * 2.2) * 0.06 + (popping ? Math.sin(Math.PI * d.treasureT) * 0.8 : 0), popping ? 1 + 0.5 * Math.sin(Math.PI * d.treasureT) : 1);
+      if (d.starFly > 0 && d.starFly < 1) {
+        const f = d.starFly;
+        const to = starTarget(d, tmpS);
+        const e = easeInOut(f);
+        d.model.setStarAt(
+          d.starFrom.x + (to.x - d.starFrom.x) * e,
+          d.starFrom.y + (to.y - d.starFrom.y) * e + Math.sin(Math.PI * f) * 2.2,
+          d.starFrom.z + (to.z - d.starFrom.z) * e,
+          d.starSpin,
+          1 + 1.3 * Math.sin(Math.PI * Math.min(1, f * 1.2)),
+        );
+      } else {
+        const popping = d.treasureT > 0 && d.treasureT < 1;
+        d.model.setStar(d.starSpin, TREASURE_STAR_Y + Math.sin(time * 2.2) * 0.06 + (popping ? Math.sin(Math.PI * d.treasureT) * 0.5 : 0), popping ? 1 + 0.4 * Math.sin(Math.PI * d.treasureT) : 1);
+      }
+      // Pads: pushed in when stepped on, shake on a miss, lit for each right step.
+      for (let i = 0; i < d.pads.length; i++) {
+        const stand = i === d.selected ? 0.05 : 0;
+        const push = Math.max(stand, 0.08 * d.padPush[i]);
+        const shake = Math.sin(time * 40 + i) * 0.06 * d.padShake[i] * d.padShake[i];
+        d.model.setPad(i, push, shake, d.padLook[i]);
+        d.buttons.setButton(i, push, d.lock.opened ? 0 : 1 + 0.15 * (i === d.selected ? 1 : 0) + 0.2 * d.flash[i], shake, camYaw - DOOR_RULES.padAngles[i]);
+      }
       d.model.commit();
+      d.buttons.commit();
 
       // Weak-eye sign: the shapes light up one after another (1 → 2 → 3, pause), wobble on a miss.
       if (!d.lock.opened) {
         const cycle = (time % 3.4) / 0.85;
         for (let i = 0; i < 3; i++) {
-          const target = Math.floor(cycle) === i ? 1.28 : 1;
+          const target = Math.floor(cycle) === i ? 1.2 : 1;
           d.signScale[i] += (target - d.signScale[i]) * (1 - Math.exp(-10 * dt));
           d.sign.setStep(i, d.signScale[i], Math.sin(time * 40 + i) * 0.08 * w);
         }
         d.sign.commit();
       }
-
-      // Strong-eye buttons (on the door, moving with it) and floor tiles: the selected one stands
-      // out, pressed ones flash; buttons go once the door is down, tiles once it is open.
-      const buttonsOn = d.openT < 0.98;
-      for (let i = 0; i < DOOR_RULES.buttons; i++) {
-        const sel = i === d.selected ? 1 : 0;
-        const target = 1 + 0.2 * sel + 0.25 * d.flash[i];
-        d.buttonScale[i] += (target - d.buttonScale[i]) * (1 - Math.exp(-12 * dt));
-        d.buttons.setButton(i, wob, sink, buttonsOn ? d.buttonScale[i] : 0, 0.06 * d.flash[i]);
-        d.buttons.setTile(i, d.lock.opened ? 0 : 1 + 0.08 * sel + Math.sin(time * 5) * 0.02 * sel);
-      }
-      d.buttons.commit();
     }
   }
 
@@ -617,6 +793,14 @@ export function createSecrets(ctx: GameContext): Secrets {
 
   function placeArrows(): void {
     arrowsPlaced = true;
+    // Start rings sit on the walkable surface (a platform or paving can be above the terrain).
+    for (const p of paths) {
+      const { x, z } = p.def.start;
+      const g = Math.max(world.waterLevel, h(x, z));
+      const hit = ctx.physics.raycast(tmpP.set(x, g + 4, z), DOWN, 6);
+      const y = hit && hit.point.y > g - 0.5 && hit.point.y < g + 3 ? Math.max(g, hit.point.y) : g;
+      p.startCull.position.y = y;
+    }
     for (const p of paths) placeTrail(`path-${p.def.id}`, p.def.start, null);
     // Chest keys live on the same weak layer: find them among our siblings (read-only).
     const keys = arrows.parent ? arrows.parent.children.filter((o) => o.name === 'chest-key') : [];
@@ -680,6 +864,13 @@ export function createSecrets(ctx: GameContext): Secrets {
       d.flash.fill(0);
       d.treasure = false;
       d.treasureT = 0;
+      d.starFly = 0;
+      d.lastPad = -1;
+      d.padPush.fill(0);
+      d.padShake.fill(0);
+      relight(d);
+      for (let i = 0; i < d.pads.length; i++) d.model.setPad(i, 0, 0, d.padLook[i]);
+      d.model.setStar(0, TREASURE_STAR_Y, 1);
       if (!d.doorCollider) d.doorCollider = d.makeDoorCollider();
       // New sequence → new sign. The door, buttons and tiles go back to rest.
       d.signHolder.remove(d.sign.root);
@@ -690,10 +881,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       d.buttonScale.fill(1);
       d.model.setDoor(0, 0);
       d.doorPose[0] = d.doorPose[1] = 0;
-      for (let i = 0; i < DOOR_RULES.buttons; i++) {
-        d.buttons.setButton(i, 0, 0, 1, 0);
-        d.buttons.setTile(i, 1);
-      }
+      for (let i = 0; i < DOOR_RULES.buttons; i++) d.buttons.setButton(i, 0, 1, 0);
       d.buttons.commit();
       setLamps(d);
     }
@@ -732,7 +920,16 @@ export function createSecrets(ctx: GameContext): Secrets {
           treasure: d.treasure,
           misses: d.lock.misses,
           selected: d.selected,
+          pads: d.pads.map((_p, i) => {
+            const l = padLocal(i);
+            const o = fromDoorLocal(d.def.yaw, l.x, l.z);
+            return [d.def.x + o.x, d.def.z + o.z] as [number, number];
+          }),
+          padLooks: d.padLook.slice(),
+          board: boardPhase(time + d.index * 1.7),
+          starFly: d.starFly,
         })),
+        starts: paths.map((p) => p.startCull.position.toArray() as [number, number, number]),
         arrows: arrows.count,
         trails: trails.map((t) => {
           const f = t.places[0];
@@ -769,9 +966,10 @@ export function createSecrets(ctx: GameContext): Secrets {
         for (const d of doors) [...d.colliders, ...(d.doorCollider ? [d.doorCollider] : [])].forEach((c, i) => check(`vault-${d.def.id}#${i}`, c, true));
         return out;
       },
-      standPoint(door, button, dist = 1.75) {
+      standPoint(door, button, dist) {
         const d = doors[door];
-        const o = fromDoorLocal(d.def.yaw, DOOR_RULES.buttonX[button], dist);
+        const l = padLocal(button);
+        const o = dist === undefined ? fromDoorLocal(d.def.yaw, l.x, l.z) : fromDoorLocal(d.def.yaw, l.x * 0.5, dist);
         return [d.def.x + o.x, d.def.z + o.z];
       },
       insidePoint(door) {
@@ -803,6 +1001,8 @@ export function createSecrets(ctx: GameContext): Secrets {
         ctx.vision.remove(p.group);
         ctx.scene.remove(p.pedestalCull);
         p.pedestal.dispose();
+        ctx.scene.remove(p.startCull);
+        p.start.dispose();
         p.stones.dispose();
         p.halos.dispose();
         for (const c of p.colliders) removeCollider(c);
@@ -815,6 +1015,8 @@ export function createSecrets(ctx: GameContext): Secrets {
         d.model.dispose();
         d.sign.dispose();
         d.buttons.dispose();
+        ctx.scene.remove(d.boardRoot);
+        d.board.dispose();
         for (const c of d.colliders) removeCollider(c);
         removeCollider(d.doorCollider);
       }
@@ -829,6 +1031,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       surfMat.dispose();
       ctx.scene.remove(confetti.group);
       confetti.dispose();
+      hud.dispose();
       secretRewardSpots.length = 0;
       if (window.__rgSecrets) delete window.__rgSecrets;
     },
