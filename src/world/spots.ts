@@ -61,7 +61,9 @@ export function buildGemSpots(height: HeightFn, roads: readonly ProcessedRoad[])
 
   // ── First 15: plaza, rooftops, trampoline ──
   ground(0, -2, 'plaza', 3.4); // on top of the fountain
-  ground(7.5, 2.5, 'plaza');
+  // (Was (7.5, 2.5): moved 2.3 m towards the fountain so the island map board can stand beside the
+  // spawn's run lane without hiding this gem from the spawn view, tests/world/spawn-lane.test.ts.)
+  ground(5.25, 2.25, 'plaza');
   ground(-7, 4, 'plaza');
   ground(15, -9, 'plaza');
   ground(-14, -13, 'plaza');

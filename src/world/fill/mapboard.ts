@@ -20,10 +20,14 @@ import { ANCHORS } from '../layout';
  * Where the board stands and the point it faces (QA6 m10): on the plaza ahead-left of spawn, facing
  * the spawn camera, so a child sees it at once (default view, 640x360: between the HUD corners,
  * left of the hero, below the compass bar) and can read its pictures; off the plaza chest's line.
+ * It stands beside the spawn's forward run lane, not in it, and off the walk from spawn to the park
+ * road (tests/world/spawn-lane.test.ts: at (6.6, 5.9) and 3.6 m wide its right post blocked the
+ * first run/dash from spawn). The plaza is full there (spawn circle, plaza gem, Gear Shack), so the
+ * face is 3 m wide: the map itself is sized by H, so it draws just as big.
  */
-export const MAP_BOARD = { x: 6.6, z: 5.9, faceX: -4.5, faceZ: 10 } as const;
+export const MAP_BOARD = { x: 8.25, z: 3.75, faceX: -4.5, faceZ: 10 } as const;
 /** Board face (m) and its footprint radius for the fill guard. */
-const W = 3.6;
+const W = 3.0;
 const H = 2.9;
 export const BOARD_R = W / 2 + 0.4;
 /** Map pictures on the board (m): big enough to read from spawn. */
