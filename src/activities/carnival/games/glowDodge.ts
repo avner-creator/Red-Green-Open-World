@@ -164,6 +164,7 @@ export function createGlowDodge(env: GameEnv): BoothGame {
     balls.instanceMatrix.needsUpdate = true;
     glows.instanceMatrix.needsUpdate = true;
     balls.visible = glows.visible = live.length > 0;
+    balls.count = glows.count = Math.min(CAP, live.length);
   };
 
   const launch = (plan: BallPlan, willDodge: boolean, rng: () => number): void => {

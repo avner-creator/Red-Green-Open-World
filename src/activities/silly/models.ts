@@ -167,7 +167,7 @@ export function createCapsules(tubeCount: number): CapsuleSlots {
   const sweeper = tubeArms + tubeCount * 4;
   const pillows = sweeper + SWEEPER_PARTS + 2;
   const count = pillows + PILLOW_PARTS;
-  const mesh = new THREE.InstancedMesh(new THREE.CapsuleGeometry(CAPSULE.radius, CAPSULE.length, 4, 12), new THREE.MeshStandardMaterial({ roughness: 0.4 }), count);
+  const mesh = new THREE.InstancedMesh(new THREE.CapsuleGeometry(CAPSULE.radius, CAPSULE.length, 3, 10), new THREE.MeshStandardMaterial({ roughness: 0.4 }), count);
   mesh.name = 'silly-capsules';
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.castShadow = true;
