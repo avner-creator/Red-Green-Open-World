@@ -107,6 +107,16 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
     g.setTargetAtTime(1, now + d[1], 0.35);
   }
 
+  /** Music under a voice line: down to `level`, back to 1 after `seconds`. */
+  function duckMusic(level: number, seconds: number): void {
+    if (!engine || !Number.isFinite(level) || !Number.isFinite(seconds)) return;
+    const g = engine.duckGain.gain;
+    const now = engine.ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setTargetAtTime(Math.max(0, Math.min(1, level)), now, 0.06);
+    g.setTargetAtTime(1, now + Math.max(0, seconds), 0.35);
+  }
+
   function build(): void {
     if (engine || failed || ctx.testMode) return;
     const Ctor = findAudioContext();
@@ -298,6 +308,13 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
       }
     },
     play,
+    duckMusic(level: number, seconds: number) {
+      try {
+        duckMusic(level, seconds);
+      } catch {
+        /* never throw */
+      }
+    },
     setLoop(name: LoopName, intensity: number, pitch = 1) {
       if (!engine || !running()) return;
       try {

@@ -84,7 +84,7 @@ export const TIP_SCHEDULE: readonly { id: TipId; at: number }[] = [
 ];
 
 export type RideView = 'none' | 'basket' | 'freefall' | 'canopy' | 'vehicle' | 'other';
-export type ChestHint = 'findKey' | 'findSide' | 'shape' | null;
+export type ChestHint = 'findKey' | 'shape' | null;
 
 export interface DirectorView {
   hero: V2;

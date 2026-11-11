@@ -102,7 +102,7 @@ describe('Pip never leads towards layer objects', () => {
     d.onTrampolineApex();
     d.onTrampolineApex();
     d.onChestKey();
-    run(12, { hero: { x: 84, z: -12 }, nearAttraction: 'bouncePads', chestHint: 'findSide' });
+    run(12, { hero: { x: 84, z: -12 }, nearAttraction: 'bouncePads', chestHint: 'shape' });
     run(200, { heroSpeed: 0 });
     const targets = leads.filter((t): t is V2 => t !== null);
     expect(targets.length).toBeGreaterThan(2);

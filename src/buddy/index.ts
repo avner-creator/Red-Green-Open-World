@@ -39,6 +39,7 @@ import type { V2 } from './steer';
 import { createBuddyStore } from './store';
 import { GLASSES_ATTRACTIONS, type Attraction } from './types';
 import { createVoice } from './voice';
+import type { VoiceRequest } from './voice';
 
 /** Keys that play the game: they never skip the intro (moving must not skip the tour). */
 const GAME_KEYS = new Set([
@@ -116,6 +117,8 @@ export interface BuddyTestApi {
   ride(): RideView;
   /** Every line Pip started saying, in order (text + id). */
   history(): { text: string; id: string }[];
+  /** What Pip's voice was asked to say, in order (clip id + text + clip/speech). */
+  voice(): VoiceRequest[];
   /** Leading state: where Pip leads (attraction id) and the hop state. */
   lead(): { to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
   /** Same as pressing T / tapping Pip: Pip says what to do next (a bubble, deterministically). */
@@ -139,9 +142,10 @@ export function createBuddy(ctx: GameContext): GameSystem {
   const model = buildPip();
   ctx.scene.add(model.object);
   const anim = new PipAnimator(model);
-  const voice = createVoice({ settings: ctx.settings, events: ctx.events, testMode: ctx.testMode });
+  const voice = createVoice({ settings: ctx.settings, events: ctx.events, testMode: ctx.testMode, audio: ctx.audio });
   const ui = createBuddyUi(ctx.uiRoot);
   const queue = new DialogueQueue();
+  queue.clipSeconds = (l) => voice.clipSeconds(l.text);
   const rand = mulberry(ctx.testMode ? 7 : (Date.now() & 0xffff) + 1);
   const hintFn = chestHintFn();
   const raycaster = { origin: new THREE.Vector3(), dir: new THREE.Vector3(0, -1, 0) };
@@ -284,7 +288,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       }
     }
     if (near < 0) return null;
-    return carryingKey ? 'findSide' : 'findKey';
+    return carryingKey ? 'shape' : 'findKey'; // symbol ring: opens from any side
   };
 
   // ───────── director sink ─────────
@@ -798,6 +802,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       ride: () => ride,
       history: () => history.slice(),
       ask: () => ask(),
+      voice: () => voice.requests.slice(),
       lead: () => ({ to: director.leadTo, dest: leader.dest ? [leader.dest.x, leader.dest.z] : null, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
     };
   }

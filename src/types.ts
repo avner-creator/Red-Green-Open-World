@@ -92,6 +92,8 @@ export interface GameSettings {
   volumeMaster: number; // 0..1
   volumeMusic: number; // 0..1
   volumeSfx: number; // 0..1
+  /** Pip's spoken words, 0..1 (default 1). */
+  voicePip: number;
   quality: Quality;
   /** Grown-up option "Auto challenge": gently adapts weak-eye objects during a session. Default off (undefined). */
   autoChallenge?: boolean;
@@ -580,6 +582,8 @@ export interface AudioApi {
   /** Continuous sounds (wind, engine): intensity 0 stops it. pitch ~0.5..2 */
   setLoop(name: 'wind' | 'engine' | 'gallop', intensity: number, pitch?: number): void;
   setMusic(on: boolean): void;
+  /** Duck the music to `level` (0..1) now and ease back to full after `seconds` (e.g. while Pip talks). */
+  duckMusic?(level: number, seconds: number): void;
   update(dt: number): void;
 }
 
