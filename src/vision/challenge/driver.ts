@@ -71,7 +71,7 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
   const onResult = (r: GlassesResult): void => {
     if (phase !== 'playing') return;
     tally.record(r);
-    if (enabled()) moved(staircaseResult(stair, r.hit, play));
+    if (enabled()) moved(staircaseResult(stair, r.hit, play, r.mechanic));
   };
 
   const offs = [
@@ -154,7 +154,7 @@ export function createChallengeDriver(ctx: Pick<GameContext, 'settings' | 'event
         },
       };
     },
-    state: () => ({ ...stair, enabled: enabled(), forced: forced !== null, phase, seconds }),
+    state: () => ({ ...stair, lastCountedMiss: { ...stair.lastCountedMiss }, enabled: enabled(), forced: forced !== null, phase, seconds }),
     dispose() {
       for (const off of offs) off();
     },

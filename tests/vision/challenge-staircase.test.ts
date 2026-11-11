@@ -154,6 +154,64 @@ describe('hit pacing (bursts)', () => {
   });
 });
 
+describe('miss pacing (per mechanic)', () => {
+  /** A staircase at level 3 (9 counted hits, 4 s apart, ending at t = 32). */
+  const atLevel3 = (): Stair => {
+    const s = createStaircase();
+    for (let i = 0; i < 9; i++) staircaseResult(s, true, i * 4);
+    expect(s.level).toBe(3);
+    return s;
+  };
+  it('pins the number', () => {
+    expect(CHALLENGE.missSpacingSeconds).toBe(4);
+  });
+  it('6 misses from one mechanic within 3 s → exactly one step down', () => {
+    const s = atLevel3();
+    const dirs = [0, 0.5, 1, 1.5, 2, 3].map((d) => staircaseResult(s, false, 40 + d, 'bellSweet'));
+    expect(dirs).toEqual([-1, 0, 0, 0, 0, 0]);
+    expect(s.level).toBe(2);
+    expect(s.stepsDown).toBe(1);
+  });
+  it('two misses 5 s apart → two steps', () => {
+    const s = atLevel3();
+    expect(staircaseResult(s, false, 40, 'vaultDoor')).toBe(-1);
+    expect(staircaseResult(s, false, 45, 'vaultDoor')).toBe(-1);
+    expect(s.level).toBe(1);
+  });
+  it('misses from two different mechanics within 1 s → two steps', () => {
+    const s = atLevel3();
+    expect(staircaseResult(s, false, 40, 'vaultDoor')).toBe(-1);
+    expect(staircaseResult(s, false, 40.8, 'scoopsSecret')).toBe(-1);
+    expect(s.level).toBe(1);
+  });
+  it('an ignored miss does not reset the hit streak', () => {
+    const s = atLevel3();
+    staircaseResult(s, false, 40, 'glowDodge'); // counted: level 2, streak 0
+    staircaseResult(s, true, 40.5); // counted hit (8.5 s after the last): streak 1
+    staircaseResult(s, false, 41, 'glowDodge'); // ignored
+    expect(s.streak).toBe(1);
+    expect(s.level).toBe(2);
+  });
+  it('the first miss always counts, and a reset forgets every mechanic', () => {
+    const s = atLevel3();
+    expect(staircaseResult(s, false, 0, 'x')).toBe(-1);
+    resetStaircase(s);
+    expect(s.lastCountedMiss).toEqual({});
+    for (let i = 0; i < 6; i++) staircaseResult(s, true, i * 4);
+    expect(staircaseResult(s, false, 21, 'x')).toBe(-1);
+  });
+  it('the tally counts every miss of a spree', () => {
+    const s = atLevel3();
+    const tally = new SessionTally();
+    for (let i = 0; i < 6; i++) {
+      tally.record({ mechanic: 'bellSweet', kind: 'timeIt', tier: 2, hit: false });
+      staircaseResult(s, false, 40 + i * 0.5, 'bellSweet');
+    }
+    expect(tally.rows()).toEqual([{ mechanic: 'bellSweet', kind: 'timeIt', tier: 2, hits: 0, misses: 6 }]);
+    expect(s.level).toBe(2);
+  });
+});
+
 describe('level → modifiers', () => {
   it('level 0 is identity', () => {
     expect(levelModifiers(0)).toEqual({ level: 0, maxLevel: 6, weakScale: 1, strongScale: 1, sizeScale: 1 });
