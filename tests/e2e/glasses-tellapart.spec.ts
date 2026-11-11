@@ -94,73 +94,228 @@ test.afterAll(async () => {
   await page.close();
 });
 
-// ───────────────────────────── Odd one out ─────────────────────────────
+// ───────────────────────────── Odd one out (booth kit) ─────────────────────────────
 
-test('odd one out: weak shapes touch only the weak channel; answer hidden from the strong eye', async () => {
+type P3 = { x: number; y: number; z: number };
+interface OddKit {
+  phase: string;
+  results: boolean[];
+  fx: Record<string, number>;
+  booth: { frame: number; lamps: string[]; lampMode: string; padMode: string; prompt: string | null; deviceOn: boolean };
+}
+interface OddDebug {
+  state: string;
+  phase: string;
+  level: number;
+  tier: number;
+  answer: number;
+  pressed: number;
+  lastHit: boolean;
+  hits: number;
+  misses: number;
+  gems: number;
+  fade: number;
+  facing: number;
+  kit: OddKit;
+  stands: P3[];
+  pad: P3;
+  padBack: P3;
+  booth: P3;
+  far: P3 & { yaw: number };
+  celebrateView: P3 & { yaw: number };
+}
+const BOOTH = 'booth';
+const odd = (): Promise<OddDebug> => page.evaluate(() => window.__rgGlasses!.debug('oddone')) as unknown as Promise<OddDebug>;
+const oddForce = (p: Record<string, unknown>): Promise<void> => page.evaluate((x) => window.__rgGlasses!.force('oddone', x), p);
+const wallet = (): Promise<number> => page.evaluate(() => window.__rg!.ctx.profile.wallet);
+const stepN = (n: number, render = false): Promise<void> => page.evaluate(({ n, render }) => window.__rg!.step(1 / 60, n, render), { n, render });
+
+/** Teleport (feet on the ground) facing `yaw`, let the camera settle, render once. */
+async function standAt(p: P3, yaw: number, settle = 40): Promise<void> {
+  await page.evaluate(
+    ({ p, yaw, settle }) => {
+      const rg = window.__rg!;
+      rg.teleport(p.x, p.y + 0.05, p.z, yaw);
+      rg.step(1 / 60, settle, false);
+      rg.step(1 / 60, 1);
+    },
+    { p, yaw, settle },
+  );
+}
+
+/** A spot ~30 m out on the approach with a clear line of sight to the booth and the pad, facing them. */
+async function oddFarSpot(d: OddDebug): Promise<P3 & { yaw: number }> {
+  return page.evaluate((d) => {
+    const w = window.__rg!.ctx.world;
+    const g = window.__rgGlasses!;
+    const by = w.heightAt(d.booth.x, d.booth.z) + 3.8;
+    for (const dist of [30, 28, 32, 26]) {
+      for (const off of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2]) {
+        const a = d.facing + off;
+        const x = d.pad.x + Math.sin(a) * dist;
+        const z = d.pad.z + Math.cos(a) * dist;
+        const y = w.heightAt(x, z);
+        if (!w.isLand(x, z) || y < w.waterLevel + 0.5) continue;
+        if (g.sight({ x, y: y + 2.6, z }, { x: d.booth.x, y: by, z: d.booth.z }) !== null) continue;
+        if (g.sight({ x, y: y + 1.5, z }, { x: d.pad.x, y: d.pad.y + 1.2, z: d.pad.z }) !== null) continue;
+        const bx = d.booth.x * 0.5 + d.pad.x * 0.5;
+        const bz = d.booth.z * 0.5 + d.pad.z * 0.5;
+        return { x, y, z, yaw: Math.atan2(bx - x, bz - z) };
+      }
+    }
+    return d.far;
+  }, d);
+}
+
+/** Stand on the pad facing the pedestals and press Use there (the real interaction path). */
+async function startOnPad(d: OddDebug): Promise<string | null> {
+  await standAt(d.pad, d.facing + Math.PI, 6);
+  return pressUse();
+}
+
+/** Wait for the next try, stand at the button over `i` and press it. */
+async function pressButton(d: OddDebug, i: number): Promise<string | null> {
+  await standAt(d.stands[i], d.facing + Math.PI, 3);
+  return pressUse();
+}
+
+test('odd one out: a booth from 30 m, attract at the pad, Use on the pad → 3-2-1-GO', async () => {
   await page.evaluate(() => {
     window.__rgGlasses!.goto('oddone');
     window.__rg!.step(1 / 60, 30, false);
-    window.__rgGlasses!.force('oddone', { level: 0, answer: 2 });
-    window.__rg!.step(1 / 60, 1);
+    window.__rg!.setRemaining(9999);
   });
-  expect(await page.evaluate(() => window.__rgGlasses!.active('oddone'))).toBe(true);
-  await save('oddone', 'approach-level0', true);
-  await standAtButtons();
-  await page.evaluate(() => {
-    window.__rgGlasses!.force('oddone', { level: 0, answer: 1 });
-    window.__rg!.render();
-  });
-  await save('oddone', 'buttons-level0', true);
-  await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: 'oddone' });
-
-  const answer = (a: number) => async (): Promise<void> => {
-    await page.evaluate((x) => window.__rgGlasses!.force('oddone', { answer: x }), a);
-  };
-  for (const level of [0, 6]) {
-    await page.evaluate((l) => window.__rgGlasses!.force('oddone', { level: l, answer: 0 }), level);
-    await expectAnswerBlindWithoutWeakEye(page, { setA: answer(0), setB: answer(2), label: `oddone level ${level}` });
-  }
-  await page.evaluate(() => {
-    window.__rgGlasses!.force('oddone', { level: 7, answer: 2 });
-    window.__rg!.render();
-  });
-  await save('oddone', 'buttons-level7', true);
+  let d = await odd();
+  expect(await page.evaluate(() => window.__rgGlasses!.isBooth('oddone'))).toBe(true);
+  expect([d.phase, d.state]).toEqual(['idle', 'idle']);
+  // From ~30 m on the approach: the marquee reads in R-only and G-only.
+  const spot = await oddFarSpot(d);
+  await standAt(spot, spot.yaw);
+  await save(BOOTH, 'oddone-30m', true);
+  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('oddone'));
+  expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
+  const far = await canvasShot(page);
+  expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
+  expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  // Behind the pad, facing the pedestals: attract (demo loops, the pad pulses, the device's button shows).
+  await standAt(d.padBack, d.facing + Math.PI);
+  d = await odd();
+  expect(d.kit.phase).toBe('idle');
+  expect(d.kit.booth.deviceOn).toBe(true);
+  expect(d.kit.booth.prompt).toBeNull();
+  const f0 = d.kit.booth.frame;
+  await stepN(90);
+  expect((await odd()).kit.booth.frame, 'the demo flipbook runs').not.toBe(f0);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 1));
+  await save(BOOTH, 'oddone-pad-idle', true);
+  expect(await page.evaluate(() => window.__rgGlasses!.signDraws('oddone'))).toBe(1);
+  await expectDrawBudget(page, 'oddone', 6);
+  // No button prompt while the booth is idle; on the pad, Use starts a round.
+  await standAt(d.stands[1], d.facing + Math.PI, 4);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).not.toMatch(/glasses-oddone/);
+  expect(await startOnPad(d)).toMatch(/^glasses-booth-/);
+  d = await odd();
+  expect(d.kit.phase).toBe('countdown');
+  expect(d.kit.fx.digit ?? 0).toBe(1);
+  // A few frames in: the "3" has popped up to full size.
+  await page.evaluate(() => window.__rg!.step(1 / 60, 12));
+  await save(BOOTH, 'oddone-countdown', true);
+  await stepN(200);
+  d = await odd();
+  expect([d.phase, d.state]).toEqual(['play', 'open']);
+  expect(d.kit.booth.prompt).toBe('press');
 });
 
-test('odd one out: a hit and a miss through the button prompts; the staircase moves; a nap after the miss', async () => {
-  await page.evaluate(() => window.__rgGlasses!.force('oddone', { level: 2, answer: 1 }));
+test('odd one out: weak shapes touch only the weak channel; the answer is hidden from the strong eye', async () => {
+  const d = await odd();
+  await oddForce({ level: 0, answer: 2 });
+  await standAt(d.pad, d.facing + Math.PI, 2);
+  await save(BOOTH, 'oddone-play', true);
+  await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: 'oddone' });
+  // The booth's clocks are pinned: demo frame, lamps and pad pulse are equal in every frame.
+  await oddForce({ pin: 0 });
+  const answer = (a: number) => async (): Promise<void> => oddForce({ answer: a });
+  for (const level of [0, 6]) {
+    await oddForce({ level, answer: 0 });
+    await expectAnswerBlindWithoutWeakEye(page, { setA: answer(0), setB: answer(2), label: `oddone level ${level}` });
+  }
+  await oddForce({ level: 7, answer: 2 });
   await standAtButtons();
+  await save('oddone', 'buttons-level7', true);
+  await expectDrawBudget(page, 'oddone', 6);
+});
+
+test('odd one out: a round of 5 through the buttons: a hit and a miss, lamps, the staircase, celebration, prize', async () => {
   await events();
-  expect(await pressUse()).toBe('glasses-oddone-1');
-  let dbg = await page.evaluate(() => window.__rgGlasses!.debug('oddone'));
-  expect(dbg).toMatchObject({ phase: 'feedback', pressed: 1, lastHit: true, level: 3, hits: 1 });
+  const before = await wallet();
+  let d = await odd();
+  expect(d.phase).toBe('play');
+  // Try 1 at level 2 (tier 2): the middle button is the odd one → ✓, lamp 0 lights, finer.
+  await oddForce({ level: 2, answer: 1 });
+  expect(await pressButton(d, 1)).toBe('glasses-oddone-1');
+  d = await odd();
+  expect(d).toMatchObject({ state: 'done', pressed: 1, lastHit: true, level: 3, hits: 1 });
+  expect(d.kit.results).toEqual([true]);
+  expect(d.kit.booth.lamps[0]).toBe('hit');
+  expect(d.kit.fx.pop).toBe(1);
   let ev = await events();
   expect(ev.filter((e) => e.type === 'result')).toEqual([{ type: 'result', mechanic: 'oddone', kind: 'tellApart', tier: 2, hit: true }]);
-  expect(ev.some((e) => e.type === 'toast' && e.icon === 'gem')).toBe(true);
-  await page.evaluate(() => window.__rg!.step(1 / 60, 12));
-  await expectDrawBudget(page, 'oddone', 5);
-  await save('oddone', 'hit');
-
-  // Next round after the feedback, then a miss (answer forced away from the middle).
-  await page.evaluate(() => window.__rg!.step(1 / 60, 110, false));
-  dbg = await page.evaluate(() => window.__rgGlasses!.debug('oddone'));
-  expect(dbg).toMatchObject({ phase: 'ask', level: 3 });
-  await page.evaluate(() => window.__rgGlasses!.force('oddone', { answer: 0 }));
-  expect(await pressUse()).toBe('glasses-oddone-1');
-  dbg = await page.evaluate(() => window.__rgGlasses!.debug('oddone'));
-  expect(dbg).toMatchObject({ phase: 'feedback', lastHit: false, level: 2, misses: 1 });
+  expect(ev.some((e) => e.type === 'toast'), 'no gems before the prize').toBe(false);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 10));
+  await save(BOOTH, 'oddone-hit', true);
+  // Try 2 (level 3, tier 2): press the middle one, the odd one is on the left → ✗, a dim lamp, coarser.
+  await stepN(80);
+  d = await odd();
+  expect([d.phase, d.state, d.level]).toEqual(['play', 'open', 3]);
+  await oddForce({ answer: 0 });
+  expect(await pressButton(d, 1)).toBe('glasses-oddone-1');
+  d = await odd();
+  expect(d).toMatchObject({ lastHit: false, level: 2, misses: 1 });
+  expect(d.kit.booth.lamps.slice(0, 2)).toEqual(['hit', 'miss']);
   ev = await events();
   expect(ev.filter((e) => e.type === 'result')).toEqual([{ type: 'result', mechanic: 'oddone', kind: 'tellApart', tier: 2, hit: false }]);
+  await stepN(80);
+  await standAt(d.padBack, d.facing + Math.PI, 20);
+  await save(BOOTH, 'oddone-mid-round', true);
+  // Tries 3–5 right (levels 2, 3, 4): 4 of 5, the last try at tier 3 → the prize for 4 at tier 3.
+  for (let t = 0; t < 3; t++) {
+    d = await odd();
+    expect([d.phase, d.state]).toEqual(['play', 'open']);
+    expect(await pressButton(d, d.answer)).toBe(`glasses-oddone-${d.answer}`);
+    await stepN(80);
+  }
+  d = await odd();
+  expect(d.phase).toBe('celebrate');
+  expect(d.state).toBe('idle');
+  expect(d.kit.booth.lampMode).toBe('chase');
+  expect(d.level).toBe(5);
+  await standAt(d.celebrateView, d.celebrateView.yaw, 10);
+  await save(BOOTH, 'oddone-celebrate', true);
+  ev = await events();
+  expect(ev.filter((e) => e.type === 'result').map((e) => [e.tier, e.hit])).toEqual([[2, true], [2, true], [3, true]]);
   expect(ev.some((e) => e.type === 'toast')).toBe(false);
-  // After the feedback the pedestals nap: no prompt for 5 s, then they wake up.
-  await page.evaluate(() => window.__rg!.step(1 / 60, 110));
-  await save('oddone', 'nap');
-  dbg = await page.evaluate(() => window.__rgGlasses!.debug('oddone'));
-  expect(dbg).toMatchObject({ phase: 'ask' });
-  expect(dbg.nap as number).toBeGreaterThan(3);
-  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? null)).toBeNull();
-  await page.evaluate(() => window.__rg!.step(1 / 60, 300, false));
-  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? null)).toBe('glasses-oddone-1');
+  await stepN(240);
+  d = await odd();
+  expect(['cooldown', 'idle']).toContain(d.phase);
+  expect(d.gems).toBe(8);
+  expect(await wallet()).toBe(before + 8);
+  ev = await events();
+  expect(ev.filter((e) => e.type === 'toast' && e.icon === 'gem')).toHaveLength(1);
+  await stepN(120);
+  expect((await odd()).kit.phase).toBe('idle');
+});
+
+test('odd one out: walking away mid-round cancels it with no misses for the tries never played', async () => {
+  await events();
+  let d = await odd();
+  expect(await startOnPad(d)).toMatch(/^glasses-booth-/);
+  await stepN(200);
+  expect((await odd()).phase).toBe('play');
+  await page.evaluate((p) => window.__rg!.teleport(p.x, p.y + 0.05, p.z, p.yaw), d.far);
+  await stepN(3);
+  d = await odd();
+  expect([d.kit.phase, d.state]).toEqual(['idle', 'idle']);
+  expect((await events()).filter((e) => e.type === 'result')).toEqual([]);
 });
 
 // ───────────────────────────── Line-up (booth kit) ─────────────────────────────

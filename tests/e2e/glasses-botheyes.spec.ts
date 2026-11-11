@@ -66,6 +66,15 @@ interface DotsDebug {
   view: P3;
   approach: P3;
   approachYaw: number;
+  phase: string;
+  roundTier: number;
+  dotsShown: boolean;
+  kit: GatesKit & { booth: { deviceOn: boolean } };
+  pad: P3;
+  padBack: P3;
+  booth: P3;
+  far: P3 & { yaw: number };
+  celebrateView: P3 & { yaw: number };
 }
 
 const debug = <T>(id: string): Promise<T> => page.evaluate((i) => window.__rgGlasses!.debug(i), id) as Promise<T>;
@@ -381,17 +390,77 @@ test('gates: leaving mid-round cancels it with no misses for the runs never play
   expect((await events()).results).toEqual([]);
 });
 
-// ───────────────────────────── dot-picture signs ─────────────────────────────
+// ───────────────────────────── dot-picture signs (booth kit) ─────────────────────────────
 
 const SHAPES = ['star', 'heart', 'moon'];
+const dots = (): Promise<DotsDebug> => debug<DotsDebug>('dotsigns');
 
-test('dot signs: the picture and the buttons; each layer only touches its channel', async () => {
+/** Press Use once through the input system; returns the id of the prompt that was focused. */
+async function useOnce(): Promise<string | null> {
+  return page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = rg.ctx.interactions.focused?.id ?? null;
+    rg.inject({ usePressed: true, use: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 1, false);
+    return f;
+  });
+}
+/** Stand in front of button `i` (facing the sign) and press it. */
+async function pressDot(d: DotsDebug, i: number): Promise<string | null> {
+  await teleport(d.stand[i], d.yaw + Math.PI);
+  await step(3);
+  return useOnce();
+}
+
+test('dot signs: a booth from 30 m, attract at the pad, Use on the pad → 3-2-1-GO', async () => {
   await page.evaluate(() => window.__rgGlasses!.goto('dotsigns'));
   await step(2);
-  const d = await debug<DotsDebug>('dotsigns');
+  let d = await dots();
+  expect(await page.evaluate(() => window.__rgGlasses!.isBooth('dotsigns'))).toBe(true);
+  expect([d.phase, d.state, d.dotsShown]).toEqual(['idle', 'idle', false]);
+  // From ~30 m on the approach: the marquee reads in R-only and G-only.
+  const spot = await farSpot(d as unknown as GatesDebug);
+  await standAt(spot, spot.yaw);
+  const far = await shots(BOOTH_OUT, 'dotsigns-30m', true);
+  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('dotsigns'));
+  expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
+  expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
+  expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  // Behind the pad, facing the sign: attract (demo loops, the pad pulses, the device's button shows).
+  await standAt(d.padBack, d.yaw + Math.PI);
+  d = await dots();
+  expect(d.kit.phase).toBe('idle');
+  expect(d.kit.booth.deviceOn).toBe(true);
+  const f0 = d.kit.booth.frame;
+  await step(90);
+  expect((await dots()).kit.booth.frame, 'the demo flipbook runs').not.toBe(f0);
+  await shots(BOOTH_OUT, 'dotsigns-pad-idle', true);
+  expect(await page.evaluate(() => window.__rgGlasses!.signDraws('dotsigns'))).toBe(1);
+  await expectDrawBudget(page, 'dotsigns', 6);
+  // No button prompt while the booth is idle; on the pad, Use starts a round.
+  await standAt(d.stand[1], d.yaw + Math.PI, 4);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).not.toMatch(/glasses-dotsigns/);
+  await standAt(d.pad, d.yaw + Math.PI, 6);
+  expect(await useOnce()).toMatch(/^glasses-booth-/);
+  d = await dots();
+  expect(d.kit.phase).toBe('countdown');
+  expect(d.kit.fx.digit ?? 0).toBe(1);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 12));
+  await shots(BOOTH_OUT, 'dotsigns-countdown', true);
+  await step(200);
+  d = await dots();
+  expect([d.phase, d.state, d.dotsShown]).toEqual(['play', 'open', true]);
+  expect(d.kit.booth.prompt).toBe('look');
+});
+
+test('dot signs: the picture and the buttons; each layer only touches its channel', async () => {
+  const d = await dots();
   await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 1 });
   await standAt(d.view, d.yaw + Math.PI);
   await shots('dotsigns', 'pedestal', true);
+  await shots(BOOTH_OUT, 'dotsigns-play', true);
   await standAt(d.approach, d.approachYaw);
   await shots('dotsigns', 'approach', true);
   await standAt(d.view, d.yaw + Math.PI);
@@ -399,7 +468,9 @@ test('dot signs: the picture and the buttons; each layer only touches its channe
   await expectDrawBudget(page, 'dotsigns', 6);
 });
 
-test('dot signs: neither eye alone can tell the hidden shape', async () => {
+test('dot signs: neither eye alone can tell the hidden shape (booth, lamps and pad identical)', async () => {
+  // The booth's clocks are pinned: demo frame, lamps and pad pulse are equal in every frame.
+  await force('dotsigns', { pin: 0 });
   // Same seed, same buttons, different hidden shape: the strong eye's dots are bit-identical.
   await expectAnswerBlindWithoutWeakEye(page, {
     setA: () => force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234 }),
@@ -414,77 +485,86 @@ test('dot signs: neither eye alone can tell the hidden shape', async () => {
     const a = await layerFrame(page, { weak: true, strong: false });
     await force('dotsigns', { shapes: SHAPES, answer: 1, seed: 1234 });
     const b = await layerFrame(page, { weak: true, strong: false });
-    const d = channelDiff(a, b);
-    expect(maxOf(d, combo.strong), 'strong channel identical').toBe(0);
-    expect(d.maxB).toBe(0);
+    const diff = channelDiff(a, b);
+    expect(maxOf(diff, combo.strong), 'strong channel identical').toBe(0);
+    expect(diff.maxB).toBe(0);
   }
   await setEye(page, COMBOS[0].eye);
   await layerFrame(page, { weak: true, strong: true });
 });
 
-test('dot signs: press the hidden shape → hit, a wrong one → miss, a new picture follows', async () => {
+test('dot signs: a round of 5 through the buttons: a hit and a miss, lamps, celebration, prize', async () => {
   await events();
-  await force('dotsigns', { shapes: SHAPES, answer: 2, seed: 77, tier: 1 });
-  let d = await debug<DotsDebug>('dotsigns');
-  const facing = d.yaw + Math.PI;
-  const pressAt = async (i: number): Promise<void> => {
-    await teleport(d.stand[i], facing);
-    await step(3);
-    await page.evaluate(() => {
-      const rg = window.__rg!;
-      rg.inject({ usePressed: true, use: true });
-      rg.step(1 / 60, 1, false);
-      rg.inject(null);
-      rg.step(1 / 60, 1, false);
-    });
-  };
-  await pressAt(2);
-  d = await debug<DotsDebug>('dotsigns');
-  expect(d.state).toBe('done');
-  expect(d.hits).toBe(1);
-  expect(d.tier).toBe(2);
-  expect(d.gems).toBe(3);
-  await standAt(d.view, facing, 20);
-  await shots('dotsigns', 'hit');
+  const before = await wallet();
+  await force('dotsigns', { shapes: SHAPES, answer: 2, seed: 77 });
+  let d = await dots();
+  expect(d.phase).toBe('play');
+  // Picture 1: the hidden shape is on the right button → ✓, lamp 0 lights, the sign does a flourish.
+  expect(await pressDot(d, 2)).toBe('glasses-dotsigns-2');
+  d = await dots();
+  expect([d.state, d.hits]).toEqual(['done', 1]);
+  expect(d.kit.results).toEqual([true]);
+  expect(d.kit.booth.lamps[0]).toBe('hit');
+  expect(d.kit.fx.pop).toBe(1);
   let ev = await events();
   expect(ev.results).toEqual([{ mechanic: 'dotsigns', kind: 'popOut', tier: 1, hit: true }]);
-  expect(ev.toasts).toBe(1);
-  const round = d.round;
-  await step(140);
-  d = await debug<DotsDebug>('dotsigns');
-  expect(d.round).toBe(round + 1);
-  expect(d.state).toBe('open');
-
-  const wrong = (d.answer + 1) % 3;
-  await pressAt(wrong);
-  d = await debug<DotsDebug>('dotsigns');
+  expect(ev.toasts, 'no gems before the prize').toBe(0);
+  await standAt(d.view, d.yaw + Math.PI, 8);
+  await shots(BOOTH_OUT, 'dotsigns-hit', true);
+  // Picture 2: a wrong button → ✗, a dim lamp; the right one bobs.
+  await step(90);
+  d = await dots();
+  expect([d.phase, d.state, d.round]).toEqual(['play', 'open', 2]);
+  expect(await pressDot(d, (d.answer + 1) % 3)).toBe(`glasses-dotsigns-${(d.answer + 1) % 3}`);
+  d = await dots();
   expect(d.misses).toBe(1);
-  expect(d.tier).toBe(1);
+  expect(d.kit.booth.lamps.slice(0, 2)).toEqual(['hit', 'miss']);
   ev = await events();
-  expect(ev.results).toEqual([{ mechanic: 'dotsigns', kind: 'popOut', tier: 2, hit: false }]);
+  expect(ev.results).toEqual([{ mechanic: 'dotsigns', kind: 'popOut', tier: 1, hit: false }]);
+  await step(90);
+  await standAt(d.padBack, d.yaw + Math.PI, 20);
+  await shots(BOOTH_OUT, 'dotsigns-mid-round', true);
+  // Pictures 3–5 right: 4 of 5 at tier 1 → the prize for 4, and finer pictures next round.
+  for (let t = 0; t < 3; t++) {
+    d = await dots();
+    expect([d.phase, d.state]).toEqual(['play', 'open']);
+    expect(await pressDot(d, d.answer)).toBe(`glasses-dotsigns-${d.answer}`);
+    await step(90);
+  }
+  d = await dots();
+  expect(d.phase).toBe('celebrate');
+  expect(d.kit.booth.lampMode).toBe('chase');
+  expect(d.dotsShown).toBe(false);
+  await standAt(d.celebrateView, d.celebrateView.yaw, 10);
+  await shots(BOOTH_OUT, 'dotsigns-celebrate', true);
+  ev = await events();
+  expect(ev.results.map((r) => r.hit)).toEqual([true, true, true]);
+  expect(ev.results.every((r) => r.tier === 1)).toBe(true);
   expect(ev.toasts).toBe(0);
-  // The nap: buttons sink, every prompt is off, a press does nothing, for 5 s.
-  await step(140);
-  const nap = await debug<DotsDebug & { sink: number }>('dotsigns');
-  expect(nap.round).toBe(d.round);
-  expect(nap.sink).toBeGreaterThan(0.5);
-  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused)).toBeNull();
-  await pressAt(d.answer);
-  expect((await debug<DotsDebug>('dotsigns')).hits).toBe(1);
-  await step(200);
-  d = await debug<DotsDebug>('dotsigns');
-  expect(d.round).toBe(nap.round + 1);
-  // The first hit after a miss pays 1 gem.
-  const before = d.gems;
-  await pressAt(d.answer);
-  d = await debug<DotsDebug>('dotsigns');
-  expect(d.hits).toBe(2);
-  expect(d.gems - before).toBe(1);
+  await step(240);
+  d = await dots();
+  expect(['cooldown', 'idle']).toContain(d.phase);
+  expect(d.gems).toBe(6);
+  expect(await wallet()).toBe(before + 6);
+  expect((await events()).toasts).toBe(1);
+  expect(d.roundTier, '4 of 5: finer pictures next round').toBe(2);
+  await step(120);
+  expect((await dots()).kit.phase).toBe('idle');
+});
+
+test('dot signs: walking away mid-round cancels it with no misses for the pictures never shown', async () => {
   await events();
-  // A finer picture in view for the record.
-  await force('dotsigns', { shapes: SHAPES, answer: 0, seed: 1234, tier: 3 });
-  await standAt(d.view, facing);
+  let d = await dots();
+  // A finer picture in view for the record (a round forced straight into play at tier 3).
+  await force('dotsigns', { play: true, tier: 3, shapes: SHAPES, answer: 0, seed: 1234 });
+  await standAt(d.view, d.yaw + Math.PI);
   await shots('dotsigns', 'tier3', true);
+  expect((await dots()).phase).toBe('play');
+  await teleport(d.far, d.far.yaw);
+  await step(3);
+  d = await dots();
+  expect([d.kit.phase, d.state, d.dotsShown]).toEqual(['idle', 'idle', false]);
+  expect((await events()).results).toEqual([]);
 });
 
 test('both are idle when the player is far', async () => {

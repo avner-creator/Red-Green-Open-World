@@ -26,7 +26,7 @@ export const MECHANICS: readonly MechanicDef[] = [
   // Catch the drifting weak-eye fireflies by running through them → gems.
   { id: 'glowflies', kind: 'follow', pictos: ['firefly', 'run', 'gems'], create: glowflies.create, booth: true },
   // Three weak-eye shapes: press the button under the different one → gems.
-  { id: 'oddone', kind: 'tellApart', pictos: ['odd', 'press', 'gems'], create: oddone.create },
+  { id: 'oddone', kind: 'tellApart', pictos: ['odd', 'press', 'gems'], create: oddone.create, booth: true },
   // Stand on the pad, put the weak-eye magic ring over the strong-eye bubble and press → it pops → gems.
   { id: 'lineup', kind: 'lineUp', pictos: ['pad', 'hoop', 'gems'], create: lineup.create, booth: true },
   // Follow the weak-eye paw prints to Pip's lost toy → gems.
@@ -34,5 +34,5 @@ export const MECHANICS: readonly MechanicDef[] = [
   // Two halves (one per eye) show which of three arches to run through → gems.
   { id: 'gates', kind: 'lineUp', pictos: ['halves', 'arches', 'gems'], create: gates.create, booth: true },
   // The hidden shape of the dot picture is the answer on the three-button pedestal → gems.
-  { id: 'dotsigns', kind: 'popOut', pictos: ['dots', 'press', 'gems'], create: dotsigns.create },
+  { id: 'dotsigns', kind: 'popOut', pictos: ['dots', 'press', 'gems'], create: dotsigns.create, booth: true },
 ];
