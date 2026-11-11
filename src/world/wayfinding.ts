@@ -79,6 +79,8 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
   // The bridge's far end, the roost path, the ranch approach.
   { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee'] },
   { x: 4.6, z: -133, scale: 0.85, targets: ['dragonRoost'] },
+  // Where the roost footpath leaves the north road (QA round 3: make the way up to the roost obvious).
+  { x: -22, z: -135.8, scale: 0.85, targets: ['dragonRoost', 'lighthouse', 'bungee'] },
   { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform'] },
 ];
 
