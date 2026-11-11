@@ -33,3 +33,9 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - `npm run verify` green on 438b801: 882 unit, 229 e2e passed, 3 skipped (31.5 min under load).
 - Now on `main`: everything listed under "Batch 2", six weaker-eye mini-games with toolkit / Auto challenge / grown-up summary, secrets re-sited and batched (≤ 12 draws), far-distance culling for attractions, cleared mini-game sites with first wayfinding.
 - Still in flight: `agent/world-finish` (rest of mini-game wayfinding, Low render budget, re-measure Medium), `agent/e2e-speed` (suite time). Stream P Phase 2 continues on `agent/glasses-depth`.
+
+## Clarity pass on `main` (2026-11-12 ~05:15 UTC)
+- `npm run verify` green on 110570a: 888 unit, 238 e2e passed, 3 skipped (16 min on a quiet machine).
+- Added since the previous push: wayfinding for the six weaker-eye mini-games (beacons, pictograms, third plaza post, compass, two stone trails); Medium and Low render budgets met in every perf-report view; e2e starts frozen and runs 3 workers; Pip knows the mini-games; frog hat position fix; closer balloon-top framing; trampoline step rings all round; rocket pads allow a practice launch at 0 gems; new start screen, Fun Pass stamp card (replaces mission cards), HUD explain bubbles, help on H/F1.
+- Lesson: full verify under agent load (load average 20–30) gives false failures (timeouts, renderer crashes). Run the promoting verify only when no worker is running e2e.
+- Open: rocket first launch is still paid; `stamp:earned` event wanted on the EventBus (stamps are derived from other events); Pip's bubble unverified by eye at desktop sizes; Low spawn sits exactly at 130 draws; weak-eye layer objects have no distance cut-off; QA round 3 not yet run; nobody has checked the new sites/screens by eye beyond the workers' own screenshots.

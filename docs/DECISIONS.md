@@ -76,3 +76,5 @@
 - Batch 2 site conflict (carnival boardwalk over the rooftops secret start, foam course over the village vault): the secret pieces move, attractions and sites stay. Reason: secrets live in one folder; attraction coordinates are baked into two streams.
 - Batch 2 is held on `integration/m1` (not `main`) until the one red e2e test and the Medium render budget are fixed. Reason: `main` only moves when verify is green, and every view is over budget.
 - R releases every ride, including the horse and rocket/trampoline flight (overrides "stay mounted on R"). Reason: one rule kids can rely on.
+- Play on the title starts at once with the saved (or default frog) hero; hero select is behind "change hero". Reason: one obvious button for 8-year-olds.
+- The orchestrator may `git apply` a diff a worker wrote and tested for files outside that worker's folders. Reason: it is the worker's code; avoids a second agent for a mechanical step.
