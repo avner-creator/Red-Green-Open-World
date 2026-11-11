@@ -249,6 +249,58 @@ test.describe('ui', () => {
     await expect(page.getByTestId('play')).toBeVisible();
   });
 
+  test('Tab opens the Fun Pass only while playing; elsewhere it moves focus', async () => {
+    await freshTitle();
+    await page.evaluate(() => window.__rg!.freeze(true));
+    await startGame(page);
+    await step(page);
+    const pass = page.getByTestId('funpass');
+    const focused = (): Promise<string> =>
+      page.evaluate(() => {
+        const a = document.activeElement as HTMLElement | null;
+        return a ? `${a.tagName}#${a.id}.${a.dataset.testid ?? ''}.${a.getAttribute('aria-label') ?? ''}` : '';
+      });
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press('Tab');
+    await expect(pass).toHaveClass(/\bon\b/);
+    await page.keyboard.press('Tab');
+    await expect(pass).not.toHaveClass(/\bon\b/);
+
+    // Calibration opened mid-game (a dialog): Tab / Shift+Tab move focus, the pass stays shut.
+    await page.evaluate(() => window.__rg!.ctx.vision.openCalibration(() => {}));
+    await page.focus('#rgv-weakStrength');
+    const f0 = await focused();
+    await page.keyboard.press('Shift+Tab');
+    const f1 = await focused();
+    expect(f1).not.toBe(f0);
+    expect(await page.evaluate(() => document.querySelector('.rgv-cal')!.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Tab');
+    expect(await focused()).toBe(f0);
+    await expect(pass).not.toHaveClass(/\bon\b/);
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => window.__rgVision!.calibrationOpen())).toBe(false);
+
+    // Settings (behind the gate, paused): Tab / Shift+Tab cycle through its controls.
+    await page.evaluate(() => window.__rg!.ctx.session.pause());
+    await step(page, 2);
+    await page.getByTestId('pause-grownups').click();
+    const q = await page.evaluate(() => {
+      const m = /(\d+) × (\d+)/.exec(document.querySelector('[data-testid="gate-question"]')!.textContent!)!;
+      return Number(m[1]) * Number(m[2]);
+    });
+    await page.locator(`[data-testid="gate-answer"][data-value="${q}"]`).click();
+    await expect(page.getByTestId('settings')).toBeVisible();
+    const s0 = await focused();
+    await page.keyboard.press('Tab');
+    const s1 = await focused();
+    expect(s1).not.toBe(s0);
+    await page.keyboard.press('Shift+Tab');
+    expect(await focused()).toBe(s0);
+    expect(await page.evaluate(() => document.querySelector('[data-testid="settings"]')!.contains(document.activeElement))).toBe(true);
+    await expect(pass).not.toHaveClass(/\bon\b/);
+    await page.getByTestId('settings-done').click();
+  });
+
   test('the hold button opens the gate', async () => {
     await freshTitle();
     await page.getByTestId('grownups').click();

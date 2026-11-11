@@ -7,6 +7,7 @@ import { clear, h } from './dom';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
 import type { Screen } from './screens';
+import { gameplayKeyAllowed } from './gameKeys';
 
 type HeaderIcon = UiIconName | 'walker';
 
@@ -142,6 +143,7 @@ export function createControlsOverlay(ctx: GameContext): ControlsOverlay {
   window.addEventListener('keydown', (e) => {
     if (ctx.session.state.phase !== 'playing' || typing(e.target)) return;
     if (e.code === 'KeyH' || e.code === 'F1') {
+      if (!gameplayKeyAllowed(e, ctx.session.state.phase)) return;
       if (!e.repeat) api.toggle();
       e.preventDefault();
     } else if (e.code === 'Escape' && open) {

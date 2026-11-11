@@ -22,6 +22,7 @@ import { createSkillChip } from './skillButton';
 import { createTouchUi } from './touch';
 import { createTutorial } from './tutorial';
 import { createWayfinding } from './wayfinding';
+import { dialogOpen, typingTarget } from './gameKeys';
 
 /** Title camera: close and low, the hero fills the middle of the screen. */
 const TITLE_CAMERA = { distance: 6.4, height: 0.9, fov: 46 };
@@ -213,7 +214,7 @@ export function createUi(ctx: GameContext): UiApi {
   // Help is one key away on the title and in the pause menu too (H / F1 / gamepad Back).
   const helpHere = (): boolean => !calibrating && stack.length === 0 && (top() === title || top() === pause);
   window.addEventListener('keydown', (e) => {
-    if ((e.code === 'KeyH' || e.code === 'F1') && !e.repeat && helpHere()) {
+    if ((e.code === 'KeyH' || e.code === 'F1') && !e.repeat && helpHere() && !typingTarget(e.target) && !dialogOpen()) {
       e.preventDefault();
       actions.openHelp?.();
     }

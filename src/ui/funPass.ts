@@ -12,6 +12,7 @@ import { CHEST_STAMP, milestones, modeStamp, nextMilestone, prizeFor, stuntStamp
 import type { StampId } from './funPassLogic';
 import { icon } from './icons';
 import { injectFunPassCss } from './funPassCss';
+import { gameplayKeyAllowed } from './gameKeys';
 
 /** Pass pictogram: a ticket card with a round stamp on it. */
 const PASS_SVG =
@@ -216,6 +217,8 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
     (e) => {
       if (ctx.session.state.phase !== 'playing') return;
       if (e.code === 'Tab') {
+        // Tab is keyboard navigation everywhere else (menus, calibration, form controls).
+        if (!gameplayKeyAllowed(e, ctx.session.state.phase)) return;
         e.preventDefault();
         if (!e.repeat) toggle();
       } else if (e.code === 'Escape' && open) {
