@@ -30,9 +30,9 @@ const WHITE = 0xf2eee6;
  */
 export const PADDOCK = { hx: 18, hz: 14, northEnd: 3, eastStart: -1, westGate: [-3, 3] as const, beachGap: [-14.8, -10.6] as const };
 /** Ranch entrance arch over the west road (centre on the road, yaw along it). */
-// Entrance arch over the west road, a few metres up the road towards the paddock corner: at -54, 32.5
+// Entrance arch over the west road, a few metres back towards the plaza: at -54, 32.5
 // its sign hung right in the view from the glow-flies trail end to their booth.
-export const ARCH = { x: -57.4, z: 36.8, yaw: Math.atan2(-8, 10), half: 4.6 };
+export const ARCH = { x: -50, z: 28.4, yaw: Math.atan2(-18, 14), half: 4.6 };
 /** Riding track centreline (rounded rect inside the fence) and its width. */
 export const TRACK = { hx: 15.6, hz: 11.6, r: 2.3, width: 2.6 };
 /**

@@ -42,7 +42,7 @@ export interface FingerpostDef {
  * the player's path east stays clear.
  */
 /** The toys trail-head flag (beside the toys fingerpost). */
-export const TOYS_FLAG = { x: -8.9, z: 67.2 } as const;
+export const TOYS_FLAG = { x: -8.4, z: 71.2 } as const;
 
 export const FINGERPOSTS: readonly FingerpostDef[] = [
   {
@@ -84,7 +84,7 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
   { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee', 'lookout'] },
   { x: 4.6, z: -133, scale: 0.85, targets: ['dragonRoost'] },
   // Glasses booths hidden behind a crest or cliff: an arm with their pictogram where the child arrives.
-  { x: -8, z: 66, scale: 1, stripe: true, targets: ['toys'] },
+  { x: -8, z: 69.5, scale: 1, stripe: true, targets: ['toys'] },
   { x: 65.2, z: -80.6, scale: 0.85, targets: ['lineup'] },
   // Where the roost footpath leaves the north road (QA round 3: make the way up to the roost obvious).
   { x: -22, z: -135.8, scale: 0.85, targets: ['dragonRoost', 'lighthouse', 'bungee'] },

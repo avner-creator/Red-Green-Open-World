@@ -24,7 +24,7 @@ export const SIGHTLINES: readonly Sightline[] = [
   // Line-up: from the ridge-road signpost to the pad.
   { id: 'lineup', ax: 65.2, az: -80.6, bx: 71.7, bz: -89.5, half: 3 },
   // Toys: from the trail-head flag to the pad.
-  { id: 'toys', ax: -8, az: 66, bx: -30.5, bz: 69.7, half: 3 },
+  { id: 'toys', ax: -8, az: 69.5, bx: -30.5, bz: 69.7, half: 3 },
 ];
 
 function segDist(px: number, pz: number, s: Sightline): number {
