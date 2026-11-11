@@ -445,9 +445,9 @@ export function create(env: MechanicEnv): Mechanic {
           const t = frame.toWorld(-1.5, D.signZ);
           return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
         })(),
-        /** A spot ~5 m behind the pad facing the booth and the sign (the whole booth in view). */
+        /** A spot ~7 m behind the pad facing the booth and the sign (the whole booth in view). */
         celebrateView: (() => {
-          const p = pt(D.pad.x, D.pad.z + 5);
+          const p = pt(D.pad.x - 1, D.pad.z + 7);
           const t = frame.toWorld(-2.2, -0.4);
           return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
         })(),
