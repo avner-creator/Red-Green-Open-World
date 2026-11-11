@@ -265,6 +265,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
             hud.splash('splash', e.weak ? 3 : 1);
             ctx.events.emit('stunt', { kind: 'bumper', value: e.weak ? 3 : 1, stars: e.weak ? 2 : 1 });
             ctx.cameraRig.shake(e.weak ? 0.3 : 0.15);
+            if (e.weak) ctx.events.emit('glasses:result', { mechanic: 'sumoBalloon', kind: 'find', tier: 1, hit: true });
           }
           break;
         }
@@ -272,6 +273,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           hud.splash('tail', 1);
           ctx.audio.play('star', { pitch: 1.6 });
           ctx.cameraRig.shake(0.25);
+          ctx.events.emit('glasses:result', { mechanic: 'sumoBeat', kind: 'timeIt', tier: 2, hit: true });
           ctx.events.emit('stunt', { kind: 'bumper', value: 1, stars: 1 });
           break;
         case 'start':
