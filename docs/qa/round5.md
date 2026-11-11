@@ -19,9 +19,9 @@ Scripts (all on `agent/qa5`):
 | Item | Works | Clear (non-reader) | Fun | Top defect |
 |---|---|---|---|---|
 | Title / PLAY | yes | yes: PLAY is huge, Pip points at it | 4 | — |
-| Dressing room (title + kiosk) | yes (try, buy, wear, duck hat in play) | mostly; first open shows only grey cone icons | 3 | item pictures never load from the title (M4) |
+| Dressing room (title + kiosk) | yes (try, buy, wear; hat stays on when changing hero) | grid is all identical cone icons | 3 | item pictures never swap in (M4) |
 | Hero select + power pick | yes; 10 heroes, 5 free, 3 powers each | yes | 4 | locked powers look the same as free (no lock glyph seen) — minor |
-| Using powers | only rocket boots tapped (0.7 m hop) | — | ? | not verified, see "not tested" |
+| Using powers | yes: double jump (2.2 m vs 1.0), dash (31 m vs 14), bounce ball (20 m); glide unclear on flat ground; rocket boots needs a hold (a tap = 0.7 m) | chip icon changes per power | 3 | camera behind the plaza chevron sign hides the hero (`drv/pw/dash.png`) |
 | Pip story (6 beats) | yes, all 6 clip ids in order, no `speech` fallbacks | yes (pictogram bubbles) | 4 | — |
 | Pip leads to trampoline | yes (reached at 25 s both profiles) | yes | 4 | — |
 | Pip leads to the 2nd attraction | **no** (desktop: 250 s idle next to the hero) | no | 1 | B1 |
@@ -68,9 +68,10 @@ Scripts (all on `agent/qa5`):
 - **M3 (activities-race) Race car wedged off the track, no rescue.** Steering toward the racing line, the car left
   the line near s≈150 and sat at (−0.1, 74.8) with W held for 135 s until the rivals finished; no auto-reset, no
   hint. Steps `22-race.js` (`drv/r/t040.png`). (Autopilot run finishes fine: `24-race-podium.js`.)
-- **M4 (ui wardrobe) Item pictures never appear when opened from the title** (all grey cones, even after 10 s
-  with previews on) — a "wardrobe" of identical cones (`drv/t/09-wardrobe-fresh.png`). From the kiosk the hat
-  previews show. Note: previews are off by default in test mode, so check in a real build.
+- **M4 (ui wardrobe / itemArt) Item pictures never swap in**: with `__rgGear.enablePreviews(true)` and 12 s of
+  real-time loop, 0 of 23 tiles got an `<img>` although `item.preview()` returns a PNG data URL; the grid is 23
+  identical cone icons (`drv/t/09-wardrobe-fresh.png`, `drv/g/03-bought.png`). Previews are opt-in in test mode,
+  so confirm in a real build; suspect the queue's `active` check (`src/ui/itemArt.ts` / `wardrobe/screen.ts:111`).
 - **M5 (activities-secrets) Vault pads trigger when you walk across them.** Pads are ~2.3 m apart in an arc;
   walking from pad 2 to pad 0 crosses pad 1 and resets the sequence (misses 15→17). Detouring around works.
   `95-vault.js` vs `96-vault-detour.js`.
@@ -90,10 +91,11 @@ Scripts (all on `agent/qa5`):
   the foam countdown (`drv/foam/01-start.png`), inside a bush on the race result (`drv/r2/result-095.png`).
 - m6 (world) A bench stands right in front of the map board (`drv/map/01-board.png`).
 - m7 (buddy) In the Scoops game Pip keeps saying "This way, buddy!" every 25 s for 140 s (`first3-desktop`).
+- m9 (core camera) The plaza chevron sign sits between camera and hero when walking east from spawn (`drv/pw/dash.png`).
 - m8 (tests) `scripts/qa4b/foam.mjs` fails on the current `__rgFoam` API.
 
 ## Not tested / not verified
 Audio (cannot hear). NPC pass-through (folk do not load in test mode). Gamepad. Five of six Phase 2 layers
-and full rounds of the six mini-games (only the channel split was checked). Using three powers (only one tap).
+and full rounds of the six mini-games (only the channel split was checked). Glide and rocket boots only briefly.
 Gem hunt with a mega gem by a child (bot too weak). R-only/G-only of every new screen (title, HUD, vault,
 bounce ring checked). Real phone, real glasses.
