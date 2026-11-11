@@ -334,6 +334,11 @@ test('fakes: four ground spots; a cluster arms on approach; only the weak channe
   const s = d.spots[spot];
   // Walk up to 12 m of it: the cluster arms by itself.
   await page.evaluate(() => window.__rgEconomy!.forceRespawn());
+  // The shack tests above leave the hero by the kiosk, near another spot (gem8 at (24, -14) became
+  // a cluster spot when the map board moved off the street corner): that cluster stays armed out to `disarm`
+  // (32 m), which still covers the approach point. Start from no cluster armed.
+  await wforce('fakes', { disarm: true });
+  expect((await wdebug<FakesDebug>('fakes')).active).toBe(false);
   await standAt(s.x + 12, s.z, -Math.PI / 2, 5);
   d = await wdebug<FakesDebug>('fakes');
   expect(d.active).toBe(true);
