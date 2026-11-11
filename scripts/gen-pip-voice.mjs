@@ -27,7 +27,7 @@ const OUT = join(ROOT, 'public/assets/voice');
 const CACHE = join(ROOT, 'node_modules/.cache/pip-voice');
 const MANIFEST = join(OUT, 'manifest.json');
 /** Bump when the voice, the engine or the post-processing changes (forces a full re-render). */
-const RECIPE = 'kokoro-q8/af_heart/v1:asetrate1.12+rb1.09+comp+mp3-32k';
+const RECIPE = 'kokoro-q8/af_heart/v2:speed0.92+asetrate1.12+rb1.09+comp+mp3-32k';
 const MODEL_SHA = 'fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478';
 const VOICE = 'af_heart';
 /** Budget for the whole clip set (bytes). */

@@ -21,7 +21,8 @@ def main() -> None:
     with open(jobs_path, encoding="utf-8") as f:
         jobs = json.load(f)
     for i, job in enumerate(jobs):
-        audio, sr = tts.create(job["spoken"], voice=style, speed=1.0, lang="en-us")
+        # 0.92 here × 1.12 from the pitch lift ≈ natural pace: clear for young listeners.
+        audio, sr = tts.create(job["spoken"], voice=style, speed=0.92, lang="en-us")
         sf.write(f"{out_dir}/{job['id']}.wav", audio, sr, subtype="FLOAT")
         print(f"[{i + 1}/{len(jobs)}] {job['id']} {len(audio) / sr:.2f}s", flush=True)
 

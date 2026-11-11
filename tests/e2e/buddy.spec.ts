@@ -113,6 +113,22 @@ test.describe('Pip on a brand-new profile', () => {
     expect(said).not.toContain('intro:jump');
   });
 
+  test('Pip speaks each intro line aloud: the voice is asked for the matching recorded clip', async () => {
+    const asked = await page.evaluate(() => window.__rgBuddy!.voice());
+    const ids = asked.map((r) => r.id);
+    const at = (id: string): number => ids.indexOf(id);
+    expect(at('hi-i-am-pip')).toBe(0);
+    expect(at('walk-with-me')).toBeGreaterThan(0);
+    expect(at('look-around')).toBeGreaterThan(at('walk-with-me'));
+    expect(at('gems-are-money')).toBeGreaterThan(at('look-around'));
+    // Every clip it asked for is in the shipped manifest (so it plays a clip, not the fallback).
+    const clips = await page.evaluate(async () => (await (await fetch('assets/voice/manifest.json')).json()).clips as Record<string, { file: string }>);
+    for (const id of ids) expect(clips[id], id).toBeTruthy();
+    expect(asked.slice(1).every((r) => r.source === 'clip')).toBe(true);
+    const head = await page.evaluate(async (f) => (await fetch(`assets/voice/${f}`)).status, clips['hi-i-am-pip'].file);
+    expect(head).toBe(200);
+  });
+
   test('no console errors', async () => {
     expect(consoleErrors).toEqual([]);
   });
