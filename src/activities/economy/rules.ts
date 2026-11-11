@@ -43,12 +43,13 @@ export function checkBuy(item: ShopItem | undefined, owned: boolean, wallet: num
 
 /**
  * Price of the next ride, given how many rides of this kind were already taken this session
- * (balloon: the first `freeBalloonRides` are free; attractions: the first play is free).
+ * (balloon: the first `freeBalloonRides` are free; rocket pads and other attractions: the first
+ * play is free).
  */
 export function ticketPriceFor(kind: TicketKind, ridesThisSession: number): number {
   if (kind === 'balloon') return ridesThisSession < ECONOMY.freeBalloonRides ? 0 : ECONOMY.balloonTicket;
-  if (kind === 'rocketPad') return ECONOMY.rocketPadTicket;
-  return ridesThisSession < 1 ? 0 : ECONOMY.attractionTicket;
+  if (ridesThisSession < 1) return 0;
+  return kind === 'rocketPad' ? ECONOMY.rocketPadTicket : ECONOMY.attractionTicket;
 }
 
 export function createEconomyRules(events: EventBus, profile: ProfileApi, opts: EconomyOptions = {}): EconomyRules {

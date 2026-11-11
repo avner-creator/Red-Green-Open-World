@@ -411,6 +411,7 @@ export function createScoops(ctx: GameContext): Scoops {
     const p = profile();
     if (p && !practice) p.earn(score.gems, 'mission');
     ctx.events.emit('stunt', { kind: 'scoops', value: score.stars, stars: score.stars });
+    ctx.events.emit('stamp:earned', { id: 'iceCream' });
     ctx.events.emit('ui:toast', { icon: 'check' });
     ui.showResult({ stars: score.stars, gems: p && !practice ? score.gems : null, recipe: score.recipe, secret: score.secret });
     ctx.audio.play('fanfare', { volume: 0.8 });

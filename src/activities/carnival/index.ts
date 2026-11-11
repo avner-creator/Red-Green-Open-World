@@ -296,6 +296,7 @@ export function createCarnival(ctx: GameContext): Carnival {
     }
     if (r.won) plush.add(a.id);
     ctx.events.emit('stunt', { kind: 'carnival', value: s[0], stars: r.stars });
+    ctx.events.emit('stamp:earned', { id: 'carnivalRow' });
     ctx.events.emit('ui:toast', { icon: 'gem', text: `+${r.gems}` });
     ctx.audio.play(r.won ? 'fanfare' : 'chest');
     const burst = boothWorld(a.id, 0, 2.2, 0.4);

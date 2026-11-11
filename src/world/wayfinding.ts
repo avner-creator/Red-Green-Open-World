@@ -49,7 +49,7 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
     hang: ['bouncePads', 'trampoline', 'ranch'],
   },
   // Carnival Island post: on the plaza's south-east rim, right of the spawn camera's line of sight and
-  // clear of the first chest's lock view
+  // clear of the plaza chest
   // (the plaza post is left of it), so both read from the spawn view. Arms in three rows; the race arm
   // points straight away from the camera, so it also carries a hanging disc.
   {
@@ -79,6 +79,8 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
   // The bridge's far end, the roost path, the ranch approach.
   { x: 6.5, z: -138, scale: 0.85, targets: ['lighthouse', 'bungee'] },
   { x: 4.6, z: -133, scale: 0.85, targets: ['dragonRoost'] },
+  // Where the roost footpath leaves the north road (QA round 3: make the way up to the roost obvious).
+  { x: -22, z: -135.8, scale: 0.85, targets: ['dragonRoost', 'lighthouse', 'bungee'] },
   { x: -44, z: 30, scale: 0.85, targets: ['ranch', 'lakePlatform'] },
 ];
 

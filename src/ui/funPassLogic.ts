@@ -1,8 +1,9 @@
 /**
  * Fun Pass (stamp card) rules, pure: which stamp an event earns and the prize milestones.
- * There are no dedicated "attraction done" events yet, so stamps are derived from existing ones:
- * a ticket (the attraction was started), a stunt (attributed to the nearest candidate attraction),
- * driving / riding, a weak-eye mini-game hit, a chest opened.
+ * Attractions with a clean "round done" point emit `stamp:earned` themselves (`EXPLICIT_STAMPS`).
+ * For the rest, stamps are still derived from existing events: a ticket (the attraction was
+ * started), a stunt (attributed to the nearest candidate attraction), driving / riding, a weak-eye
+ * mini-game hit.
  */
 import type { AnchorName, PlayerMode, StuntKind, TicketKind } from '../types';
 
@@ -10,6 +11,19 @@ import type { AnchorName, PlayerMode, StuntKind, TicketKind } from '../types';
 export type StampId = string;
 
 export const CHEST_STAMP = 'chest';
+
+/**
+ * Stamps earned only through `stamp:earned` (emitted by the attraction when a round is done). The
+ * ticket / stunt derivation skips these, so the stamp lands on completion, not at the start.
+ */
+export const EXPLICIT_STAMPS: ReadonlySet<StampId> = new Set([
+  CHEST_STAMP, 'carnivalRow', 'raceStart', 'iceCream', 'foamCourse', 'bubbleArena', 'dinoRing', 'launchPads',
+]);
+
+/** A derived (fallback) stamp, or null when that stamp comes from `stamp:earned` only. */
+export function derived(id: StampId | null): StampId | null {
+  return id && !EXPLICIT_STAMPS.has(id) ? id : null;
+}
 
 /** Prize milestones: stamps needed → gems paid. The last one is the grand prize. */
 export const PASS_PRIZES: readonly { at: number; gems: number }[] = [

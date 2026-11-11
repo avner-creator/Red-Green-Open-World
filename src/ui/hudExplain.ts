@@ -50,6 +50,29 @@ function part(p: Part): HTMLElement {
   return pictogram(p as PictoName);
 }
 
+/** The picture rows of one chip (also used by the pause screen's "what does the HUD mean" card). */
+export function explainRows(c: HudChip): HTMLElement[] {
+  return EXPLAIN_ROWS[c].map((row) => h('div', 'xrow', {}, ...row.map(part)));
+}
+
+/** The chip each legend line starts with (what it looks like on the HUD). */
+const CHIP_ICON: Record<HudChip, PictoName | 'pass'> = { wallet: 'gem', stars: 'star', combo: 'bolt', timer: 'sun', pass: 'pass' };
+
+/**
+ * Pause-screen legend: one line per HUD chip, its icon then its picture rows. On desktop the pointer
+ * is locked while playing, so this is where a child (or grown-up) can look the HUD up.
+ */
+export function hudLegend(): HTMLElement {
+  return h(
+    'div',
+    'hudlegend',
+    { 'data-testid': 'hud-legend' },
+    ...(Object.keys(EXPLAIN_ROWS) as HudChip[]).map((c) =>
+      h('div', 'xline', { 'data-chip': c }, h('span', 'xchip', {}, part(CHIP_ICON[c])), h('div', 'xcard', {}, ...explainRows(c))),
+    ),
+  );
+}
+
 export interface HudExplain {
   update(dt: number): void;
   /** Show a chip's picture now (also used for the first-time callouts). */
@@ -106,7 +129,7 @@ export function createHudExplain(ctx: GameContext, hud: HTMLElement): HudExplain
     show(c, seconds = 2.6) {
       if (ctx.session.state.phase !== 'playing' || passOpen()) return;
       if (shown !== c) {
-        bubble.replaceChildren(...EXPLAIN_ROWS[c].map((row) => h('div', 'xrow', {}, ...row.map(part))));
+        bubble.replaceChildren(...explainRows(c));
         bubble.dataset.chip = c;
       }
       shown = c;

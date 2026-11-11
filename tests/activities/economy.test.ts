@@ -38,7 +38,9 @@ describe('pure helpers', () => {
   it('ticket prices come from ECONOMY', () => {
     expect(ticketPriceFor('balloon', 0)).toBe(0);
     expect(ticketPriceFor('balloon', ECONOMY.freeBalloonRides)).toBe(ECONOMY.balloonTicket);
-    expect(ticketPriceFor('rocketPad', 0)).toBe(ECONOMY.rocketPadTicket);
+    // The first rocket launch is free, like every attraction's first play.
+    expect(ticketPriceFor('rocketPad', 0)).toBe(0);
+    expect(ticketPriceFor('rocketPad', 1)).toBe(ECONOMY.rocketPadTicket);
   });
 });
 
@@ -100,11 +102,13 @@ describe('tickets', () => {
     expect(eco.payTicket('balloon')).toBe(true);
     expect(profile.wallet).toBe(1);
     expect(eco.payTicket('balloon')).toBe(false);
+    expect(eco.payTicket('rocketPad')).toBe(true);
     expect(eco.payTicket('rocketPad')).toBe(false);
     expect(profile.wallet).toBe(1);
     expect(paid).toEqual([
       { kind: 'balloon', price: 0, free: true },
       { kind: 'balloon', price: ECONOMY.balloonTicket, free: false },
+      { kind: 'rocketPad', price: 0, free: true },
     ]);
     expect(denied).toEqual([
       { kind: 'balloon', price: ECONOMY.balloonTicket, wallet: 1 },

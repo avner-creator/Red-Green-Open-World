@@ -200,6 +200,9 @@ test.describe('ui', () => {
       rg.ctx.session.setTotals({ gems: 20, chests: 4 });
       e.emit('chest:opened', { chestId: 'c1', outfitId: 'cape_gold' });
       e.emit('chest:opened', { chestId: 'c2', outfitId: 'glasses_star' });
+      // The chests system stamps the pass with 'stamp:earned' (twice here: the pass ignores repeats).
+      e.emit('stamp:earned', { id: 'chest' });
+      e.emit('stamp:earned', { id: 'chest' });
       e.emit('outfit:unlocked', { outfitId: 'cape_gold' });
       e.emit('outfit:unlocked', { outfitId: 'glasses_star' });
       e.emit('outfit:unlocked', { outfitId: 'ghost_unknown' });
@@ -299,6 +302,37 @@ test.describe('ui', () => {
     expect(await page.evaluate(() => document.querySelector('[data-testid="settings"]')!.contains(document.activeElement))).toBe(true);
     await expect(pass).not.toHaveClass(/\bon\b/);
     await page.getByTestId('settings-done').click();
+  });
+
+  test('HUD picture bubbles: tap a HUD chip while playing, and the legend on the pause screen', async () => {
+    await freshTitle();
+    await startGame(page);
+    // Touch (or a free mouse pointer): tapping a top-bar chip pops its picture bubble.
+    const box = (await page.getByTestId('wallet').boundingBox())!;
+    await page.evaluate(([x, y]) => {
+      window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', clientX: x, clientY: y, bubbles: true }));
+    }, [box.x + box.width / 2, box.y + box.height / 2]);
+    await step(page, 2);
+    const bubble = page.getByTestId('hud-explain');
+    await expect(bubble).toHaveClass(/\bon\b/);
+    await expect(bubble).toHaveAttribute('data-chip', 'wallet');
+    await expect(bubble.locator('.xrow')).toHaveCount(3);
+    await save(page, 'hud-explain-wallet');
+    // Desktop (pointer locked while playing): the pause screen's "?" shows every chip's pictures.
+    await page.evaluate(() => window.__rg!.ctx.session.pause());
+    await step(page, 2);
+    const what = page.getByTestId('pause-hudhelp');
+    await expect(what).toBeVisible();
+    await expect(page.getByTestId('hud-legend')).toBeHidden();
+    await what.click();
+    await expect(page.getByTestId('hud-legend')).toBeVisible();
+    await expect(page.locator('[data-testid="hud-legend"] .xline')).toHaveCount(5);
+    await expect(page.getByTestId('resume')).toBeHidden();
+    await save(page, 'pause-hud-legend');
+    await what.click();
+    await expect(page.getByTestId('resume')).toBeVisible();
+    await page.getByTestId('resume').click();
+    expect(consoleErrors).toEqual([]);
   });
 
   test('the hold button opens the gate', async () => {

@@ -1,6 +1,8 @@
 // Cold-boot network log: every request (and its transferred bytes) up to the title screen, and
 // then up to the first playable frame after Play. Checks that only the selected character's GLB
-// and no music load before Play. Plays as a real user would (no test mode).
+// and no music load before Play. Boots in test mode with the loop frozen (`?test=1&freeze=1`, as the
+// e2e helpers do): the real-time loop on SwiftShader made the Play click time out. Quality stays on
+// auto, so the same files load as for a real user.
 // "loading screen" = what the browser needs to paint the inline loading screen and run its
 // progress bar: the HTML plus the scripts index.html names (not the preloaded WASM).
 // gzip / brotli columns compress the dist files (vite preview itself sends them uncompressed).
@@ -34,7 +36,7 @@ async function run(stored) {
   page.on('pageerror', (e) => errors.push(String(e)));
 
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/`, { waitUntil: 'commit' });
+  await page.goto(`http://localhost:${port}/?test=1&freeze=1`, { waitUntil: 'commit' });
   // The loader script marks the first boot stage as soon as it runs (older builds: no marker).
   await page.waitForSelector('#boot[data-stage], #boot.js', { state: 'attached', timeout: 60_000 }).catch(() => undefined);
   const tLoader = Date.now() - t0;
@@ -44,15 +46,19 @@ async function run(stored) {
   const tTitle = Date.now() - t0;
   for (const r of reqs.values()) r.stage ||= 'title';
 
+  await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 60_000 });
+  await page.evaluate(() => window.__rg.freeze(true));
   await page.click('[data-testid="play"]');
+  await page.evaluate(() => window.__rg.step(1 / 60, 1, false));
   // Play may open the character select first: start with the preselected character.
   const go = page.locator('[data-testid="csel-go"]');
-  await Promise.race([
-    go.waitFor({ state: 'visible', timeout: 60_000 }).then(() => go.click()).catch(() => undefined),
-    page.waitForSelector('[data-testid="timer"]', { state: 'visible', timeout: 60_000 }).catch(() => undefined),
-  ]);
-  await page.waitForSelector('[data-testid="timer"]', { state: 'visible', timeout: 60_000 });
-  await page.evaluate(() => new Promise((res) => window.requestAnimationFrame(() => window.requestAnimationFrame(res))));
+  if (await go.isVisible()) {
+    await go.click();
+    await page.evaluate(() => window.__rg.step(1 / 60, 1, false));
+  }
+  await page.waitForFunction(() => window.__rg.state().phase === 'playing', undefined, { timeout: 60_000 });
+  // The first playable frame: a couple of rendered steps.
+  await page.evaluate(() => window.__rg.step(1 / 60, 2, true));
   await page.waitForTimeout(3000); // let Play-triggered streaming (music) start
   const tPlay = Date.now() - t0;
   for (const r of reqs.values()) r.stage ||= 'play';

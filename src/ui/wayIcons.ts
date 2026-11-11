@@ -6,7 +6,7 @@
 import type { UiIconName } from './icons';
 import { icon } from './icons';
 
-export type WayIconName = 'wTrampoline' | 'wPads' | 'wCar' | 'wBalloon' | 'wTarget' | 'wRocket' | 'wAir' | 'wSlide';
+export type WayIconName = 'wTrampoline' | 'wPads' | 'wCar' | 'wBalloon' | 'wTarget' | 'wRocket' | 'wAir' | 'wSlide' | 'wRun';
 
 const S: Record<WayIconName, string> = {
   // Jumper ball above a legged round mat.
@@ -30,6 +30,9 @@ const S: Record<WayIconName, string> = {
   // Person-dot with a big flip arrow around it.
   wAir:
     '<path class="o" d="M20 12a8 8 0 1 1-2.800-6.100"/><path class="w" d="M20 12a8 8 0 1 1-2.800-6.100"/><path d="M14 1.800l7.500 1-1.500 7.200z"/><circle cx="12" cy="12" r="3.200"/>',
+  // Sprint: a running shoe with speed lines behind it (Q's skill keeps the lightning bolt).
+  wRun:
+    '<path d="M2 18v-6.500l3.200-.6 2.300-3.600 4.200 2.600 3.600 1.100 5.700 2.100c1.100.4 1.700 1.400 1.700 2.400V18z"/><rect x="1.500" y="17.500" width="21.200" height="4" rx="1.600"/><path class="l" d="M8.800 11.600l1.600-1.800M11.500 12.700l1.600-1.800"/><path class="o" d="M1.500 3h6M3 6.500h5.500"/><path class="w" d="M1.500 3h6M3 6.500h5.500"/>',
   // Car skidding with slide lines.
   wSlide:
     '<path d="M6 16v-3.500l2.600-3.500h6.300l3.100 3.500H21V16z"/><circle cx="9.500" cy="16.500" r="2.600"/><circle cx="17" cy="16.500" r="2.600"/><path class="o" d="M1.500 21q4-2.500 8-1M2 7.500h4M1.500 12h3.500"/><path class="w" d="M1.500 21q4-2.500 8-1M2 7.500h4M1.500 12h3.500"/>',

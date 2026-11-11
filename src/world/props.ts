@@ -155,7 +155,9 @@ export function flagpole(k: Kit, x: number, z: number, height: number, flag: num
   k.b.add('metal', cylG(8), C.stoneDark, T(x, y, z, 0, 0.22, 0.25, 0.22));
   k.b.add('gloss', sphereG(1), 0xf0c050, T(x, y + height + 0.08, z, 0, 0.12, 0.12, 0.12));
   k.b.add('cloth', flagG(), flag, T(x + 0.05, y + height - 0.1, z, 0.35, flagW, flagW * 0.62, 1));
-  k.col.cyl(x, y, z, height / 2, 0.12);
+  // Wider than the 7 cm pole so the hero's arms and outfit never pass through it (QA round 3: the
+  // Bouncy Park corner pole sat inside the hero standing in the fence corner).
+  k.col.cyl(x, y, z, height / 2, 0.45);
 }
 
 /** A sagging string of pennants between two points (alternating colours). */

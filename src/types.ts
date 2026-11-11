@@ -203,6 +203,12 @@ export interface GameEvents {
   /** Ask for the equipped emote (or a given one) to play. */
   'emote:play': { itemId?: string };
   'ticket:paid': { kind: TicketKind; price: number; free: boolean };
+  /**
+   * An attraction round was completed (a Fun Pass stamp). Emitted once per completion by the
+   * attraction itself; `id` is the stamp slot: the attraction's anchor name, a glasses site id, or
+   * 'chest'. The Fun Pass ignores repeats.
+   */
+  'stamp:earned': { id: string };
   'ticket:denied': { kind: TicketKind; price: number; wallet: number };
   'mission:progress': { index: number; mission: MissionState };
   'mission:completed': { index: number; mission: MissionState };

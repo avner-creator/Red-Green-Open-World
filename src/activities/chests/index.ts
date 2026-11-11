@@ -334,6 +334,7 @@ export function createChests(ctx: GameContext): Chests {
     e.lockRoot.visible = false;
     e.model.treasure.visible = false;
     ctx.events.emit('chest:opened', { chestId: e.id, outfitId: e.outfitId });
+    ctx.events.emit('stamp:earned', { id: 'chest' });
     equip(e.outfitId);
     ctx.audio.play('chest');
     ctx.audio.play('star', { pitch: 1.1 });
