@@ -14,7 +14,7 @@ import { applyChibi, hideParts, recolourMaterials, surfaceZ, tagRegions } from '
 import { buildFace, type FaceRig, type FaceState } from './face';
 import { createLife, type Life } from './life';
 import { mergeCharacterMeshes } from './merge';
-import { smoothNormals, warmCharacter } from './warm';
+import { smoothNormals, tickShowcase, warmCharacter } from './warm';
 
 export interface LoadedCharacter {
   readonly def: CharacterDef;
@@ -228,6 +228,7 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       const act = fidgetAction ?? current;
       const dur = act ? act.getClip().duration : 1;
       chibi.update(dt, fidgetAction ? 'emote' : currentAnim);
+      tickShowcase(dt);
       life.update(dt, fidgetAction ? 'emote' : currentAnim, act && dur > 0 ? (act.time / dur) % 1 : 0, currentRate);
       if (!def.seat) return;
       const target = currentAnim === 'sit' ? 1 : 0;

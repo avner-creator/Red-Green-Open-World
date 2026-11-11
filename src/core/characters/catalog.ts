@@ -211,7 +211,7 @@ function astroAttach(headY: number, headZ: number, faceY: number, faceZ: number)
  * Chibi look for the space-suit heroes: bigger head, stubby mitten hands, big boots, a round belly,
  * arms hanging relaxed at the sides and a friendly head tilt when calm.
  */
-function astroChibi(mitten: string, accent: string, head = 1.4, headTint?: string, collar?: number): ChibiDef {
+function astroChibi(mitten: string, accent: string, head = 1.4, headTint?: string, collar = 0.3): ChibiDef {
   const fingers = (side: 'L' | 'R'): Record<string, readonly [number, number, number]> => ({
     [`Pinky1.${side}`]: [0.9, 0.42, 0.9],
     [`Middle1.${side}`]: [0.9, 0.42, 0.9],
@@ -326,7 +326,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['bounceBall', 'doubleJump'],
     emoteName: 'hop',
     cardColors: ['#e9f7d4', '#1f3a1c'],
-    face: { bone: 'Head', eyeAt: [0.27, 1.49, 0.25], eyeR: 0.125, eyeYaw: 0.5, eyePitch: 0.1, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
+    face: { bone: 'Head', eyeAt: [0.25, 1.49, 0.27], eyeR: 0.12, eyeYaw: 0.32, eyePitch: 0.05, irisSize: 0.8, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
   }),
   hero({
     id: 'panda',
@@ -473,7 +473,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['rainbowSlide', 'doubleJump'],
     emoteName: 'dance',
     cardColors: ['#ffe2c8', '#4a1f08'],
-    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c', mouthAt: [0, 1.0, 1.26], mouthW: 0.05, brow: 1.15 },
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c', mouthAt: [0, 0.95, 1.26], mouthW: 0.05, brow: 1.15 },
     chibi: { ...pawsChibi(1.35, 0.62, 0.8), materials: { Grey: '#7a4a32' } },
     springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
     smooth: true,

@@ -5,6 +5,7 @@
  * Wallet top-left. Light-on-dark with black outlines: every cue reads by brightness.
  */
 import { CHARACTERS } from '../core/characters/catalog';
+import { holdShowcase } from '../core/characters/warm';
 import type { GameContext } from '../types';
 import { buddyPicto } from './buddy/picto';
 import { clear, h } from './dom';
@@ -21,6 +22,9 @@ export interface TitleScreen extends Screen {
   /** Per frame while shown: hero name and device glyphs. */
   update(dt: number): void;
 }
+
+/** Title framing for the hero (applied on show, after the UI's generic title camera). */
+const TITLE_CAMERA = { distance: 4.5, height: 0.85, fov: 46 };
 
 /** Goofy items the title's dress-up button shows in turn. */
 const TEASERS = ['hat-duck', 'hat-viking', 'face-googly', 'back-dragon', 'hat-octopus', 'hat-sombrero', 'face-bigglasses', 'back-balloons'];
@@ -148,6 +152,8 @@ export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
     el,
     wallet,
     update(dt) {
+      // Warm showcase light on the hero (see src/core/characters/warm.ts).
+      holdShowcase();
       wallet.update(dt);
       refresh();
       teaseT -= dt;
@@ -157,6 +163,8 @@ export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
       }
     },
     onShow: () => {
+      // Closer than the shared title framing: the hero stands about half the screen tall.
+      ctx.cameraRig.setOverride(TITLE_CAMERA);
       wallet.snap();
       refresh();
       return play;

@@ -53,7 +53,6 @@ try {
   }
   // Hero select with the first hero.
   await page.getByTestId('title-hero').click();
-  await page.getByTestId(`csel-${ids[0]}`).click();
   await setHero(ids[0]);
   await shot(`select-${ids[0]}`);
   await page.getByTestId('csel-back').click();
