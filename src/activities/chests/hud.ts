@@ -17,6 +17,8 @@ const CSS = `
   padding:calc(var(--u)*.7) calc(var(--u)*1.6);background:var(--panel);border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*2.4);
   box-shadow:0 0 0 calc(var(--u)*.4) var(--y),0 0 calc(var(--u)*2) rgba(255,217,59,.55);z-index:5;pointer-events:none}
 .rg .ch-key.on{display:flex}
+/* Touch: beside the Pip button, above the move stick (under it, it hid behind both). */
+.rg.touch-on .ch-key{left:calc(var(--u)*13.5 + env(safe-area-inset-left,0px));top:calc(var(--u)*39.5)}
 .rg .ch-key .ic{font-size:calc(var(--u)*5.2);color:var(--y)}
 .rg .ch-key .ic+.ic{font-size:calc(var(--u)*3.6);color:#fff}
 .rg .ch-key b{font-size:1.3em;-webkit-text-stroke:calc(var(--u)*.5) #000;paint-order:stroke fill;display:none}
