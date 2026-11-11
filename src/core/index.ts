@@ -8,6 +8,7 @@ import { CHARACTERS } from './characters/catalog';
 import { createInteractions } from './interactions';
 import { createPauseWatch } from './pause-watch';
 import { createPlayer } from './player';
+import { prewarmShaders } from './prewarm';
 import { shadowProxyWatcher } from './shadow-proxy';
 import { createVehicles } from './vehicles';
 
@@ -46,6 +47,7 @@ export async function createPlayerSystems(ctx: GameContext): Promise<PlayerSyste
   // Shadow-only proxies (buggy, balloon, thrills) need the sun's shadow camera to see their layer.
   const watchShadows = shadowProxyWatcher(ctx.scene);
   const pauseWatch = createPauseWatch(ctx);
+  prewarmShaders(ctx);
 
   return {
     player: player.api,
