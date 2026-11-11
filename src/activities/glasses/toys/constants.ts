@@ -2,12 +2,16 @@
 import type { GlassesTier } from '../../../types';
 import type { BoothSpec, PrizeTable, RoundRules } from '../booth/types';
 
-/** Where things stand (site-local metres). The trail starts at the pad; the basket is right ahead of it. */
+/**
+ * Where things stand (site-local metres). From the pad the child sees the booth front-left with
+ * Pip's basket in front of its counter (left of the hero, never hidden behind them) and the bowl
+ * beside it; the trail starts at the pad and leads off to the right / ahead, the open side.
+ */
 export const SPOT = {
-  pad: { x: 0.3, z: 2.5, r: 0.95 },
+  pad: { x: 0.8, z: 2.6, r: 0.95 },
   /** Pip's basket (centre of its foot) and the dog bowl beside it. */
-  basket: { x: 0.3, z: 0.2 },
-  bowl: { x: 1.85, z: 0.75 },
+  basket: { x: -0.9, z: 1.0 },
+  bowl: { x: -2.35, z: 2.0 },
   /** Keep-clear circles for the trail (around the basket, the bowl and the marquee). */
   basketClear: 1.4,
   bowlClear: 0.6,
@@ -50,7 +54,7 @@ export const TRAIL = {
   /** The first print's direction, off the child's view line from the pad (radians, either side). */
   startOff: [0.4, 1.75] as readonly [number, number],
   /** Path shape tries per direction. */
-  variants: 3,
+  variants: 4,
   /** The trail starts this far from the pad's centre (just past its rim). */
   startOffset: 1.4,
   /** Path sampling step for the validity checks. */
@@ -160,9 +164,9 @@ export function toyRules(prize: PrizeTable): RoundRules {
   };
 }
 
-/** The booth: marquee front-left of the pad, turned to face it; a press pad right behind the basket. */
+/** The booth: marquee front-left of the pad, turned to face it, the basket before its counter; a press pad. */
 export const TOY_BOOTH: BoothSpec = {
-  marquee: { x: -2.75, z: -0.35, yaw: 0.62 },
+  marquee: { x: -3.0, z: -0.9, yaw: 0.83 },
   lamps: TOYS.perSession,
   pad: { x: SPOT.pad.x, z: SPOT.pad.z, r: SPOT.pad.r, walkIn: false },
   playPrompt: 'follow',

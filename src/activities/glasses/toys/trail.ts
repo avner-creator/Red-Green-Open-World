@@ -173,10 +173,11 @@ export function makeTrail(w: TrailWorld, start: XZ, seed: number, tier: GlassesT
     const angle = rot + (c / K) * Math.PI * 2;
     const from = { x: start.x + Math.sin(angle) * TRAIL.startOffset, z: start.z + Math.cos(angle) * TRAIL.startOffset };
     for (let v = 0; v < TRAIL.variants; v++) {
-      const bend = (0.22 + rng() * 0.33) * (v === 1 ? -1 : 1) * (v === 2 ? 0.4 : 1);
+      // v 0, 1: a full-length bend either way; v 2, 3: the shortest trail, a gentle bend either way.
+      const bend = (0.22 + rng() * 0.33) * (v % 2 === 1 ? -1 : 1) * (v >= 2 ? 0.4 : 1);
       const freq = 0.6 + rng() * 0.6;
       const phase = rng() * Math.PI * 2;
-      const count = v === 2 ? trailShape(tier, 0).count : shape.count;
+      const count = v >= 2 ? trailShape(tier, 0).count : shape.count;
       const a = walk(w, from, angle, bend, freq, phase, count, shape.spacing);
       if (a.ok && a.end) {
         return { prints: a.prints, end: a.end, spacing: shape.spacing, length: shape.spacing * (count - 1), candidate: c, angle, valid: true };

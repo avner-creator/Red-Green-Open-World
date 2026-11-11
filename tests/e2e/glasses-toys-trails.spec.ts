@@ -2,7 +2,7 @@
  * Pip's lost toys: a valid paw trail exists for every seed at the real site, on the current world,
  * through the real code path (the mechanic's own world probes: terrain, roads, anchors, reserved
  * footprints, colliders, open sky). 200 seeds × the three toys of a session. Also the default
- * camera at the basket with the first prints in view.
+ * camera on the start pad with the first prints in view.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
@@ -25,7 +25,7 @@ interface Row {
   prints: number;
   length: number;
   candidate: number;
-  /** First print's distance from the basket (m). */
+  /** First print's distance from the start pad's centre (m). */
   first: number;
 }
 
@@ -60,8 +60,8 @@ test(`every one of ${SEEDS} seeds × 3 toys has a full trail at the real site`, 
           const seed = Math.imul(i + 1, 0x9e3779b1) >>> 0;
           for (let found = 0; found < 3; found++) {
             g.force('toys', { found, seed });
-            const d = g.debug('toys') as { valid: boolean; prints: { x: number; z: number }[]; length: number; candidate: number; basket: { x: number; z: number }; tier: number };
-            out.push({ seed, tier: d.tier, valid: d.valid, prints: d.prints.length, length: d.length, candidate: d.candidate, first: Math.hypot(d.prints[0].x - d.basket.x, d.prints[0].z - d.basket.z) });
+            const d = g.debug('toys') as { valid: boolean; prints: { x: number; z: number }[]; length: number; candidate: number; pad: { x: number; z: number }; tier: number };
+            out.push({ seed, tier: d.tier, valid: d.valid, prints: d.prints.length, length: d.length, candidate: d.candidate, first: Math.hypot(d.prints[0].x - d.pad.x, d.prints[0].z - d.pad.z) });
           }
         }
         return out;
@@ -84,7 +84,7 @@ test(`every one of ${SEEDS} seeds × 3 toys has a full trail at the real site`, 
   }
 });
 
-test('the default camera at the basket shows the first prints (weak layer only)', async () => {
+test('the default camera on the start pad shows the first prints', async () => {
   const cover = await page.evaluate(() => {
     const g = window.__rgGlasses!;
     const rg = window.__rg!;
@@ -103,9 +103,9 @@ test('the default camera at the basket shows the first prints (weak layer only)'
     });
   });
   mkdirSync(OUT, { recursive: true });
-  const img = await canvasShot(page, `${OUT}/basket-full.png`);
-  writeFileSync(`${OUT}/basket-R.png`, PNG.sync.write(channelOnly(img, 0)));
-  writeFileSync(`${OUT}/basket-G.png`, PNG.sync.write(channelOnly(img, 1)));
+  const img = await canvasShot(page, `${OUT}/pad-full.png`);
+  writeFileSync(`${OUT}/pad-R.png`, PNG.sync.write(channelOnly(img, 0)));
+  writeFileSync(`${OUT}/pad-G.png`, PNG.sync.write(channelOnly(img, 1)));
   expect(cover.filter(Boolean).length, `first prints in view: ${cover}`).toBeGreaterThanOrEqual(3);
 });
 

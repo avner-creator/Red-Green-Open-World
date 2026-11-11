@@ -67,8 +67,16 @@ export function create(env: MechanicEnv): Mechanic {
   // ── Pip's basket and bowl, merged into the booth's single mesh ──
   const bk = SPOT.basket;
   const basketY = Math.min(ground(bk.x, bk.z), ground(bk.x - 0.6, bk.z), ground(bk.x + 0.6, bk.z), ground(bk.x, bk.z + 0.5), ground(bk.x, bk.z - 0.5)) - 0.02;
-  const bowlRel = { x: SPOT.bowl.x - bk.x, y: ground(SPOT.bowl.x, SPOT.bowl.z) - basketY - 0.02, z: SPOT.bowl.z - bk.z };
-  const bgeo = basketGeometry(bowlRel);
+  // The basket's front (paw badge, low opening) faces the pad.
+  const basketYaw = Math.atan2(SPOT.pad.x - bk.x, SPOT.pad.z - bk.z);
+  const cy = Math.cos(basketYaw);
+  const sy = Math.sin(basketYaw);
+  /** Basket-local (x, z) → site-local offset (the basket turned by `basketYaw`), and back. */
+  const turn = (x: number, z: number): { x: number; z: number } => ({ x: x * cy + z * sy, z: -x * sy + z * cy });
+  const unturn = (x: number, z: number): { x: number; z: number } => ({ x: x * cy - z * sy, z: x * sy + z * cy });
+  const bowlIn = unturn(SPOT.bowl.x - bk.x, SPOT.bowl.z - bk.z);
+  const bgeo = basketGeometry({ x: bowlIn.x, y: ground(SPOT.bowl.x, SPOT.bowl.z) - basketY - 0.02, z: bowlIn.z });
+  bgeo.rotateY(basketYaw);
   bgeo.translate(bk.x, basketY, bk.z);
   const boothGeo = kit.booth.mesh.geometry;
   const basketRange = appendToBooth(boothGeo, bgeo);
@@ -192,7 +200,8 @@ export function create(env: MechanicEnv): Mechanic {
   /** World centre of basket place `i` (with the basket's hop). */
   function slotWorld(i: number, h: THREE.Matrix4 | null, out: THREE.Vector3): THREE.Vector3 {
     const [x, y, z] = BASKET.slots[Math.min(i, BASKET.slots.length - 1)];
-    out.set(basketLocal.x + x, basketLocal.y + y, basketLocal.z + z);
+    const o = turn(x, z);
+    out.set(basketLocal.x + o.x, basketLocal.y + y, basketLocal.z + o.z);
     if (h) out.applyMatrix4(h);
     return kit.booth.mesh.localToWorld(out);
   }
@@ -210,7 +219,7 @@ export function create(env: MechanicEnv): Mechanic {
       sy = 1 - Math.sin(k * Math.PI) * 0.25;
       sx = 1 + Math.sin(k * Math.PI) * 0.15;
     }
-    m.compose(p, q.setFromEuler(e.set(0, site.yaw + TOY_YAW[Math.min(kind, 3)], 0)), sc.set(sx, sy, sx));
+    m.compose(p, q.setFromEuler(e.set(0, site.yaw + basketYaw + TOY_YAW[Math.min(kind, 3)], 0)), sc.set(sx, sy, sx));
     toys.set(count, m, kind);
     return count + 1;
   }
