@@ -394,6 +394,45 @@ One follow-up on this branch (`agent/glasses-followup`, merged):
 From owner playtest 4: the gates mini-game ("arches near the beach") was unclear to the owner.
 It is listed by the main session as still to assign after QA 4; nothing was changed here.
 
+## Phase 3: the six mini-games explain themselves (in progress, 2026-11-12)
+
+Owner after playtest 4: "There are these arches near the beach, I couldn't figure out what they
+did"; nothing explains what the games do or how; make it wild and fun. Target: a non-reading
+8-year-old walking up to any of the six knows within 5 seconds that it is a game, how to start
+it and what to do, without Pip.
+
+**Booth kit** (`src/activities/glasses/booth/`, how-to in its `README.md`): every mini-game gets
+a carnival marquee with the shared magic-glasses mark, bunting, a lamp row (one lamp per try:
+✓ bright / ✗ dim), a picture board with a looping animated demo (a little hero doing the
+action; drawn once at boot, so it can never show the current answer), a glowing start pad with
+the button pictogram for the device in use (or a walk-in footprint pad), a 3-2-1-GO, one bobbing
+prompt at a time, ✓ / ✗ pops, confetti, and a round: idle → countdown → N tries → celebration →
+prize → idle. The whole booth, including everything that changes, is ONE mesh with one shared
+material: the same single draw call the old pictogram board used. Measured on Low: spawn 122
+and Gear Shack 125 draws before and after.
+
+**Rule change that comes with it:** games are played in rounds and the prize is paid at the end
+of the round if enough tries were right. This replaces the nap after a miss and the "1 gem until
+two in a row" rule. `glasses:result` is still reported for every try.
+
+| Game | State | Round | One true sentence for Pip |
+|---|---|---|---|
+| `gates` | done | 3 runs, prize from 2 right (3 or 10 gems at tier 1) | "Step on the glowing pad, put the two halves on the sign together with both eyes, then run through the arch with that whole shape — three runs, get two right to win gems!" |
+| `oddone` | building | 5 tries, prize from 3 | — |
+| `dotsigns` | building | 5 tries, prize from 3 | — |
+| `lineup` | building | 5 bubbles, prize from 3 | — |
+| `glowflies` | building | timed, 5 flies, prize from 3 | — |
+| `toys` | building | one trail per round, three toys per session | — |
+
+**Pip lines (`agent/pip-story`, `src/buddy/script.ts`) that stop being true:**
+- gates: "Step on the start plate for a new shape!" — the pad now starts a countdown and a round
+  of three runs. ("Look at the sign. Each eye sees half a shape!" and "Put the halves together,
+  then run through that arch!" stay true.)
+- the other five: filled in as each game lands.
+
+**Wanted from the world owner** (paths, signposts, the toys stepping-stone trail; with
+coordinates): filled in as each game lands.
+
 ## Test results
 
 **Follow-up after integration (code at `9f07a00`, which includes `origin/main` `32eaf36`;
