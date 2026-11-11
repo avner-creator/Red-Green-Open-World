@@ -1,7 +1,8 @@
 /**
  * Glasses weave part `boost`: a weak-eye beat on the buggy race's boost pads (timeIt).
  *
- * While the race is on, the next pad ahead (within 40 m) carries an upright weak-eye hoop: a
+ * While the race is on, the next pad ahead (within 40 m) carries a weak-eye arch across the road
+ * (an upright ring whose lower half the road hides, legs beside the buggy in the chase view): a
  * closing ring that shrinks onto a target ring with a steady 1.2 s beat. The target ring flares
  * bright and thick only in its "hot" window. Driving over the pad while it is hot is a turbo pad:
  * +1 / 2 / 3 gems by tier and a weak-eye flash on the layer. Driving over it cold is a miss. Pads
@@ -94,7 +95,7 @@ export function create(env: WeaveEnv): WeavePart {
 
   function ensureFlash(): RingBlock {
     if (!flash) {
-      flash = createRing({ radius: BOOST.ringRadius, thickness: 0.45, segments: 10, segmentFill: 0.55, spin: 0.9, facing: 'wall' });
+      flash = createRing({ radius: BOOST.ringRadius, thickness: 0.6, segments: 10, segmentFill: 0.55, spin: 0.9, facing: 'wall' });
       flash.object.name = 'boostFlash';
     }
     return flash;

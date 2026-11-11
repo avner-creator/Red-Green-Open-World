@@ -28,11 +28,15 @@ export const BOOST = {
   pay: { 1: 1, 2: 2, 3: 3 } as Readonly<Record<GlassesTier, number>>,
   /** Hits in a row that raise the tier. */
   hitsToRise: 2,
-  /** Look (metres): upright hoop over the pad, closing ring start, line width, centre height. */
-  ringRadius: 2.3,
-  ringStart: 4.8,
-  ringThickness: 0.5,
-  ringHeight: 2.3,
+  /**
+   * Look (metres): an upright ring standing across the road at the pad, its centre just above the
+   * road, so the road hides the lower half and it reads as an arch whose legs stand beside the
+   * buggy (the chase camera looks over the buggy at the pad). Closing ring start, line width.
+   */
+  ringRadius: 3.4,
+  ringStart: 6.8,
+  ringThickness: 0.7,
+  ringHeight: 0.1,
   /** Weak-eye flash after a turbo pad, seconds. */
   flashSeconds: 0.75,
 } as const;
