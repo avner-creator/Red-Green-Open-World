@@ -13,6 +13,7 @@
  */
 import * as THREE from 'three';
 import { PLAYER } from '../../config';
+import { HERO_ONLY } from './crowd';
 import type { Anchor, ExternalController, GameContext, InputState, PlayerApi } from '../../types';
 import { ConeView, disposeConeCaches } from './coneView';
 import type { ConeState } from './coneView';
@@ -66,6 +67,8 @@ export interface ScoopsInfo {
   debris: number;
   cones: number;
   friendsLoaded: boolean;
+  /** The two friends: local and world feet position, blocker on, opacity. */
+  friends: { pos: [number, number, number]; world: [number, number, number]; solid: boolean; opacity: number }[];
   lean: number;
 }
 
@@ -92,6 +95,14 @@ export interface Scoops {
   dispose(): void;
 }
 
+/**
+ * The game camera while building (QA6 M5): in front of the shop, a little to the right of the hero
+ * (who stands at the counter's right end, see LAYOUT), low enough to pass under the awning. The
+ * cone, tubs, sauces and jars run to the hero's left, so no head or hat (sombrero on the alpaca)
+ * covers them, on 16:9 and on a phone (whose buttons sit on the right).
+ */
+export const BUILD_CAMERA = { distance: 5, height: 1.0, fov: 54, yawOffset: Math.PI + 0.3 } as const;
+
 const UP = new THREE.Vector3(0, 1, 0);
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
@@ -116,7 +127,9 @@ export function createScoops(ctx: GameContext): Scoops {
 
   const colliders = parlour.colliders.map((c) => {
     const centre = toWorld(c.c);
-    return c.kind === 'box' ? ctx.physics.addStaticBox(centre, c.h.clone(), siteQ) : ctx.physics.addStaticCylinder(centre, c.h.y, c.h.x);
+    const col = c.kind === 'box' ? ctx.physics.addStaticBox(centre, c.h.clone(), siteQ) : ctx.physics.addStaticCylinder(centre, c.h.y, c.h.x);
+    if (c.heroOnly) col.setCollisionGroups(HERO_ONLY);
+    return col;
   });
 
   // ── Parts ──
@@ -128,7 +141,11 @@ export function createScoops(ctx: GameContext): Scoops {
   const today = secretOfDay(dayNumber(Date.now()));
   const secret = createSecretTopping(ctx, today);
   const effects = createEffects(ctx);
-  const friends = createFriends(group, ctx.player.characterId);
+  const friends = createFriends(group, ctx.player.characterId, {
+    physics: ctx.physics,
+    toWorld,
+    cameraLocal: (out) => toLocal(ctx.camera.position, out),
+  });
   const cursor = createCursor();
   group.add(cursor.root);
   const profile = (): ProfileLike | null => (ctx as unknown as { profile?: ProfileLike }).profile ?? null;
@@ -456,7 +473,7 @@ export function createScoops(ctx: GameContext): Scoops {
             phaseT = 0;
             pl.yaw = chefYaw;
             ctx.audio.play('land', { volume: 0.5 });
-            ctx.cameraRig.setOverride({ distance: 3.9, height: 1.9, fov: 54, yawOffset: Math.PI });
+            ctx.cameraRig.setOverride({ ...BUILD_CAMERA });
           } else {
             phase = 'idle';
             builder = null;
@@ -498,7 +515,7 @@ export function createScoops(ctx: GameContext): Scoops {
         pl.position.copy(hopTo);
         pl.yaw = chefYaw;
         // Lift the cone to the mouth, three big chomps, a gulp, then hop out.
-        const mouthY = FLOOR + PLAYER.height * 0.78 * pl.object.scale.y;
+        const mouthY = LAYOUT.chef.y + PLAYER.height * 0.78 * pl.object.scale.y;
         const lift = smooth(Math.min(1, phaseT / 0.6));
         coneView.root.position.set(
           LAYOUT.holder.x + (LAYOUT.chef.x + 0.08 - LAYOUT.holder.x) * lift,
@@ -569,6 +586,7 @@ export function createScoops(ctx: GameContext): Scoops {
         debris: coneView.debris,
         cones,
         friendsLoaded: friends.loaded,
+        friends: friends.debug().map((f) => ({ ...f, world: toWorld(new THREE.Vector3().fromArray(f.pos)).toArray() as [number, number, number] })),
         lean: wobble.lean(),
       }),
       secretWorld: () => (secret.group.visible ? (secret.group.getWorldPosition(new THREE.Vector3()).toArray() as [number, number, number]) : null),
@@ -601,8 +619,9 @@ export function createScoops(ctx: GameContext): Scoops {
       friends.update(dt, local, near && ctx.session.state.phase !== 'title', busyElsewhere);
       if (!near) return;
 
-      // Behind the counter is a closed room (counter, walls, 0.45 m slits): a hero who got in there
-      // without building (pushed or jumped over, QA round 5 M1) hops back out to the customer side.
+      // Behind the counter is a closed room (the shop front is sealed for walking, see FRONT). Only
+      // a teleport, a respawn or a ride ending in there could leave an idle hero inside: hop them
+      // back out to the customer side.
       if (phase === 'idle' && ctx.player.mode === 'walk' && Math.abs(local.x) < 3.85 && local.z > -2.95 && local.z < 1.3 && local.y > -0.5 && local.y < FLOOR + 1.6) {
         trappedT += dt;
         if (trappedT > 0.5) {
