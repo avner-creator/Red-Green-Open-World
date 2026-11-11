@@ -17,7 +17,7 @@ import { VisionLayer } from '../../types';
 import type { ExternalController, GameContext, GameSystem, InputState } from '../../types';
 import { stickToWorld } from '../skydive/flight';
 import { ThrillConfetti } from '../thrillConfetti';
-import { createArenaModel, ARENA } from './arena';
+import { ARENA, PAL, createArenaModel, gateSpan } from './arena';
 import { follow, localToWorld, rng, worldToLocal } from './bodies';
 import { acquireFriendPool, releaseFriendPool } from './friends';
 import type { Friend } from './friends';
@@ -32,6 +32,8 @@ import { createBallMesh, createBonusRing, createBubbles, createChargeSparkle } f
 
 /** Bubble centre above the feet and its radius (the hero's legs poke out underneath). */
 const BUB_CY = 1.12;
+/** The match camera: a raised three-quarter view from the near touchline. */
+const BROADCAST = { angle: 0.6, swing: 0.3, distance: 11.5, height: 7.2 } as const;
 const FRIEND_SCALE = 0.9;
 /** Player capsule centre above the feet (setVisualRotation pivots there). */
 const BODY_CENTRE = 0.85;
@@ -99,7 +101,36 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   };
   const skirt = site.deckY - site.groundY + 0.5;
   box(0, site.deckY - skirt / 2, 0, ARENA.hx, skirt / 2, ARENA.hz);
-  for (const s of [-1, 1]) box(0, site.deckY + ARENA.wallH / 2, s * (PITCH.hz + ARENA.wallR), PITCH.hx, ARENA.wallH / 2, ARENA.wallR);
+  // Sidelines; the near one has the walk-in gate (no collider there) and a little ramp up to it.
+  box(0, site.deckY + ARENA.wallH / 2, PITCH.hz + ARENA.wallR, PITCH.hx, ARENA.wallH / 2, ARENA.wallR);
+  const gate = gateSpan();
+  for (const [a, b] of [
+    [-PITCH.hx, gate.x0 - 0.2],
+    [gate.x1 + 0.2, PITCH.hx],
+  ]) {
+    box((a + b) / 2, site.deckY + ARENA.wallH / 2, -(PITCH.hz + ARENA.wallR), (b - a) / 2, ARENA.wallH / 2, ARENA.wallR);
+  }
+  const ramp = (() => {
+    const gx = (gate.x0 + gate.x1) / 2;
+    const run = 2.6;
+    const footW = localToWorld(gx, -(ARENA.hz + run), site.yaw);
+    const footY = ctx.world.heightAt(site.x + footW.x, site.z + footW.z);
+    const rise = Math.max(0, site.deckY - footY);
+    if (rise < 0.12) return null;
+    const len = Math.hypot(run, rise);
+    const tilt = Math.atan2(rise, run);
+    const midW = localToWorld(gx, -(ARENA.hz + run / 2), site.yaw);
+    const q = yawQ.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -tilt)); // high end (+Z) at the deck
+    const centre = new THREE.Vector3(site.x + midW.x, (site.deckY + footY) / 2, site.z + midW.z).add(new THREE.Vector3(0, -0.12, 0).applyQuaternion(q));
+    colliders.push(ctx.physics.addStaticBox(centre, new THREE.Vector3((gate.x1 - gate.x0) / 2, 0.12, len / 2), q));
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(gate.x1 - gate.x0, 0.24, len), new THREE.MeshStandardMaterial({ color: PAL.navy, roughness: 0.8 }));
+    mesh.name = 'bubbleball-ramp';
+    mesh.position.copy(centre);
+    mesh.quaternion.copy(q);
+    mesh.receiveShadow = true;
+    ctx.scene.add(mesh);
+    return mesh;
+  })();
   for (const s of [-1, 1]) box(s * (PITCH.hx + PITCH.goalDepth + 0.25), site.deckY + 1.2, 0, 0.25, 1.2, PITCH.hz);
   box(ARENA.booth.x, boothGround + 0.6, ARENA.booth.z, 1.15, 0.6, 0.6);
 
@@ -142,6 +173,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   let ballSquashV = 0;
   /** Camera yaw offset (smoothed) that frames the ball and the goal. */
   let camOff = 0;
+  /** Stars from goals, reported at the whistle. */
+  let bonusStars = 0;
 
   // ── State ──
   let phase: Phase = 'idle';
@@ -340,6 +373,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
         case 'kickoff':
           ctx.audio.play('start');
           hud.count(0, 'ball');
+          hud.practice(ticket.practice, false);
           break;
         case 'goal': {
           const home = e.team === 'home';
@@ -352,7 +386,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           const gx = home ? PITCH.hx + PITCH.goalDepth * 0.5 : -(PITCH.hx + PITCH.goalDepth * 0.5);
           confetti.burst(toWorld(gx, 1.6, 0, tmpV), home ? 160 : 70);
           confetti.burst(toWorld(gx * 0.6, 3, home ? -3 : 3, tmpV), home ? 80 : 30);
-          if (home) ctx.events.emit('stunt', { kind: 'bumper', value: e.points, stars: e.points });
+          // Goal stars are reported at the whistle (no HUD pop-ups in the middle of a match).
+          if (home) bonusStars += e.points;
           break;
         }
         case 'over':
@@ -372,7 +407,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     const stars = matchStars(home, away);
     const gems = matchPrize(stars, match.doubles.home);
     const paid = ticket.prize(gems);
-    ctx.events.emit('stunt', { kind: 'bumper', value: home, stars });
+    ctx.events.emit('stunt', { kind: 'bumper', value: home, stars: stars + Math.min(6, bonusStars) });
     ctx.events.emit('stamp:earned', { id: 'bubbleArena' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${home} – ${away}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
@@ -383,7 +418,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       confetti.burst(toWorld(p.x, 2.5, p.z, tmpV), 120);
     }
     hud.chip(null, false);
-    hud.result(stars, paid, ctx.input.state.device);
+    // Exactly what the wallet got: the prize, plus a bonus line for missions / Fun Pass prizes.
+    hud.result(stars, paid, ctx.input.state.device, { bonus: ticket.gained() - paid, practice: ticket.practice });
     for (const a of match.agents) a.cheer = a.team === (home >= away ? 'home' : 'away') ? 99 : 0;
   }
 
@@ -392,7 +428,9 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     rand = rng(ctx.testMode ? 7 : (Date.now() & 0xffff) + 1);
     phase = 'match';
     lastCount = -1;
+    bonusStars = 0;
     hud.hideResult();
+    hud.practice(ticket.practice, true);
     bubbles.setVisible(true);
     ballCollider.setEnabled(false);
     camOff = 0;
@@ -471,15 +509,20 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       ctx.cameraRig.setOverride({ distance: 6.2, height: 2.6, fov: CAMERA.fov, lookAhead: 0, yawOffset: off });
       return;
     }
-    // Camera: behind the hero, looking down the pitch at the goal to attack, turned a little
-    // toward the ball so the ball and the goal are both in the shot.
+    // Broadcast camera: raised, from the near (booth) touchline, three-quarter toward the goal to
+    // attack, so the hero, the ball and the target goal are in the shot and no goal frame or net is
+    // ever between the camera and the play. It turns a little to keep the ball in frame.
     const ball = match.ball;
-    const toBall = Math.atan2(ball.z - b.z, ball.x - b.x); // pitch space, 0 = +X (attack)
-    const want = Math.max(-0.45, Math.min(0.45, -toBall * 0.45));
-    camOff += (want - camOff) * follow(2.2, dt);
-    let off = attackYaw + camOff - player.yaw;
+    const base = BROADCAST.angle; // pitch space: 0 = looking +Z (across), +π/2 = looking +X (attack)
+    const toBall = Math.atan2(ball.x - b.x, ball.z - b.z);
+    let rel = toBall - base;
+    rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+    const near = Math.min(1, Math.hypot(ball.x - b.x, ball.z - b.z) / 6);
+    const want = Math.max(-BROADCAST.swing, Math.min(BROADCAST.swing, rel * 0.35 * near));
+    camOff += (want - camOff) * follow(1.6, dt);
+    let off = site.yaw + base + camOff - player.yaw;
     off = Math.atan2(Math.sin(off), Math.cos(off));
-    ctx.cameraRig.setOverride({ distance: 8.2, height: 4.3, fov: CAMERA.fov + 8, lookAhead: 0.3, yawOffset: off });
+    ctx.cameraRig.setOverride({ distance: BROADCAST.distance, height: BROADCAST.height, fov: CAMERA.fov + 6, lookAhead: 0, yawOffset: off });
   }
 
   const controller: ExternalController = {
@@ -677,6 +720,11 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       ctx.vision.remove(ringView.object);
       ctx.vision.remove(sparkle.object);
       model.group.removeFromParent();
+      if (ramp) {
+        ramp.removeFromParent();
+        ramp.geometry.dispose();
+        (ramp.material as THREE.Material).dispose();
+      }
       model.dispose();
       bubbles.dispose();
       ballView.dispose();
