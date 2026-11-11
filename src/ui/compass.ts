@@ -30,7 +30,7 @@ const FULL_MARKERS = 6;
 
 const WORLD_ICONS: ReadonlySet<string> = new Set(COMPASS_ATTRACTIONS.map((a) => a.icon));
 
-function markerIcon(name: PictoName | IconId): HTMLElement {
+export function markerIcon(name: PictoName | IconId): HTMLElement {
   if (!WORLD_ICONS.has(name)) return pictogram(name as PictoName);
   // A world pictogram (round badge) drawn on a small canvas: the same picture as the signs.
   const el = h('span', 'ic wpic');

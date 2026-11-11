@@ -37,6 +37,11 @@ export const WAYFINDING_CSS = `
   pointer-events:auto;cursor:pointer;font:inherit;font-size:calc(var(--u)*4.2);font-weight:1000;color:#fff;background:linear-gradient(180deg,#2b3360,#10142a);
   border:calc(var(--u)*.6) solid #fff;box-shadow:0 0 0 calc(var(--u)*.45) #000,0 calc(var(--u)*.8) calc(var(--u)*2) rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
 .rg .wf-help:hover{filter:brightness(1.2)}
+.rg .wf-help .hk{position:absolute;right:calc(var(--u)*-1.6);bottom:calc(var(--u)*-1.4);font-size:calc(var(--u)*1.9);pointer-events:none}
+.rg .wf-help .hk .cap,.rg .wf-help .hk .gp{margin:0}
+.rg .wf-devs{display:flex;gap:calc(var(--u)*1.6);justify-content:center}
+.rg .wf-dev{min-height:max(40px,calc(var(--u)*6.4));font-size:calc(var(--u)*3)}
+.rg .wf-dev .cap{font-size:.7em;margin:0}
 .rg .wf-help[aria-pressed="true"]{background:linear-gradient(180deg,#ffe97a,#ffd93b 55%,#f2b400);color:#15110a}
 .rg .wf-card{--u:clamp(3.6px,.9vmin,20px);z-index:30;position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;
   background:radial-gradient(ellipse at center,rgba(6,8,20,.5),rgba(6,8,20,.78))}

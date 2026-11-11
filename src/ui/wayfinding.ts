@@ -3,6 +3,7 @@ import type { GameContext } from '../types';
 import { createCompass } from './compass';
 import { createControlsOverlay, createControlsScreen } from './controlsCard';
 import { h } from './dom';
+import { buddyPicto } from './buddy/picto';
 import { icon } from './icons';
 import { createModeHints } from './modeHints';
 import type { Screen } from './screens';
@@ -34,7 +35,7 @@ export function createWayfinding(ctx: GameContext, hooks: WayfindingHooks): Wayf
 
   const screen = createControlsScreen(ctx, hooks.back);
   const grid = hooks.pause.el.querySelector('.grid3, .grid2');
-  const b = h('button', 'b d tile', { type: 'button', 'aria-label': 'Controls', 'data-testid': 'pause-controls' }, h('span', 'pair', {}, icon('stick'), icon('hand')), '?');
+  const b = h('button', 'b d tile', { type: 'button', 'aria-label': 'Help', 'data-testid': 'pause-controls' }, h('span', 'pair', {}, buddyPicto('question'), icon('stick')), 'Help');
   b.addEventListener('click', () => hooks.open(screen));
   grid?.append(b);
 

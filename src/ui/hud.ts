@@ -3,6 +3,8 @@ import type { GameContext, IconName } from '../types';
 import { clear, h, retrigger } from './dom';
 import type { EconTracker } from './econState';
 import { formatTime, timeFraction } from './format';
+import { createFunPass } from './funPass';
+import type { FunPass } from './funPass';
 import { createHudEcon } from './hudEcon';
 import { outfitIcon, stuntIcon, useKey } from './glyphs';
 import { icon } from './icons';
@@ -14,6 +16,8 @@ const NS = 'http://www.w3.org/2000/svg';
 
 export interface Hud {
   el: HTMLElement;
+  /** The Fun Pass (stamp card): HUD chip, overlay and end-screen card. */
+  pass: FunPass;
   setVisible(on: boolean): void;
   update(dt: number): void;
 }
@@ -62,7 +66,8 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
   const econ = createHudEcon(ctx, tracker, toastNodes);
   const gems = econ.top;
   econ.row2.prepend(stars);
-  el.append(glow, econ.top, econ.missions, timer, prompt, toasts, econ.moments);
+  const pass = createFunPass(ctx, { goals: econ.missions });
+  el.append(glow, econ.top, pass.chip, timer, prompt, toasts, econ.moments, pass.overlay);
   ctx.uiRoot.append(el);
 
   let lastStars = -1;
@@ -125,6 +130,7 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
 
   return {
     el,
+    pass,
     setVisible(on) {
       el.classList.toggle('on', on);
       if (!on) {
@@ -138,6 +144,7 @@ export function createHud(ctx: GameContext, tracker: EconTracker): Hud {
     update(dt) {
       const s = ctx.session.state;
       econ.update(dt);
+      pass.update(dt);
       if (s.stars !== lastStars) {
         lastStars = s.stars;
         starText.textContent = String(s.stars);

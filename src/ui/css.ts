@@ -60,6 +60,45 @@ export const UI_CSS = `
 .rg .play:hover{transform:none;filter:brightness(1.1)}
 .rg .play:active{transform:none;filter:brightness(.95)}
 .rg .play:hover .ic{transform:scale(1.15)}
+/* title layout: logo top, hero (3D) in the middle with Pip left and the change-hero arrows right, PLAY + tiles at the bottom */
+.rg .tscreen{padding:calc(var(--u)*2.4) calc(var(--u)*3) calc(var(--u)*3)}
+.rg .tscreen .ttop{display:flex;justify-content:center;width:100%;pointer-events:none}
+.rg .tscreen .logo .l1{font-size:calc(var(--u)*9)}
+.rg .tscreen .logo .l2{font-size:calc(var(--u)*3.8)}
+.rg .tstage{position:absolute;left:34%;right:34%;top:22%;bottom:30%;pointer-events:auto;cursor:pointer}
+.rg .tmid{position:relative;flex:1;width:100%;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.rg .tmid .tgap{width:max(30vw,calc(var(--u)*30))}
+.rg .herobtn{flex-direction:row;gap:calc(var(--u)*.8);padding:calc(var(--u)*.6) calc(var(--u)*1);min-height:calc(var(--u)*12);border-radius:calc(var(--u)*6)}
+.rg .herobtn .ar{font-size:calc(var(--u)*5);color:var(--y);--out:#000;animation:rg-nudge 1.4s ease-in-out infinite}
+.rg .herobtn .ar:first-child{animation-name:rg-nudgel}
+.rg .herobtn .hmid{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.4)}
+.rg .herobtn .hs .sk{font-size:calc(var(--u)*6.4)}
+.rg .herobtn .hn{font-size:calc(var(--u)*3.2);letter-spacing:.06em}
+@keyframes rg-nudge{50%{transform:translateX(calc(var(--u)*.7))}}
+@keyframes rg-nudgel{50%{transform:translateX(calc(var(--u)*-.7))}}
+.rg .tpip{position:relative;width:calc(var(--u)*16);height:calc(var(--u)*14);pointer-events:none}
+.rg .tpip .pface{position:absolute;left:0;bottom:0;width:calc(var(--u)*12);height:calc(var(--u)*12);border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,#2a3258,#171c38);border:calc(var(--u)*.6) solid #fff;box-shadow:0 0 0 calc(var(--u)*.45) #000;animation:rg-pipbob 2.4s ease-in-out infinite}
+.rg .tpip .pface .ic{font-size:calc(var(--u)*9);color:#fff}
+.rg .tpip .ppaw{position:absolute;left:calc(var(--u)*9.4);bottom:calc(var(--u)*7.6);transform-origin:20% 90%;animation:rg-wave 1.1s ease-in-out infinite}
+.rg .tpip .ppaw .ic{font-size:calc(var(--u)*4.6);color:#fff}
+.rg .tpip .pbub{position:absolute;left:calc(var(--u)*12.4);bottom:calc(var(--u)*10);display:flex;gap:calc(var(--u)*.4);align-items:center;padding:calc(var(--u)*.6) calc(var(--u)*1.2);border-radius:calc(var(--u)*3);
+  background:#fff;border:calc(var(--u)*.5) solid #000;font-size:calc(var(--u)*3.6);animation:rg-pipbub 2.4s ease-in-out infinite}
+.rg .tpip .pbub .ic{color:#15110a;--out:#fff}
+.rg .tpip .pbub .ic.y{color:var(--y);--out:#000}
+@keyframes rg-pipbob{50%{transform:translateY(calc(var(--u)*-.8)) rotate(-4deg)}}
+@keyframes rg-wave{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(22deg)}}
+@keyframes rg-pipbub{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.rg .tbot{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:calc(var(--u)*2);width:100%}
+.rg .tbot .play{min-height:calc(var(--u)*16);padding:0 calc(var(--u)*6)}
+.rg .tside{display:flex;gap:calc(var(--u)*1.6);align-items:end}
+.rg .tside.r{justify-content:flex-end}
+.rg .ttile{flex-direction:column;gap:calc(var(--u)*.4);min-width:calc(var(--u)*13);min-height:calc(var(--u)*12);padding:calc(var(--u)*.8) calc(var(--u)*1.4)}
+.rg .ttile .pics{display:flex;align-items:center;gap:calc(var(--u)*.6)}
+.rg .ttile .pics .ic{font-size:calc(var(--u)*5)}
+.rg .ttile .pics .cap,.rg .ttile .pics .gp{font-size:calc(var(--u)*2.6)}
+.rg .ttile .lbl{font-size:calc(var(--u)*2.3);letter-spacing:.04em}
+@media (max-aspect-ratio:4/3){.rg .tmid .tgap{width:calc(var(--u)*16)}}
 .rg .corner{position:absolute;bottom:calc(var(--u)*3)}
 .rg .corner.l{left:calc(var(--u)*3)}
 .rg .corner.r{right:calc(var(--u)*3)}
