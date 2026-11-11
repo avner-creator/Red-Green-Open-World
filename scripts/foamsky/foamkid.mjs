@@ -13,7 +13,7 @@ const PLAN = [
   [-3.8, 40.2, 0.6], [-3.8, 37.0],
   [-3.8, 25.6, 0.8], [-3.8, 7.6], [-3.8, 5.9], [-3.6, 0.3],
 ];
-const local = () => fo(() => { const s = window.__rgFoam.sim; return { x: s.p.x, y: s.p.y, z: s.p.z, falls: s.falls, time: s.time, mode: s.mode, cp: s.cp, ph: window.__rgFoam.phase() }; });
+const local = () => fo(() => { const s = window.__rgFoam.sim; return { x: s.p.x, y: s.p.y, z: s.p.z, falls: s.falls, time: s.time, mode: s.mode, cp: s.cp, lap: s.lap, ph: window.__rgFoam.phase() }; });
 const PROBE = process.env.PROBE !== '0';
 try {
   const booth = await fo(() => window.__rgFoam.booth());
@@ -43,6 +43,7 @@ try {
     if (s.mode === 'splash' && after.mode === 'run') { let best = 0, bd = 1e9; for (let j = 0; j < PLAN.length; j++) { const d = Math.hypot(PLAN[j][0] - after.x, PLAN[j][1] - after.z); if (d < bd) { bd = d; best = j; } } i = best; console.log(`respawn cp${after.cp} -> wp ${i}`); await shot('respawn'); }
     if (s.mode === 'swing' && after.mode === 'run' && i < 17) i = 17;
     if (after.cp >= 3 && i < 20) i = 20;
+    if (after.lap !== s.lap) { i = 0; console.log(`LAP ${after.lap} at ${after.time.toFixed(1)}`); await shot('lap'); }
     if (t >= nextShot) { await shot(`run-t${(t / 60).toFixed(0)}`); nextShot += 75; console.log(`t=${(t / 60).toFixed(1)} wp ${i} ${after.mode} cp${after.cp} local ${after.x.toFixed(1)},${after.y.toFixed(1)},${after.z.toFixed(1)} run ${after.time.toFixed(1)}`); }
     if (Math.abs(after.x) > 6.3 || after.z > 44.5) console.log(`OUT OF COURSE at ${after.x.toFixed(1)},${after.z.toFixed(1)}`);
   }

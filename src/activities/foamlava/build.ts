@@ -261,7 +261,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
 
   // ───────────── Static parts: one merged mesh ─────────────
   const parts: THREE.BufferGeometry[] = [];
-  for (const id of ['start', 'finish', 'cp1', 'bridgeA', 'bridgeB', 'towerA', 'towerB', 'cp3', 'walk']) deckParts(solid(id), parts, !['start', 'finish', 'cp3'].includes(id));
+  for (const id of ['start', 'finish', 'middle', 'cp1', 'bridgeA', 'bridgeB', 'towerA', 'towerB', 'cp3', 'walk']) deckParts(solid(id), parts, !['start', 'finish', 'middle', 'cp3'].includes(id));
   for (const id of ['startStep', 'gapStep']) deckParts(solid(id), parts, id === 'gapStep');
   for (const id of ['bin0', 'bin1', 'bin2', 'bin3']) binParts(solid(id), parts);
   // Balance-block posts (the wobbling caps are instanced).

@@ -168,3 +168,18 @@ describe('foam lava surprises', () => {
     expect(Math.abs(sim.p.z - f.z)).toBeGreaterThan(0.1);
   });
 });
+
+describe('foam lava: no trap between the decks', () => {
+  it('stepping off the start deck towards the finish deck never drops you into a hole you cannot walk out of', () => {
+    const start = SOLIDS.findIndex((s) => s.id === 'start');
+    const sim = runAt(1.6, 0.3, 1.0, start);
+    sim.groundAt = () => 0;
+    let minY = Infinity;
+    for (let i = 0; i < 60; i++) {
+      sim.step(DT, { mx: -1, mz: 0, sprint: false, jumpPressed: false });
+      minY = Math.min(minY, sim.p.y);
+    }
+    expect(minY).toBeGreaterThan(0.9);
+    expect(sim.p.x).toBeLessThan(-1.3);
+  });
+});
