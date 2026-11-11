@@ -54,7 +54,9 @@ export const TRAIL = {
   /** The first print's direction, off the child's view line from the pad (radians, either side). */
   startOff: [0.4, 1.75] as readonly [number, number],
   /** Path shape tries per direction. */
-  variants: 4,
+  variants: 6,
+  /** Rounds of candidates (new fan turn and bends each) before the fallback. */
+  rounds: 4,
   /** The trail starts this far from the pad's centre (just past its rim). */
   startOffset: 1.4,
   /** Path sampling step for the validity checks. */
@@ -66,7 +68,7 @@ export const TRAIL = {
   /** Max rise per metre between samples (walkable). */
   maxGrade: 0.5,
   /** The hidden spot is this far beside the last print (left or right of the path). */
-  endBeside: 1.8,
+  endBeside: 2.4,
   /** Prints that glow ahead of the player: nearest bright, farther fainter. */
   glow: [1, 0.75, 0.5, 0.3] as readonly number[],
   /** Reaching a print (XZ distance); the last print needs `reachLast`. */
@@ -78,6 +80,9 @@ export const TRAIL = {
   markerSize: 0.8,
   /** Open sky over the hidden spot: no trunk or wall within this radius at trunk height. */
   skyClear: 4,
+  /** No trunk, wall, post or bumpable toy this close to the hidden spot / to the default camera behind the hero on the last stretch. */
+  endClear: 6,
+  camClear: 6,
   /** A passed print fades out over this long. */
   passFade: 0.7,
 } as const;
@@ -102,10 +107,10 @@ export const TOYS = {
   /** Squash on landing in the basket. */
   settleSeconds: 0.35,
   /** Launch height above the ground and the toy's size multiplier during the show. */
-  launchHeight: 2.8,
+  launchHeight: 2.2,
   showScale: 2,
   /** The ✓ pops this high above the hidden spot (over the launching toy). */
-  checkHeight: 4.6,
+  checkHeight: 4.0,
   /** Celebration (basket hop) after the third toy lands. */
   celebrateSeconds: 2.4,
   /** Toy size (metres, roughly its diameter). */
