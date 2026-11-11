@@ -146,6 +146,9 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
   /** Bumped by every speak/hush: a clip that arrives late for an old line is dropped. */
   let token = 0;
   const bank = new ClipBank(baseUrl());
+  // The clip list (a few KB) loads at once, so the very first line already knows its clip; the
+  // clips themselves wait for the first gesture.
+  void bank.load();
   const speaker = createSpeaker();
 
   const level = (s: Readonly<GameSettings>): number => {
