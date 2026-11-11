@@ -369,6 +369,7 @@ interface LineupDebug {
   offset: { thetaDeg: number; phiDeg: number };
   promptDevice: string;
   bubbles: { state: string }[];
+  screen: { bubbles: ({ x: number; y: number; r: number } | null)[]; ring: { x: number; y: number; r: number } | null };
   kit: LineupKit;
   booth: LuP3;
   padBack: LuP3;
@@ -432,7 +433,22 @@ async function luFarSpot(d: LineupDebug): Promise<LuP3 & { yaw: number }> {
 /** Step onto the pad (from just behind it): the walk-in start. */
 async function stepOnPad(d: LineupDebug): Promise<void> {
   await luStandAt(d.padBack, d.padYaw, 4);
-  await luStandAt(luPadOf(d), d.padYaw, 4, -0.03);
+  await luStandAt(luPadOf(d), d.padYaw, 4);
+}
+
+/**
+ * Where children arrive (the road end of the stepping-stone trail) and 12 m out from the site on
+ * that line, on the ground, facing the booth.
+ */
+async function luArrivalSpots(d: LineupDebug): Promise<{ trail: LuP3 & { yaw: number }; m12: LuP3 & { yaw: number } }> {
+  return page.evaluate((d) => {
+    const w = window.__rg!.ctx.world;
+    const s = window.__rgGlasses!.sites().find((x) => x.id === 'lineup')!;
+    const a = s.arrival ?? { x: s.x + Math.sin(s.yaw) * 30, z: s.z + Math.cos(s.yaw) * 30 };
+    const l = Math.hypot(a.x - s.x, a.z - s.z) || 1;
+    const at = (x: number, z: number) => ({ x, y: w.heightAt(x, z), z, yaw: Math.atan2(d.booth.x * 0.6 + d.pad[0] * 0.4 - x, d.booth.z * 0.6 + d.pad[2] * 0.4 - z) });
+    return { trail: at(a.x, a.z), m12: at(s.x + ((a.x - s.x) / l) * 12, s.z + ((a.z - s.z) / l) * 12) };
+  }, d);
 }
 
 /** Through the round's 3-2-1-GO into try `n`'s live bubble. */
@@ -442,27 +458,33 @@ async function toLiveBubble(): Promise<void> {
   await luStep(1);
 }
 
-test('line-up: a booth from 30 m; idle attract at the pad', async () => {
+test('line-up: the booth from the trail end, 12 m and 30 m; idle attract at the pad', async () => {
   await page.evaluate(() => window.__rgGlasses!.goto('lineup'));
   await luStep(2);
   let d = await lineup();
   expect(d.phase).toBe('idle');
   expect(await page.evaluate(() => window.__rgGlasses!.isBooth('lineup'))).toBe(true);
+  // From the end of the stepping-stone trail and from 12 m: the booth faces the child.
+  const arr = await luArrivalSpots(d);
+  await luStandAt(arr.trail, arr.trail.yaw);
+  await save(LU_BOOTH, 'lineup-arrival', true);
+  await luStandAt(arr.m12, arr.m12.yaw);
+  const near = await canvasShot(page);
+  await save(LU_BOOTH, 'lineup-12m', true);
+  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('lineup'));
+  expect(rect, 'the booth is on screen from 12 m').not.toBeNull();
+  expect(channelSpread(near, rect!, 0), 'marquee R contrast from 12 m').toBeGreaterThan(80);
+  expect(channelSpread(near, rect!, 1), 'marquee G contrast from 12 m').toBeGreaterThan(80);
   const spot = await luFarSpot(d);
   await luStandAt(spot, spot.yaw);
-  const far = await canvasShot(page);
   await save(LU_BOOTH, 'lineup-30m', true);
-  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('lineup'));
-  expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
-  expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
-  expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
   // Just behind the pad, facing the bubbles' sky: attract (demo loops, pad pulses, lamps twinkle).
   await luStandAt(d.padBack, d.padYaw);
   d = await lineup();
   expect(d.kit.phase).toBe('idle');
   expect(d.kit.booth.prompt).toBe('stepPad');
   const f0 = d.kit.booth.frame;
-  await luStep(30);
+  await luStep(100);
   expect((await lineup()).kit.booth.frame, 'the demo flipbook runs').not.toBe(f0);
   await page.evaluate(() => window.__rg!.step(1 / 60, 1));
   await save(LU_BOOTH, 'lineup-pad-idle', true);
@@ -483,7 +505,21 @@ test('line-up: step on the pad → 3-2-1-GO → a bubble; each layer only its ch
   expect(g.wanted).toBe(1);
   expect(g.kit.booth.prompt, "the kit's device-button prompt").toBe('button');
   expect(g.promptDevice, 'the play prompt shows the device button').toBe('keyboard');
-  await lineupForce({ live: true, aim: 'reticle', target: 0 });
+  // From the pad with the default camera: the bubble well inside the picture, big enough to read.
+  await lineupForce({ live: true });
+  await luStep(30);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 1));
+  const sc = (await lineup()).screen;
+  const b0 = sc.bubbles.find((b) => b !== null);
+  console.log(`line-up bubble on screen from the pad: ${JSON.stringify(b0)}, ring ${JSON.stringify(sc.ring)}`);
+  expect(b0, 'a live bubble in front of the camera').toBeTruthy();
+  expect(b0!.x).toBeGreaterThan(0.15);
+  expect(b0!.x).toBeLessThan(0.85);
+  expect(b0!.y, 'not at the top edge').toBeGreaterThan(0.15);
+  expect(b0!.y, 'above the hero').toBeLessThan(0.5);
+  expect(b0!.r, 'bubble radius ≥ 2.5 % of the picture height').toBeGreaterThan(0.025);
+  await save(LU_BOOTH, 'lineup-bubble', true);
+  await lineupForce({ aim: 'reticle', target: 0 });
   await page.evaluate(() => window.__rg!.render());
   await save(LU_BOOTH, 'lineup-play', true);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'lineup' });
@@ -539,7 +575,7 @@ test('line-up: a round of 5 bubbles through Use: pops, a missed tap, a time-out,
   await luStep(20);
   await luStandAt(d.padBack, d.padYaw, 20);
   await save(LU_BOOTH, 'lineup-mid-round', true);
-  await luStandAt(luPadOf(d), d.padYaw, 4, -0.03);
+  await luStandAt(luPadOf(d), d.padYaw, 4);
   // 4 and 5: two more pops → 3 of 5 → celebration, then the prize (tier 1, 3 pops).
   for (let i = 0; i < 2; i++) {
     await toLiveBubble();

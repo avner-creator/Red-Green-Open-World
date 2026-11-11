@@ -3,7 +3,7 @@
  *
  * The weak-eye magic ring sits at a fixed OFFSET from the screen centre and moves 1:1 with the
  * camera, so a child who sees it can steer it onto a bubble easily. The offset is redrawn after
- * every press and every time-out, uniformly BY AREA from a large region: 5°–14° from the centre
+ * every press and every time-out, uniformly BY AREA from a large region: 5°–16° from the centre
  * in every direction except the lower sector where the hero's body would hide it. A player who
  * cannot see the ring can only guess where it is: one guess per bubble (press to pop), with the
  * hit chance of a blind guess ≈ (ring area × bubbles) / region area.
@@ -20,11 +20,11 @@ const DEG = Math.PI / 180;
 
 export const AIM = {
   thetaMin: 5 * DEG,
-  thetaMax: 14 * DEG,
+  thetaMax: 16 * DEG,
   /** Excluded sector: directions within this half-angle of straight down (the hero's body). */
   downHalf: 40 * DEG,
   /** Ring radius = how far a bubble's centre may be from the ring's centre and still count, by tier. */
-  tolerance: { 1: 3.0 * DEG, 2: 2.3 * DEG, 3: 1.7 * DEG } as Readonly<Record<GlassesTier, number>>,
+  tolerance: { 1: 3.6 * DEG, 2: 2.8 * DEG, 3: 2.05 * DEG } as Readonly<Record<GlassesTier, number>>,
   /** Seconds the ring glides to a newly drawn offset. */
   glideSeconds: 0.3,
 } as const;

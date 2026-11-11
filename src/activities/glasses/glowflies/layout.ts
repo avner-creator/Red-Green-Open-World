@@ -26,6 +26,7 @@ export function choosePatchLayout(
   heroBack: number,
   targets: readonly { x: number; z: number; y: number }[],
   footprint: readonly { x: number; z: number }[] = [],
+  arrival?: { at: { x: number; z: number } | null | undefined; targets: readonly { x: number; z: number; y: number }[] },
 ): PatchLayout {
   const down = new THREE.Vector3(0, -1, 0);
   const o = new THREE.Vector3();
@@ -46,7 +47,10 @@ export function choosePatchLayout(
   let bestScore = Infinity;
   const shifts: [number, number][] = [];
   for (const sz of [0, -1.5, -3]) for (const sx of [0, 1.5, -1.5, 3, -3]) shifts.push([sx, sz]);
-  const turns = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9];
+  // With an arrival point the turns centre on facing it (clamped: the site keeps its rough heading).
+  const arrivalYaw = arrival?.at ? Math.atan2(arrival.at.x - site.x, arrival.at.z - site.z) : null;
+  const base = arrivalYaw === null ? 0 : Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(arrivalYaw - site.yaw), Math.cos(arrivalYaw - site.yaw))));
+  const turns = (arrivalYaw === null ? [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9] : [0, 0.2, -0.2, 0.4, -0.4, 0.6, -0.6]).map((t) => base + t);
   shifts.forEach(([sx, sz], si) =>
     turns.forEach((t, ti) => {
       const c = siteToWorld(site, sx, sz);
@@ -73,6 +77,22 @@ export function choosePatchLayout(
       for (const t2 of targets) {
         const w = siteToWorld(L, t2.x, t2.z);
         if (!clear(cam, new THREE.Vector3(w.x, ctx.world.heightAt(w.x, w.z) + t2.y, w.z))) p += 2;
+      }
+      // A meadow that rises steeply ahead of the pad puts the flies at the top of the picture.
+      const rise = ctx.world.heightAt(c.x, c.z) - hy;
+      if (rise > 0.8) p += Math.floor((rise - 0.8) / 0.5) + 1;
+      // From where children arrive (12 m and 30 m out): the booth and the pad in clear view.
+      if (arrivalYaw !== null && arrival) {
+        for (const dd of [12, 30]) {
+          const ex = site.x + Math.sin(arrivalYaw) * dd;
+          const ez = site.z + Math.cos(arrivalYaw) * dd;
+          if (!ctx.world.isLand(ex, ez)) continue;
+          const eye = new THREE.Vector3(ex, Math.max(ctx.world.heightAt(ex, ez), ctx.world.waterLevel) + 2.6, ez);
+          for (const t2 of arrival.targets) {
+            const w = siteToWorld(L, t2.x, t2.z);
+            if (!clear(eye, new THREE.Vector3(w.x, ctx.world.heightAt(w.x, w.z) + t2.y, w.z))) p += dd <= 12 ? 2 : 1;
+          }
+        }
       }
       const score = p * 100 + si + ti * 1.5;
       if (score < bestScore) {

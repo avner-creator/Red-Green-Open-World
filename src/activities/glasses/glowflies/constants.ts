@@ -40,7 +40,7 @@ export const FLIES = {
   /** Base angular speed of the paths (rad/s); multiplied by the tier speed. */
   baseSpeed: 0.42,
   /** Fly glow quad size (metres) before the tier size. */
-  size: 2.4,
+  size: 3.0,
   /** Quick catches within this many seconds raise the chime's pitch. */
   comboWindow: 4,
   /** Bursts kept at once and particles per burst. */
@@ -53,3 +53,9 @@ export const FLIES = {
   /** Glow beads in the jar (one per catch of the round; full after 5). */
   jarNotches: 5,
 } as const;
+
+/**
+ * The camera while the flies are out (`ctx.cameraRig.setOverride`): pulled back, lower (a flatter
+ * look, so the air over the meadow is in the middle of the picture) and a little wider.
+ */
+export const FLY_CAMERA = { distance: 7.5, height: 0.9, fov: 66 } as const;
