@@ -6,7 +6,8 @@ attractions that already exist. Each part lives in its own folder here and is cr
 `WeaveEnv`. A part decides itself when it is active, and while inactive it attaches nothing and
 returns early. Results go through `env.result(tier, hit[, kind])` and gems through `env.pay(n)`.
 
-Line numbers are for branch `agent/glasses-depth` at `8abd0a6` (integration/m1 merged).
+Line numbers are for branch `agent/glasses-depth` at `da704d6`. `8abd0a6`, which came after it,
+changes only docs.
 
 Rules for every part:
 - Only additive hooks in other owners' folders. Each proposed diff below is the whole change.
