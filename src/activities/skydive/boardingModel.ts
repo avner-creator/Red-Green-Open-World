@@ -255,7 +255,7 @@ export function createBoardingModel(spec: BoardingSpec): BoardingModel {
   // ── Arch: candy-striped pillars, a beam, the sign, bunting ──
   const k = new Kit();
   const halfW = 1.9;
-  const archH = 3.3;
+  const archH = 2.6;
   const pillars: THREE.Vector3[] = [];
   for (const s of [-1, 1]) {
     const p = archC.clone().addScaledVector(right, s * halfW);
