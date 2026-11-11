@@ -15,7 +15,8 @@ export type TouchGlyph = UiIconName | 'jump' | null;
 
 export type ControlId =
   | 'move' | 'look' | 'jump' | 'sprint' | 'use' | 'flop' | 'respawn' | 'pause' | 'air'
-  | 'steer' | 'drive' | 'hop' | 'slide' | 'horn' | 'exit' | 'chute' | 'skill' | 'emote';
+  | 'steer' | 'drive' | 'hop' | 'slide' | 'horn' | 'exit' | 'chute' | 'skill' | 'emote'
+  | 'wardrobe' | 'radio';
 
 export interface ControlDef {
   /** Clusters shown side by side for one press. */
@@ -43,6 +44,9 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   skill: { keys: [['Q']], pad: [['LB']], touch: 'bolt', icon: 'bolt' },
   emote: { keys: [['C']], pad: [['↑']], touch: 'sparkle', icon: 'sparkle' },
   pause: { keys: [['Esc']], pad: [['START']], touch: 'pause', icon: 'pause' },
+  // Dressing room (src/ui/wardrobe) and radio stations (src/ui/radio.ts); both have a HUD button.
+  wardrobe: { keys: [['I']], pad: [['←']], touch: 'hanger', icon: 'hanger' },
+  radio: { keys: [['M']], pad: [['RB']], touch: 'note', icon: 'note' },
   // In the air, the move keys flip and spin.
   air: { keys: [['W', 'A', 'S', 'D']], pad: [['L']], touch: 'stick', icon: 'wAir' },
   steer: { keys: [['A', 'D']], pad: [['L']], touch: 'stick', icon: 'car' },
@@ -54,6 +58,28 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   exit: { keys: [['E']], pad: [['X']], touch: 'exit', icon: 'exit' },
   chute: { keys: [['␣']], pad: [['A']], touch: 'jump', icon: 'parachute' },
 };
+
+/**
+ * Every on-foot binding at once, with the standard-mapping gamepad button index: the controls
+ * above plus the HUD shortcuts read elsewhere (Fun Pass Tab / D-pad right, help H / Back, Pip T /
+ * D-pad down). `tests/ui/controlMap.test.ts` checks that no two actions share a key or button.
+ */
+export const ON_FOOT_BINDINGS: readonly { action: string; keys: readonly string[]; pad: readonly number[] }[] = [
+  { action: 'move', keys: ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'], pad: [] },
+  { action: 'jump', keys: ['Space'], pad: [0] },
+  { action: 'flop', keys: ['KeyF'], pad: [1] },
+  { action: 'use', keys: ['KeyE'], pad: [2] },
+  { action: 'respawn', keys: ['KeyR'], pad: [3] },
+  { action: 'skill', keys: ['KeyQ'], pad: [4] },
+  { action: 'radio', keys: ['KeyM'], pad: [5] },
+  { action: 'sprint', keys: ['ShiftLeft', 'ShiftRight'], pad: [7, 10] },
+  { action: 'help', keys: ['KeyH', 'F1'], pad: [8] },
+  { action: 'pause', keys: ['Escape', 'KeyP'], pad: [9] },
+  { action: 'emote', keys: ['KeyC', 'KeyG'], pad: [12] },
+  { action: 'buddy', keys: ['KeyT'], pad: [13] },
+  { action: 'wardrobe', keys: ['KeyI'], pad: [14] },
+  { action: 'pass', keys: ['Tab'], pad: [15] },
+];
 
 /** First gamepad label of a control, e.g. padLabel('use') === 'X'. */
 export function padLabel(id: ControlId): string {

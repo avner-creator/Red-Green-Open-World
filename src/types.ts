@@ -364,6 +364,8 @@ export interface PlayerSkillView {
    * shortly after a landing that started no bounce.
    */
   readonly bounceBoost: number;
+  /** The chosen super power's id when it differs from the classic skill `id` (extra powers). */
+  readonly power?: string;
 }
 
 export type PlayerAnim = 'idle' | 'walk' | 'run' | 'jump' | 'fall' | 'flop' | 'dance' | 'wave' | 'cheer' | 'sit';
@@ -428,7 +430,7 @@ export interface PlayerApi {
   /** Hide/show the avatar (inside the balloon basket, in a car…). */
   setVisible(visible: boolean): void;
   /** Attach an outfit mesh to a body part; returns a remover. */
-  attach(part: 'head' | 'back' | 'face', object: THREE.Object3D): () => void;
+  attach(part: 'head' | 'back' | 'face' | 'hand', object: THREE.Object3D): () => void;
   /**
    * Tilt the body about its centre (PLAYER.height / 2), radians: `pitch` forward (+ = face down,
    * the belly-down skydive pose), `roll` sideways. Feet `position`, yaw and pickup points don't
@@ -683,14 +685,19 @@ declare global {
 
 // ───────────────────────────── Economy (stream C) ─────────────────────────────
 
-export type EquipSlot = OutfitSlot | 'trail' | 'emote' | 'character';
+/**
+ * 'hand' = a held wardrobe item (shown on the back anchor until heroes get a hand anchor).
+ * 'power' = the chosen super power per hero, stored as `hero:power` pairs joined by ',' (see
+ * `src/core/skills-powers.ts`); not an owned item.
+ */
+export type EquipSlot = OutfitSlot | 'hand' | 'trail' | 'emote' | 'character' | 'power';
 export type ShopCategory = 'character' | 'outfit' | 'paint' | 'trail' | 'emote';
 export type WalletReason = 'gem' | 'mission' | 'jackpot' | 'shop' | 'ticket' | 'test';
 export type UnlockSource = 'shop' | 'chest' | 'starter';
 export type TicketKind =
   | 'balloon' | 'rocketPad'
   /** Attractions: first play of each per session free, then `ECONOMY.attractionTicket`. */
-  | 'bubbleBall' | 'dinoSumo' | 'carnival' | 'foam' | 'plane' | 'dragon' | 'race' | 'scoops';
+  | 'bubbleBall' | 'dinoSumo' | 'carnival' | 'foam' | 'plane' | 'dragon' | 'race' | 'scoops' | 'silly';
 /** `EconomyApi.rideTicket` outcome: 'practice' = could not pay; play anyway, no prize. */
 export type TicketOutcome = 'free' | 'paid' | 'practice';
 export type BuyResult = 'ok' | 'owned' | 'tooPoor' | 'notForSale' | 'unknown';

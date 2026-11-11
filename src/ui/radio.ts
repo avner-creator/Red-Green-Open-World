@@ -2,7 +2,7 @@
  * Radio button + "now playing" chip. Self-contained: mounted into #ui-root by the audio module
  * (see `createAudio`), so no other UI file needs to change.
  *
- * Controls: M = next station (Shift+M = previous), gamepad D-pad left = next, tap the radio button.
+ * Controls: M = next station (Shift+M = previous), gamepad RB = next (D-pad: up emote, down Pip, left wardrobe, right Fun Pass), tap the radio button.
  * All shapes read by brightness alone (white pictograms with a black outline on a dark panel),
  * so they are clear through a red or a green lens.
  */
@@ -47,10 +47,11 @@ function iconEl(name: StationId | 'radio'): HTMLSpanElement {
 }
 
 const CSS = `
-.rgr{--u:clamp(6.4px,1.05vmin,24px);position:absolute;right:calc(var(--u)*2.4);top:calc(var(--u)*13.6);display:none;align-items:center;gap:calc(var(--u)*1.2);
+.rgr{--u:clamp(6.4px,1.05vmin,24px);position:absolute;right:calc(var(--u)*2.4);top:calc(var(--u)*35.2);display:none;align-items:center;gap:calc(var(--u)*1.2);
   margin-right:env(safe-area-inset-right,0px);margin-top:env(safe-area-inset-top,0px);pointer-events:none;z-index:5;
   font:800 calc(var(--u)*3.6)/1.1 ui-rounded,"Nunito","Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff}
 #ui-root[data-phase="playing"] .rgr{display:flex}
+#ui-root.touch-on .rgr{top:calc(var(--u)*24.6);right:calc(var(--u)*12.4)}
 .rgr .ic{display:inline-block;width:1em;height:1em;flex:none;color:#fff}
 .rgr .ic svg{width:100%;height:100%;overflow:visible;fill:currentColor;stroke:#000;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round;paint-order:stroke fill}
 .rgr .ic .k{fill:#000;stroke:none}.rgr .ic .l{fill:none;stroke:#000;stroke-width:1.3}
@@ -70,6 +71,9 @@ const CSS = `
 .rgr-chip .t{-webkit-text-stroke:calc(var(--u)*.7) #000;paint-order:stroke fill;text-shadow:0 calc(var(--u)*.3) 0 #000;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.rgr-chip,.rgr-btn{transition:none}}
 `;
+
+/** Standard-mapping gamepad button for the next station (RB). */
+export const RADIO_PAD_BUTTON = 5;
 
 export interface RadioUi {
   destroy(): void;
@@ -134,7 +138,7 @@ export function mountRadio(testMode: boolean): RadioUi | null {
     btn.blur(); // keep the M key working after a tap
   });
 
-  // Gamepad: D-pad left (button 14) = next station.
+  // Gamepad: RB (button 5) = next station.
   let raf = 0;
   let padDown = false;
   const poll = (): void => {
@@ -142,7 +146,7 @@ export function mountRadio(testMode: boolean): RadioUi | null {
     if (phase() !== 'playing') return;
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     let down = false;
-    for (const p of pads) if (p?.buttons[14]?.pressed) down = true;
+    for (const p of pads) if (p?.buttons[RADIO_PAD_BUTTON]?.pressed) down = true;
     if (down && !padDown) radio.next(now());
     padDown = down;
   };

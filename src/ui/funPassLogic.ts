@@ -18,6 +18,7 @@ export const CHEST_STAMP = 'chest';
  */
 export const EXPLICIT_STAMPS: ReadonlySet<StampId> = new Set([
   CHEST_STAMP, 'carnivalRow', 'raceStart', 'iceCream', 'foamCourse', 'bubbleArena', 'dinoRing', 'launchPads',
+  'sillyZone', 'secrets', 'airstrip', 'dragonRoost',
 ]);
 
 /** A derived (fallback) stamp, or null when that stamp comes from `stamp:earned` only. */
@@ -37,14 +38,22 @@ export const GRAND_PRIZE = 60;
 
 const TICKET_STAMP: Record<TicketKind, AnchorName> = {
   balloon: 'balloon', rocketPad: 'launchPads', bubbleBall: 'bubbleArena', dinoSumo: 'dinoRing', carnival: 'carnivalRow',
-  foam: 'foamCourse', plane: 'airstrip', dragon: 'dragonRoost', race: 'raceStart', scoops: 'iceCream',
+  foam: 'foamCourse', plane: 'airstrip', dragon: 'dragonRoost', race: 'raceStart', scoops: 'iceCream', silly: 'sillyZone',
 };
 
-/** Candidate attractions per stunt kind; with more than one, the nearest to the player wins. */
-const STUNT_STAMP: Record<StuntKind, readonly AnchorName[]> = {
+/** Every ticket kind (for the one-slot-one-way check). */
+export const TICKET_KINDS = Object.keys(TICKET_STAMP) as TicketKind[];
+
+/**
+ * Candidate attractions per stunt kind; with more than one, the nearest to the player wins. Each
+ * derived slot has exactly one way in: the balloon stamps on its ticket (not the glide after it),
+ * the trampoline on a big bounce (not big air). A stunt that comes with its own `stamp:earned`
+ * (Silly Zone, secrets pedestal and vault, rocket…) never stamps anything else (`StuntDeferral`).
+ */
+export const STUNT_STAMP: Record<StuntKind, readonly AnchorName[]> = {
   bigBounce: ['trampoline'],
-  bigAir: ['bouncePads', 'sillyZone', 'trampoline'],
-  longGlide: ['balloon'],
+  bigAir: ['bouncePads'],
+  longGlide: [],
   bullseye: ['landingRings'],
   bungee: ['bungee'],
   launch: ['launchPads', 'raceStart'],
@@ -58,6 +67,41 @@ const STUNT_STAMP: Record<StuntKind, readonly AnchorName[]> = {
 
 export function ticketStamp(kind: TicketKind): StampId {
   return TICKET_STAMP[kind];
+}
+
+/**
+ * Stunts are derived one microtask late: an attraction that emits `stunt` and then its own
+ * `stamp:earned` in the same call (secrets pedestal `bigAir`, vault `bullseye`, Silly Zone…) gets
+ * only its own stamp, never a nearby trampoline or landing-rings stamp.
+ */
+export class StuntDeferral {
+  private seq = 0;
+  constructor(private readonly schedule: (fn: () => void) => void = queueMicrotask) {}
+  /** Call on every `stamp:earned`. */
+  noteStamp(): void {
+    this.seq++;
+  }
+  /** Call on every `stunt`: `apply` runs later unless a stamp was earned in between. */
+  stunt(apply: () => void): void {
+    const at = this.seq;
+    this.schedule(() => {
+      if (this.seq === at) apply();
+    });
+  }
+}
+
+/**
+ * How a slot can be earned: 'explicit' (its own `stamp:earned`), `ticket:<kind>`, `stunt:<kind>`,
+ * `mode:<mode>` or 'glasses' (a hit at that weaker-eye site).
+ */
+export function earnWays(id: StampId, glassesSites: readonly string[]): string[] {
+  if (EXPLICIT_STAMPS.has(id)) return ['explicit'];
+  const ways: string[] = [];
+  for (const k of TICKET_KINDS) if (TICKET_STAMP[k] === id) ways.push(`ticket:${k}`);
+  for (const [k, ids] of Object.entries(STUNT_STAMP)) if ((ids as readonly string[]).includes(id)) ways.push(`stunt:${k}`);
+  for (const m of ['driving', 'riding'] as const) if (modeStamp(m) === id) ways.push(`mode:${m}`);
+  if (glassesSites.includes(id)) ways.push('glasses');
+  return ways;
 }
 
 export function modeStamp(mode: PlayerMode): StampId | null {

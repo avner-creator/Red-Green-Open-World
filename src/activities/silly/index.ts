@@ -65,11 +65,8 @@ export interface SillySpot {
 /** Live array: cleared and refilled when the Silly Zone is built. */
 export const sillySpots: SillySpot[] = [];
 
-/**
- * Ticket kind for "Boop them all!". `TicketKind` has no 'silly' yet (wanted diff in src/types.ts);
- * the economy rules treat any kind generically (first play free, then the attraction price).
- */
-const SILLY_TICKET = ('silly' as string) as TicketKind;
+/** Ticket kind for "Boop them all!" (first play free, then the attraction price). */
+const SILLY_TICKET: TicketKind = 'silly';
 
 /** Test hook (`window.__rgSilly`, only with `?test=1`). */
 export interface SillyTestApi {

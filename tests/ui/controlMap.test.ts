@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CONTROL_MAP, padLabel } from '../../src/ui/controlMap';
+import { CONTROL_MAP, ON_FOOT_BINDINGS, padLabel } from '../../src/ui/controlMap';
 import type { ControlId } from '../../src/ui/controlMap';
 import { GAMEPAD_GLYPH } from '../../src/ui/glyphs';
 
@@ -63,6 +63,39 @@ describe('touch column', () => {
     expect(CONTROL_MAP.respawn.touch).toBeNull(); // no respawn button on touch
     expect(CONTROL_MAP.skill.touch).toBeTruthy(); // touch Skill and Emote buttons exist
     expect(CONTROL_MAP.emote.touch).toBe('sparkle');
+  });
+});
+
+describe('no shared bindings', () => {
+  it('no two on-foot actions share a key or a gamepad button', () => {
+    const keys = new Map<string, string>();
+    const pads = new Map<number, string>();
+    for (const b of ON_FOOT_BINDINGS) {
+      for (const k of b.keys) {
+        expect(keys.get(k), `${k}: ${b.action} vs ${keys.get(k)}`).toBeUndefined();
+        keys.set(k, b.action);
+      }
+      for (const p of b.pad) {
+        expect(pads.get(p), `pad ${p}: ${b.action} vs ${pads.get(p)}`).toBeUndefined();
+        pads.set(p, b.action);
+      }
+    }
+  });
+
+  it('the table matches the code that reads each shortcut', () => {
+    const read = (f: string): string => readFileSync(f, 'utf8');
+    const bind = (a: string): { keys: readonly string[]; pad: readonly number[] } => ON_FOOT_BINDINGS.find((b) => b.action === a)!;
+    expect(read('src/ui/radio.ts')).toContain(`RADIO_PAD_BUTTON = ${bind('radio').pad[0]}`);
+    expect(read('src/ui/radio.ts')).toContain(`'${bind('radio').keys[0]}'`);
+    expect(read('src/ui/index.ts')).toContain(`buttons[${bind('wardrobe').pad[0]}]`);
+    expect(read('src/ui/index.ts')).toContain(`'${bind('wardrobe').keys[0]}'`);
+    expect(read('src/ui/funPass.ts')).toContain(`buttons[${bind('pass').pad[0]}]`);
+    expect(read('src/ui/controlsCard.ts')).toContain(`buttons[${bind('help').pad[0]}]`);
+    expect(read('src/buddy/index.ts')).toContain(`buttons[${bind('buddy').pad[0]}]`);
+    expect(padLabel('wardrobe')).toBe('←');
+    expect(padLabel('radio')).toBe('RB');
+    expect(CONTROL_MAP.wardrobe.keys[0]).toEqual(['I']);
+    expect(CONTROL_MAP.radio.keys[0]).toEqual(['M']);
   });
 });
 

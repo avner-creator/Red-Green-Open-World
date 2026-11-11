@@ -2,7 +2,7 @@
 import { open } from './lib.mjs';
 
 const g = await open('dino');
-const { page, shot, step, st, pos, release, tap, walkTo, tp, steer, visibleText } = g;
+const { page, shot, step, st, release, tap, walkTo, tp, steer, visibleText } = g;
 const ds = (fn, ...a) => page.evaluate(([fn, a]) => window.__rgDinoSumo[fn](...a), [fn, a]);
 const W = async (lx, lz) => { const w = await ds('world', lx, 0, lz); return [w[0], w[2]]; };
 try {

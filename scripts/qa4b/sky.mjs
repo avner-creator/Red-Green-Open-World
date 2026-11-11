@@ -3,7 +3,7 @@
 import { open } from './lib.mjs';
 
 const g = await open('sky');
-const { page, shot, step, st, pos, release, tap, walkTo, tp, setKeys, visibleText } = g;
+const { page, shot, step, st, release, tap, walkTo, tp, setKeys, visibleText } = g;
 const sky = (expr, a) => page.evaluate(expr, a);
 const wallet = () => page.evaluate(() => window.__rg.ctx.profile.wallet);
 const CONTEST = Number(process.env.QA_CONTEST ?? 40);

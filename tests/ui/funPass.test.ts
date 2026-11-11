@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { derived, EXPLICIT_STAMPS, GRAND_PRIZE, milestones, modeStamp, nextMilestone, PASS_PRIZES, prizeFor, stuntStamp, ticketStamp } from '../../src/ui/funPassLogic';
+import { derived, earnWays, EXPLICIT_STAMPS, StuntDeferral, TICKET_KINDS, GRAND_PRIZE, milestones, modeStamp, nextMilestone, PASS_PRIZES, prizeFor, stuntStamp, ticketStamp } from '../../src/ui/funPassLogic';
 
 describe('fun pass logic', () => {
   it('maps tickets and ride modes to attraction stamps', () => {
@@ -46,5 +46,53 @@ describe('fun pass logic', () => {
     expect(nextMilestone(0, 24)).toBe(3);
     expect(nextMilestone(10, 24)).toBe(15);
     expect(nextMilestone(24, 24)).toBeNull();
+  });
+});
+
+describe('fun pass: every slot has exactly one way to earn it', () => {
+  it('one slot per attraction / mini-game, one way in, and an emitter for every explicit stamp', async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { PASS_SLOTS } = await import('../../src/ui/funPass');
+    const { GLASSES_WAY } = await import('../../src/world/attractions');
+    const ids = PASS_SLOTS.map((s) => s.id);
+    expect(new Set(ids).size, 'no duplicate slots').toBe(ids.length);
+    for (const want of ['sillyZone', 'secrets', 'airstrip', 'dragonRoost', 'chest', 'balloon', 'trampoline']) expect(ids, want).toContain(want);
+    const glasses = GLASSES_WAY.map((g) => g.id as string);
+    for (const g of glasses) expect(ids, g).toContain(g);
+    // Source of every `stamp:earned` id under src/.
+    const src: string[] = [];
+    const walk = (d: string): void => {
+      for (const f of readdirSync(d)) {
+        const p = join(d, f);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (p.endsWith('.ts')) src.push(readFileSync(p, 'utf8'));
+      }
+    };
+    walk('src');
+    const all = src.join('\n');
+    for (const id of ids) {
+      const ways = earnWays(id, glasses);
+      expect(ways.length, `${id}: ${ways.join(', ')}`).toBe(1);
+      if (ways[0] === 'explicit') expect(all.includes(`'stamp:earned', { id: '${id}' }`), `${id} emitter`).toBe(true);
+    }
+    // Every ticket kind lands on a slot on the card.
+    for (const k of TICKET_KINDS) expect(ids).toContain(ticketStamp(k));
+    // A stunt followed by its own stamp in the same call never derives another stamp.
+    const q: (() => void)[] = [];
+    const d = new StuntDeferral((fn) => q.push(fn));
+    let applied = 0;
+    d.stunt(() => applied++);
+    d.noteStamp();
+    d.stunt(() => applied++);
+    for (const fn of q) fn();
+    expect(applied).toBe(1);
+  });
+
+  it('secrets big air and vault bullseye can only reach their own slot', () => {
+    const where = (): { x: number; z: number } => ({ x: 0, z: 0 });
+    expect(stuntStamp('bigAir', { x: 0, z: 0 }, where, () => true)).toBe('bouncePads');
+    expect(stuntStamp('longGlide', { x: 0, z: 0 }, where, () => true)).toBeNull();
+    expect(derived(ticketStamp('silly'))).toBeNull();
   });
 });

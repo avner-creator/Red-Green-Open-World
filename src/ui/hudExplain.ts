@@ -152,8 +152,15 @@ export function createHudExplain(ctx: GameContext, hud: HTMLElement): HudExplain
   };
 
   /** First time a chip matters: pulse it and show its picture once (saved per profile). */
+  // During a ride or a match (external mode) no bubbles: they wait until the hero is back on foot.
+  const waiting = new Set<HudChip>();
   const first = (c: HudChip): void => {
     if (seen[c] || ctx.session.state.phase !== 'playing') return;
+    if (ctx.player.mode === 'external') {
+      waiting.add(c);
+      return;
+    }
+    waiting.delete(c);
     markSeen(c);
     const t = el(c);
     if (t) {
@@ -177,6 +184,11 @@ export function createHudExplain(ctx: GameContext, hud: HTMLElement): HudExplain
     if (e.remaining <= 60 && e.remaining > 0) first('timer');
   });
   ctx.events.on('ticket:paid', () => window.setTimeout(() => first('pass'), 2000));
+  ctx.events.on('player:mode', (e) => {
+    if (e.mode === 'external' || !waiting.size) return;
+    const next = [...waiting][0]!;
+    window.setTimeout(() => first(next), 1500);
+  });
 
   // Hover (mouse, not captured) and tap: hit-test the chips' boxes (most are pointer-events: none).
   const hit = (x: number, y: number): HudChip | null => {

@@ -462,7 +462,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       object.visible = v;
     },
     attach(part, o) {
-      model.anchors[part].add(o);
+      // No hand anchor yet: held items ride on the back.
+      model.anchors[part === 'hand' ? 'back' : part].add(o);
       return () => {
         o.removeFromParent();
       };
