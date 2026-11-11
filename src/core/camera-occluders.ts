@@ -78,13 +78,17 @@ export interface CameraOccluders {
    * Distance along unit `dir` from `origin` until a sphere of `radius` touches an occluder, or
    * null within `maxDist`. Triangles are tested with five parallel rays (centre + 4 offsets).
    */
-  cast(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, radius: number): number | null;
+  cast(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, radius: number, crowns?: boolean): number | null;
   /** True if `p` lies inside a crown capsule (or within `pad` of it). */
   inside(p: THREE.Vector3, pad?: number): boolean;
   stats(): { triangles: number; bakes: number; capsules: number };
 }
 
-export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
+/**
+ * `onScenery` is told about every static vegetation instanced mesh that counts as an occluder (the
+ * see-through cut patches its material: camera-cutout.ts).
+ */
+export function createCameraOccluders(scene: THREE.Scene, onScenery?: (mesh: THREE.InstancedMesh) => void): CameraOccluders {
   // Baked proxy triangles (world space, 9 floats each) and the triangle → bake index.
   let tris = new Float32Array(9 * 4096);
   let triBake = new Int32Array(4096);
@@ -216,7 +220,10 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
     const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
     if (!pos || pos.itemSize !== 3 || (pos as unknown as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) return;
     const local = crownCapsule(pos.array);
-    if (local) instanced.push({ mesh, local });
+    if (local) {
+      instanced.push({ mesh, local });
+      onScenery?.(mesh);
+    }
   }
 
   function scan(): void {
@@ -341,9 +348,9 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
       scanT = SCAN_INTERVAL;
       gatherT = GATHER_INTERVAL;
     },
-    cast(origin, dir, maxDist, radius) {
+    cast(origin, dir, maxDist, radius, crowns = true) {
       let best = castTris(origin, dir, maxDist, radius);
-      for (const c of capsules) {
+      if (crowns) for (const c of capsules) {
         const t = castCapsule(c, origin, dir, best ?? maxDist, radius);
         if (t !== null && (best === null || t < best)) best = t;
       }

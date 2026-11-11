@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { CAMERA, PLAYER } from '../config';
 import type { CameraApi, GameContext } from '../types';
 import { clamp, orbitOffset, resolveArm, steerOverrideYaw } from './camera-math';
+import { createCameraCutout } from './camera-cutout';
 import { createCameraOccluders } from './camera-occluders';
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
@@ -68,6 +69,8 @@ const ARM = {
   seeOver: 0.3,
   /** Camera stays this far above the terrain (m). */
   groundClearance: 0.3,
+  /** A tree crown (render-only, see-through when close) shortens the arm to no less than this (m). */
+  crownFloor: 1.7,
 } as const;
 
 /** Test-mode hook (`window.__rgCamera`, only with `?test=1`). */
@@ -128,7 +131,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   /** Scripted-camera unblock: next scan countdown and the clear yaw being swung to (or null). */
   let scanT = 0;
   let swingTo: number | null = null;
-  const occluders = createCameraOccluders(ctx.scene);
+  const cutout = createCameraCutout();
+  const occluders = createCameraOccluders(ctx.scene, (m) => cutout.patch(m.material));
+  const heroMid = new THREE.Vector3();
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
   const ballSoft = new R.Ball(ARM.softRadius);
@@ -145,7 +150,13 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     let best = hit ? hit.time_of_impact : null;
     // Chase cams (buggy at speed) keep to physics colliders: roadside crowns flicking past would
     // snap the arm in and out and break the drive's smoothness.
-    const o = chase ? null : occluders.cast(origin, d, best ?? max, radius);
+    let o = chase ? null : occluders.cast(origin, d, best ?? max, radius);
+    if (o !== null && o < ARM.crownFloor) {
+      // Foliage this close is cut away (camera-cutout.ts): a crown never pulls the camera into the
+      // hero's head (QA6 m7, pines); only solid occluders may.
+      const solid = occluders.cast(origin, d, best ?? max, radius, false);
+      o = solid !== null && solid <= o + 1e-3 ? solid : Math.min(ARM.crownFloor, best ?? max);
+    }
     if (ball === ballHard) lastHit = { phys: best, occ: o, collider: hit ? hit.collider.handle : -1 };
     if (o !== null && (best === null || o < best)) best = o;
     return best;
@@ -354,6 +365,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     }
     if (chaseK > 0.001) lookAt.y -= (chase?.lookDrop ?? 0.35) * chaseK; // frame the vehicle and its driver
     camera.lookAt(lookAt);
+    heroMid.copy(ctx.player.position).setY(ctx.player.position.y + CAM.pivotHeight * 0.55);
+    cutout.update(camera.position, heroMid, phase !== 'title');
 
     if (trauma > 0) {
       shakeTime += dt;
@@ -393,7 +406,13 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       rc.far = max;
       rc.layers.mask = camera.layers.mask;
       rc.camera = camera;
-      for (const h of rc.intersectObjects(ctx.scene.children, true)) if (shown(h.object) && !isHero(h.object)) return h;
+      for (const h of rc.intersectObjects(ctx.scene.children, true)) {
+        if (!shown(h.object) || isHero(h.object)) continue;
+        // Foliage the see-through cut removes there is not in the picture.
+        const mat = (h.object as THREE.Mesh).material as THREE.Material | THREE.Material[];
+        if (!Array.isArray(mat) && cutout.patched(mat) && cutout.covers(h.point)) continue;
+        return h;
+      }
       return null;
     };
     return {
@@ -437,7 +456,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         d.subVectors(camera.position, pivot);
         const near = d.length();
         const inner = firstHit(pivot, d.normalize(), near);
-        const insideCrown = occluders.inside(camera.position, 0);
+        // Inside a crown counts only where its foliage is not cut away round the camera.
+        const insideCrown = occluders.inside(camera.position, 0) && !cutout.covers(camera.position);
         if (inner) hits.push(`inner:${inner.object.name || inner.object.type}@${inner.distance.toFixed(2)}`);
         return { blocked: blocked / pts.length, headHidden, inside: !!inner || insideCrown, insideCrown, near, hits };
       },

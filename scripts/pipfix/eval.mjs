@@ -27,6 +27,10 @@ await page.evaluate(() => {
 });
 const out = await page.evaluate(`(async () => { const rg = window.__rg; ${body} })()`);
 console.log(JSON.stringify(out, null, 1));
+if (process.env.SHOT) {
+  await page.evaluate(() => window.__rg.render());
+  await page.screenshot({ path: process.env.SHOT, timeout: 120000 });
+}
 if (errors.length) console.log('ERRORS', errors.slice(0, 5));
 await browser.close();
 await new Promise((r) => server.httpServer.close(r));
