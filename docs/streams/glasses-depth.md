@@ -3,9 +3,9 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 is on `main`. Phase 2 is done and ready to merge** (built from
-`origin/integration/m1` with the owner's go-ahead; `npm run verify` green: 977 unit tests,
-253 e2e tests). The Phase 1 sections below
+**Status: Phases 1 and 2 and the budget follow-up are on `main`. Phase 3 (the six mini-games
+explain themselves) is done and ready to merge** (`npm run verify` green: 1267 unit tests,
+327 e2e tests). The Phase 1 sections below
 describe what was merged; "Phase 2" is near the end.
 
 `npm run verify` is green on the final branch: 664 unit tests and 174 e2e tests passed (see "Test results" at the end).
@@ -394,7 +394,7 @@ One follow-up on this branch (`agent/glasses-followup`, merged):
 From owner playtest 4: the gates mini-game ("arches near the beach") was unclear to the owner.
 It is listed by the main session as still to assign after QA 4; nothing was changed here.
 
-## Phase 3: the six mini-games explain themselves (2026-11-12)
+## Phase 3: the six mini-games explain themselves (2026-11-12, done, ready to merge)
 
 Owner after playtest 4: "There are these arches near the beach, I couldn't figure out what they
 did"; nothing explains what the games do or how; make it wild and fun. Target: a non-reading
@@ -493,6 +493,12 @@ the arches still partly hide the booth during the celebration; the ✓ / ✗ pop
 for weak-eye objects behind them.
 
 ## Test results
+
+**Phase 3 (code at `a3b503e`, which includes `origin/integration/m1` `5a0089c`; `origin/main`
+`dbc75bb` adds one docs-only commit on top, merged afterwards), 2026-11-12:** `npm run verify`
+is green — typecheck and lint clean; **1267 unit tests passed** (118 files); build passed;
+**327 e2e tests passed, 5 skipped** (the skips come from `main`), in 23 minutes with three
+workers. 91 of the e2e tests are this stream's.
 
 **Follow-up after integration (code at `9f07a00`, which includes `origin/main` `32eaf36`;
 `a32d298` adds docs only), 2026-11-12:** `npm run verify` is green — **1072 unit tests passed**
