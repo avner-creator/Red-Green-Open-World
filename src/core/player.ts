@@ -930,6 +930,11 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     sfx.update(dt);
     fx.update(dt);
     model.update(dt);
+    // Fresh world matrices for the avatar, its bones and everything attached to them. Without
+    // this, code that reads an outfit's (or anchor's) world position between the update and the
+    // render sees last frame's matrices: in skydive freefall (~25 m/s) a hat then reads ~0.4 m
+    // off the head although it renders on it.
+    object.updateMatrixWorld(true);
   }
 
   return internal;

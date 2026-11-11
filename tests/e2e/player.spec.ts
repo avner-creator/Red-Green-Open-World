@@ -304,3 +304,87 @@ test('island walk: road to the trampoline, up its steps and bouncing; sea splash
   expect(await page.evaluate(() => window.__rg!.errors)).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
+
+test('outfits stay on every hero in every ride pose, read between update and render', async () => {
+  const r = await page.evaluate(async () => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const p = ctx.player;
+    rg.freeze(true);
+    rg.start();
+    ctx.profile.earn(300, 'test');
+    ctx.economy.buy('hat-explorer');
+    rg.step(1 / 60, 30, false);
+    type V3 = import('three').Vector3;
+    type Quat = import('three').Quaternion;
+    type Obj = import('three').Object3D;
+    const V = p.position.constructor as unknown as new (x?: number, y?: number, z?: number) => V3;
+    const Q = p.object.quaternion.constructor as unknown as new () => Quat;
+    const q = (ax: number, ay: number, az: number, a: number): Quat => {
+      const s = Math.sin(a / 2);
+      return new Q().set(ax * s, ay * s, az * s, Math.cos(a / 2));
+    };
+    // Ride poses as the activities set them (skydive belly-down, bungee upside down and
+    // stretched, plane/dragon seated and banked, rocket spin + stretch, trampoline flip + squash).
+    const poses: { name: string; tilt: [number, number]; rot: Quat | null; stretch: number; anim: 'fall' | 'sit' | 'jump' }[] = [
+      { name: 'skydive', tilt: [1.25, 0.25], rot: null, stretch: 0, anim: 'fall' },
+      { name: 'bungee', tilt: [0, 0], rot: q(1, 0, 0, Math.PI), stretch: 0.35, anim: 'fall' },
+      { name: 'plane', tilt: [-0.3, 0.6], rot: null, stretch: 0, anim: 'sit' },
+      { name: 'dragon', tilt: [0.25, -0.5], rot: null, stretch: 0, anim: 'sit' },
+      { name: 'rocket', tilt: [0, 0], rot: q(0, 0, 1, 0.8), stretch: 0.5, anim: 'jump' },
+      { name: 'trampoline', tilt: [0, 0], rot: q(1, 0, 0, 2), stretch: -0.4, anim: 'jump' },
+    ];
+    const boneOf = (o: Obj): Obj => {
+      let b = o.parent as Obj;
+      while (b.parent && !(b as { isBone?: boolean }).isBone && !b.name.startsWith('character-')) b = b.parent;
+      return b;
+    };
+    const sp = ctx.world.anchors.spawn.position;
+    const worst: Record<string, number> = {};
+    for (const id of ['robot', 'frog', 'panda', 'bee', 'flamingo', 'rex']) {
+      await p.setCharacter(id);
+      rg.step(1 / 60, 20, false);
+      ctx.scene.updateMatrixWorld(true);
+      const holders = (['head', 'face', 'back'] as const).map((part) => p.object.getObjectByName(`outfit-${part}`) as Obj);
+      // Rest offset of each holder in its bone's frame.
+      const rest = holders.map((h) => h.getWorldPosition(new V()).applyMatrix4(boneOf(h).matrixWorld.clone().invert()));
+      for (const pose of poses) {
+        let t = 0;
+        p.setExternalController({
+          update(dt) {
+            t += dt;
+            p.position.y -= 25 * dt; // freefall speed: one stale frame reads ~0.4 m off
+            p.position.x += 8 * dt;
+            p.setTilt(pose.tilt[0], pose.tilt[1]);
+            p.setVisualRotation(pose.rot);
+            p.setVisualStretch(pose.stretch);
+            p.setAnimation(pose.anim);
+            return t < 10;
+          },
+        });
+        let w = 0;
+        for (let i = 0; i < 12; i++) {
+          rg.step(1 / 60, 1, false);
+          // What gameplay code reads right after the update (no forced refresh)...
+          const seen = holders.map((h) => new V().setFromMatrixPosition(h.matrixWorld));
+          const hat = holders[0].children[0] as Obj | undefined;
+          const hatSeen = hat ? new V().setFromMatrixPosition(hat.matrixWorld) : null;
+          // ...against the truth: the rest offset carried by the bone's fresh pose.
+          ctx.scene.updateMatrixWorld(true);
+          holders.forEach((h, k) => {
+            w = Math.max(w, seen[k].distanceTo(rest[k].clone().applyMatrix4(boneOf(h).matrixWorld)));
+          });
+          if (hat && hatSeen) w = Math.max(w, hatSeen.distanceTo(new V().setFromMatrixPosition(hat.matrixWorld)));
+        }
+        p.setExternalController(null);
+        worst[`${id}/${pose.name}`] = Number(w.toFixed(4));
+        rg.teleport(sp.x, sp.y + 0.1, sp.z);
+        rg.step(1 / 60, 2, false);
+      }
+    }
+    await p.setCharacter('frog');
+    return worst;
+  });
+  expect(Object.keys(r).length).toBe(36);
+  for (const [k, v] of Object.entries(r)) expect(v, k).toBeLessThan(0.01);
+});

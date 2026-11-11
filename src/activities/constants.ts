@@ -9,6 +9,8 @@ export const MAT = {
   rimTube: 0.45,
   legs: 10,
   stepRise: 0.33,
+  /** Tread depth of each step ring round the frame, metres. */
+  stepDepth: 1,
 } as const;
 
 /** Giant trampoline rules. */
