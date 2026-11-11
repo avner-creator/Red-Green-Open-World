@@ -69,6 +69,8 @@ export interface BoothSpec {
    */
   playPrompt: BoothPrompt;
   playPromptAt?: V3;
+  /** Edge length of the play prompt at `playPromptAt` (m, default 1.25). */
+  playPromptSize?: number;
   /** Where the 3-2-1-GO digits pop up (above the marquee's picture board if left out). */
   countdown?: V3;
   /** Ground decals (chevrons leading to the play, footprints). */
@@ -143,8 +145,13 @@ export interface BoothSetup {
    */
   extra?: readonly THREE.BufferGeometry[];
   /**
-   * Where the celebration happens: the camera turns there for the celebration and the confetti
-   * flies there (frame-local; default: in front of the booth's picture board).
+   * Where the camera turns for the celebration (frame-local; default: in front of the booth's
+   * picture board). A function is asked when the tries end (it may use where the child is).
    */
-  celebrateAt?: V3;
+  celebrateAt?: V3 | (() => V3);
+  /**
+   * The play's focus: what the hero faces from the pad during a try (frame-local; default the
+   * frame's origin). Used for the pad-camera checks (`kit.padView()`, the prompt e2e check).
+   */
+  look?: { x: number; z: number };
 }

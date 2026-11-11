@@ -143,3 +143,80 @@ export function channelOnly(img: PNG, ch: 0 | 1): PNG {
   }
   return out;
 }
+
+export interface ScreenRect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Every visible HUD element's rectangle (CSS px, canvas-relative), with its class for messages. */
+export async function hudRects(page: Page): Promise<(ScreenRect & { what: string })[]> {
+  return page.evaluate(() => {
+    const ctx = window.__rg!.ctx;
+    const c = ctx.canvas.getBoundingClientRect();
+    const out: { x0: number; y0: number; x1: number; y1: number; what: string }[] = [];
+    for (const el of Array.from(ctx.uiRoot.querySelectorAll<HTMLElement>('*'))) {
+      const vis = (el as HTMLElement & { checkVisibility?: (o: object) => boolean }).checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) ?? true;
+      if (!vis) continue;
+      const r = el.getBoundingClientRect();
+      const area = r.width * r.height;
+      // Skip empty boxes and full-screen layers (vignettes, overlays that only tint).
+      if (area < 16 || area > c.width * c.height * 0.25) continue;
+      if (r.right < c.left || r.left > c.right || r.bottom < c.top || r.top > c.bottom) continue;
+      const cls = (el.className as unknown as { baseVal?: string })?.baseVal ?? String(el.className);
+      out.push({ x0: r.left - c.left, y0: r.top - c.top, x1: r.right - c.left, y1: r.bottom - c.top, what: `${el.tagName.toLowerCase()}.${cls.split(' ').join('.')}` });
+    }
+    return out;
+  });
+}
+
+/** The booth prompt's screen rectangle (CSS px) for the current camera, or null when hidden/behind. */
+export async function promptRect(page: Page, id: string): Promise<(ScreenRect & { id: string }) | null> {
+  return page.evaluate((i) => {
+    const ctx = window.__rg!.ctx;
+    const d = window.__rgGlasses!.boothDebug(i) as { promptWorld: { id: string; x: number; y: number; z: number; size: number } | null } | null;
+    const p = d?.promptWorld;
+    if (!p) return null;
+    const cam = ctx.camera;
+    cam.updateMatrixWorld();
+    const e = cam.matrixWorld.elements;
+    const W = ctx.canvas.clientWidth;
+    const H = ctx.canvas.clientHeight;
+    let r: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    // The prompt bobs ±0.12 m: test the whole band it covers.
+    const h = p.size / 2;
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const v = cam.position.clone().set(p.x + (e[0] * a + e[4] * b) * h, p.y + (e[1] * a + e[5] * b) * h + b * 0.12, p.z + (e[2] * a + e[6] * b) * h);
+      v.applyMatrix4(cam.matrixWorldInverse);
+      if (v.z > -0.1) return null;
+      v.applyMatrix4(cam.projectionMatrix);
+      const x = (v.x * 0.5 + 0.5) * W;
+      const y = (0.5 - v.y * 0.5) * H;
+      r = r ? { x0: Math.min(r.x0, x), y0: Math.min(r.y0, y), x1: Math.max(r.x1, x), y1: Math.max(r.y1, y) } : { x0: x, y0: y, x1: x, y1: y };
+    }
+    return r && { ...r, id: p.id };
+  }, id);
+}
+
+/** Central safe area (fractions of the canvas) the prompt must lie in (`booth/view.ts` PROMPT_SAFE, a little looser). */
+export const PROMPT_SAFE_E2E = { x0: 0.2, x1: 0.8, y0: 0.15, y1: 0.72 } as const;
+
+/**
+ * The booth prompt seen from the current camera: on screen, inside the central safe area and
+ * clear of every visible HUD element. Returns the reasons it is not.
+ */
+export async function checkPromptClear(page: Page, id: string): Promise<{ ok: boolean; why: string[]; prompt: ScreenRect | null }> {
+  const r = await promptRect(page, id);
+  if (!r) return { ok: false, why: ['no prompt on screen'], prompt: null };
+  const why: string[] = [];
+  const { W, H } = await page.evaluate(() => ({ W: window.__rg!.ctx.canvas.clientWidth, H: window.__rg!.ctx.canvas.clientHeight }));
+  const S = PROMPT_SAFE_E2E;
+  const n = (v: number): number => Math.round(v);
+  if (r.x0 < S.x0 * W || r.x1 > S.x1 * W || r.y0 < S.y0 * H || r.y1 > S.y1 * H) why.push(`outside the safe area: ${n(r.x0)},${n(r.y0)}–${n(r.x1)},${n(r.y1)} of ${W}x${H}`);
+  for (const h of await hudRects(page)) {
+    if (r.x0 < h.x1 && h.x0 < r.x1 && r.y0 < h.y1 && h.y0 < r.y1) why.push(`under HUD ${h.what} (${n(h.x0)},${n(h.y0)}–${n(h.x1)},${n(h.y1)})`);
+  }
+  return { ok: why.length === 0, why, prompt: r };
+}

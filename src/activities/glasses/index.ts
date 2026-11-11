@@ -66,6 +66,13 @@ export interface GlassesTestApi {
   signDraws(id: string): number;
   /** True when the site runs the booth kit. */
   isBooth(id: string): boolean;
+  /** Booth kit test hooks: the pad camera spot, jump into a try (no countdown), cancel the round. */
+  boothPadView(id: string): { x: number; y: number; z: number; yaw: number } | null;
+  boothPlay(id: string): void;
+  boothCancel(id: string): void;
+  boothDebug(id: string): Record<string, unknown> | null;
+  /** Paint the booth's pad with brightness k (null = normal): diffing two frames finds its visible pixels. */
+  boothPadProbe(id: string, k: number | null): void;
   /** Every object the six mini-games may draw (boards, booths, tracked objects), for draw counts. */
   objects(): THREE.Object3D[];
   active(id: string): boolean;
@@ -559,6 +566,11 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         return sign ? countDraws(sign) : 0;
       },
       isBooth: (id) => !!byId(id).kit,
+      boothPadView: (id) => byId(id).kit?.padView() ?? null,
+      boothPlay: (id) => byId(id).kit?.forcePlay(),
+      boothCancel: (id) => byId(id).kit?.cancel(),
+      boothDebug: (id) => byId(id).kit?.debug() ?? null,
+      boothPadProbe: (id, k) => byId(id).kit?.booth.probePad(k),
       objects() {
         build();
         const out: THREE.Object3D[] = [];

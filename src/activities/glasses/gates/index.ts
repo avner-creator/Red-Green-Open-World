@@ -339,6 +339,7 @@ export function create(env: MechanicEnv): Mechanic {
   // The play prompt ("run through an arch") floats near the play, in clear view from the pad's
   // camera: in the central safe area (never under the HUD), off the hero, the sign and the three
   // symbol plaques. Picked once from the layout; it never depends on the answer.
+  const PROMPT_SIZE = 1.6;
   const promptPick = (() => {
     const pad = { x: 0, y: padBase + PAD_TOP, z: G.padZ };
     const keepClear = [
@@ -351,15 +352,28 @@ export function create(env: MechanicEnv): Mechanic {
         for (const h of [1.5, 1.8, 1.2, 2.1, 2.4]) cands.push({ x, y: ground(x, z) + h, z });
       }
     }
-    return pickPromptSpot(cands, { pad, look: { x: 0, z: G.archZ }, size: 1.25 + 0.35, keepClear });
+    return pickPromptSpot(cands, { pad, look: { x: 0, z: G.archZ }, size: PROMPT_SIZE + 0.35, keepClear });
   })();
-  const boothSpec: BoothSpec = { ...B, prompt: lift(B.prompt), playPromptAt: promptPick.at, countdown: lift(B.countdown) };
+  const boothSpec: BoothSpec = { ...B, prompt: lift(B.prompt), playPromptAt: promptPick.at, playPromptSize: PROMPT_SIZE, countdown: lift(B.countdown) };
   const kit = env.booth({
     frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
     ground,
     spec: boothSpec,
     demo: GATES_DEMO,
     rules: GATE_RULES,
+    look: { x: 0, z: G.archZ },
+    // The child ends beyond the arches: turn the camera back so the booth (lamps chasing) sits in the
+    // left part of the view and the pad, where the next round starts, in the middle.
+    celebrateAt: () => {
+      const me = kit.toLocal(ctx.player.position);
+      const bx = B.marquee.x;
+      const bz = B.marquee.z;
+      const toBooth = Math.atan2(bx - me.x, bz - me.z);
+      const toPad = Math.atan2(0 - me.x, G.padZ - me.z);
+      let d = Math.atan2(Math.sin(toPad - toBooth), Math.cos(toPad - toBooth));
+      d = Math.max(-0.45, Math.min(0.45, d));
+      return { x: me.x + Math.sin(toBooth + d) * 6, y: padBase + 2, z: me.z + Math.cos(toBooth + d) * 6 };
+    },
     hooks: {
       onTry(_i, t) {
         tier = t;

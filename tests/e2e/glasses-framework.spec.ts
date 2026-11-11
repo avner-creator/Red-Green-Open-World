@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { boot, canvasShot } from './helpers';
-import { channelOnly, channelSpread, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
+import { channelOnly, channelSpread, checkPromptClear, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
 import { ROADS } from '../../src/world/layout';
 import type { GlassesSiteInfo } from '../../src/activities/glasses';
 import { FIXED_SITES } from '../../src/activities/glasses/sites';
@@ -158,6 +158,100 @@ test('no extra glasses draws at spawn and at the Gear Shack', async () => {
   console.log(`glasses mini-game draws: spawn ${counts.spawn}, Gear Shack ${counts.shack}`);
   expect(counts.spawn, 'glasses draws at spawn').toBeLessThanOrEqual(PINNED_GLASSES_DRAWS.spawn);
   expect(counts.shack, 'glasses draws at the Gear Shack').toBeLessThanOrEqual(PINNED_GLASSES_DRAWS.shack);
+});
+
+/**
+ * Games whose play prompt must already pass the pad-camera check (in the central safe area, clear
+ * of every HUD element). The others are measured and logged; their builders add their id here
+ * when they place their prompt with `booth/view.ts` (see the booth README).
+ */
+const PROMPT_ENFORCED = new Set(['gates']);
+
+test('the play prompt is in clear view from the pad: central safe area, never under the HUD', async () => {
+  test.setTimeout(180_000);
+  mkdirSync(`${OUT}/booth`, { recursive: true });
+  const report: string[] = [];
+  const failures: string[] = [];
+  for (const s of sites) {
+    const view = await page.evaluate((id) => window.__rgGlasses!.boothPadView(id), s.id);
+    if (!view) continue;
+    await page.evaluate(({ id, v }) => {
+      const rg = window.__rg!;
+      rg.teleport(v.x, v.y + 0.05, v.z, v.yaw);
+      rg.step(1 / 60, 50, false);
+      window.__rgGlasses!.boothPlay(id);
+      rg.step(1 / 60, 3, false);
+      rg.step(1 / 60, 1);
+    }, { id: s.id, v: view });
+    for (const [w, h] of [[640, 360], [1280, 720]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+      await page.evaluate(() => window.__rg!.render());
+      const c = await checkPromptClear(page, s.id);
+      report.push(`${s.id} ${w}x${h}: ${c.ok ? 'ok' : c.why.join('; ')}`);
+      if (!c.ok && PROMPT_ENFORCED.has(s.id)) failures.push(`${s.id} ${w}x${h}: ${c.why.join('; ')}`);
+      if (w === 640) await canvasShot(page, `${OUT}/booth/prompt-${s.id}-full.png`);
+    }
+    await page.setViewportSize({ width: 640, height: 360 });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.evaluate((id) => window.__rgGlasses!.boothCancel(id), s.id);
+  }
+  console.log(`booth play prompts from the pad camera:\n${report.join('\n')}`);
+  expect(failures).toEqual([]);
+});
+
+/**
+ * The start pad stands out of the grass: from 8 m in front of it (the approach side), at Low,
+ * Medium and High (the grass gets denser), painting the pad dark changes enough pixels — i.e.
+ * enough of the drum's face, rim and glowing bollards is visible.
+ */
+test('every booth start pad is visible from 8 m at Low, Medium and High', async () => {
+  test.setTimeout(240_000);
+  const rows: string[] = [];
+  const low: string[] = [];
+  for (const quality of ['low', 'medium', 'high'] as const) {
+    await page.evaluate((q) => window.__rg!.ctx.settings.set({ quality: q }), quality);
+    for (const s of sites) {
+      const px = await page.evaluate((id) => {
+        const rg = window.__rg!;
+        const g = window.__rgGlasses!;
+        const v = g.boothPadView(id);
+        if (!v) return -1;
+        // 8 m out from the pad on the approach side (the camera is ~5 m further back).
+        const x = v.x - Math.sin(v.yaw) * 8;
+        const z = v.z - Math.cos(v.yaw) * 8;
+        // Facing a little past it (the pad ~20° off-centre): straight ahead it would sit behind the hero.
+        rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, v.yaw + 0.35);
+        rg.step(1 / 60, 60, false);
+        const shot = (): Uint8Array => {
+          rg.render();
+          const gl = rg.ctx.renderer.getContext();
+          const w = gl.drawingBufferWidth;
+          const h = gl.drawingBufferHeight;
+          const buf = new Uint8Array(w * h * 4);
+          gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+          return buf;
+        };
+        g.boothPadProbe(id, 3);
+        const a = shot();
+        g.boothPadProbe(id, 0);
+        const b = shot();
+        g.boothPadProbe(id, null);
+        let n = 0;
+        for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) > 60) n++;
+        // In 640×360 pixels (Low renders at a lower resolution scale).
+        return Math.round((n * 640 * 360) / (a.length / 4));
+      }, s.id);
+      if (px < 0) continue;
+      rows.push(`${quality} ${s.id}: ${px} px`);
+      await page.evaluate(() => window.__rg!.render());
+      await canvasShot(page, `${OUT}/booth/pad-8m-${quality}-${s.id}.png`);
+      if (px < 400) low.push(`${quality} ${s.id}: only ${px} px of the pad visible`);
+    }
+  }
+  await page.evaluate(() => window.__rg!.ctx.settings.set({ quality: 'low' }));
+  console.log(`start pad visible pixels from 8 m (640×360):\n${rows.join('\n')}`);
+  expect(low).toEqual([]);
 });
 
 test('every board is visible from goto() and reads in R-only and G-only', async () => {

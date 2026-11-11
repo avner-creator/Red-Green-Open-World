@@ -64,8 +64,11 @@ export interface BoothKit {
   setActive(on: boolean): void;
   reset(): void;
   dispose(): void;
-  /** Test hooks: start a round now; jump into try 0 (no countdown); pin animation clocks. */
+  /** The hero on the pad facing the play's focus (world feet point and yaw): the pad camera. */
+  padView(): { x: number; y: number; z: number; yaw: number };
+  /** Test hooks: start a round now; jump into try 0 (no countdown); pin animation clocks; cancel. */
   start(): void;
+  cancel(): void;
   forcePlay(tier?: GlassesTier): void;
   pin(t: number): void;
   debug(): Record<string, unknown>;
@@ -149,7 +152,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
   }
   function camHold(): void {
     if (ctx.player.mode !== 'walk') return;
-    const c = setup.celebrateAt;
+    const c = typeof setup.celebrateAt === 'function' ? setup.celebrateAt() : setup.celebrateAt;
     if (c) toWorld(c, camFocus);
     else booth.mesh.localToWorld(camFocus.copy(booth.build.boardFront));
     camHeld = true;
@@ -167,7 +170,8 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     const yaw = Math.atan2(camFocus.x - p.x, camFocus.z - p.z);
     let off = yaw - ctx.player.yaw;
     off = Math.atan2(Math.sin(off), Math.cos(off));
-    ctx.cameraRig.setOverride({ yawOffset: off, distance: 6.6, height: 2.8 });
+    // Pulled back, a flatter look: the booth stands tall and beyond the play from where the child ends.
+    ctx.cameraRig.setOverride({ yawOffset: off, distance: 7, height: 1.7 });
   }
   const offPhase = ctx.events.on('session:phase', () => camRelease());
   const head = new THREE.Vector3();
@@ -233,7 +237,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           setup.hooks.onTry(e.index, e.tier);
           booth.setPad('busy');
           // The play prompt floats in front of the booth's picture board (or where the spec says).
-          if (spec.playPromptAt) booth.setPrompt(spec.playPrompt, new THREE.Vector3(spec.playPromptAt.x, spec.playPromptAt.y, spec.playPromptAt.z), 1.25);
+          if (spec.playPromptAt) booth.setPrompt(spec.playPrompt, new THREE.Vector3(spec.playPromptAt.x, spec.playPromptAt.y, spec.playPromptAt.z), spec.playPromptSize ?? 1.25);
           else booth.setPrompt(spec.playPrompt, booth.build.boardFront, 1.45);
           break;
         case 'result':
@@ -418,6 +422,16 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       if (!active || round.phase !== 'idle') return;
       handle(round.start());
     },
+    cancel() {
+      handle(round.cancel('test'));
+    },
+    padView() {
+      settle();
+      const p = toWorld({ x: pad.x, y: pad.y + 0.02, z: pad.z });
+      const look = setup.look ?? { x: 0, z: 0 };
+      const l = toWorldXZ(look.x, look.z);
+      return { x: p.x, y: p.y, z: p.z, yaw: Math.atan2(l.x - p.x, l.z - p.z) };
+    },
     forcePlay(tier) {
       if (round.busy) round.cancel('force');
       fxOn(true);
@@ -445,6 +459,12 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       fxIn,
       fx: fx.live(),
       booth: booth.debug(),
+      /** The prompt in world space now (centre at rest, edge length), for the HUD / screen checks. */
+      promptWorld: (() => {
+        const p = booth.prompt();
+        const w = booth.mesh.localToWorld(p.at.clone());
+        return p.id ? { id: p.id, x: w.x, y: w.y, z: w.z, size: p.size } : null;
+      })(),
     }),
   };
   return kit;

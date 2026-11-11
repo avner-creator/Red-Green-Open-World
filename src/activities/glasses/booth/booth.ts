@@ -70,6 +70,8 @@ export interface BoothController {
   update(dt: number, camera: THREE.Vector3): void;
   /** Test hook: set every animation clock to `t` and re-apply (frames for proofs are then equal). */
   pin(t: number): void;
+  /** Test hook: paint the pad's face, rim and bollard caps with brightness `k` (null = normal), to find its visible pixels. */
+  probePad(k: number | null): void;
   debug(): Record<string, unknown>;
   dispose(): void;
 }
@@ -164,7 +166,12 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
     setSlotColor(color, S.lamps[i], glow);
   }
 
+  let padProbe: number | null = null;
   function padLook(t: number): void {
+    if (padProbe !== null) {
+      for (const s of [S.padFace, S.padGlow, S.padPosts]) if (s) setSlotColor(color, s, padProbe);
+      return;
+    }
     const k =
       padMode === 'attract' ? 1.15 + 0.45 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 0.8))
         : padMode === 'wait' ? 1.2 + 0.6 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 2.2))
@@ -280,6 +287,10 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
     pin(t) {
       clock = t;
       apply(clock, lastCam);
+    },
+    probePad(k) {
+      padProbe = k;
+      padLook(clock);
     },
     debug: () => ({
       frame,
