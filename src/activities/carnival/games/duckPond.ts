@@ -262,7 +262,7 @@ export function createDuckPond(env: GameEnv): BoothGame {
   return {
     id: 'duckPond',
     duration: 30,
-    thresholds: [11, 22],
+    thresholds: [13, 24],
     camera: { distance: 2.5, height: 3.1, fov: 60, lookAhead: 0 },
     aimLimits: { yaw: 0.55, pitchMin: -0.62, pitchMax: -0.12 },
     how: ['aim', 'scoop'],

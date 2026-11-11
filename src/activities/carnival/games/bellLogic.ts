@@ -16,7 +16,7 @@ export const DIAL_ANGLE = (75 * Math.PI) / 180;
 /** |u − sweet| inside this rings the bell (the bright weak-eye core). */
 export const PERFECT = 0.13;
 /** Half-width of the dimmer "good" zone drawn around the core (tier 5 and up). */
-export const GOOD = 0.31;
+export const GOOD = 0.25;
 /** Sweet spot centres stay inside ±this. */
 export const SWEET_RANGE = 0.68;
 /** A new sweet spot is at least this far from the previous one (a fresh hunt each stomp). */
@@ -51,7 +51,8 @@ export function needleAt(t: number, period = NEEDLE_PERIOD): number {
 /** Stomp power 0..1 for the needle at `u` with the sweet spot at `sweet` (+ ground-pound bonus). */
 export function stompPower(u: number, sweet: number, bonus = 0): number {
   const d = Math.abs(u - sweet);
-  const base = d <= PERFECT ? 1 : Math.max(MIN_POWER, 0.95 - (d - PERFECT) * 1.1);
+  // Steep fall-off: a stomp at a random moment rarely gets past the middle (timing wins).
+  const base = d <= PERFECT ? 1 : Math.max(MIN_POWER, 0.95 - (d - PERFECT) * 1.6);
   return Math.min(1, base + bonus);
 }
 

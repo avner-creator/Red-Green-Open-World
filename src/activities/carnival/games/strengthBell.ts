@@ -442,7 +442,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
   return {
     id: 'strengthBell',
     duration: 0,
-    thresholds: [9, 14],
+    thresholds: [11, 15],
     camera: { distance: 5.2, height: -0.5, fov: 72, lookAhead: 0 },
     aimLimits: null,
     how: ['stomp'],

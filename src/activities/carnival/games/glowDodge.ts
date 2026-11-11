@@ -297,6 +297,12 @@ export function createGlowDodge(env: GameEnv): BoothGame {
         launch(plan, willDodge, l.rng);
       });
 
+      // The player's rollers follow them along the lane until just before they arrive: a roller
+      // is dodged by a well-timed hop, not by wiggling sideways (lobs are still dodged by a step).
+      for (const b of live) {
+        if (b.plan.who !== 0 || b.plan.kind !== 'roll' || b.resolved || b.bonk) continue;
+        if (b.plan.dur - b.s > 0.3) b.plan.tx = clampLane(r.playerOffset.x, me.center, me.half);
+      }
       // Friends react to their own incoming balls.
       for (const b of live) {
         const who = b.plan.who;
