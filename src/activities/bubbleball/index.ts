@@ -258,6 +258,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           // The hoop is gone now; the chime tells the weak eye "you did it" (no position hint left).
           ctx.audio.play('star', { pitch: 1.3 });
           ctx.audio.play('gem', { pitch: 1.4, volume: 0.7 });
+          if (e.team === 'home') ctx.events.emit('glasses:result', { mechanic: 'bubbleRing', kind: 'follow', tier: 2, hit: true });
           break;
         case 'kickoff':
           ctx.audio.play('start');
