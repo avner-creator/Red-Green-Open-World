@@ -383,6 +383,16 @@ export function create(env: MechanicEnv): Mechanic {
         goIdle();
       },
     },
+    // The ground trail runs back through the arch the child ran through, then round the sign.
+    waitPath: (from) => {
+      const x = chosen >= 0 ? G.archX[chosen] : 0;
+      if (from.z > G.archZ + 0.3) return [{ x: x === 0 ? 1.6 : x * 0.6, y: 0, z: G.signZ + 0.9 }];
+      return [
+        { x, y: 0, z: G.archZ - 0.9 },
+        { x, y: 0, z: G.archZ + 0.9 },
+        { x: x === 0 ? 1.6 : x * 0.6, y: 0, z: G.signZ + 0.9 },
+      ];
+    },
     waitPromptAt: () => {
       // After a run the child stands beyond the arch, facing away: the "back to the pad" prompt
       // floats ahead of them, over the arch they just ran through (the answer is already given).

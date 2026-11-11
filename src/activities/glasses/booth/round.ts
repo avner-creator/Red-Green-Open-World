@@ -27,6 +27,14 @@ export type RoundEvent =
   | { type: 'result'; index: number; hit: boolean; tier: GlassesTier; streak: number }
   /** Between tries, waiting for the child to be back on the pad. */
   | { type: 'wait' }
+  /** Still waiting after `waitNudge` s: call the child back (sound, toast; the trail pulses). */
+  | { type: 'nudge' }
+  /**
+   * Still waiting after `waitFetch` s: the kit pops the hero back onto the pad (QA6 m3: a child
+   * who never walked back waited 34 s and lost the round). If the hero still is not on the pad
+   * a moment later the round ends with the hits so far (never a cancel).
+   */
+  | { type: 'fetch' }
   /** All tries done: `gems` > 0 → a celebration; 0 → "aww, again?". */
   | { type: 'end'; hits: number; gems: number }
   /** The prize flight begins (gems > 0 only). */
@@ -45,6 +53,8 @@ export const ROUND_DEFAULTS = {
   cooldown: 1.4,
   stall: 45,
   leaveRadius: 15,
+  waitNudge: 4,
+  waitFetch: 10,
 } as const;
 
 type Full = Required<Omit<RoundRules, 'upAt' | 'downBelow' | 'time'>> & { upAt: number; downBelow: number; time?: number };
@@ -88,6 +98,8 @@ export class RoundMachine {
   gems = 0;
   private paid = false;
   private count = 3;
+  private nudged = false;
+  private fetched = false;
   /** Totals for the session (debug). */
   rounds = 0;
   totalGems = 0;
@@ -173,7 +185,8 @@ export class RoundMachine {
     if (this.phase === 'idle') return out;
     this.t += dt;
     if (this.phase === 'play' && this.rules.time !== undefined && this.t >= this.rules.time) return this.finish();
-    if (this.phase === 'play' || this.phase === 'wait') {
+    // Only an unanswered try stalls: the wait for the pad resolves itself (nudge, fetch, end).
+    if (this.phase === 'play') {
       this.quiet += dt;
       if (this.quiet >= this.rules.stall) return this.cancel('stall');
     }
@@ -199,12 +212,21 @@ export class RoundMachine {
           if (this.results.length >= R.tries) out.push(...this.finish());
           else if (R.between === 'pad' && !ready) {
             this.go('wait');
+            this.nudged = this.fetched = false;
             out.push({ type: 'wait' });
           } else out.push(...this.nextTry());
         }
         break;
       case 'wait':
         if (ready) out.push(...this.nextTry());
+        else if (this.fetched && this.t >= R.waitFetch + 2) out.push(...this.finish());
+        else if (!this.fetched && this.t >= R.waitFetch) {
+          this.fetched = true;
+          out.push({ type: 'fetch' });
+        } else if (!this.nudged && this.t >= R.waitNudge) {
+          this.nudged = true;
+          out.push({ type: 'nudge' });
+        }
         break;
       case 'celebrate':
         if (this.t >= R.celebrate) {
