@@ -27,6 +27,12 @@ const ICON: Record<HudIcon, string> = {
 };
 
 const CSS = `
+.rg-sky .sk-nogem{position:relative;display:inline-grid;place-items:center}
+.rg-sky .sk-nogem::after{content:"";position:absolute;left:-14%;right:-14%;top:44%;height:calc(var(--u)*.9);background:#000;border:calc(var(--u)*.25) solid #fff;transform:rotate(-38deg);border-radius:calc(var(--u)*.5)}
+.rg-sky .sk-practice{position:absolute;left:50%;top:calc(var(--u)*24);transform:translateX(-50%);display:none;align-items:center;gap:calc(var(--u)*.8);
+  background:#10142a;border:calc(var(--u)*.4) dashed #fff;border-radius:calc(var(--u)*2.4);padding:calc(var(--u)*.5) calc(var(--u)*1.4);font-size:calc(var(--u)*3)}
+.rg-sky .sk-practice.on{display:flex}
+.rg-sky .sk-practice .ic{color:#9ff3ff}
 .rg-sky{position:absolute;inset:0;pointer-events:none;z-index:3;--u:clamp(5px,1vmin,22px);
   font:900 calc(var(--u)*3.4)/1 ui-rounded,"Nunito","Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#fff}
 .rg-sky .ic{display:inline-block;width:1em;height:1em;vertical-align:middle;flex:none}
@@ -104,6 +110,8 @@ export interface RacerView {
   id: string;
   color: string;
   score: number;
+  /** Racer pictogram (default plane). */
+  icon?: HudIcon;
 }
 
 export interface SkyHud {
@@ -117,7 +125,12 @@ export interface SkyHud {
   setHints(h: readonly { icon: HudIcon; key: 'space' | 'skill'; cool?: boolean }[], gamepad: boolean, touch: boolean): void;
   countdown(n: number | 'go'): void;
   pop(icon: HudIcon, text: string): void;
-  podium(r: { places: readonly RacerView[]; you: number; stars: number; prize: number }): void;
+  /** Result: places, stars and the gems the round added to the wallet; `practice` = no gems (crossed-out gem). */
+  podium(r: { places: readonly RacerView[]; you: number; stars: number; prize: number; practice?: boolean }): void;
+  /** Update the gem total on the open podium (a stamp or mission bonus landed). */
+  setPrize(gems: number): void;
+  /** A crossed-out gem chip under the clock: this ride is practice (no gems). */
+  practice(on: boolean): void;
   hidePodium(): void;
   readonly root: HTMLElement;
   dispose(): void;
@@ -136,6 +149,11 @@ export function createSkyHud(root: HTMLElement): SkyHud {
     '<div class="sk-count t"></div><div class="sk-pops"></div><div class="sk-hints"></div>' +
     '<div class="sk-podium" data-testid="sky-podium"><div class="sk-steps"></div><div class="sk-stars"></div><div class="sk-prize t"></div></div>';
   root.appendChild(el);
+  const practiceChip = document.createElement('div');
+  practiceChip.className = 'sk-practice t';
+  practiceChip.setAttribute('data-testid', 'sky-practice-chip');
+  practiceChip.innerHTML = `<span class="sk-nogem">${iconHtml('gem')}</span><span>0</span>`;
+  el.appendChild(practiceChip);
   const q = <T extends HTMLElement>(s: string): T => el.querySelector(s) as T;
   const sec = q('.sk-sec');
   const clock = q('.sk-clock');
@@ -184,7 +202,7 @@ export function createSkyHud(root: HTMLElement): SkyHud {
         .map(
           (x) =>
             `<div class="sk-racer t${x.id === 'you' ? ' sk-you' : ''}${x.score === best && best > 0 ? ' sk-lead' : ''}" data-racer="${x.id}">` +
-            `<span class="sk-crown">${iconHtml('crown')}</span>${iconHtml('plane', x.color)}<span>${x.score}</span></div>`,
+            `<span class="sk-crown">${iconHtml('crown')}</span>${iconHtml(x.icon ?? 'plane', x.color)}<span>${x.score}</span></div>`,
         )
         .join('');
     },
@@ -234,15 +252,27 @@ export function createSkyHud(root: HTMLElement): SkyHud {
         .map((place) => {
           const x = r.places[place - 1];
           if (!x) return '';
-          return `<div class="sk-step sk-p${place}${x.id === 'you' ? ' sk-you' : ''}" data-place="${place}" data-racer="${x.id}">${iconHtml('plane', x.color)}<span class="sk-sc t">${x.score}</span><div class="sk-blk">${place}</div></div>`;
+          return `<div class="sk-step sk-p${place}${x.id === 'you' ? ' sk-you' : ''}" data-place="${place}" data-racer="${x.id}">${iconHtml(x.icon ?? 'plane', x.color)}<span class="sk-sc t">${x.score}</span><div class="sk-blk">${place}</div></div>`;
         })
         .join('');
       stars.innerHTML = [0, 1, 2]
         .map((i) => `<span class="ic${i < r.stars ? ' sk-got' : ''}" style="animation-delay:${0.3 + i * 0.25}s"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON.star}</svg></span>`)
         .join('');
-      prize.innerHTML = r.prize > 0 ? `${iconHtml('gem')}<span>+${r.prize}</span>` : '';
+      prize.innerHTML = r.practice
+        ? `<span class="sk-nogem" data-testid="sky-practice">${iconHtml('gem')}</span><span>0</span>`
+        : `${iconHtml('gem')}<span data-testid="sky-prize">+${r.prize}</span>`;
+      prize.style.display = r.practice || r.prize > 0 ? '' : 'none';
       podiumEl.dataset.you = String(r.you);
       podiumEl.classList.add('on');
+    },
+    setPrize(gems) {
+      const t = prize.querySelector('[data-testid="sky-prize"]');
+      if (!t) return;
+      t.textContent = `+${gems}`;
+      prize.style.display = gems > 0 ? '' : 'none';
+    },
+    practice(on) {
+      practiceChip.classList.toggle('on', on);
     },
     hidePodium() {
       podiumEl.classList.remove('on');

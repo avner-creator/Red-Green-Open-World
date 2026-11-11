@@ -15,7 +15,11 @@ import { segmentSphereHit } from '../gemLogic';
 import { getStuntGate } from '../stuntGate';
 import { createCourse, offsetAt } from './course';
 import type { Course } from './course';
-import { DRAGON_TUNING, angleDelta, bezier, clamp, createFlyState, flyVelocity, follow, stepFly } from './flightModel';
+import { DRAGON_TUNING, angleDelta, bezier, clamp, createFlyState, flyVelocity, follow, leashControls, stepFly } from './flightModel';
+import { standings } from './contestLogic';
+import { DragonFriend } from './dragonFriend';
+import { PrizeTally } from './prizeTally';
+import { WalkInPad } from './walkIn';
 import type { FlyState, V3 } from './flightModel';
 import { CONFETTI_COLORS, Puffs } from './fx';
 import { DRAGON_DIMS, createDragonModel } from './dragonModel';
@@ -23,7 +27,7 @@ import { SkyPilot, getSkyPilot } from './pilot';
 import { outlineGeometry } from './planeModel';
 import { buildRoost, siteFor } from './sites';
 import type { SkyHud } from './skyHud';
-import { RideTickets, payPrize } from './tickets';
+import { RideTickets } from './tickets';
 
 export type DragonPhase = 'idle' | 'feed' | 'mount' | 'launch' | 'tour' | 'return' | 'land' | 'dismount';
 
@@ -44,14 +48,22 @@ export const TOUR_POINTS: readonly (readonly [number, number, number])[] = [
 ];
 
 export const TOUR = {
-  seconds: 80,
+  /** A 60 s flight: with the treat, launch and the glide home a round is ~75 s. */
+  seconds: 60,
   treasureSpacing: 38,
   treasureRadius: 2.6,
   /** Treasure weaves off the autopilot line: amplitude (m) and wavelength (m). */
   weave: 9,
   weaveLength: 70,
-  clouds: 8,
+  /** Both-eye cloud-balloons along the route (you and the friend dragon race to pop them). */
+  clouds: 18,
   golden: 5,
+  /** Points: a cloud 1, a golden cloud 3 (weak eye), a treasure 1 (weak eye). */
+  points: { cloud: 1, golden: 3, treasure: 1 },
+  /** Gems for 1st / 2nd place. */
+  prize: [5, 3] as readonly number[],
+  /** Auto bubbles: blow at a both-eye cloud this close ahead (m) and within this angle (rad). */
+  autoBreath: { range: 32, angle: 0.42 },
   cloudRadius: 3.2,
   bubbleHit: 2.9,
   flapLift: 7,
@@ -60,9 +72,9 @@ export const TOUR = {
   breathCooldown: 0.6,
 } as const;
 
-/** Stars for a dragon tour by treasures found. */
-export function tourStars(treasure: number): number {
-  return treasure >= 15 ? 3 : treasure >= 8 ? 2 : treasure >= 1 ? 1 : 0;
+/** Stars for a dragon tour by points (clouds, golden clouds, treasure). */
+export function tourStars(points: number): number {
+  return points >= 16 ? 3 : points >= 9 ? 2 : points >= 3 ? 1 : 0;
 }
 
 export interface DragonRide {
@@ -70,11 +82,16 @@ export interface DragonRide {
   readonly treasure: number;
   readonly clouds: number;
   readonly befriended: boolean;
-  readonly lastTour: { treasure: number; clouds: number; stars: number } | null;
+  readonly lastTour: { treasure: number; clouds: number; stars: number; points: number; friend: number; place: number; prize: number } | null;
+  /** Points so far this tour (yours and the friend dragon's). */
+  readonly points: number;
+  readonly friendPoints: number;
   readonly weakObjects: THREE.Object3D[];
   readonly course: Course;
   /** Test hook: shorter tours. */
   tourSeconds: number;
+  /** Walk-in start pad (world centre) and how full it is (0..1). */
+  readonly pad: { readonly at: THREE.Vector3; readonly progress: number };
   /** Test hook: put the dragon at a pose during the tour (returns false if not touring). */
   testPose(x: number, y: number, z: number, yaw: number): boolean;
   /** Treasure trail spots (tests aim at them). */
@@ -190,9 +207,13 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
   const cloudSpots: THREE.Vector3[] = [];
+  /** Arc length of each cloud along the tour (the friend dragon pops what it passes). */
+  const cloudS: number[] = [];
   for (let i = 0; i < TOUR.clouds; i++) {
-    const p = offsetAt(course, startS + (i + 0.6) * ((L - 80) / TOUR.clouds), i % 2 ? 6 : -6, 2);
+    const s = startS + 30 + (i + 0.5) * ((L - 120) / TOUR.clouds);
+    const p = offsetAt(course, s, i % 2 ? 5 : -5, 2);
     cloudSpots.push(new THREE.Vector3(p.x, p.y, p.z));
+    cloudS.push(s);
   }
   const goldSpots: THREE.Vector3[] = [];
   for (let i = 0; i < TOUR.golden; i++) {
@@ -227,7 +248,13 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
   let cloudsPopped = 0;
   let tourT = 0;
   let tourSeconds: number = TOUR.seconds;
-  let lastTour: { treasure: number; clouds: number; stars: number } | null = null;
+  let lastTour: DragonRide['lastTour'] = null;
+  let points = 0;
+  let podiumT = 0;
+  let friend: DragonFriend | null = null;
+  const tally = new PrizeTally(ctx.events);
+  const friendPos = new THREE.Vector3();
+  const cloudState = cloudS.map((s) => ({ s, here: true }));
   const fly: FlyState = createFlyState(perch.x, perch.y, perch.z, perchYaw, 0);
   let progress = startS;
   let untouched = 0;
@@ -265,6 +292,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     goldGone.fill(false);
     treasure = 0;
     cloudsPopped = 0;
+    points = 0;
     tourT = 0;
     bubbles.clear();
     sparks.clear();
@@ -278,6 +306,9 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     weak.visible = false;
     both.visible = false;
     hud.showTour(false);
+    hud.showContest(false);
+    hud.practice(false);
+    friend?.setVisible(false);
     placeDragon(perch.x, perch.y, perch.z, perchYaw, 0, 0);
     fly.speed = 0;
     happy = 0;
@@ -295,25 +326,32 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     player.teleport(new THREE.Vector3(s.x, s.y + 0.05, s.z), perchYaw + Math.PI);
   }
 
-  function popCloud(i: number): void {
+  function popCloud(i: number, byFriend = false): void {
     const c = cloudSpots[i];
     cloudGone[i] = 14;
-    cloudsPopped++;
     puffs.burst(c.x, c.y, c.z, 10, 7, 0.8, 0.9);
     sparks.burst(c.x, c.y, c.z, 12, 8, 1, 1, CONFETTI_COLORS);
+    if (byFriend) {
+      // The friend dragon got there first: a cheeky squeak.
+      ctx.audio.play('squeak', { pitch: 1.4, volume: 0.5 });
+      return;
+    }
+    cloudsPopped++;
+    points += TOUR.points.cloud;
     ctx.audio.play('boing', { pitch: 1.3, volume: 0.8 });
-    hud.pop('cloud', '+1');
+    hud.pop('cloud', `+${TOUR.points.cloud}`);
   }
 
   function popGolden(i: number): void {
     const c = goldSpots[i];
     goldGone[i] = true;
     cloudsPopped++;
+    points += TOUR.points.golden;
     weakSparks.burst(c.x, c.y, c.z, 16, 9, 0.9, 0.5);
     ctx.audio.play('boing', { pitch: 1.6, volume: 0.8 });
     ctx.events.emit('glasses:result', { mechanic: 'dragonGolden', kind: 'find', tier: 1, hit: true });
-    payPrize(ctx, 2, 'gem');
-    hud.pop('cloud', '+2');
+    tickets.payPrize(2, 'gem');
+    hud.pop('cloud', `+${TOUR.points.golden}`);
     roar();
   }
 
@@ -349,6 +387,28 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
       ctx.audio.play('whoosh', { pitch: 1.5, volume: 0.6 });
     }
     if (input.emotePressed) roar();
+    // Stay near the route: flap-mashing or a held turn never leaves the clouds far behind.
+    course.at(progress + 14, tmp);
+    leashControls(fly, controls, tmp, dt);
+    // One button: the dragon blows bubbles by itself at a cloud-balloon right ahead (both-eye
+    // clouds only, so the bubbles never point at a weak-eye golden cloud). Q still blows on demand.
+    if (breathT <= 0 && breathCool <= 0) {
+      const fx = Math.sin(fly.yaw);
+      const fz = Math.cos(fly.yaw);
+      for (let i = 0; i < cloudSpots.length; i++) {
+        if (cloudGone[i] > 0) continue;
+        const c = cloudSpots[i];
+        const dx = c.x - fly.x;
+        const dz = c.z - fly.z;
+        const d = Math.hypot(dx, dz);
+        if (d > TOUR.autoBreath.range || d < 3) continue;
+        const cos = (dx * fx + dz * fz) / d;
+        if (cos < Math.cos(TOUR.autoBreath.angle) || Math.abs(c.y - fly.y - 1.5) > 9) continue;
+        breathT = TOUR.breathSeconds * 0.7;
+        ctx.audio.play('whoosh', { pitch: 1.5, volume: 0.5 });
+        break;
+      }
+    }
     const ev = stepFly(fly, controls, DRAGON_TUNING, dt, (x, y, z) => pilot.surface(x, y, z));
     if (ev.bounced) {
       ctx.audio.play('boing', { pitch: 0.7 });
@@ -361,11 +421,12 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
       if (segmentSphereHit(prevChest, curChest, treasureSpots[i], TOUR.treasureRadius) || segmentSphereHit(prevChest, curChest, treasureSpots[i].clone().setY(treasureSpots[i].y + 1.7), TOUR.treasureRadius)) {
         taken[i] = true;
         treasure++;
+        points += TOUR.points.treasure;
         const p = treasureSpots[i];
         weakSparks.burst(p.x, p.y, p.z, 10, 7, 0.6, 0.45);
         ctx.audio.play('gem', { pitch: 1 + Math.min(0.8, treasure * 0.04) });
         ctx.events.emit('glasses:result', { mechanic: 'dragonTreasure', kind: 'follow', tier: 1, hit: true });
-        payPrize(ctx, 1, 'gem');
+        tickets.payPrize(1, 'gem');
       }
     }
     for (let i = 0; i < cloudSpots.length; i++) {
@@ -465,6 +526,9 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
             untouched = 0;
             tourT = 0;
             roar();
+            friend?.setVisible(true);
+            hud.showContest(true);
+            hud.setClock(tourSeconds);
           }
           break;
         }
@@ -545,6 +609,12 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     },
     onRelease(): void {
       const was = phase;
+      if (was !== 'dismount') {
+        // R mid-ride: no result, nothing more counted.
+        tally.stop();
+        tally.onChange(null);
+        hud.hidePodium();
+      }
       resetAll();
       if (was !== 'idle' && was !== 'dismount') standAtFeedSpot();
       player.launch(new THREE.Vector3(0, 0, 0));
@@ -552,12 +622,50 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
   };
 
   function finishTour(): void {
-    const stars = tourStars(treasure);
-    lastTour = { treasure, clouds: cloudsPopped, stars };
-    if (stars > 0) getStuntGate(ctx).stunt({ kind: 'sky', value: treasure, stars });
-    ctx.events.emit('ui:toast', { icon: 'check', text: `${treasure}` });
-    ctx.audio.play('fanfare');
+    const stars = tourStars(points);
+    const friendPts = friend?.score ?? 0;
+    const st = standings([
+      { id: 'you', score: points },
+      { id: 'friend0', score: friendPts },
+    ]);
+    const place = st.find((x) => x.id === 'you')?.place ?? 2;
+    tally.notePrize(tickets.payPrize(TOUR.prize[place - 1] ?? 1));
+    if (stars > 0) getStuntGate(ctx).stunt({ kind: 'sky', value: points, stars });
+    ctx.events.emit('stamp:earned', { id: 'dragonRoost' });
+    ctx.events.emit('ui:toast', { icon: 'check', text: `${place}` });
+    ctx.audio.play(place === 1 ? 'fanfare' : 'star');
     happy = 1;
+    // The card shows what the wallet really gained this ride (treasure, golden clouds, the place
+    // prize and any stamp / mission bonus it set off).
+    lastTour = { treasure, clouds: cloudsPopped, stars, points, friend: friendPts, place, prize: tally.total };
+    const color = (id: string): string => (id === 'you' ? '#8fe6b8' : '#ffb8dc');
+    hud.practice(false);
+    hud.podium({ places: st.map((x) => ({ id: x.id, color: color(x.id), score: x.score, icon: 'dragon' as const })), you: place, stars, prize: tally.total, practice: tickets.practice });
+    tally.onChange((n) => {
+      hud.setPrize(n);
+      if (lastTour) lastTour.prize = n;
+    });
+    podiumT = 6;
+    pad.disarm();
+  }
+
+  function start(): void {
+    if (phase !== 'idle' || !pilot.canTake()) return;
+    if (!tickets.pay()) return;
+    tally.start();
+    tally.onChange(null);
+    hud.hidePodium();
+    podiumT = 0;
+    resetTour();
+    if (!pilot.take(hooks)) return;
+    enter('feed');
+    weak.visible = true;
+    both.visible = true;
+    friend ??= new DragonFriend(both);
+    friend.reset(startS, 11 + Math.floor(time));
+    friend.setVisible(false);
+    hud.practice(tickets.practice);
+    ctx.audio.play('click');
   }
 
   const removeInteract = ctx.interactions.add({
@@ -566,18 +674,11 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     radius: 7,
     icon: 'hand',
     enabled: () => phase === 'idle' && pilot.canTake(),
-    onUse() {
-      if (phase !== 'idle' || !pilot.canTake()) return;
-      if (!tickets.pay()) return;
-      resetTour();
-      if (!pilot.take(hooks)) return;
-      enter('feed');
-      weak.visible = true;
-      both.visible = true;
-      hud.showTour(true);
-      ctx.audio.play('click');
-    },
+    onUse: start,
   });
+
+  // Walk-in start: a ring at the treat basket, where you stand to feed the dragon.
+  const pad = new WalkInPad(ctx, { at: roost.standSpot.clone(), enabled: () => phase === 'idle' && pilot.canTake(), onStart: start });
 
   const offPhase = ctx.events.on('session:phase', (e) => {
     if (e.phase === 'playing' && e.previous === 'title') {
@@ -607,18 +708,36 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     } else {
       model.head.rotation.y += (0 - model.head.rotation.y) * follow(3, dt);
     }
+    pad.update(dt);
+    if (podiumT > 0) {
+      podiumT -= dt;
+      if (podiumT <= 0) {
+        hud.hidePodium();
+        tally.stop();
+        tally.onChange(null);
+      }
+    }
     if (phase === 'idle') return;
-    hud.setTour(treasure, cloudsPopped);
+    // The friend dragon races along the route and pops the clouds it reaches first.
+    if (friend && (phase === 'tour' || phase === 'return')) {
+      for (let i = 0; i < cloudState.length; i++) cloudState[i].here = cloudGone[i] <= 0;
+      friend.update(dt, course, phase === 'tour' ? progress : friend.s + 40, cloudState, (i) => {
+        popCloud(i, true);
+        friend?.position(friendPos);
+        bubbles.burst(friendPos.x, friendPos.y, friendPos.z, 6, 5, 0.8, 0.4);
+      });
+      if (phase === 'tour') {
+        hud.setClock(Math.max(0, tourSeconds - tourT));
+        hud.setRacers([
+          { id: 'you', color: '#8fe6b8', score: points, icon: 'dragon' },
+          { id: 'friend0', color: '#ffb8dc', score: friend.score, icon: 'dragon' },
+        ]);
+      }
+    }
     const input = ctx.input.state;
     if (phase === 'tour') {
-      hud.setHints(
-        [
-          { icon: 'wing', key: 'space' },
-          { icon: 'bubbles', key: 'skill', cool: breathT <= 0 && breathCool > 0 },
-        ],
-        input.device === 'gamepad',
-        input.device === 'touch',
-      );
+      // One button: Space flaps (the bubbles blow by themselves at clouds ahead; Q still works).
+      hud.setHints([{ icon: 'wing', key: 'space' }], input.device === 'gamepad', input.device === 'touch');
     } else hud.setHints([], false, false);
     // Bubble breath: a stream of bubbles and sparkles from the mouth.
     if (breathT > 0 && phase === 'tour') {
@@ -714,6 +833,12 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     get clouds() {
       return cloudsPopped;
     },
+    get points() {
+      return points;
+    },
+    get friendPoints() {
+      return friend?.score ?? 0;
+    },
     get befriended() {
       return befriended;
     },
@@ -722,6 +847,9 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     },
     get tourSeconds() {
       return tourSeconds;
+    },
+    get pad() {
+      return { at: pad.group.position, progress: pad.progress };
     },
     set tourSeconds(s: number) {
       tourSeconds = s;
@@ -747,6 +875,9 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
       if (pilot.active && phase !== 'idle') pilot.release();
       model.dispose();
       roost.dispose();
+      friend?.dispose();
+      pad.dispose();
+      tally.stop();
       ctx.vision.remove(weak);
       both.removeFromParent();
       for (const g of [gemGeo, cloudBase, goldGeo, weakSparkGeo, cloudOutlineGeo, bubbleGeo, sparkGeo, puffGeo, treatGeo]) g.dispose();

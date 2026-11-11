@@ -215,6 +215,36 @@ export function stepFly(s: FlyState, c: FlyControls, t: FlyTuning, dt: number, s
   return ev;
 }
 
+/** How far a touring craft may stray from its route: above, below and to the side (m). */
+export const LEASH = { up: 10, down: 14, side: 18 } as const;
+
+/**
+ * Keep a touring craft (the dragon) near its route, so mashing flap or holding a turn never leaves
+ * the cloud-balloons and treasure far behind: above `up` m over the line the nose goes down and flap
+ * lift fades; beyond `side` m to the side the stick is blended into a turn back. Mutates `c` and
+ * caps `s.lift`. `line` = a point on the route a little ahead.
+ */
+export function leashControls(s: FlyState, c: FlyControls, line: V3, dt: number, l = LEASH): void {
+  const above = s.y - line.y;
+  if (above > l.up) {
+    const k = clamp((above - l.up) / 6, 0, 1);
+    c.climb = Math.min(c.climb, -0.8 * k);
+    s.lift = Math.min(s.lift, Math.max(0, (l.up + 6 - above) * 1.2));
+    s.lift -= s.lift * Math.min(1, dt * 4 * k);
+  } else if (above < -l.down) {
+    c.climb = Math.max(c.climb, clamp((-above - l.down) / 8, 0, 1));
+  }
+  const dx = line.x - s.x;
+  const dz = line.z - s.z;
+  const d = Math.hypot(dx, dz);
+  if (d > l.side) {
+    const k = clamp((d - l.side) / 10, 0, 1);
+    const t = clamp(-angleDelta(s.yaw, Math.atan2(dx, dz)) * 1.6, -1, 1);
+    c.turn += (t - c.turn) * k;
+    c.lookWeight = (c.lookWeight ?? 0) * (1 - k);
+  }
+}
+
 /**
  * Trick timeline for loops and barrel rolls (plane). A loop flies a real vertical circle; a roll
  * spins the plane round its nose while it keeps flying straight. `t` runs 0..1.
