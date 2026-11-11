@@ -47,7 +47,7 @@ export const RING = {
   stepRadius: 0.62,
   /** Seconds a wrong button stays sunk. */
   sunkSeconds: 2,
-  /** Pressing E picks the nearest button within this distance. */
+  /** Reach of `nearestButton` (E itself picks a tile with `facedButton`, QA6 m2). */
   useReach: 2.6,
 } as const;
 
@@ -85,6 +85,55 @@ export function nearestButton(pts: readonly { x: number; z: number }[], px: numb
       best = i;
     }
   });
+  return best;
+}
+
+/** When E presses a tile (QA6 m2): standing on it, or clearly facing one close by. */
+export const E_PICK = {
+  /** Feet this close to a tile's centre: that tile (about its half-width). */
+  onRadius: 0.7,
+  /** A faced tile's centre is at most this far from the feet (m). */
+  reach: 1.9,
+  /** ...and within this angle of where the hero faces (rad, ~28°). */
+  cone: 0.5,
+  /** The next candidate must be this much further off-axis (rad, ~14°), else it is not clear. */
+  margin: 0.25,
+} as const;
+
+/**
+ * The tile E presses at a chest, or -1 when E should do nothing: the tile the hero stands on, else
+ * the one they clearly face within reach (`yaw`: facing (sin, cos) on x/z). Never just the nearest,
+ * so pressing E at the chest itself never spends a try by accident.
+ */
+export function facedButton(pts: readonly { x: number; z: number }[], px: number, pz: number, yaw: number): number {
+  let on = -1;
+  let onD: number = E_PICK.onRadius;
+  pts.forEach((p, i) => {
+    const d = Math.hypot(p.x - px, p.z - pz);
+    if (d <= onD) {
+      onD = d;
+      on = i;
+    }
+  });
+  if (on >= 0) return on;
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  let best = -1;
+  let bestA = Infinity;
+  let nextA = Infinity;
+  pts.forEach((p, i) => {
+    const dx = p.x - px;
+    const dz = p.z - pz;
+    const d = Math.hypot(dx, dz);
+    if (d > E_PICK.reach || d < 1e-6) return;
+    const a = Math.acos(Math.max(-1, Math.min(1, (dx * fx + dz * fz) / d)));
+    if (a < bestA) {
+      nextA = bestA;
+      bestA = a;
+      best = i;
+    } else if (a < nextA) nextA = a;
+  });
+  if (best < 0 || bestA > E_PICK.cone || nextA - bestA < E_PICK.margin) return -1;
   return best;
 }
 

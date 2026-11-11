@@ -265,11 +265,22 @@ test('opens from every direction (stepping on the shape from 4 sides, and with E
     if (dir % 2 === 0) {
       await stand(b.x, b.z, 0, false); // step on it
     } else {
-      // 0.95 m outward from the button (not on it), then press E: the nearest button counts.
+      // First E right at the chest, facing it (QA6 m2): nothing is pressed, no try is spent.
       const dx = b.x - c.position[0];
       const dz = b.z - c.position[2];
       const l = Math.hypot(dx, dz);
-      await stand(b.x + (dx / l) * 0.95, b.z + (dz / l) * 0.95, 0, false);
+      const nx = c.position[0] + (dx / l) * 1.2;
+      const nz = c.position[2] + (dz / l) * 1.2;
+      await stand(nx, nz, yawToward(nx, nz, c.position[0], c.position[2]), false);
+      expect((await info())[i].eTile).toBe(-1);
+      await use();
+      await page.evaluate(() => window.__rg!.step(1 / 60, 10, false));
+      expect((await info())[i].open).toBe(false);
+      expect((await info())[i].wrongTries).toBe(0);
+      // 0.95 m outward from the button (not on it), facing it, then press E: that button counts.
+      const fx = b.x + (dx / l) * 0.95;
+      const fz = b.z + (dz / l) * 0.95;
+      await stand(fx, fz, yawToward(fx, fz, b.x, b.z), false);
       expect((await info())[i].open).toBe(false);
       // The tile E would press is the highlighted one: this right button.
       expect((await info())[i].eTile).toBe(c.buttons.findIndex((bb) => bb.x === b.x && bb.z === b.z));
