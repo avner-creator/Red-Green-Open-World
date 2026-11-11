@@ -143,6 +143,26 @@ async function standAt(p: P3, yaw: number, settle = 40): Promise<void> {
   );
 }
 
+/** A spot on the line from the site to its arrival (`dist` m from the site; 0 = the arrival itself, the stepping-stone trail's end), facing the booth. */
+async function oddArrivalSpot(id: string, dist: number): Promise<P3 & { yaw: number }> {
+  return page.evaluate(
+    ({ id, dist }) => {
+      const g = window.__rgGlasses!;
+      const w = window.__rg!.ctx.world;
+      const s = g.sites().find((x) => x.id === id)!;
+      const a = s.arrival ?? { x: s.x, z: s.z + 30 };
+      const l = Math.hypot(a.x - s.x, a.z - s.z) || 1;
+      const x = dist ? s.x + ((a.x - s.x) / l) * dist : a.x;
+      const z = dist ? s.z + ((a.z - s.z) / l) * dist : a.z;
+      const b = (g.debug(id) as { booth: { x: number; z: number } }).booth;
+      const tx = (b.x + s.x) / 2;
+      const tz = (b.z + s.z) / 2;
+      return { x, y: w.heightAt(x, z), z, yaw: Math.atan2(tx - x, tz - z) };
+    },
+    { id, dist },
+  );
+}
+
 /** A spot ~30 m out on the approach with a clear line of sight to the booth and the pad, facing them. */
 async function oddFarSpot(d: OddDebug): Promise<P3 & { yaw: number }> {
   return page.evaluate((d) => {
@@ -197,6 +217,12 @@ test('odd one out: a booth from 30 m, attract at the pad, Use on the pad → 3-2
   const far = await canvasShot(page);
   expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
   expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  // From the end of the stepping-stone trail (where children arrive) and from 12 m on that line.
+  for (const [tag, dist] of [['arrival', 0], ['12m', 12]] as const) {
+    const p = await oddArrivalSpot('oddone', dist);
+    await standAt(p, p.yaw);
+    await save(BOOTH, `oddone-${tag}`, true);
+  }
   // Behind the pad, facing the pedestals: attract (demo loops, the pad pulses, the device's button shows).
   await standAt(d.padBack, d.facing + Math.PI);
   d = await odd();
@@ -223,7 +249,7 @@ test('odd one out: a booth from 30 m, attract at the pad, Use on the pad → 3-2
   await stepN(200);
   d = await odd();
   expect([d.phase, d.state]).toEqual(['play', 'open']);
-  expect(d.kit.booth.prompt).toBe('press');
+  expect(d.kit.booth.prompt).toBe('button');
 });
 
 test('odd one out: weak shapes touch only the weak channel; the answer is hidden from the strong eye', async () => {
@@ -277,7 +303,7 @@ test('odd one out: a round of 5 through the buttons: a hit and a miss, lamps, th
   await stepN(80);
   await standAt(d.padBack, d.facing + Math.PI, 20);
   await save(BOOTH, 'oddone-mid-round', true);
-  // Tries 3–5 right (levels 2, 3, 4): 4 of 5, the last try at tier 3 → the prize for 4 at tier 3.
+  // Tries 3–5 right (levels 2, 3, 4; results at tiers 2, 2, 3): 4 of 5 in the session's first round (round tier 1) → the prize for 4 at tier 1.
   for (let t = 0; t < 3; t++) {
     d = await odd();
     expect([d.phase, d.state]).toEqual(['play', 'open']);
@@ -297,8 +323,8 @@ test('odd one out: a round of 5 through the buttons: a hit and a miss, lamps, th
   await stepN(240);
   d = await odd();
   expect(['cooldown', 'idle']).toContain(d.phase);
-  expect(d.gems).toBe(8);
-  expect(await wallet()).toBe(before + 8);
+  expect(d.gems).toBe(6);
+  expect(await wallet()).toBe(before + 6);
   ev = await events();
   expect(ev.filter((e) => e.type === 'toast' && e.icon === 'gem')).toHaveLength(1);
   await stepN(120);

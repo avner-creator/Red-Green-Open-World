@@ -16,7 +16,9 @@
  * + strong dots (1) during a try (+ the kit's fx 2 during a round) ≤ 6.
  */
 import * as THREE from 'three';
-import { MARQUEE } from '../booth/geometry';
+import { cellUv, KIT_CELL } from '../booth/cells';
+import { MARQUEE, PAD_TOP } from '../booth/geometry';
+import { padCamera, pickPromptSpot, screenRect } from '../booth/view';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier, Interactable } from '../../../types';
 import { createDotPicturePair, DOT_BOARD_GREY, FULL_SYMBOL_STYLE, TIERS, withChallenge } from '../../../vision/toolkit';
@@ -53,8 +55,9 @@ export function create(env: MechanicEnv): Mechanic {
     z: mq.z - lx * Math.sin(mq.yaw) + lz * Math.cos(mq.yaw),
   });
   const spec: LayoutSpec = {
-    // Between two buttons: the default camera then shows all three beside the hero.
-    hero: { x: D.buttonX[2] / 2, z: D.heroZ },
+    // In line with the pad (between the middle and the right button): from there the default
+    // camera shows all three buttons beside the hero.
+    hero: { x: D.pad.x, z: D.heroZ },
     targets: [
       ...[-1, 0, 1].flatMap((sx) => [-1, 0, 1].map((sy) => ({ x: sx * 1.15, z: D.signZ + 0.15, y: D.signY + sy * 1.15 }))),
       ...D.buttonX.map((x) => ({ x, z: D.pedZ, y: D.pedH + 0.12 })),
@@ -77,8 +80,21 @@ export function create(env: MechanicEnv): Mechanic {
     // The approach (~7 m from the sign): the clearest of a few spots, kept in `lay.view`.
     views: [[0, 7], [-2.5, 6.6], [2.5, 6.6], [-4, 5.8], [4, 5.8]].map(([x, dz]) => ({ x, z: D.signZ + dz })),
     foreground: 1.5,
+    // The booth and the sign's front face where children arrive (the end of the stepping-stone trail).
+    arrival: site.arrival,
+    arrivalTargets: [
+      { ...mqPt(0, 0.2), y: MARQUEE.lampY },
+      { ...mqPt(0, 0.2), y: MARQUEE.bannerY },
+      { ...mqPt(-0.8, 0.2), y: MARQUEE.boardY },
+      { x: D.pad.x, z: D.pad.z, y: 0.5 },
+    ],
   };
-  const lay = chooseLayout(ctx, site, spec, { refreshDecor: true });
+  // The site's own heading points almost straight away from the arrival here, and the layout search
+  // only turns ±1.15 rad around it: search around the arrival's heading instead. A booth game has
+  // no pictogram board, so the board checks are moved out of the way.
+  const arrivalYaw = site.arrival ? Math.atan2(site.arrival.x - site.x, site.arrival.z - site.z) : site.yaw;
+  const searchSite = { ...site, yaw: arrivalYaw, board: { x: site.x + 5000, z: site.z } };
+  const lay = chooseLayout(ctx, searchSite, spec, { refreshDecor: true });
   // The sign turns to face the default camera at the play spot squarely.
   const signYaw = Math.atan2(spec.hero.x, spec.hero.z + CAM_BACK - D.signZ);
   const signTurn = new THREE.Matrix4()
@@ -273,8 +289,54 @@ export function create(env: MechanicEnv): Mechanic {
   }
 
   // Booth spec heights are relative to the site's y: the countdown at the picture's height.
+  // The play prompt (the device's Use button) floats beside the sign, in clear view from the pad's
+  // camera: in the central safe area (never under the HUD), off the hero, the picture and the
+  // buttons. Picked once from the layout; it never depends on the answer.
+  const look = { x: D.pad.x, z: D.signZ };
+  const promptPick = (() => {
+    const padP = { x: D.pad.x, y: ground(D.pad.x, D.pad.z) + PAD_TOP, z: D.pad.z };
+    const keepClear = [
+      { p: { x: 0, y: signY, z: D.signZ }, size: D.panel + 0.1 },
+      ...D.buttonX.map((x) => ({ p: { x, y: btnY, z: btnZ }, size: D.buttonR * 2 + 0.2 })),
+    ];
+    const cands: { x: number; y: number; z: number }[] = [];
+    for (const z of [0.6, 1.0, 0.2]) {
+      for (const x of [2.5, 2.8, -2.5, 3.1, -2.8, 2.2]) {
+        for (const h of [2.4, 2.1, 1.8, 2.8, 1.5, 3.2]) cands.push({ x, y: ground(x, z) + h, z });
+      }
+    }
+    // The Fun Pass chip reaches further in than `PROMPT_SAFE` on a small 16:9 screen (its left edge
+    // at ≈0.6 of the width, down to ≈0.38): keep the prompt out of that corner too.
+    const cam = padCamera(padP, look, 16 / 9);
+    const offChip = cands.filter((c) => {
+      const r = screenRect(c, D.promptSize + 0.3, cam);
+      return !!r && (r.x1 < 0.58 || r.y0 > 0.4);
+    });
+    return pickPromptSpot(offChip.length ? offChip : cands, { pad: padP, look, size: D.promptSize + 0.3, keepClear });
+  })();
+
+  // The back of the sign is dressed (candy stripes and the magic-glasses mark, merged into the
+  // booth's one draw), so it never reads as a blank wall from behind.
+  const backDressing = ((): THREE.BufferGeometry[] => {
+    const quad = (w: number, h: number, z: number, rect: readonly [number, number, number, number]): THREE.BufferGeometry => {
+      const g = new THREE.PlaneGeometry(w, h).rotateY(Math.PI);
+      const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, rect[0] + uv.getX(i) * rect[2], rect[1] + uv.getY(i) * rect[3]);
+      g.translate(0, signY, z);
+      g.applyMatrix4(signTurn);
+      return g;
+    };
+    const back = D.signZ - 0.085;
+    return [
+      quad(D.frameW - 0.12, D.frameH - 0.12, back, cellUv(KIT_CELL.stripes)),
+      quad(1.7, 1.7, back - 0.02, cellUv(KIT_CELL.mark)),
+    ];
+  })();
+
   const boothSpec: BoothSpec = {
     ...DOT_BOOTH,
+    playPromptAt: promptPick.at,
+    playPromptSize: D.promptSize,
     countdown: DOT_BOOTH.countdown && { ...DOT_BOOTH.countdown, y: signY },
   };
   const kit = env.booth({
@@ -283,6 +345,8 @@ export function create(env: MechanicEnv): Mechanic {
     spec: boothSpec,
     demo: DOT_DEMO,
     rules: DOT_RULES,
+    look,
+    extra: backDressing,
     hooks: {
       onTry(_i, t) {
         tier = t;
@@ -436,6 +500,8 @@ export function create(env: MechanicEnv): Mechanic {
         pad: pt(D.pad.x, D.pad.z),
         /** A spot 2.6 m behind the pad (the camera then shows the pad, the sign and the booth). */
         padBack: pt(D.pad.x, D.pad.z + 2.6),
+        /** A spot 7 m behind the sign (its dressed back: stripes and the magic-glasses mark). */
+        behind: pt(0.5, D.signZ - 7),
         booth: (() => {
           const b = kit.booth.build.marqueeBox;
           return pt((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2);
@@ -460,6 +526,8 @@ export function create(env: MechanicEnv): Mechanic {
           return Math.atan2(t.x - a.x, t.z - a.z);
         })(),
         layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes, ms: lay.ms },
+        promptFits: promptPick.fits,
+        promptAt: promptPick.at,
         sign: { ...pt(0, D.signZ), y: site.y + signY },
       };
     },

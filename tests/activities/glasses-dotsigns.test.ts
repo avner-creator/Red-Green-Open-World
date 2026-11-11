@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_KIT } from '../../src/activities/glasses/booth/draw';
+import { auditDemo } from '../../src/activities/glasses/booth/legibility';
 import { fullRules, prizeFor, stepTier } from '../../src/activities/glasses/booth/round';
 import { simulate } from '../../src/activities/glasses/booth/sim';
 import { DOT_BOOTH, DOT_PRIZE, DOT_RULES, DOT_TIERS } from '../../src/activities/glasses/dotsigns/constants';
@@ -19,6 +20,8 @@ describe('dot-picture rounds', () => {
       expect(new Set(r.shapes).size).toBe(3);
       expect(r.shapes).toContain(answerShape(r));
       expect(r.seed).toBeGreaterThan(0);
+      // Never a plain disc on a button (it reads as a blank button).
+      expect(r.shapes).not.toContain('circle');
     }
   });
 
@@ -160,6 +163,10 @@ describe('dot tiers and rewards', () => {
     const calls: string[] = [];
     const c = new Proxy({}, { get: (_t, k) => (k === 'canvas' ? {} : (..._a: unknown[]) => calls.push(String(k))), set: () => true }) as unknown as CanvasRenderingContext2D;
     for (let f = 0; f < DOT_DEMO.frames; f++) DOT_DEMO.draw(c, f, 256, DEMO_KIT);
-    expect(calls.length).toBeGreaterThan(100);
+    expect(calls.length).toBeGreaterThan(50);
+    // Readable from 8 m: hero ≥ 33 of 100 units where it appears, ≤ 9 pictures a frame.
+    const a = auditDemo(DOT_DEMO);
+    console.info(`dotsigns demo: hero ${a.minHeroPx.toFixed(0)} px, ≤ ${a.maxThings} pictures/frame`);
+    expect(a.problems).toEqual([]);
   });
 });

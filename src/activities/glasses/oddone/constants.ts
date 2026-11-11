@@ -50,6 +50,8 @@ export const ODD = {
   pad: { x: 0.9, z: -1.2, r: 0.9 },
   /** Idle look of the three panels (weak eye only): the same soft circle on all three. */
   idleFade: 0.5,
+  /** Edge of the play prompt (the device's Use button) floating beside the pedestals (m). */
+  promptSize: 1.0,
 } as const;
 
 /**
@@ -81,7 +83,7 @@ export const ODD_BOOTH: BoothSpec = {
   marquee: { x: -3.7, z: -2.3, yaw: 0.6 },
   lamps: 5,
   pad: { x: ODD.pad.x, z: ODD.pad.z, r: ODD.pad.r, walkIn: false },
-  playPrompt: 'press',
+  playPrompt: 'button',
   // 3-2-1-GO pops in front of the middle panel, where the shapes are about to appear.
   countdown: { x: ODD.pedestals[1][0], y: ODD.shapeHeight, z: ODD.pedestals[1][1] + 0.8 },
   decals: [

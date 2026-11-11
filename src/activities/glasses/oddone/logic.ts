@@ -122,9 +122,9 @@ export function differs(a: ShapeSpec, b: ShapeSpec): boolean {
 // ───────────────────────────── the staircase on the booth's rounds (pure; mechanic + bot tests) ─────────────────────────────
 
 /**
- * The level a session is at; it runs through every try of every round. The tier of a try (its
- * result and the round's prize) is `tierForLevel` of the level it was asked at: the mechanic
- * copies it into the round machine before each report.
+ * The level a session is at; it runs through every try of every round. A try's result carries
+ * `tierForLevel` of the level it was asked at (`kit.report(hit, at, tier)`); the round's prize
+ * uses the kit's round tier (up after 5 of 5, down below 3).
  */
 export class OddStaircase {
   level = 0;
@@ -192,8 +192,8 @@ export function simulateOddOne(rules: RoundRules, p: OddSimPlayer): { gemsPerMin
       if (sinceTry >= p.tryTime) {
         const level = stairs.current();
         const hit = rng() < p.hitP(level);
-        m.tier = tierForLevel(level);
-        m.report(hit);
+        if (p.lockLevel !== undefined) m.tier = tierForLevel(level);
+        m.report(hit, tierForLevel(level));
         stairs.answer(hit);
       }
     }
