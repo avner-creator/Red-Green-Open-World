@@ -20,6 +20,18 @@ export const ARENA = {
   booth: { x: -6.5, z: -9.3 },
 } as const;
 
+/**
+ * The walk-in gate: the near (−Z, booth side) sideline section closest to the booth is an arch with
+ * a ribbon curtain. Walkers stroll through it (no wall collider there) and up a little ramp from
+ * the meadow; the match ball still bounces off the curtain (the match keeps its sideline).
+ */
+export function gateSpan(): { x0: number; x1: number; z: number } {
+  const sideLen = (PITCH.hx - PITCH.corner) * 2;
+  const secs = Math.round(sideLen / 3.2);
+  const x0 = -PITCH.hx + PITCH.corner;
+  return { x0, x1: x0 + sideLen / secs, z: -PITCH.hz };
+}
+
 export const PAL = {
   navy: 0x1b2766,
   ink: 0x10142e,
@@ -181,6 +193,21 @@ export function createArenaModel(opts: {
     const len = Math.hypot(x1 - x0, z1 - z0);
     proxy.add(UNIT.box, 0, TRS(mx + ox, wallH / 2, mz + oz, Math.atan2(x1 - x0, z1 - z0), wr * 2, wallH, len));
   };
+  /** The walk-in gate: two tall striped posts, an arch tube and a curtain of soft ribbons. */
+  const gateArch = (x0: number, x1: number, z: number): void => {
+    const top = 2.6;
+    for (const px of [x0, x1]) {
+      for (let b = 0; b < 4; b++) k.add(UNIT.cyl, b % 2 ? PAL.navy : PAL.yellow, TRS(px, ((b + 0.5) * top) / 4, z, 0, wr * 1.15, top / 4, wr * 1.15));
+      k.add(UNIT.sphere, PAL.yellow, TRS(px, top, z, 0, wr * 1.3, wr * 1.3, wr * 1.3));
+      proxy.add(UNIT.cyl, 0, TRS(px, top / 2, z, 0, wr * 1.15, top, wr * 1.15));
+    }
+    k.add(UNIT.cyl, PAL.white, between(x0, top, z, x1, top, z, wr * 0.8));
+    const n = 9;
+    for (let i = 1; i < n; i++) {
+      const x = x0 + ((x1 - x0) * i) / n;
+      k.add(UNIT.box, i % 2 ? PAL.yellow : PAL.white, TRS(x, top / 2 + 0.1, z, 0, 0.16, top - 0.3, 0.03));
+    }
+  };
   // Sidelines in sections (posts every ~3.2 m).
   let wi = 0;
   const sideLen = (hx - cc) * 2;
@@ -189,6 +216,11 @@ export function createArenaModel(opts: {
     for (let i = 0; i < secs; i++) {
       const xa = -hx + cc + (i * sideLen) / secs;
       const xb = -hx + cc + ((i + 1) * sideLen) / secs;
+      if (s < 0 && i === 0) {
+        gateArch(xa, xb, s * hz - wr);
+        wi++;
+        continue;
+      }
       tubeWall(xa, s * hz, xb, s * hz, wi++);
     }
     for (const t of [-1, 1]) {

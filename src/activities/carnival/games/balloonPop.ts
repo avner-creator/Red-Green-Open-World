@@ -10,7 +10,7 @@ import { createLayerMaterial } from '../../../vision';
 import { G, Kit, T, kitMaterial } from '../kit';
 import { RIVAL_SKILLS, RivalBrain } from '../rivals';
 import { makeRng } from '../rng';
-import { ASSIST_RADIUS, COLS, PRIZE_POINTS, PRIZE_RESPAWN, RESPAWN, ROWS, WALL_Z, assistPick, pickPrizeSlots, slotXY } from './balloonLogic';
+import { ASSIST_RADIUS, COLS, MISS_STUN, PRIZE_POINTS, PRIZE_RESPAWN, RESPAWN, ROWS, WALL_Z, assistPick, pickPrizeSlots, slotXY } from './balloonLogic';
 import type { AssistTarget } from './balloonLogic';
 import { EYE, Projectiles, aimAt, aimOnPlaneZ } from './common';
 import type { Shot } from './common';
@@ -185,6 +185,8 @@ export function createBalloonPop(env: GameEnv): BoothGame {
       }
     }
     ctx.audio.play('bump', { volume: 0.25, pitch: 1.4 });
+    // A wild throw: a short "oops" before the next beanbag (aim beats speed).
+    if (shot.data.who === 0) r?.fumble(MISS_STUN);
   };
   const bags = new Projectiles<Bag>(new Kit().add(G.boxC, 0xffffff, T(0, 0, 0, 0, 0.17, 0.1, 0.17)).build(), balloonMat, 10, onLand);
   bags.mesh.name = 'carnival-beanbags';
@@ -208,7 +210,7 @@ export function createBalloonPop(env: GameEnv): BoothGame {
   return {
     id: 'balloonPop',
     duration: 30,
-    thresholds: [8, 16],
+    thresholds: [12, 26],
     camera: { distance: 3.1, height: 0.7, fov: 62, lookAhead: 0 },
     aimLimits: { yaw: 0.6, pitchMin: -0.15, pitchMax: 0.55 },
     how: ['aim', 'throw'],
@@ -244,7 +246,7 @@ export function createBalloonPop(env: GameEnv): BoothGame {
         r.playerAct('wave', 0.35);
       }
       brains.forEach((b, i) => {
-        if (!b.tick(dt)) return;
+        if (!b.tick(dt, r.scores[0] - r.scores[i + 1])) return;
         const targets = aliveTargets(false);
         if (!targets.length) return;
         const t = targets[Math.floor(b.random() * targets.length)];

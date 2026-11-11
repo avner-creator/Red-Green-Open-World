@@ -56,6 +56,13 @@ export interface RoundApi {
   finish(): void;
   /** Stall-keeper reacts. */
   keeperCheer(big?: boolean): void;
+  /**
+   * The player fumbled (a wild throw, an empty scoop, a hop in mid-air): a short comic "oops"
+   * stun with no input (default 0.8 s). Mashing costs time, so the skill is what wins.
+   */
+  fumble(seconds?: number): void;
+  /** Seconds of stun left (the row blocks the player's input while > 0). */
+  readonly stunned: number;
 }
 
 export interface BoothGame {

@@ -12,7 +12,7 @@ import { RIVAL_SKILLS, RivalBrain } from '../rivals';
 import { makeRng } from '../rng';
 import { Projectiles } from './common';
 import type { Shot } from './common';
-import { HAND_Z, PEGS, PEG_H, capturePeg, chargePower, landingPoint, powerFor } from './ringLogic';
+import { MIN_CHARGE, HAND_Z, PEGS, PEG_H, capturePeg, chargePower, landingPoint, powerFor } from './ringLogic';
 import type { BoothGame, GameEnv, RoundApi } from './types';
 
 const RING_COLORS = [0xffe14a, 0xffffff];
@@ -219,7 +219,7 @@ export function createRingToss(env: GameEnv): BoothGame {
   return {
     id: 'ringToss',
     duration: 35,
-    thresholds: [8, 16],
+    thresholds: [10, 22],
     camera: { distance: 3.0, height: 2.4, fov: 60, lookAhead: 0 },
     aimLimits: { yaw: 0.5, pitchMin: 0, pitchMax: 0 },
     how: ['aim', 'charge'],
@@ -258,16 +258,24 @@ export function createRingToss(env: GameEnv): BoothGame {
         marker.position.set(lx, tableY(lz) + 0.02, lz);
         if (!held) {
           charging = false;
-          cooldown = 0.35;
+          cooldown = 0.5;
           marker.visible = false;
           r.meter(null);
-          from.set(0.2 + r.playerOffset.x, 1.35, HAND_Z);
-          throwRing(0, from, lx, lz, capturePeg(lx, lz));
-          r.playerAct('wave', 0.4);
+          if (chargeT < MIN_CHARGE) {
+            // A tap: the ring slips and plops at the hero's feet. Oops!
+            ctx.audio.play('boing', { volume: 0.4, pitch: 0.9 });
+            r.fumble(0.7);
+          } else {
+            from.set(0.2 + r.playerOffset.x, 1.35, HAND_Z);
+            const peg = capturePeg(lx, lz);
+            throwRing(0, from, lx, lz, peg);
+            r.playerAct('wave', 0.4);
+            if (peg < 0) cooldown = 0.9; // a miss: pick up the next ring
+          }
         }
       }
       brains.forEach((b, i) => {
-        if (!b.tick(dt)) return;
+        if (!b.tick(dt, (r.scores[0] - r.scores[i + 1]) / 2)) return;
         const options = PEGS.map((_, j) => j).filter((j) => j !== bonusPeg);
         const peg = options[Math.floor(b.random() * options.length)];
         const p = PEGS[peg];

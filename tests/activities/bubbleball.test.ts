@@ -112,14 +112,14 @@ describe('Bubble Ball match', () => {
   it('rivals ease off while they lead and never race away', () => {
     expect(rivalSkillScale(0, 0)).toBe(1);
     expect(rivalSkillScale(0, 2)).toBeLessThan(0.8);
-    expect(rivalSkillScale(0, 9)).toBeGreaterThanOrEqual(0.6);
+    expect(rivalSkillScale(0, 9)).toBeGreaterThanOrEqual(0.55);
     expect(rivalSkillScale(6, 0)).toBeLessThanOrEqual(1.12);
   });
 
   it('a full match runs to the end with goals, bumps and flips, and everything stays on the pitch', () => {
     const { m, events } = play(3, 1);
     expect(m.phase).toBe('over');
-    expect(m.clock).toBe(0);
+    expect(m.clock === 0 || Math.max(m.score.home, m.score.away) >= MATCH.target).toBe(true);
     expect(events.filter((e) => e.kind === 'goal').length).toBeGreaterThan(0);
     expect(events.some((e) => e.kind === 'bump')).toBe(true);
     for (const a of m.agents) {

@@ -45,6 +45,8 @@ const FACTORIES: Record<GameId, GameFactory> = {
 };
 
 const COUNTDOWN = 3;
+/** Mashing: this many action presses inside `window` seconds = a dizzy stun of `stun` seconds. */
+const MASH = { presses: 4, window: 1.0, stun: 1.4 } as const;
 const RESULT_TIMEOUT = 25;
 
 type Phase = 'count' | 'play' | 'result';
@@ -105,6 +107,7 @@ class Round implements RoundApi {
   anim: PlayerAnim = 'idle';
   animHold = 0;
   stretch = 0;
+  stunned = 0;
   constructor(
     readonly rng: Rng,
     private readonly host: {
@@ -112,8 +115,16 @@ class Round implements RoundApi {
       friendAct(i: number, anim: PlayerAnim | 'emote', hold: number): void;
       meter(v: number | null, mark: number | null): void;
       keeperCheer(big: boolean): void;
+      fumble(seconds: number): void;
     },
   ) {}
+  fumble(seconds = 0.8): void {
+    if (this.stunned > 0) return;
+    this.stunned = seconds;
+    this.anim = 'flop';
+    this.animHold = Math.min(0.6, seconds);
+    this.host.fumble(seconds);
+  }
   score(who: number, points: number): void {
     if (points <= 0 || who < 0 || who > 2) return;
     this.scores[who] += points;
@@ -229,6 +240,9 @@ export function createCarnival(ctx: GameContext): Carnival {
     goT: number;
     /** Could not pay: a practice round (no prize). */
     practice: boolean;
+    /** Wallet right after paying (the result card shows exactly what it gained). */
+    walletStart: number;
+    bonus: number;
   } | null = null;
   let autopilot = false;
   let seed = 1;
@@ -256,7 +270,15 @@ export function createCarnival(ctx: GameContext): Carnival {
         const id = keeperOf();
         if (id) keepers.cheer(id, big);
       },
+      fumble() {
+        // A comic wobble: dizzy stars on the HUD and a silly boing.
+        hud.setDizzy(true);
+        ctx.audio.play('boing', { volume: 0.5, pitch: 0.7 });
+        ctx.audio.play('squeak', { volume: 0.35, pitch: 1.5 });
+      },
     });
+  /** Times of the player's recent action presses (mash detector). */
+  const presses: number[] = [];
 
   const placeFriends = (): void => {
     if (!active) return;
@@ -296,9 +318,13 @@ export function createCarnival(ctx: GameContext): Carnival {
       console.warn('carnival: earn failed', err);
     }
     if (r.won) plush.add(a.id);
+    hud.setDizzy(false);
     ctx.events.emit('stunt', { kind: 'carnival', value: s[0], stars: r.stars });
     ctx.events.emit('stamp:earned', { id: 'carnivalRow' });
-    ctx.events.emit('ui:toast', { icon: 'gem', text: `+${r.gems}` });
+    // Everything the wallet got this round (prize + mission / Fun Pass bonuses), shown honestly.
+    const gained = Math.max(0, (walletOf(profile) ?? a.walletStart) - a.walletStart);
+    a.bonus = a.practice ? 0 : Math.max(0, gained - r.gems);
+    if (!a.practice) ctx.events.emit('ui:toast', { icon: 'gem', text: `+${r.gems + a.bonus}` });
     ctx.audio.play(r.won ? 'fanfare' : 'chest');
     const burst = boothWorld(a.id, 0, 2.2, 0.4);
     fx.burst(burst, r.won ? 140 : 60);
@@ -306,7 +332,7 @@ export function createCarnival(ctx: GameContext): Carnival {
     a.round.playerAct(r.won ? 'dance' : 'cheer', 3);
     // Friends are good sports: whoever won dances, everyone else cheers.
     for (let i = 0; i < 2; i++) friends.act(i, !r.won && s[i + 1] === Math.max(s[1], s[2]) ? 'emote' : 'cheer', 2.5);
-    hud.showResult(r, a.contestants, s, r.won, ctx.input.state.device);
+    hud.showResult(r, a.contestants, s, r.won, ctx.input.state.device, { bonus: a.bonus, practice: a.practice });
   };
 
   const beginCountdown = (): void => {
@@ -318,17 +344,27 @@ export function createCarnival(ctx: GameContext): Carnival {
     active.result = null;
     active.goT = 0;
     round.left = active.game.duration > 0 ? active.game.duration : Infinity;
+    active.walletStart = walletOf(profileOf(ctx)) ?? 0;
+    active.bonus = 0;
+    presses.length = 0;
     hud.show(active.contestants);
+    hud.setPractice(active.practice);
+    hud.setDizzy(false);
     hud.setTime(active.game.duration > 0 ? 1 : null);
     placeFriends();
     ctx.audio.play('tick');
   };
 
   const ticket = (id: GameId): TicketOutcome => {
-    // Through the economy: first carnival play per session free, then a ticket; a child who
-    // cannot pay plays a practice round (no prize). The economy emits ticket:paid / ticket:denied.
-    freeUsed.add(id);
+    // The first play of EVERY booth per session is free; after that a ticket through the economy;
+    // a child who cannot pay plays a practice round (no prize). The economy emits ticket:paid /
+    // ticket:denied. (The economy's own first free carnival ride is used up by the first booth.)
     const economy = (ctx as Partial<GameContext>).economy;
+    if (!freeUsed.has(id)) {
+      freeUsed.add(id);
+      if (economy && economy.ticketPrice('carnival') === 0) economy.rideTicket('carnival');
+      return 'free';
+    }
     const out = economy ? economy.rideTicket('carnival') : 'free';
     if (out === 'practice') {
       const have = walletOf(profileOf(ctx));
@@ -345,6 +381,24 @@ export function createCarnival(ctx: GameContext): Carnival {
       if (a.exitRequested) return false;
       let input: Readonly<InputState> = realInput;
       if (autopilot && a.phase === 'play') input = { ...realInput, ...a.game.autopilot(dt, a.round) };
+      if (a.phase === 'play') {
+        const rr = a.round;
+        // Mash detector: a burst of presses makes the hero dizzy for a moment.
+        if ((input.jumpPressed || input.usePressed) && rr.stunned <= 0) {
+          presses.push(rr.t);
+          while (presses.length && presses[0] < rr.t - MASH.window) presses.shift();
+          if (presses.length >= MASH.presses) {
+            presses.length = 0;
+            rr.fumble(MASH.stun);
+          }
+        }
+        if (rr.stunned > 0) {
+          rr.stunned = Math.max(0, rr.stunned - dt);
+          if (rr.stunned <= 0) hud.setDizzy(false);
+          // Stunned: no actions, no aiming, no stepping (the hero wobbles).
+          input = { ...input, jump: false, jumpPressed: false, use: false, usePressed: false, moveX: 0, moveY: 0, lookX: 0, lookY: 0 };
+        }
+      }
       if (realInput.respawnPressed || (a.phase === 'result' && realInput.flopPressed)) return false;
 
       // Aim (camera follows the player's yaw).
@@ -429,6 +483,8 @@ export function createCarnival(ctx: GameContext): Carnival {
       exitRequested: false,
       goT: 0,
       practice: out === 'practice',
+      walletStart: 0,
+      bonus: 0,
     };
     friends.setVisible(true);
     for (let i = 0; i < 2; i++) friends.act(i, 'wave', 1.2);

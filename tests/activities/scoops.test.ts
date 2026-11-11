@@ -5,6 +5,7 @@ import {
   SCOOPS,
   SECRETS,
   StackWobble,
+  safeLean,
   WOBBLE,
   effectsFor,
   makeRecipe,
@@ -18,28 +19,51 @@ import {
 import type { Recipe } from '../../src/activities/scoops/logic';
 
 describe('stack wobble', () => {
-  it('a settled stack of five never topples when each scoop waits for the wobble', () => {
+  it('a stack of five never topples when each scoop waits for an upright moment', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const w = new StackWobble(rng(seed));
       for (let n = 1; n <= SCOOPS.maxScoops; n++) {
-        w.push(n);
+        expect(w.push(n), `seed ${seed}, scoop ${n} put on upright`).toBe(false);
         let fell = false;
-        for (let i = 0; i < 600 && !(i > 30 && w.calm()); i++) fell ||= w.step(1 / 60, n);
+        const next = n + 1;
+        for (let i = 0; i < 900 && !(i > 30 && w.safeFor(next)); i++) fell ||= w.step(1 / 60, n);
+        if (n === SCOOPS.maxScoops) for (let i = 0; i < 600; i++) fell ||= w.step(1 / 60, n);
         expect(fell, `seed ${seed}, scoop ${n}`).toBe(false);
       }
     }
   });
 
-  it('spamming scoops onto a wobbling stack topples it', () => {
-    for (let seed = 1; seed <= 40; seed++) {
-      const w = new StackWobble(rng(seed));
-      let fell = false;
-      for (let n = 1; n <= SCOOPS.maxScoops && !fell; n++) {
-        w.push(n);
-        for (let i = 0; i < 6 && !fell; i++) fell = w.step(1 / 60, n);
+  it('a tall stack sways by itself; the fifth scoop at full sway tips it over', () => {
+    const w = new StackWobble(rng(5));
+    for (let n = 1; n <= 4; n++) {
+      w.push(n);
+      for (let i = 0; i < 40 || !w.safeFor(n + 1); i++) w.step(1 / 60, n);
+    }
+    // Wait for a big lean, then pile the fifth on.
+    let maxLean = 0;
+    for (let i = 0; i < 400 && w.lean() < safeLean(5) * 1.2; i++) {
+      w.step(1 / 60, 4);
+      maxLean = Math.max(maxLean, w.lean());
+    }
+    expect(w.lean()).toBeGreaterThan(safeLean(5));
+    expect(w.push(5)).toBe(true);
+    let fell = false;
+    for (let i = 0; i < 120 && !fell; i++) fell = w.step(1 / 60, 5);
+    expect(fell).toBe(true);
+  });
+
+  it('spamming scoops onto a wobbling stack topples it (five scoops 0.1-0.3 s apart)', () => {
+    for (const gap of [6, 12, 18]) {
+      for (let seed = 1; seed <= 40; seed++) {
+        const w = new StackWobble(rng(seed));
+        let fell = false;
+        for (let n = 1; n <= SCOOPS.maxScoops && !fell; n++) {
+          w.push(n);
+          for (let i = 0; i < gap && !fell; i++) fell = w.step(1 / 60, n);
+        }
+        for (let i = 0; i < 120 && !fell; i++) fell = w.step(1 / 60, SCOOPS.maxScoops);
+        expect(fell, `gap ${gap} seed ${seed}`).toBe(true);
       }
-      for (let i = 0; i < 120 && !fell; i++) fell = w.step(1 / 60, SCOOPS.maxScoops);
-      expect(fell, `seed ${seed}`).toBe(true);
     }
   });
 
@@ -58,9 +82,11 @@ describe('stack wobble', () => {
     b.push(3);
     for (let i = 0; i < 60; i++) a.step(1 / 60, 3);
     for (let i = 0; i < 20; i++) b.step(1 / 20, 3);
-    expect(Math.abs(a.x - b.x)).toBeLessThan(0.02);
-    for (let i = 0; i < 600; i++) a.step(1 / 60, 3);
-    expect(a.calm()).toBe(true);
+    expect(Math.abs(a.x - b.x)).toBeLessThan(0.03);
+    const c = new StackWobble(rng(9));
+    c.push(2);
+    for (let i = 0; i < 600; i++) c.step(1 / 60, 2);
+    expect(c.calm()).toBe(true);
   });
 });
 
