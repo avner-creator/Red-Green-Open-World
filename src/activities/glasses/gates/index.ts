@@ -365,7 +365,8 @@ export function create(env: MechanicEnv): Mechanic {
     drawSymbols();
     // The sign goes quiet once the run is answered.
     weakRoot.visible = strongRoot.visible = false;
-    kit.report(hit, { x: G.archX[i], y: archBase[i] + G.plaqueY + 0.95, z: G.archZ + 0.3 });
+    // The ✓ / ✗ pops in the middle of the opening the child just ran through (seen from either side).
+    kit.report(hit, { x: G.archX[i], y: archBase[i] + 1.45, z: G.archZ });
   }
 
   const m4 = new THREE.Matrix4();
@@ -485,12 +486,12 @@ export function create(env: MechanicEnv): Mechanic {
         })(),
         arches: G.archX.map((x) => ({ front: pt(x, G.archZ + 0.7), back: pt(x, G.archZ - 0.7), around: pt(x + G.outerHalf + 0.6, G.archZ - 0.7) })),
         sign: { ...pt(0, G.signZ), y: signY },
-        /** The booth's marquee (world, on the ground) and a spot 1.6 m behind the pad. */
+        /** The booth's marquee (world, on the ground) and a spot 2.8 m behind the pad. */
         booth: (() => {
           const b = kit.booth.build.marqueeBox;
           return pt((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2);
         })(),
-        padBack: pt(0, G.padZ + 1.7),
+        padBack: pt(0, G.padZ + 2.8),
       };
     },
     force(params) {

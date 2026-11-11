@@ -78,6 +78,8 @@ export interface BoothGeometry {
   bannerAt: THREE.Vector3;
   /** Frame-local point in front of the picture board: where the play prompt floats by default. */
   boardFront: THREE.Vector3;
+  /** Frame-local point in front of the magic-glasses mark (celebration burst and confetti). */
+  topAt: THREE.Vector3;
 }
 
 type Piece = { geo: THREE.BufferGeometry; name?: string; w?: number; h?: number };
@@ -308,6 +310,7 @@ export function buildBoothGeometry(spec: BoothSpec, ground: (x: number, z: numbe
     countdownAt,
     bannerAt: new THREE.Vector3(0, K.bannerY, 0.4).applyMatrix4(B),
     boardFront: new THREE.Vector3(0, K.boardY + 0.05, 0.45).applyMatrix4(B),
+    topAt: new THREE.Vector3(0, K.markY + 0.2, 0.5).applyMatrix4(B),
   };
 }
 

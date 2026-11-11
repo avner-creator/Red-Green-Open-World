@@ -305,8 +305,15 @@ test('gates: a round of 3 runs: a hit and a miss through real movement, lamps, c
   expect(d.kit.booth.lamps[0]).toBe('hit');
   expect(d.kit.fx.pop).toBe(1);
   // Turn round behind the arch: the camera looks back at it (squash, ✓, confetti).
-  await standAt(d.arches[1].back, d.yaw, 10);
-  await shots(BOOTH_OUT, 'gates-hit');
+  {
+    const b = d.arches[1].back;
+    const f = d.arches[1].front;
+    // ~3.8 m behind the arch, looking back at it (the shot is taken mid-pop).
+    const behind = { x: b.x + (b.x - f.x) * 2.2, y: b.y, z: b.z + (b.z - f.z) * 2.2 };
+    behind.y = await page.evaluate((p) => window.__rg!.ctx.world.heightAt(p.x, p.z), behind);
+    await standAt(behind, d.yaw, 10);
+  }
+  await shots(BOOTH_OUT, 'gates-hit', true);
   // The beat ends: "back to the pad".
   await step(60);
   d = await debug<GatesDebug>('gates');

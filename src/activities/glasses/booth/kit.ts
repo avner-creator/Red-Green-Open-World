@@ -181,9 +181,10 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           if (e.gems > 0) {
             booth.setLampMode('chase');
             ctx.audio.play('fanfare');
-            const top = marqueeTop();
+            // Above the lamps, so the chasing lamps stay in view.
+            const top = booth.mesh.localToWorld(booth.build.topAt.clone());
             fx.confettiAt(top, 100, 6.5);
-            fx.burst(top, 3.2);
+            fx.burst(top, 2.2);
           } else {
             ctx.audio.play('boing', { volume: 0.5, pitch: 0.6 });
           }

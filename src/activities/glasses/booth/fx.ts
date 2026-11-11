@@ -37,6 +37,7 @@ export function popScale(age: number, life: number, out = 0.2): number {
 
 export class BoothFx {
   readonly mesh: THREE.Mesh;
+  private readonly material: THREE.Material;
   readonly confetti = new Confetti(110);
   private readonly items: (Item | null)[];
   private readonly pos: THREE.BufferAttribute;
@@ -62,7 +63,15 @@ export class BoothFx {
     geo.setAttribute('uv', this.uv);
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(max * vq * 3).fill(1.35), 3));
     quad.dispose();
-    this.mesh = new THREE.Mesh(geo, material);
+    // Pops sit inside arches, signs and props: drawn last and on top so they are never cut.
+    this.material = material.clone();
+    // Same shader as the booth (clone() does not carry these).
+    this.material.onBeforeCompile = material.onBeforeCompile;
+    this.material.customProgramCacheKey = material.customProgramCacheKey;
+    this.material.depthTest = false;
+    this.material.depthWrite = false;
+    this.mesh = new THREE.Mesh(geo, this.material);
+    this.mesh.renderOrder = 50;
     this.mesh.name = 'glasses:booth:fx';
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = false;
@@ -189,6 +198,7 @@ export class BoothFx {
 
   dispose(): void {
     this.mesh.geometry.dispose();
+    this.material.dispose();
     this.confetti.dispose();
   }
 }
