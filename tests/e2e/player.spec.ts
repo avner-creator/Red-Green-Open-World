@@ -25,7 +25,7 @@ async function startFrozen(page: Page): Promise<void> {
     const rg = window.__rg!;
     rg.freeze(true);
     rg.start();
-    rg.step(1 / 60, 20);
+    rg.step(1 / 60, 20, false);
   });
 }
 
@@ -141,9 +141,9 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
   const flop = await page.evaluate(() => {
     const rg = window.__rg!;
     rg.inject({ flopPressed: true });
-    rg.step(1 / 60, 2);
+    rg.step(1 / 60, 2, false);
     const during = rg.ctx.player.mode;
-    rg.step(1 / 60, 90);
+    rg.step(1 / 60, 90, false);
     return { during, after: rg.ctx.player.mode };
   });
   expect(flop).toEqual({ during: 'flop', after: 'walk' });
@@ -153,10 +153,10 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
     const rg = window.__rg!;
     const before = rg.ctx.player.position.clone();
     rg.teleport(30, rg.ctx.world.heightAt(30, 30) + 5, 30);
-    rg.step(1 / 60, 1);
+    rg.step(1 / 60, 1, false);
     const after = rg.ctx.player.position.clone();
     rg.inject({ respawnPressed: true });
-    rg.step(1 / 60, 2);
+    rg.step(1 / 60, 2, false);
     const back = rg.ctx.player.position.clone();
     return { before: before.toArray(), after: after.toArray(), back: back.toArray() };
   });
@@ -168,7 +168,7 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
   const fell = await page.evaluate(() => {
     const rg = window.__rg!;
     rg.teleport(0, -40, 0);
-    rg.step(1 / 60, 2);
+    rg.step(1 / 60, 2, false);
     const { x, y, z } = rg.ctx.player.position;
     return { above: y - rg.ctx.world.heightAt(x, z), land: rg.ctx.world.isLand(x, z) };
   });
@@ -179,7 +179,7 @@ test('player walks, jumps, launches, teleports and respawns without errors', asy
   // Camera stays above the ground and looks at the player.
   const cam = await page.evaluate(() => {
     const rg = window.__rg!;
-    rg.step(1 / 60, 30);
+    rg.step(1 / 60, 30, false);
     const c = rg.ctx.camera.position;
     return { above: c.y - rg.ctx.world.heightAt(c.x, c.z), d: c.distanceTo(rg.ctx.player.position) };
   });
@@ -201,12 +201,12 @@ test('interactions focus the nearest target and E uses it', async () => {
     const focusLog: (string | null)[] = [];
     rg.ctx.events.on('interact:focus', (e) => focusLog.push(e.target ? e.target.id : null));
     const remove = rg.ctx.interactions.add({ id: 'box', radius: 3, icon: 'hand', position: () => at, onUse: () => (used += 1) });
-    rg.step(1 / 60, 2);
+    rg.step(1 / 60, 2, false);
     const focused = rg.ctx.interactions.focused?.id ?? null;
     rg.inject({ usePressed: true });
-    rg.step(1 / 60, 3);
+    rg.step(1 / 60, 3, false);
     remove();
-    rg.step(1 / 60, 1);
+    rg.step(1 / 60, 1, false);
     return { focused, used, focusLog, after: rg.ctx.interactions.focused };
   });
   expect(r.focused).toBe('box');

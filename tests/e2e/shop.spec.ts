@@ -37,7 +37,7 @@ async function save(page: Page, name: string, at = 1200): Promise<void> {
   writeFileSync(`${OUT}/${name}-G.png`, channel(png, 1));
 }
 
-const step = (page: Page, n = 5): Promise<void> => page.evaluate((k) => window.__rg!.step(1 / 60, k), n);
+const step = (page: Page, n = 5): Promise<void> => page.evaluate((k) => window.__rg!.step(1 / 60, k, false), n);
 const phase = (page: Page): Promise<string> => page.evaluate(() => window.__rg!.state().phase);
 /** Tap the unlock moment away (it also leaves by itself after ~2 s). */
 const dismiss = (page: Page): Promise<void> =>
@@ -163,7 +163,7 @@ test.describe('economy ui', () => {
       rg.ctx.events.emit('combo:changed', { multiplier: 5, streak: 9 });
       rg.ctx.events.emit('mission:progress', { index: 0, mission: { ...ms[0]!, progress: Math.floor(ms[0]!.target / 2) } });
       rg.ctx.events.emit('mission:completed', { index: 2, mission: { ...ms[2]!, progress: ms[2]!.target, done: true } });
-      rg.step(1 / 60, 40);
+      rg.step(1 / 60, 40, false);
       return ms;
     });
     expect(missions.length).toBe(3);
@@ -178,7 +178,7 @@ test.describe('economy ui', () => {
       const rg = window.__rg!;
       rg.ctx.profile.earn(5, 'gem');
       rg.ctx.events.emit('gem:collected', { id: 'mg', count: 1, total: 60, position: rg.ctx.player.position.clone(), value: 5, mega: true, combo: 1, gain: 5 });
-      rg.step(1 / 60, 2);
+      rg.step(1 / 60, 2, false);
     });
     await expect(page.locator('[data-testid="wallet-pop"][data-kind="mega"]')).toHaveCount(1);
     await save(page, 'hud-combo-missions', 300);
@@ -225,7 +225,7 @@ test.describe('economy ui', () => {
     await page.evaluate(() => {
       window.__rg!.ctx.events.emit('combo:changed', { multiplier: 1, streak: 0 });
       window.__rg!.ctx.events.emit('ticket:denied', { kind: 'balloon', price: 50, wallet: 3 });
-      window.__rg!.step(1 / 60, 2);
+      window.__rg!.step(1 / 60, 2, false);
     });
     // The toast lives ~3 s of real time: check it first (a busy machine can be slow to hide the badge).
     await expect(page.locator('.toast.deny')).toContainText('50');
@@ -242,7 +242,7 @@ test.describe('economy ui', () => {
       rg.inject({ usePressed: true, use: true });
       rg.step(1 / 60, 1, false);
       rg.inject(null);
-      rg.step(1 / 60, 3);
+      rg.step(1 / 60, 3, false);
     });
     await expect(page.getByTestId('shop')).toBeVisible();
     expect(await phase(page)).toBe('paused');
@@ -318,7 +318,7 @@ test.describe('economy ui', () => {
     // Wardrobe from the pause menu: wear / take off.
     await page.evaluate(() => {
       window.__rg!.ctx.session.pause();
-      window.__rg!.step(1 / 60, 2);
+      window.__rg!.step(1 / 60, 2, false);
     });
     await page.getByTestId('pause-wardrobe').click();
     await expect(page.getByTestId('wardrobe')).toBeVisible();
@@ -341,7 +341,7 @@ test.describe('economy ui', () => {
     await page.evaluate((chest) => {
       const rg = window.__rg!;
       rg.ctx.profile.unlock(chest, 'chest');
-      rg.step(1 / 60, 2);
+      rg.step(1 / 60, 2, false);
     }, 'fx-specs');
     await expect(page.getByTestId('moment-unlock')).toHaveCount(1);
     await expect(page.locator('[data-testid="moment-unlock"] img.pic')).toHaveCount(1);
@@ -353,7 +353,7 @@ test.describe('economy ui', () => {
       e.emit('mission:completed', { index: 1, mission: { ...ms[1]!, progress: ms[1]!.target, done: true } });
       rg.ctx.profile.earn(15, 'jackpot');
       e.emit('mission:jackpot', { reward: 15 });
-      rg.step(1 / 60, 3);
+      rg.step(1 / 60, 3, false);
     }, missions);
     await expect(page.getByTestId('moment-jackpot')).toHaveCount(1);
     await save(page, 'hud-jackpot', 700);
@@ -362,7 +362,7 @@ test.describe('economy ui', () => {
     const earned = await page.evaluate(() => {
       const rg = window.__rg!;
       rg.setRemaining(0.05);
-      rg.step(1 / 60, 30);
+      rg.step(1 / 60, 30, false);
       return rg.state().earned ?? 0;
     });
     await expect(page.getByTestId('play-again')).toBeVisible();
@@ -428,7 +428,7 @@ test.describe('economy ui by touch', () => {
       const x = a.position.x + Math.sin(a.yaw) * 2.4;
       const z = a.position.z + Math.cos(a.yaw) * 2.4;
       rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.2, z, a.yaw + Math.PI);
-      rg.step(1 / 60, 40);
+      rg.step(1 / 60, 40, false);
     });
     await expect(page.getByTestId('missions')).toBeVisible();
     // Next to the kiosk the use button shows the shop icon.
