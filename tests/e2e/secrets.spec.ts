@@ -330,6 +330,69 @@ test('vault: stepping on pads; wrong order wobbles and starts over, the weak eye
   expect((await info()).paths.every((p) => !p.claimed)).toBe(true);
 });
 
+test('vault: walking over a pad on the way does not count; stopping on a pad edge does (QA5 M5)', async () => {
+  const door = 1;
+  const seq = (await info()).doors[door].sequence;
+  /** Door-local → world x,z. */
+  const world = (lx: number, lz: number): Promise<[number, number]> =>
+    page.evaluate(([d, x, z]) => {
+      const dd = window.__rgSecrets!.info().doors[d];
+      const c = Math.cos(dd.yaw);
+      const s = Math.sin(dd.yaw);
+      return [dd.x + c * x + s * z, dd.z - s * x + c * z] as [number, number];
+    }, [door, lx, lz] as const);
+  const local = (b: number): Promise<[number, number]> =>
+    page.evaluate(([d, bb]) => {
+      const dd = window.__rgSecrets!.info().doors[d];
+      const [wx, wz] = window.__rgSecrets!.standPoint(d, bb);
+      const c = Math.cos(dd.yaw);
+      const s = Math.sin(dd.yaw);
+      return [c * (wx - dd.x) - s * (wz - dd.z), s * (wx - dd.x) + c * (wz - dd.z)] as [number, number];
+    }, [door, b] as const);
+  /** Start at door-local `from`, walk forward toward `to` for `frames` frames, then stop. */
+  const walk = async (from: [number, number], to: [number, number], frames: number): Promise<void> => {
+    const [fx, fz] = await world(...from);
+    const [tx, tz] = await world(...to);
+    await page.evaluate(({ fx, fz, tx, tz, frames }) => {
+      const rg = window.__rg!;
+      rg.teleport(fx, rg.ctx.world.heightAt(fx, fz) + 0.1, fz, Math.atan2(tx - fx, tz - fz));
+      rg.step(1 / 60, 4, false);
+      rg.inject({ moveY: 1 });
+      rg.step(1 / 60, frames, false);
+      rg.inject(null);
+      rg.step(1 / 60, 30, false);
+    }, { fx, fz, tx, tz, frames });
+  };
+  // First step: right onto the first pad's middle (counts at once).
+  const [p0x, p0z] = await local(seq[0]);
+  await walk([p0x, p0z + 3], [p0x, p0z], 1);
+  const [wx, wz] = await world(p0x, p0z);
+  await page.evaluate(({ wx, wz }) => {
+    const rg = window.__rg!;
+    rg.teleport(wx, rg.ctx.world.heightAt(wx, wz) + 0.1, wz, 0);
+    rg.step(1 / 60, 30, false);
+  }, { wx, wz });
+  expect((await info()).doors[door].progress).toBe(1);
+  // Walk briskly across a wrong pad toward the door, 0.45 m off its middle, and on past it: nothing happens.
+  const wrong = [0, 1, 2, 3].find((b) => b !== seq[0] && b !== seq[1])!;
+  const [qx, qz] = await local(wrong);
+  await walk([qx + 0.45, qz + 2.2], [qx + 0.45, qz - 3], 40);
+  let d = (await info()).doors[door];
+  expect([d.progress, d.misses]).toEqual([1, 0]);
+  // Stop on the right pad's edge (0.45 m off its middle): the dwell counts it.
+  const [rx, rz] = await local(seq[1]);
+  const [ex, ez] = await world(rx, rz + 0.45);
+  await page.evaluate(({ ex, ez }) => {
+    const rg = window.__rg!;
+    rg.teleport(ex, rg.ctx.world.heightAt(ex, ez) + 0.1, ez, 0);
+    rg.step(1 / 60, 10, false);
+  }, { ex, ez });
+  expect((await info()).doors[door].progress).toBe(1);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 30, false));
+  d = (await info()).doors[door];
+  expect([d.progress, d.misses]).toEqual([2, 0]);
+});
+
 test('stones and arrows touch only the weak channel, vault buttons only the strong one (4 combos)', async () => {
   const s = await info();
   // Park the player out of every view.
@@ -391,9 +454,10 @@ test('clear without words: start rings and signs at every path, a rule board tha
   // The board is a both-eye object in the main scene, never on a vision layer.
   expect(await page.evaluate(() => window.__rg!.layerObjects().filter((o) => o.name.startsWith('vault-board') || o.name.startsWith('secret-start')).length)).toBe(0);
   const phases = new Set<string>();
-  for (let k = 0; k < 8; k++) {
+  // Sample every 0.4 s (shorter than any step) for over a full loop, whatever the clock is now.
+  for (let k = 0; k < 16; k++) {
     phases.add((await info()).doors[0].board);
-    await page.evaluate(() => window.__rg!.step(1 / 60, 50, false));
+    await page.evaluate(() => window.__rg!.step(1 / 60, 25, false));
   }
   for (const ph of ['show', 'step1', 'step2', 'step3', 'open']) expect([...phases], ph).toContain(ph);
 });

@@ -13,20 +13,41 @@ export const DOOR_RULES = {
   buttons: SHAPES.length,
   sequenceLength: 3,
   /**
-   * Floor pads: on an arc of this radius round the door centre, at these angles (radians, 0 = straight
-   * out of the door, left → right). Walking from one pad to any other never crosses a third.
+   * Floor pads, door-local x,z (left → right): two near the door, two further out and wider, a
+   * trapezoid. Every pad is a corner of the shape, so a straight walk from any pad to any other
+   * passes at least ~1.1 m from the centre of every other pad (QA5 M5: the old arc let a walk from
+   * pad 2 to pad 0 clip pad 1).
    */
-  padArc: 3.5,
-  padAngles: [-0.98, -0.33, 0.33, 0.98] as readonly number[],
-  /** Pad cap radius; a step counts within `padStep` of the centre. */
+  padSpots: [
+    [-2.7, 4.1],
+    [-1.2, 2.0],
+    [1.2, 2.0],
+    [2.7, 4.1],
+  ] as readonly (readonly [number, number])[],
+  /** Pad cap radius; the player is on a pad within `padStep` of its centre. */
   padR: 0.62,
   padStep: 0.68,
+  /**
+   * A pad counts only on a deliberate step: after standing on it this long (its dwell disc fills),
+   * or at once when the player is right in the middle (`padCentre` of the cap radius).
+   * Crossing a pad on the way somewhere else never counts.
+   */
+  padDwell: 0.35,
+  padCentre: 0.6,
+  /** Door-local x of the rule board (left of the pads). */
+  boardX: -4.4,
 } as const;
 
 /** Door-local x,z of floor pad `i`. */
 export function padLocal(i: number): { x: number; z: number } {
-  const a = DOOR_RULES.padAngles[i];
-  return { x: Math.sin(a) * DOOR_RULES.padArc, z: Math.cos(a) * DOOR_RULES.padArc };
+  const p = DOOR_RULES.padSpots[i];
+  return { x: p[0], z: p[1] };
+}
+
+/** Direction of pad `i` seen from the door centre (radians, 0 = straight out, + = right). */
+export function padAngle(i: number): number {
+  const p = padLocal(i);
+  return Math.atan2(p.x, p.z);
 }
 
 /** Which floor pad the player stands on (door-local x,z), or -1. */
@@ -36,6 +57,49 @@ export function padAt(localX: number, localZ: number): number {
     if (Math.hypot(localX - p.x, localZ - p.z) <= DOOR_RULES.padStep) return i;
   }
   return -1;
+}
+
+/**
+ * Turns "where the player is" into deliberate pad steps: a pad is pressed once per visit, after
+ * `padDwell` s on it or at once in its middle. Leaving the pad (or `reset`) starts over.
+ */
+export class PadStepper {
+  /** The pad stood on (-1 none). */
+  pad = -1;
+  /** Seconds on `pad` this visit. */
+  time = 0;
+  /** True once this visit has pressed the pad. */
+  done = false;
+
+  /** Feed the player's door-local position (or `on = false` when pads cannot be pressed); returns the pad pressed this frame or -1. */
+  update(localX: number, localZ: number, dt: number, on = true): number {
+    const at = on ? padAt(localX, localZ) : -1;
+    if (at !== this.pad) {
+      this.pad = at;
+      this.time = 0;
+      this.done = false;
+    }
+    if (at < 0 || this.done) return -1;
+    this.time += dt;
+    const c = padLocal(at);
+    const centred = Math.hypot(localX - c.x, localZ - c.z) < DOOR_RULES.padR * DOOR_RULES.padCentre;
+    if (this.time >= DOOR_RULES.padDwell || centred) {
+      this.done = true;
+      return at;
+    }
+    return -1;
+  }
+
+  /** Dwell disc fill 0..1 for the pad being stood on (0 once pressed or off the pads). */
+  get fill(): number {
+    return this.pad < 0 || this.done ? 0 : Math.min(1, this.time / DOOR_RULES.padDwell);
+  }
+
+  reset(): void {
+    this.pad = -1;
+    this.time = 0;
+    this.done = false;
+  }
 }
 
 /** Mulberry32: tiny seeded PRNG so each session's sequence is fresh but tests are deterministic. */
