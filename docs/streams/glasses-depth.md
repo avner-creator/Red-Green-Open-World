@@ -413,25 +413,53 @@ and Gear Shack 125 draws before and after.
 
 **Rule change that comes with it:** games are played in rounds and the prize is paid at the end
 of the round if enough tries were right. This replaces the nap after a miss and the "1 gem until
-two in a row" rule. `glasses:result` is still reported for every try.
+two in a row" rule. `glasses:result` is still reported for every try. Glow-flies now fly above
+ground reach (a catch needs a jump) and only during a round.
 
-| Game | State | Round | One true sentence for Pip |
-|---|---|---|---|
-| `gates` | done | 3 runs, prize from 2 right (3 or 10 gems at tier 1) | "Step on the glowing pad, put the two halves on the sign together with both eyes, then run through the arch with that whole shape — three runs, get two right to win gems!" |
-| `oddone` | building | 5 tries, prize from 3 | — |
-| `dotsigns` | building | 5 tries, prize from 3 | — |
-| `lineup` | building | 5 bubbles, prize from 3 | — |
-| `glowflies` | building | timed, 5 flies, prize from 3 | — |
-| `toys` | building | one trail per round, three toys per session | — |
+| Game | Round | One true sentence for Pip |
+|---|---|---|
+| `gates` | Step on the pad → 3-2-1 → 3 runs; prize from 2 right | "Step on the glowing pad, put the two halves on the sign together with both eyes, then run through the arch with that whole shape — three runs, get two right to win gems!" |
+| `oddone` | Press the pad → 3-2-1 → 5 tries; prize from 3 right | "Stand on the glowing pad and press the button, then five times push the button under the picture that is different." |
+| `dotsigns` | Press the pad → 3-2-1 → 5 pictures; prize from 3 right | "Stand on the glowing pad and press the button, then five times look at the dots and push the button with the shape that pops out." |
+| `lineup` | Step on the pad → 3-2-1 → 5 bubbles, one tap each; prize from 3 pops | "Step on the glowing pad, slide the magic ring over the bubble and press the button to pop it!" |
+| `glowflies` | Step on the pad → 3-2-1 → 35 s to catch 5 flies (lamps blink faster as time runs out); prize from 3 catches | "Step on the pad, then jump right through the glow-flies to catch five before the lamps stop blinking!" |
+| `toys` | Press the pad → 3-2-1 → one paw trail per round, three toys per session (then free-play trails) | "Press the glowing pad by Pip's basket, then follow the glowing paw prints to find each lost toy and bring all three home!" |
 
-**Pip lines (`agent/pip-story`, `src/buddy/script.ts`) that stop being true:**
-- gates: "Step on the start plate for a new shape!" — the pad now starts a countdown and a round
-  of three runs. ("Look at the sign. Each eye sees half a shape!" and "Put the halves together,
-  then run through that arch!" stay true.)
-- the other five: filled in as each game lands.
+Guessing does not pay under the round rules (unit-tested bots against the real rounds, gems per
+minute): gates random 4.9 vs seeing 30; odd one out and dot signs random 3.8–4.8 vs seeing 28;
+line-up blind 0 vs seeing 30; glow-flies blind lawn-mower 0.6 (it reaches the prize in ≤ 10 % of
+rounds) vs seeing 44.
 
-**Wanted from the world owner** (paths, signposts, the toys stepping-stone trail; with
-coordinates): filled in as each game lands.
+**Pip lines on `agent/pip-story` (`src/buddy/script.ts`) checked against the final rules:**
+
+| Game | Line | Still true? |
+|---|---|---|
+| gates | "Look at the sign. Each eye sees half a shape!" | yes |
+| gates | "Put the halves together, then run through that arch!" | yes |
+| gates | "Step on the start plate for a new shape!" | **no** — the pad starts a countdown and a round of three runs |
+| oddone | "Three shapes, one is different. Push that one's button!" | yes (does not say how to start) |
+| dotsigns | "Look at the dots. A hidden shape pops out!" / "Push the button with that same shape!" | yes (do not say how to start) |
+| lineup | "Stand on the pad. Move the magic ring onto a bubble!" / "Then push the button to pop it!" | yes |
+| glowflies | "Catch the glow-flies! Run or jump right through them!" | **no** — every fly is above ground reach now, a catch always needs a jump |
+| glowflies | "Only magic glasses can see them. Fill up the jar!" | yes |
+| toys | "I lost my toys! Follow the glowing paw prints to find them!" | yes (does not say to press the pad) |
+
+New facts no line mentions yet: every game starts on a glowing pad with a 3-2-1; games are
+rounds with lamps (win from 2 of 3 or 3 of 5); glow-flies is timed.
+
+**Wanted from the world owner** (Stream R owns `src/world/`; nothing was edited there):
+
+| Site | Wish | Where (x, z) |
+|---|---|---|
+| odd one out | a 2 m path from the west road to the start pad | pad at (−35.8, 0.6) |
+| odd one out | keep a 4 m circle clear at the approach spot; a crossing on the west road; a signpost arm at spawn pointing west | (−32.9, 6.5); near (−30, 15) |
+| dot signs | a 2 m path from the parklink path to the start pad, with a signpost arm where it joins | pad at (62.8, 8.7) |
+| dot signs | move the red-white pole that stands in front of the booth | near (60, 4) |
+| line-up | a 2.5 m path to the pad and a signpost arm | from (63.5, −78.2) to (72.3, −90.3); arm at (65.2, −80.6) |
+| glow-flies | a 2.5 m path to the pad; move the horse-ride board out of that sightline | from (−55.9, 34.1) to (−65.6, 22.6) |
+| toys | stepping stones (about 0.7 m, every 1.6 m, 2 m corridor) and a signpost arm pointing west | from the south/loop road junction (7, 74) to (−23.5, 69.0) |
+| toys | keep the meadow the paw trails cross walkable (no new fences, walls or solid props) | x −65…−12, z 29…109 |
+| gates | (to be listed by QA) | pad near (48, 104) |
 
 ## Test results
 
