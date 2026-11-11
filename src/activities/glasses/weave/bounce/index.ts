@@ -2,8 +2,10 @@
  * `bounce` (timeIt): a weak-eye perfect-bounce timing ring on the giant trampoline.
  *
  * While the hero falls in a trampoline flight (owner 'trampoline') with enough time left, a
- * ground-facing timing ring sits round the landing spot, 0.3 m above the mat, and closes onto its
- * target at a random moment between 35 % and 75 % of the fall (`./logic.ts`). One press of Jump or
+ * ground-facing timing ring lies on the fall line to the landing spot, 3 m below the hero's feet
+ * (so the high, downward-looking trampoline camera always has it on screen right under the hero,
+ * never over the both-eye body), and settles onto the landing spot 0.3 m above the mat at the end.
+ * It closes onto its target at a random moment between 35 % and 75 % of the fall (`./logic.ts`). One press of Jump or
  * Use per fall is the attempt: in the window = hit (1 / 2 / 3 gems by tier, a weak-eye star burst;
  * three perfects in a row +3), outside it = miss. A press in the last 0.35 s is the ordinary landing
  * press and never counts; holding Jump from before the fall makes no press; a press during the
@@ -28,15 +30,17 @@ import type { FallPlan, PressGrade } from './logic';
 /** Look of the ring (metres, before the tier size). */
 const LOOK = {
   lift: 0.3,
-  target: 1.8,
-  start: 5,
+  /** The ring rides this far below the hero's feet on the fall line. */
+  below: 3,
+  target: 1.5,
+  start: 4.2,
   thickness: 0.3,
   /** `t` at which the closing ring meets the target (toolkit convention). */
   perfectAt: 0.8,
   missFade: 0.35,
   burstTime: 0.8,
-  starRise: 2.6,
-  starHeight: 1.3,
+  starRise: 0.2,
+  starHeight: 1.1,
 } as const;
 
 interface Fall {
@@ -84,6 +88,16 @@ export function create(env: WeaveEnv): WeavePart {
     fall = null;
   };
 
+  /** Where the ring is now: on the fall line `below` m under the feet, or on the landing spot. */
+  const ringPos = (out: THREE.Vector3, spot: THREE.Vector3): THREE.Vector3 => {
+    const f = getFlight(ctx);
+    const p = ctx.player.position;
+    const y = p.y - LOOK.below;
+    if (y <= spot.y || f.vy > 0) return out.copy(spot);
+    const tau = timeToLand(p.y, f.vy, y);
+    return out.set(p.x + f.vx * tau, y, p.z + f.vz * tau);
+  };
+
   const applyRing = (): void => {
     if (!ring || !fall) return;
     ring.setT(Math.min(1, (fall.at / fall.plan.perfect) * LOOK.perfectAt));
@@ -125,7 +139,7 @@ export function create(env: WeaveEnv): WeavePart {
       facing: 'ground',
     });
     r.object.name = 'weave-bounce-ring';
-    r.object.position.copy(spot);
+    ringPos(r.object.position, spot);
     ring = r;
     ringFade = 1;
     ringFading = false;
@@ -164,7 +178,8 @@ export function create(env: WeaveEnv): WeavePart {
     burst.update(dt);
     burst.object.scale.setScalar(1.6 + 3.6 * (1 - (1 - k) ** 2));
     burst.setFade(Math.max(0, 1 - k) ** 0.7);
-    star.object.position.set(fxSpot.x, fxSpot.y + LOOK.starRise + 1.2 * k, fxSpot.z);
+    burst.object.position.set(fxSpot.x, fxSpot.y + 0.02, fxSpot.z);
+    star.object.position.set(fxSpot.x, fxSpot.y + LOOK.starRise, fxSpot.z);
     star.object.scale.setScalar(0.8 + 0.5 * Math.sin(Math.min(1, k * 2.2) * Math.PI * 0.5));
     star.setFade(k < 0.6 ? 1 : Math.max(0, (1 - k) / 0.4));
     if (fxLeft <= 0) {
@@ -185,9 +200,9 @@ export function create(env: WeaveEnv): WeavePart {
       hits++;
       if (g.perfect) perfects++;
       env.pay(gems);
-      const spot = fall.spot.clone();
+      const at = ringPos(new THREE.Vector3(), fall.spot);
       dropRing();
-      celebrate(spot);
+      celebrate(at);
     } else {
       misses++;
       ringFading = true;
@@ -237,7 +252,9 @@ export function create(env: WeaveEnv): WeavePart {
       }
       const p = ctx.player.position;
       fall.at = Math.max(0, fall.plan.fall - timeToLand(p.y, f.vy, f.endY));
+      if (fxLeft > 0) ringPos(fxSpot, fall.spot);
       if (ring) {
+        ringPos(ring.object.position, fall.spot);
         applyRing();
         ring.update(dt);
         if (ringFading) {

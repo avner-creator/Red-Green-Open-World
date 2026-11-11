@@ -25,16 +25,16 @@ import { HERO_LUCK, HeroLuck } from './logic';
 import type { SparkKind } from './logic';
 
 const LOOK = {
-  ringRadius: 0.82,
-  ringThickness: 0.11,
+  ringRadius: 0.95,
+  ringThickness: 0.13,
   /** Lift of the ground ring above the ground under the hero (m). */
   lift: 0.06,
   /** Ground probe: from this high above the feet, this far down. */
   probeUp: 0.4,
   probeDown: 8,
   /** Number: ink height and height of its centre above the feet. */
-  numberHeight: 0.46,
-  numberY: PLAYER.height + 0.62,
+  numberHeight: 0.55,
+  numberY: PLAYER.height + 0.5,
   /** Follow rate (1/s) of the helpers. */
   follow: 22,
   fadeIn: 0.2,
@@ -99,7 +99,7 @@ export function create(env: WeaveEnv): WeavePart {
     if (!b) {
       b = createRing({
         radius: kind === 'skill' ? LOOK.ringRadius : 0.42,
-        thickness: kind === 'skill' ? 0.12 : 0.08,
+        thickness: kind === 'skill' ? 0.16 : 0.1,
         segments: 10,
         segmentFill: 0.42,
         spin: 0.7,
@@ -121,15 +121,29 @@ export function create(env: WeaveEnv): WeavePart {
     snap = true;
   };
 
-  /** Probe the ground under the hero (the ring lies on it, tilted to its slope). */
+  /**
+   * The ground under the hero (the ring lies on it, tilted to its slope): the first collider below
+   * the feet, or the terrain height where no collider is hit; the feet themselves while grounded.
+   */
   const probeGround = (): void => {
     const p = ctx.player.position;
+    const w = ctx.world;
+    const h = w.heightAt(p.x, p.z);
     const hit = ctx.physics.raycast(probe.set(p.x, p.y + LOOK.probeUp, p.z), DOWN, LOOK.probeUp + LOOK.probeDown);
-    groundOk = hit !== null;
-    if (!hit) return;
-    ground.copy(hit.point);
-    if (hit.normal.y > 0.5) normal.copy(hit.normal);
-    else normal.copy(UP);
+    const onCollider = hit !== null && hit.point.y >= h - 0.05;
+    const gy = ctx.player.grounded ? p.y : onCollider ? hit.point.y : h;
+    groundOk = p.y - gy <= LOOK.probeDown && p.y - gy >= -1;
+    if (!groundOk) return;
+    ground.set(p.x, gy, p.z);
+    if (onCollider && hit.normal.y > 0.5) {
+      normal.copy(hit.normal);
+    } else if (!onCollider) {
+      const e = 0.6;
+      normal.set(w.heightAt(p.x - e, p.z) - w.heightAt(p.x + e, p.z), 2 * e, w.heightAt(p.x, p.z - e) - w.heightAt(p.x, p.z + e)).normalize();
+      if (normal.y < 0.5) normal.copy(UP);
+    } else {
+      normal.copy(UP);
+    }
   };
 
   const place = (dt: number): void => {
