@@ -1,18 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ODD } from '../../src/activities/glasses/oddone/constants';
-import {
-  detailForLevel,
-  differs,
-  gemsForTier,
-  makeRound,
-  napSeconds,
-  nextLevel,
-  OddOneGame,
-  payout,
-  shapesOf,
-  tierForLevel,
-  withAnswer,
-} from '../../src/activities/glasses/oddone/logic';
+import { prizeFor } from '../../src/activities/glasses/booth/round';
+import { DEMO_KIT } from '../../src/activities/glasses/booth/draw';
+import { ODD, ODD_BOOTH, ODD_PRIZE, ODD_RULES } from '../../src/activities/glasses/oddone/constants';
+import { ODD_DEMO } from '../../src/activities/glasses/oddone/demo';
+import { detailForLevel, differs, makeRound, nextLevel, OddStaircase, shapesOf, simulateOddOne, tierForLevel, withAnswer } from '../../src/activities/glasses/oddone/logic';
 import { mulberry32 } from '../../src/vision/toolkit/rng';
 
 describe('odd one out staircase', () => {
@@ -29,9 +20,8 @@ describe('odd one out staircase', () => {
     expect(l).toBe(0);
   });
 
-  it('level → tier → gems', () => {
+  it('level → tier', () => {
     expect([0, 1, 2, 3, 4, 5, 6, 7].map(tierForLevel)).toEqual([1, 1, 2, 2, 3, 3, 3, 3]);
-    expect([gemsForTier(1), gemsForTier(2), gemsForTier(3)]).toEqual([2, 3, 5]);
   });
 
   it('level 0 = different shapes, 1 = arrows, 2+ = rings with a gap', () => {
@@ -89,47 +79,65 @@ describe('odd one out staircase', () => {
   });
 });
 
-describe('odd one out: random pressing does not pay', () => {
-  const DT = 1 / 30;
-  /** Gems per minute for a bot that presses as soon as the buttons allow. */
-  function gemsPerMinute(seed: number, perfect: boolean, lock: number | null, minutes = 30): number {
-    const g = new OddOneGame(mulberry32(seed));
-    g.lockLevel = lock;
-    g.reset();
-    const bot = mulberry32(seed + 99);
-    for (let t = 0; t < minutes * 60; t += DT) {
-      g.step(DT);
-      if (g.canPress()) g.press(perfect ? g.round.answer : Math.floor(bot() * 3));
-    }
-    return g.gems / minutes;
-  }
-
-  it('naps 5 s after a miss, 8 s from the second miss in a row; the first hits after a miss pay 1', () => {
-    expect([napSeconds(0), napSeconds(1), napSeconds(2), napSeconds(5)]).toEqual([0, 5, 8, 8]);
-    expect(payout(3, 1)).toBe(1);
-    expect(payout(3, Infinity)).toBe(gemsForTier(3));
-    const g = new OddOneGame(mulberry32(1));
-    g.reset();
-    const wrong = (g.round.answer + 1) % 3;
-    expect(g.press(wrong)).toMatchObject({ hit: false });
-    expect(g.canPress()).toBe(false);
-    for (let t = 0; t < ODD.feedbackSeconds + 4.9; t += DT) g.step(DT);
-    expect(g.phase).toBe('ask');
-    expect(g.canPress()).toBe(false); // still napping
-    for (let t = 0; t < 0.2; t += DT) g.step(DT);
-    expect(g.canPress()).toBe(true);
-    expect(g.press(g.round.answer)).toMatchObject({ hit: true, gems: 1 });
-  });
-
-  it('a random-guess bot earns ≤ 6 gems per minute at any level', () => {
-    for (const lock of [null, 0, 1, 2, 3, 4, 5, 6, 7]) {
-      let sum = 0;
-      for (const s of [1, 2, 3]) sum += gemsPerMinute(s, false, lock);
-      expect(sum / 3, `level ${lock ?? 'staircase'}`).toBeLessThanOrEqual(6);
+describe('odd one out booth: rounds, prizes and the staircase', () => {
+  it('5 tries (= 5 lamps), a prize from 3 right, 5 of 5 is the jackpot', () => {
+    expect(ODD_RULES.tries).toBe(5);
+    expect(ODD_BOOTH.lamps).toBe(5);
+    expect(ODD_RULES.minHits).toBe(3);
+    expect(ODD_BOOTH.pad.walkIn).toBe(false);
+    for (const tier of [1, 2, 3] as const) {
+      for (let h = 0; h < 3; h++) expect(prizeFor(ODD_RULES, h, tier)).toBe(0);
+      expect(prizeFor(ODD_RULES, 4, tier)).toBeGreaterThan(prizeFor(ODD_RULES, 3, tier));
+      // The jackpot is clearly bigger: at least 1.7 × the prize for 4 of 5.
+      expect(prizeFor(ODD_RULES, 5, tier)).toBeGreaterThanOrEqual(1.7 * prizeFor(ODD_RULES, 4, tier));
+      if (tier > 1) expect(ODD_PRIZE[tier][5]).toBeGreaterThan(ODD_PRIZE[(tier - 1) as 1 | 2][5]);
     }
   });
 
-  it('a perfect player earns ≥ 30 gems per minute at tier 1', () => {
-    expect(gemsPerMinute(1, true, 0, 10)).toBeGreaterThanOrEqual(30);
+  it('the staircase runs through every try and across rounds: finer after a hit, coarser after a miss', () => {
+    const s = new OddStaircase();
+    expect(s.current()).toBe(0);
+    for (const h of [true, true, true, false, true]) s.answer(h); // one round: 3 → 2 → 3
+    expect(s.current()).toBe(3);
+    s.answer(true); // the next round goes on from there
+    expect(s.current()).toBe(4);
+    expect(tierForLevel(s.current())).toBe(3);
+    s.lockLevel = 1;
+    s.answer(false);
+    expect(s.current()).toBe(1);
+    s.reset();
+    expect(s.level).toBe(0);
+  });
+
+  // A bot mashes a button 0.4 s after a try opens and restarts at once; a child who looks takes ~2 s.
+  const bot = { hitP: () => 1 / 3, tryTime: 0.4, restart: 0.5 };
+  const kid = { hitP: () => 1, tryTime: 2, restart: 1.5 };
+
+  it('a random-guess bot earns ≤ 6 gems per minute (staircase and every fixed level)', () => {
+    for (const lockLevel of [undefined, 0, 2, 4, ODD.maxLevel]) {
+      const r = simulateOddOne(ODD_RULES, { ...bot, lockLevel, minutes: 600, seed: 7 });
+      console.info(`oddone bot, level ${lockLevel ?? 'staircase'}: ${r.gemsPerMinute.toFixed(2)} gems/min`);
+      expect(r.gemsPerMinute, `level ${lockLevel ?? 'staircase'}`).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('a child who sees the shapes earns ≥ 25 gems per minute, even at tier 1', () => {
+    const r1 = simulateOddOne(ODD_RULES, { ...kid, lockLevel: 0, minutes: 20 });
+    const rs = simulateOddOne(ODD_RULES, { ...kid, minutes: 20 });
+    console.info(`oddone perfect: tier 1 ${r1.gemsPerMinute.toFixed(1)}, staircase ${rs.gemsPerMinute.toFixed(1)} gems/min`);
+    expect(r1.gemsPerMinute).toBeGreaterThanOrEqual(25);
+    expect(rs.gemsPerMinute).toBeGreaterThanOrEqual(r1.gemsPerMinute);
+    expect(rs.levelEnd).toBe(ODD.maxLevel);
+  });
+
+  it('the demo flipbook has 4–6 frames and draws each without error', () => {
+    expect(ODD_DEMO.frames).toBeGreaterThanOrEqual(4);
+    expect(ODD_DEMO.frames).toBeLessThanOrEqual(6);
+    // A recording stand-in for a 2D context: every call is accepted.
+    const calls: string[] = [];
+    const c = new Proxy({}, { get: (_t, k) => (k === 'canvas' ? {} : (..._a: unknown[]) => calls.push(String(k))), set: () => true }) as unknown as CanvasRenderingContext2D;
+    for (let f = 0; f < ODD_DEMO.frames; f++) ODD_DEMO.draw(c, f, 256, DEMO_KIT);
+    expect(calls.length).toBeGreaterThan(100);
   });
 });
+
