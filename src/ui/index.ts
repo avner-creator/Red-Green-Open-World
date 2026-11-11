@@ -8,7 +8,7 @@ import { createEconTracker } from './econState';
 import { h } from './dom';
 import { icon } from './icons';
 import { setCharacterAccess } from './characterAccess';
-import { applyStoredCharacter, createCharacterSelect } from './characterSelect';
+import { applyStoredCharacter, createCharacterSelect, setWardrobeHook } from './characterSelect';
 import { createGlassesSummary } from './glasses/summaryScreen';
 import { createGate } from './gateScreen';
 import type { GateScreen } from './gateScreen';
@@ -150,6 +150,12 @@ export function createUi(ctx: GameContext): UiApi {
   const select = createCharacterSelect(ctx, {
     back: pop,
     go: () => (phase() === 'paused' ? resume() : play()),
+  });
+  // Hero select "dress up": an owned hero becomes the worn one, then the dressing room opens on top
+  // (closing it returns to the select). A locked hero opens it for the current hero.
+  setWardrobeHook((heroId) => {
+    if (ctx.profile.owns(heroId) && ctx.profile.equipped('character') !== heroId) ctx.profile.equip('character', heroId);
+    actions.openWardrobe();
   });
   // Pause menu: change hero (same screen as the title's).
   const heroTile = h('button', 'b tile d', { type: 'button', 'aria-label': 'Hero', 'data-testid': 'pause-hero' }, h('span', 'pair', {}, icon('grownup'), icon('sparkle')), 'Hero');

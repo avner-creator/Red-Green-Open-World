@@ -21,10 +21,12 @@ function glbJson(file: string): GltfJson {
 }
 
 describe('character catalog', () => {
-  it('has six characters with unique ids, two of them free', () => {
-    expect(CHARACTERS).toHaveLength(6);
-    expect(new Set(CHARACTER_IDS).size).toBe(6);
-    expect(CHARACTERS.filter((c) => c.price === 0)).toHaveLength(2);
+  it('has at least ten characters with unique ids, five or more of them free', () => {
+    expect(CHARACTERS.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(CHARACTER_IDS).size).toBe(CHARACTERS.length);
+    expect(CHARACTERS.filter((c) => c.price === 0).length).toBeGreaterThanOrEqual(5);
+    // Earned early: nothing costs more than ~10 minutes of gem hunting.
+    for (const c of CHARACTERS) expect(c.price).toBeLessThanOrEqual(50);
     expect(getCharacter(DEFAULT_CHARACTER).price).toBe(0);
     for (const c of CHARACTERS) if (c.price > 0) expect(c.price).toBeGreaterThanOrEqual(5);
     for (const c of CHARACTERS) expect(c.price).toBeLessThanOrEqual(100);
@@ -46,8 +48,9 @@ describe('character catalog', () => {
 
   it('sizes characters to fit the player capsule height', () => {
     for (const c of CHARACTERS) {
-      expect(c.height).toBeGreaterThan(1.4);
-      expect(c.height).toBeLessThan(1.9);
+      // Four-legged friends may be a bit shorter (pup) or taller (alpaca neck) than the capsule.
+      expect(c.height).toBeGreaterThan(1.2);
+      expect(c.height).toBeLessThan(2.1);
       expect(c.scale).toBeGreaterThan(0);
     }
   });
@@ -77,6 +80,22 @@ describe('character catalog', () => {
 
       it('has the attach bones', () => {
         for (const part of ['head', 'face', 'back'] as const) expect(names).toContain(c.attach[part].bone);
+      });
+
+      it('has cartoon eyes on a real bone, springy parts that exist, and a backstory + emote name', () => {
+        expect(c.face, 'every hero gets big eyes').toBeTruthy();
+        if (c.face) {
+          expect(names).toContain(c.face.bone);
+          expect(c.face.eyeR).toBeGreaterThan(0.04);
+          expect(c.face.eyeR).toBeLessThan(0.16);
+          // The eyes sit in the head: near the head anchor.
+          const [x, y, z] = c.face.eyeAt;
+          const [, hy, hz] = c.attach.head.offset;
+          expect(Math.abs(x)).toBeLessThan(0.4);
+          expect(Math.hypot(y - hy, z - hz)).toBeLessThan(0.7);
+        }
+        for (const s of c.springs ?? []) expect(names).toContain(s);
+        expect(c.emoteName?.length ?? 0).toBeGreaterThan(1);
       });
     });
   }

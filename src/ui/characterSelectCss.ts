@@ -2,6 +2,8 @@
  * Character select, skill pictograms, HUD skill chip and touch skill/emote button CSS.
  * Light-on-dark with thick black + white outlines: every cue works by brightness, not hue.
  */
+import { POWER_CSS } from './characterSelectPowers';
+
 export const CHARACTER_CSS = `
 /* ---------- skill pictograms ---------- */
 .rg .sk{display:inline-block;width:1em;height:1em;flex:none;vertical-align:middle}
@@ -162,6 +164,6 @@ export function injectCharacterCss(): void {
   if (done) return;
   done = true;
   const el = document.createElement('style');
-  el.textContent = CHARACTER_CSS;
+  el.textContent = CHARACTER_CSS + POWER_CSS;
   document.head.appendChild(el);
 }

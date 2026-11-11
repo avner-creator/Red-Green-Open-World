@@ -90,6 +90,24 @@ export function springSpeed(t: number, gravity: number): number {
   return Math.sqrt(2 * gravity * h);
 }
 
+/**
+ * An extra super power (skills-extra.ts) that takes the skill button instead of the classic skill.
+ * While `active()` the SkillMachine stays idle and forwards its frames.
+ */
+export interface ExtraPowerHook {
+  active(): boolean;
+  frame(f: SkillFrame): void;
+  /** Seconds until the power can be used again (shown on the HUD skill icon). */
+  readonly cooldown: number;
+}
+
+let extraHook: ExtraPowerHook | null = null;
+
+/** Install (or clear) the extra-power hook. */
+export function setExtraPowerHook(h: ExtraPowerHook | null): void {
+  extraHook = h;
+}
+
 export class SkillMachine {
   phase: SkillPhase = 'idle';
   /** Seconds in the current phase. */
@@ -159,6 +177,12 @@ export class SkillMachine {
 
   update(f: SkillFrame): SkillEvent | null {
     const dt = f.dt;
+    if (extraHook?.active()) {
+      const was = this.cancel();
+      extraHook.frame(f);
+      this.cooldown = extraHook.cooldown;
+      return was === 'glide' ? { kind: 'end', id: was } : null;
+    }
     this.cooldown = Math.max(0, this.cooldown - dt);
     if (this.boostTimer !== Infinity) {
       this.boostTimer -= dt;

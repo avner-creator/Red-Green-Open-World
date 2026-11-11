@@ -81,6 +81,7 @@ test.describe('character select', () => {
     await settle(page, 'frog');
     await expect(page.getByTestId('csel-name')).toHaveText('HOPPER');
     await expect(page.getByTestId('csel-skill')).toHaveAttribute('data-skill', 'superBounce');
+    await expect(page.getByTestId('csel-wardrobe')).toBeVisible();
     await save(page, 'select-frog');
 
     // Browse with the keyboard (the focused chip is the selected one).
@@ -90,9 +91,8 @@ test.describe('character select', () => {
     await save(page, 'select-robot');
 
     // A priced character shows a padlock and the price, can be previewed, and cannot start.
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
-    await settle(page, 'panda');
+    await page.getByTestId('csel-flamingo').click();
+    await settle(page, 'flamingo');
     await expect(page.getByTestId('csel-locked')).toBeVisible();
     await expect(page.getByTestId('csel-go')).toHaveCount(0);
     await save(page, 'select-locked');
@@ -135,15 +135,15 @@ test.describe('character select', () => {
   test('a character that can be afforded unlocks with a celebration and then starts', async () => {
     await page.evaluate(() => window.__rg!.ctx.session.toTitle());
     await step(page, 5);
-    // The real wallet: a fresh profile with 30 gems; Mochi (25) is for sale.
+    // The real wallet: a fresh profile with 30 gems; Rosa (15) is for sale.
     await page.evaluate(() => {
       const p = window.__rg!.ctx.profile;
       p.reset();
       p.earn(30, 'test');
     });
     await page.getByTestId('title-hero').click();
-    await page.getByTestId('csel-panda').click();
-    await settle(page, 'panda');
+    await page.getByTestId('csel-flamingo').click();
+    await settle(page, 'flamingo');
     await expect(page.getByTestId('csel-buy')).toBeVisible();
     await expect(page.getByTestId('csel-go')).toHaveCount(0);
     await save(page, 'select-buy');
@@ -151,30 +151,78 @@ test.describe('character select', () => {
     await expect(page.getByTestId('csel-unlock')).toHaveClass(/on/);
     await save(page, 'unlock');
     await expect(page.getByTestId('csel-go')).toBeVisible();
-    await expect(page.getByTestId('csel-wallet')).toHaveText('5');
+    await expect(page.getByTestId('csel-wallet')).toHaveText('15');
     await page.getByTestId('csel-go').click();
     expect(await phase(page)).toBe('playing');
-    await settle(page, 'panda');
-    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('panda');
+    await settle(page, 'flamingo');
+    expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('character'))).toBe('flamingo');
     // Same wallet and profile as the shop: paid, owned, worn, and the shop card says so.
     expect(await page.evaluate(() => {
       const p = window.__rg!.ctx.profile;
-      return { wallet: p.wallet, owns: p.owns('panda'), worn: p.equipped('character') };
-    })).toEqual({ wallet: 5, owns: true, worn: 'panda' });
+      return { wallet: p.wallet, owns: p.owns('flamingo'), worn: p.equipped('character') };
+    })).toEqual({ wallet: 15, owns: true, worn: 'flamingo' });
     await page.evaluate(() => {
       window.__rg!.ctx.events.emit('shop:open', {});
       window.__rg!.step(1 / 60, 3, false);
     });
     await page.getByTestId('shop-tab-hero').click();
-    await expect(page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="panda"]')).toHaveAttribute('data-state', 'equipped');
-    await expect(page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="bee"]')).toHaveAttribute('data-state', 'poor');
+    await expect(page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="flamingo"]')).toHaveAttribute('data-state', 'equipped');
+    await expect(page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="alpaca"]')).toHaveAttribute('data-state', 'poor');
     await page.getByTestId('wardrobe-close').click();
     await page.evaluate(() => window.__rg!.step(1 / 60, 3, false));
     expect(await phase(page)).toBe('playing');
     // A wipe locks the paid heroes again and swaps back to a free one.
     await page.evaluate(() => window.__rg!.ctx.profile.reset());
     await settle(page, 'frog');
-    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('panda'), window.__rg!.ctx.profile.equipped('character')])).toEqual([false, 'frog']);
+    expect(await page.evaluate(() => [window.__rg!.ctx.profile.owns('flamingo'), window.__rg!.ctx.profile.equipped('character')])).toEqual([false, 'frog']);
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test('every hero offers 3+ free super powers; picking a new one is saved and works in play', async () => {
+    // A fresh boot (the wipe at the end of the last test leaves menus mid-transition).
+    await page.reload();
+    await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
+    await page.evaluate(() => window.__rg!.freeze(true));
+    await step(page, 5);
+    await page.getByTestId('title-hero').click();
+    await settle(page, 'frog');
+    // Wardrobe mount point is there for the dress-up system.
+    await expect(page.getByTestId('csel-wardrobe')).toBeAttached();
+    const free = page.locator('[data-testid="csel-powers"] [data-state="free"]');
+    expect(await free.count()).toBeGreaterThanOrEqual(3);
+    await expect(page.getByTestId('csel-power-superBounce')).toHaveAttribute('aria-pressed', 'true');
+    // Pick Bounce Ball (one of the frog's free powers).
+    await page.getByTestId('csel-power-bounceBall').click();
+    await expect(page.getByTestId('csel-power-bounceBall')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('csel-skill')).toHaveAttribute('data-power', 'bounceBall');
+    await save(page, 'select-powers');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('rgow.powers.v1') ?? '{}').frog)).toBe('bounceBall');
+    await page.getByTestId('csel-go').click();
+    expect(await phase(page)).toBe('playing');
+    await step(page, 10);
+    // Use it: press the skill button, then drop from a height; the landing bounces back up.
+    const vy = await page.evaluate(async () => {
+      const rg = window.__rg!;
+      const p = rg.ctx.player;
+      const V = p.position.constructor as new (x: number, y: number, z: number) => typeof p.position;
+      rg.inject({ skill: true, skillPressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 2, false);
+      p.launch(new V(0, 6, 0));
+      let best = -Infinity;
+      let landed = false;
+      for (let i = 0; i < 200; i++) {
+        rg.step(1 / 60, 1, false);
+        if (p.velocity.y < -3) landed = true; // falling back down
+        if (landed && p.velocity.y > best) best = p.velocity.y;
+        if (landed && p.velocity.y > 3) break;
+      }
+      return best;
+    });
+    expect(vy).toBeGreaterThan(3);
+    // Back to the signature power for the other tests.
+    await page.evaluate(() => localStorage.removeItem('rgow.powers.v1'));
     expect(consoleErrors).toEqual([]);
   });
 });

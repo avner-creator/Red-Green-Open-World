@@ -21,7 +21,7 @@ interface Part {
 const KEEP = ['position', 'normal', 'uv'] as const;
 
 /** Merge same-material meshes under `model` into skinned meshes. Returns the number of draws saved. */
-export function mergeCharacterMeshes(model: THREE.Object3D, animations: readonly THREE.AnimationClip[] = []): number {
+export function mergeCharacterMeshes(model: THREE.Object3D, animations: readonly THREE.AnimationClip[] = [], only?: (mesh: THREE.Mesh) => boolean): number {
   const animated = new Set<string>();
   for (const clip of animations) {
     for (const track of clip.tracks) animated.add(THREE.PropertyBinding.parseTrackName(track.name).nodeName);
@@ -31,6 +31,7 @@ export function mergeCharacterMeshes(model: THREE.Object3D, animations: readonly
   model.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh || !m.parent || Array.isArray(m.material)) return;
+    if (only && !only(m)) return;
     if (m.morphTargetInfluences?.length || Object.keys(m.geometry.morphAttributes).length) return;
     if (animated.has(m.name) || !m.geometry.attributes.position || !m.geometry.attributes.normal) return;
     const s = m as THREE.SkinnedMesh;

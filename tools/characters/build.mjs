@@ -26,7 +26,7 @@ mkdirSync(cacheDir, { recursive: true });
 mkdirSync(outDir, { recursive: true });
 
 /** Clip names that must never ship: fighting, weapons, getting hurt. */
-const BANNED_CLIP = /death|hit|punch|kick|gun|weapon|shoot|attack|sword|slash/i;
+const BANNED_CLIP = /death|hit|punch|kick|headbutt|gun|weapon|shoot|attack|sword|slash/i;
 /** Mesh nodes that must never ship (weapons). */
 const BANNED_NODE = /pistol|gun|sword|blade|katana|club|axe/i;
 const MAX_BYTES = 600 * 1024;
