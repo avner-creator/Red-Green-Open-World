@@ -9,6 +9,7 @@ weaker eye to work.
 Then read `docs/GAME_DESIGN.md` (what we build) and `docs/BUILD_PLAN.md` (milestones, agent ownership)
 before you start. Progress is logged in `docs/PROGRESS.md`; decisions in `docs/DECISIONS.md`.
 Picking the project up in a new session? Start with `docs/HANDOFF.md`.
+Starting a different game? The reusable process is in `docs/playbook/`.
 
 ## Autonomy rules (the user asked for these explicitly)
 
