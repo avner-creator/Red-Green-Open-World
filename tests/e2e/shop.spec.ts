@@ -137,7 +137,7 @@ const hudOverlaps = (page: Page, at = 270): Promise<string[]> =>
 
 test.describe('economy ui', () => {
   test('wallet, combo, missions, kiosk shop, wardrobe, end screen, reset', async ({ page }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(240_000); // try-on + buy is one more press per purchase than the old shop
     const { consoleErrors } = await boot(page);
     await page.evaluate(() => window.__rg!.freeze(true));
 

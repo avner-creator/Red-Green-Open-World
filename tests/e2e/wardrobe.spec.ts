@@ -114,7 +114,17 @@ test.describe('dressing room', () => {
     // In play: the HUD hanger button opens it (paused), Esc closes it (playing again).
     await startGame(page);
     await expect(page.getByTestId('hud-wardrobe')).toBeVisible();
+    // The button is on top of everything in its corner (with the mouse captured for looking around,
+    // desktop players use the I key; the button itself is for touch and a free mouse).
+    expect(
+      await page.evaluate(() => {
+        const b = document.querySelector('[data-testid="hud-wardrobe"]')!.getBoundingClientRect();
+        return !!document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest('[data-testid="hud-wardrobe"]');
+      }),
+    ).toBe(true);
+    await page.evaluate(() => document.exitPointerLock());
     await page.getByTestId('hud-wardrobe').click({ force: true }); // it pops when something is new
+    await step(page, 2);
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     expect(await phase(page)).toBe('paused');
     await page.keyboard.press('Escape');
@@ -122,6 +132,7 @@ test.describe('dressing room', () => {
     expect(await phase(page)).toBe('playing');
     // The I key.
     await page.keyboard.press('KeyI');
+    await step(page, 2);
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     await page.getByTestId('wardrobe-close').click();
     await step(page, 2);
@@ -132,6 +143,7 @@ test.describe('dressing room', () => {
     await expect(page.getByTestId('hud-wardrobe-new')).toHaveClass(/on/);
     await save(page, 'hud', 400);
     await page.keyboard.press('KeyI');
+    await step(page, 2);
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     await page.keyboard.press('Escape');
     await step(page, 20);
