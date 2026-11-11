@@ -27,6 +27,9 @@ interface Row {
   candidate: number;
   /** First print's distance from the start pad's centre (m). */
   first: number;
+  /** The hidden spot (world XZ) and the farthest any print or the spot gets from the site centre. */
+  end: { x: number; z: number };
+  reach: number;
 }
 
 test.beforeAll(async ({ browser }) => {
@@ -52,7 +55,7 @@ test(`every one of ${SEEDS} seeds × 3 toys has a full trail at the real site`, 
   const rows: Row[] = [];
   for (let start = 0; start < SEEDS; start += 25) {
     const batch = await page.evaluate(
-      ([from, n]) => {
+      ([from, n, site]) => {
         const g = window.__rgGlasses!;
         const out: Row[] = [];
         for (let i = from; i < from + n; i++) {
@@ -60,13 +63,14 @@ test(`every one of ${SEEDS} seeds × 3 toys has a full trail at the real site`, 
           const seed = Math.imul(i + 1, 0x9e3779b1) >>> 0;
           for (let found = 0; found < 3; found++) {
             g.force('toys', { found, seed });
-            const d = g.debug('toys') as { valid: boolean; prints: { x: number; z: number }[]; length: number; candidate: number; pad: { x: number; z: number }; tier: number };
-            out.push({ seed, tier: d.tier, valid: d.valid, prints: d.prints.length, length: d.length, candidate: d.candidate, first: Math.hypot(d.prints[0].x - d.pad.x, d.prints[0].z - d.pad.z) });
+            const d = g.debug('toys') as { valid: boolean; prints: { x: number; z: number }[]; end: { x: number; z: number }; length: number; candidate: number; pad: { x: number; z: number }; tier: number };
+            const reach = Math.max(...[...d.prints, d.end].map((p) => Math.hypot(p.x - site.x, p.z - site.z)));
+            out.push({ seed, tier: d.tier, valid: d.valid, prints: d.prints.length, length: d.length, candidate: d.candidate, first: Math.hypot(d.prints[0].x - d.pad.x, d.prints[0].z - d.pad.z), end: { x: d.end.x, z: d.end.z }, reach });
           }
         }
         return out;
       },
-      [start, Math.min(25, SEEDS - start)] as const,
+      [start, Math.min(25, SEEDS - start), site] as const,
     );
     rows.push(...batch);
   }
@@ -76,6 +80,12 @@ test(`every one of ${SEEDS} seeds × 3 toys has a full trail at the real site`, 
   const lengths = rows.map((r) => r.length).sort((a, b) => a - b);
   const cands = new Set(rows.map((r) => r.candidate));
   console.log(`toys trails: ${rows.length - bad.length}/${rows.length} valid; length ${lengths[0].toFixed(1)}–${lengths[lengths.length - 1].toFixed(1)} m (median ${lengths[lengths.length >> 1].toFixed(1)}); ${cands.size} start directions used`);
+  const xs = rows.map((r) => r.end.x);
+  const zs = rows.map((r) => r.end.z);
+  const reach = Math.max(...rows.map((r) => r.reach));
+  console.log(`toys hiding spots: x ${Math.min(...xs).toFixed(0)}…${Math.max(...xs).toFixed(0)}, z ${Math.min(...zs).toFixed(0)}…${Math.max(...zs).toFixed(0)}; farthest ${reach.toFixed(1)} m from the site centre`);
+  // A round is cancelled only past the kit's leave radius (55 m): every trail stays well inside it.
+  expect(reach).toBeLessThan(50);
   expect(bad, `invalid trails: ${JSON.stringify(bad.slice(0, 5))}`).toEqual([]);
   for (const r of rows) {
     expect(r.prints, `seed ${r.seed} tier ${r.tier}`).toBeGreaterThanOrEqual(12);
