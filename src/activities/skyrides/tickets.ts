@@ -51,6 +51,18 @@ export class RideTickets {
     return true;
   }
 
+  /**
+   * Pay a prize for this ride: nothing in a practice ride (a child who could not pay rides free,
+   * without gems). Returns the gems actually paid.
+   */
+  payPrize(gems: number, reason: 'gem' | 'mission' = 'mission'): number {
+    if (gems <= 0 || this.practice) return 0;
+    const w = walletOf(this.ctx);
+    if (!w) return 0;
+    w.earn(gems, reason);
+    return gems;
+  }
+
   /** New session (the economy resets its own free-ride count). */
   reset(): void {
     this.outcome = 'free';

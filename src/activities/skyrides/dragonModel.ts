@@ -301,6 +301,12 @@ export function createDragonModel(): DragonModel {
   const seat = new THREE.Object3D();
   seat.position.copy(DRAGON_DIMS.seat);
   body.add(seat);
+  // Pip rides behind the hero, between the wings.
+  const pipSeat = new THREE.Object3D();
+  pipSeat.name = 'pip-seat';
+  pipSeat.userData.pipSeat = true;
+  pipSeat.position.set(DRAGON_DIMS.seat.x, DRAGON_DIMS.seat.y - 0.05, DRAGON_DIMS.seat.z - 0.7);
+  body.add(pipSeat);
 
   let time = 0;
   let flapPhase = 0;

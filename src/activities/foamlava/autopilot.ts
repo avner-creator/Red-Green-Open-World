@@ -23,7 +23,7 @@ const W = (x: number, z: number, extra: Partial<Waypoint> = {}): Waypoint => ({ 
 /** The main route (no secret tiles, takes the rope swing). */
 export const MAIN_PLAN: readonly Waypoint[] = [
   W(3.4, 3.9), W(4.2, 6.3), W(2.6, 8.4), W(4.1, 10.6),
-  W(3.5, 13.3), W(2.6, 14.9), W(3.6, 16.5), W(2.8, 18.0), W(3.3, 20.8),
+  W(3.5, 13.0), W(2.6, 14.9), W(3.6, 16.5), W(2.8, 18.0), W(3.3, 20.8),
   W(2.7, 23.4), W(3.9, 24.5), W(2.7, 25.6), W(3.9, 26.7), W(3.3, 27.9),
   W(3.3, 35.95), W(3.3, 39.0), W(1.9, 40.3, { r: 0.6 }),
   W(-3.8, 40.2, { r: 0.6 }), W(-3.8, 37.0),
@@ -38,6 +38,7 @@ export const SHORTCUT_PLAN: readonly Waypoint[] = [
 
 export class Autopilot {
   index = 0;
+  private lap = 0;
   constructor(readonly plan: readonly Waypoint[]) {}
 
   /** Skip to the waypoint nearest to the hero (after a respawn). */
@@ -57,6 +58,12 @@ export class Autopilot {
 
   input(sim: CourseSim): SimInput {
     const out: SimInput = { mx: 0, mz: 0, sprint: false, jumpPressed: false };
+    // A new lap (after the bubble express): start the plan again.
+    if (sim.lap > this.lap) {
+      this.lap = sim.lap;
+      this.index = 0;
+    }
+    if (sim.mode === 'lift') return out;
     if (this.index >= this.plan.length) return out;
     let w = this.plan[this.index];
     const reach = w.r ?? 0.35;

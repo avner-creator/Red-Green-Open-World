@@ -19,10 +19,12 @@ import { ThrillConfetti } from '../thrillConfetti';
 import { Autopilot, MAIN_PLAN, SHORTCUT_PLAN } from './autopilot';
 import { buildCourse } from './build';
 import { createFriend } from './friend';
-import { BOOTH, CHUTE, COURSE_CENTRE, FOAM_Y, SOLIDS, START } from './layout';
-import { solidBottom, CourseSim } from './sim';
+import { BOOTH, CANNONS, CHUTE, COURSE_CENTRE, FOAM_Y, LANE_B, PROPS, RIM_WALLS, ROPE, SOLIDS, START } from './layout';
+import { cannonState, solidBottom, CourseSim } from './sim';
 import type { SimEvent, SimInput } from './sim';
-import { MEDALS, TICKET, ghostAt, ghostTime, ghostTimeline, medalFor, prizeFor, starsFor } from './scoring';
+import { MEDALS, TICKET, friendRate, ghostAt, ghostTime, ghostTimeline, medalFor, prizeFor, starsFor } from './scoring';
+import { PrizeTally } from '../skyrides/prizeTally';
+import { WalkInPad } from '../skyrides/walkIn';
 import type { Medal } from './scoring';
 import { createFoamUi } from './ui';
 
@@ -64,6 +66,10 @@ export interface FoamLavaTestApi {
   friendReady(): boolean;
   /** Show/hide only this course's weak-eye objects (channel test control). */
   setWeakVisible(on: boolean): void;
+  /** World centre (at hip height), footprint radius and id of every solid prop and rim wall. */
+  props(): { id: string; x: number; z: number; r: number; bottom: number; top: number }[];
+  /** Walk-in start pad: world centre and fill 0..1. */
+  pad(): { at: [number, number, number]; fill: number };
 }
 
 declare global {
@@ -103,6 +109,14 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   vis.weakRoot.updateMatrixWorld(true);
   ctx.vision.add(vis.weakRoot, VisionLayer.WeakOnly);
   const confetti = new ThrillConfetti();
+  // Bubble express: one see-through bubble around the hero while it floats back to the start.
+  const liftBubbleGeo = new THREE.SphereGeometry(1.25, 20, 14);
+  const liftBubbleMat = new THREE.MeshStandardMaterial({ color: 0xeaf8ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.45, depthWrite: false });
+  const liftBubble = new THREE.Mesh(liftBubbleGeo, liftBubbleMat);
+  liftBubble.name = 'foam-lava-lift-bubble';
+  liftBubble.userData.cameraIgnore = true;
+  liftBubble.visible = false;
+  ctx.scene.add(liftBubble);
   let confettiT = 0;
 
   // ───────────── Colliders (so the course is solid when walking around outside a run) ─────────────
@@ -120,6 +134,14 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     if (s.shape === 'box') return ctx.physics.addStaticBox(c, new THREE.Vector3(s.hx ?? 0.5, half, s.hz ?? 0.5), yawQ);
     return ctx.physics.addStaticCylinder(c, half, s.r ?? 0.5);
   });
+  // Props and the pit rim are solid too (walking into the booth, the arch, a blower, the bubble
+  // machine, a rope post or the rim never goes through). Bottoms reach below the ground.
+  for (const s of [...PROPS, ...RIM_WALLS]) {
+    const bottom = Math.max(-1.2, s.bottom);
+    const half = (s.top - bottom) / 2;
+    const c = toWorld(s.x, bottom + half, s.z);
+    colliders.push(s.shape === 'box' ? ctx.physics.addStaticBox(c, new THREE.Vector3(s.hx ?? 0.5, half, s.hz ?? 0.5), yawQ) : ctx.physics.addStaticCylinder(c, half, s.r ?? 0.3));
+  }
 
   // ───────────── State ─────────────
   const sim = new CourseSim();
@@ -139,7 +161,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     bot.running = true;
     const pilot = new Autopilot(MAIN_PLAN);
     const track: { x: number; y: number; z: number }[] = [];
-    for (let i = 0; i < 60 * 40 && bot.mode !== 'done'; i++) {
+    for (let i = 0; i < 60 * 90 && bot.mode !== 'done'; i++) {
       bot.step(FIXED, pilot.input(bot));
       if (i % 3 === 0) track.push({ x: bot.p.x, y: bot.p.y + 1.1, z: bot.p.z });
     }
@@ -174,6 +196,12 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   let stretch = 0;
   let lastCount: number | 'go' | null = null;
   let pendingExit = false;
+  // The friend runs on its own clock, rubber-banded to you so the race stays close.
+  let friendClock = 0;
+  let friendDoneAt: number | null = null;
+  let friendWobble = 0;
+  let flipT = 0;
+  const tally = new PrizeTally(ctx.events);
   const profile = (): ProfileLike | null => (ctx as unknown as { profile?: ProfileLike }).profile ?? null;
 
   const sfx = (name: SfxName, volume = 1, pitch = 1): void => ctx.audio.play(name, { volume, pitch });
@@ -231,18 +259,28 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     // Through the economy (ticket:paid / ticket:denied); without one every run is free.
     const economy = (ctx as Partial<GameContext>).economy;
     practice = economy ? economy.rideTicket('foam') === 'practice' : false;
+    tally.start();
+    tally.onChange(null);
     freeUsed = true;
     runs++;
+    friendClock = 0;
+    friendDoneAt = null;
+    friendWobble = 0;
+    flipT = 0;
     phase = 'countdown';
     phaseT = 0;
     lastCount = null;
     sim.reset(START.hero, START.yaw);
     sim.running = false;
+    // This run's surprise: two floats turn like turntables (different ones every run).
+    sim.setSpinners(runs * 7 + (ctx.testMode ? 0 : Math.floor(Math.random() * 4)));
     if (!paceTrack) recordPace();
     vis.setCheckpoint(0, true);
     ui.result(null, ctx.input.state.device);
     ui.price(null);
     ui.showHud(true, friend.color);
+    ui.practice(practice);
+    ui.lap(1);
     ui.hud(0, 0, 0);
     if (ctx.player.mode !== 'external') ctx.player.setExternalController(controller);
     // Countdown: look at the hero and the friend from the front, then swing behind at GO.
@@ -261,8 +299,13 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     phase = 'idle';
     sim.running = false;
     ui.showHud(false);
+    liftBubble.visible = false;
+    ui.practice(false);
+    ui.jumpHint(null, false);
     ui.countdown(null);
     ui.result(null, ctx.input.state.device);
+    tally.stop();
+    tally.onChange(null);
     friend.setVisible(false);
     vis.setCheckpoint(0, false);
     ctx.cameraRig.setOverride(null);
@@ -275,16 +318,21 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     const p = toWorld(BOOTH.use.x, 0, BOOTH.use.z - 0.8);
     p.y = ctx.world.heightAt(p.x, p.z) + 0.05;
     ctx.player.teleport(p, yaw + Math.PI);
+    pad.disarm();
   }
 
   function finishRun(time: number): void {
     const medal = medalFor(time);
-    const beatFriend = time < friendTime;
+    const beatFriend = friendDoneAt === null;
+    // The friend's time: when they crossed the line, or where they would at their normal pace.
+    const shownFriend = friendDoneAt ?? time + Math.max(0.4, friendTime - friendClock);
     const stars = starsFor(medal);
     const prof = profile();
     const prize = !practice && prof ? prizeFor(medal, beatFriend) : 0;
-    if (prize > 0 && prof) prof.earn(prize, 'mission');
-    last = { time, medal, prize, beatFriend };
+    if (prize > 0 && prof) {
+      prof.earn(prize, 'mission');
+      tally.notePrize(prize);
+    }
     phase = 'result';
     phaseT = 0;
     ctx.events.emit('stunt', { kind: 'foam', value: stars, stars });
@@ -301,7 +349,14 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     // open space, whatever stands behind the finish deck).
     sim.yaw = 0;
     ctx.cameraRig.setOverride({ distance: 5.2, height: 1.9, yawOffset: Math.PI });
-    ui.result({ time, medal, stars, friendTime, beatFriend, prize, friendColor: friend.color }, ctx.input.state.device);
+    ui.jumpHint(null, false);
+    // The card shows what the wallet really gained (prize + any stamp/mission bonus it set off).
+    last = { time, medal, prize: tally.total, beatFriend };
+    ui.result({ time, medal, stars, friendTime: shownFriend, beatFriend, prize: tally.total, practice, friendColor: friend.color }, ctx.input.state.device);
+    tally.onChange((n) => {
+      ui.setPrize(n);
+      if (last) last.prize = n;
+    });
   }
 
   function handle(ev: SimEvent): void {
@@ -341,10 +396,18 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         if (d < 30) sfx('whoosh', Math.max(0.15, 0.6 - d / 60), 0.7);
         break;
       }
+      case 'bump':
+        sfx('boing', 0.9, 1.35);
+        stretch = 0.35;
+        friendWobble = 1;
+        break;
       case 'puffHit':
         sfx('boing', 1, 0.8);
+        sfx('splash', 0.5, 1.6);
+        vis.spray(sim.p.x, sim.p.y + 1, sim.p.z, 10);
         ctx.cameraRig.shake(0.3);
         stretch = 0.3;
+        flipT = 0.65;
         break;
       case 'splash':
         sfx('splash', 1);
@@ -363,10 +426,35 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         sfx('star', 0.8);
         vis.setCheckpoint(ev.cp, true);
         break;
+      case 'lap':
+        // Bubble express: a big bubble scoops you off the finish deck and floats you to the start.
+        sfx('bigBoing', 0.9, 1.4);
+        sfx('whoosh', 0.7, 1.3);
+        vis.setCheckpoint(0, true);
+        vis.spray(sim.p.x, sim.p.y + 0.5, sim.p.z, 10);
+        ui.lap(sim.lap + 1);
+        break;
+      case 'liftEnd':
+        sfx('boing', 0.9, 1.6);
+        stretch = 0.4;
+        vis.spray(sim.p.x, sim.p.y + 0.3, sim.p.z, 8);
+        break;
       case 'finish':
         finishRun(ev.time);
         break;
     }
+  }
+
+  /** Is this a "jump now!" moment (a blower about to puff at you, the bubbles, the rope gap)? */
+  function jumpNow(): boolean {
+    if (sim.mode !== 'run') return false;
+    const p = sim.p;
+    if (Math.abs(p.x - LANE_B) < 1.2 && p.z > 7 && p.z < 23) {
+      const clock = sim.cannonClock();
+      for (const c of CANNONS) if (Math.abs(p.z - c.z) < 2.2 && cannonState(clock, c.offset).state === 'warn') return true;
+    }
+    if (sim.cp >= 3 && p.z < 8.5 && p.x < -2) return true;
+    return sim.cp === 2 && p.z > 38 && p.x < 2.4 && p.x > ROPE.x;
   }
 
   function inputToSim(input: Readonly<InputState>): SimInput {
@@ -381,6 +469,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       case 'splash':
         return 'flop';
       case 'swing':
+      case 'lift':
         return 'jump';
       case 'slide':
         return 'fall';
@@ -423,17 +512,28 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         }
       } else if (phase === 'run') {
         if (phaseT > 0.8) ui.countdown(null);
+        // Rubber-banded friend: hurries when you lead, dawdles when you trail.
+        if (friendDoneAt === null) {
+          friendClock += dt * friendRate(sim.progress(), Math.min(1, friendClock / friendTime));
+          if (ghostAt(ghostKeys, friendClock).done) {
+            friendDoneAt = sim.time;
+            sfx('fanfare', 0.35, 1.3);
+          }
+        } else friendClock += dt;
         const real = inputToSim(input);
         const n = Math.max(1, Math.ceil(dt / FIXED - 1e-6));
         for (let i = 0; i < n && phase === 'run'; i++) {
           const si = bot ? bot.input(sim) : i === 0 ? real : { ...real, jumpPressed: false };
           const evs = sim.step(dt / n, si);
+          const fp = ghostAt(ghostKeys, friendClock);
+          if (friend.id && !fp.done && fp.anim !== 'flop') evs.push(...sim.bumpFriend(fp.x, fp.y, fp.z));
           for (const ev of evs) {
             handle(ev);
             if (ev.type === 'respawn' && bot) bot.resync(sim);
           }
         }
       } else if (phase === 'result') {
+        friendClock += dt;
         sim.step(dt, { mx: 0, mz: 0, sprint: false, jumpPressed: false });
         if (phaseT > 0.6 && (input.jumpPressed || input.usePressed || click === 'replay')) {
           begin();
@@ -445,8 +545,16 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         }
       }
       heroWorld();
+      liftBubble.visible = sim.mode === 'lift';
+      if (liftBubble.visible) {
+        liftBubble.position.copy(ctx.player.position).setY(ctx.player.position.y + 0.85);
+        const w = 1 + 0.06 * Math.sin(sim.liftT * 11);
+        liftBubble.scale.set(w, 2 - w, w);
+      }
       // Poses: belly slide, rope swing lean, squash and stretch.
-      if (sim.mode === 'slide') ctx.player.setTilt(1.25, 0);
+      flipT = Math.max(0, flipT - dt);
+      if (flipT > 0) ctx.player.setTilt(-(1 - flipT / 0.65) * Math.PI * 2, 0.3 * Math.sin(flipT * 20));
+      else if (sim.mode === 'slide') ctx.player.setTilt(1.25, 0);
       else if (sim.mode === 'swing') ctx.player.setTilt(0, -m * sim.rope.theta * 0.8);
       else ctx.player.setTilt(0, 0);
       stretch += (0 - stretch) * Math.min(1, dt * 9);
@@ -458,6 +566,15 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       if (phase !== 'idle') leave(false);
     },
   };
+
+  // Walk-in start: stand on the ring in front of the booth and the run starts.
+  const padAt = toWorld(BOOTH.use.x, 0, BOOTH.use.z + 0.2);
+  padAt.y = ctx.world.heightAt(padAt.x, padAt.z);
+  const pad = new WalkInPad(ctx, {
+    at: padAt,
+    enabled: () => phase === 'idle' && ctx.session.state.phase === 'playing' && ctx.player.mode === 'walk',
+    onStart: () => begin(),
+  });
 
   const offPhase = ctx.events.on('session:phase', (e) => {
     if (e.phase !== 'playing' && e.phase !== 'paused' && phase !== 'idle') {
@@ -490,6 +607,13 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       setWeakVisible: (on) => {
         vis.weakRoot.visible = on;
       },
+      props: () =>
+        [...PROPS, ...RIM_WALLS].map((p) => {
+          const w = toWorld(p.x, 0, p.z);
+          const r = p.shape === 'cyl' ? (p.r ?? 0) : Math.hypot(p.hx ?? 0, p.hz ?? 0);
+          return { id: p.id, x: w.x, z: w.z, r, bottom: oy + Math.max(-1.2, p.bottom), top: oy + p.top };
+        }),
+      pad: () => ({ at: padAt.toArray() as [number, number, number], fill: pad.progress }),
     };
   }
 
@@ -527,13 +651,16 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         const f = START.friend;
         friend.idle(f.x, 1.0, f.z, 0, phaseT < 1.5 ? 'wave' : 'idle', dt);
       } else if (phase === 'run' || phase === 'result') {
-        friend.pose(ghostAt(ghostKeys, sim.time + (phase === 'result' ? phaseT : 0)), dt);
+        friendWobble = Math.max(0, friendWobble - dt * 2);
+        friend.pose(ghostAt(ghostKeys, friendClock), dt, friendWobble);
       }
       vis.setPace(phase === 'run' ? paceAt(sim.time) : phase === 'countdown' ? paceAt(0) : null);
       if (phase === 'run') {
-        const fp = ghostAt(ghostKeys, sim.time);
-        ui.hud(sim.time, sim.progress(), fp.done ? 1 : Math.min(0.99, sim.time / friendTime));
+        const fp = ghostAt(ghostKeys, friendClock);
+        ui.hud(sim.time, sim.progress(), fp.done ? 1 : Math.min(0.99, friendClock / friendTime));
+        ui.jumpHint(ctx.input.state.device, jumpNow());
       }
+      pad.update(dt);
       // Price chip next to the booth prompt.
       if (phase === 'idle' && ctx.session.state.phase === 'playing' && ctx.player.position.distanceTo(boothPos) < 3.2) {
         ui.price(!freeUsed ? 'free' : TICKET);
@@ -563,8 +690,13 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       vis.dispose();
       friend.dispose();
       ui.dispose();
+      pad.dispose();
+      tally.stop();
       confetti.group.removeFromParent();
       confetti.dispose();
+      liftBubble.removeFromParent();
+      liftBubbleGeo.dispose();
+      liftBubbleMat.dispose();
       beardGeo.dispose();
       beardMat.dispose();
       if (ctx.testMode && typeof window !== 'undefined') delete window.__rgFoam;

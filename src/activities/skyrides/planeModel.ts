@@ -269,6 +269,12 @@ export function createPlaneModel(livery: PlaneLivery, castShadow = true): PlaneM
   const seat = new THREE.Object3D();
   seat.position.copy(PLANE_DIMS.seat);
   body.add(seat);
+  // Pip's back seat behind the pilot (the buddy sits here while you fly; see docs/streams).
+  const pipSeat = new THREE.Object3D();
+  pipSeat.name = 'pip-seat';
+  pipSeat.userData.pipSeat = true;
+  pipSeat.position.set(PLANE_DIMS.seat.x, PLANE_DIMS.seat.y + 0.12, PLANE_DIMS.seat.z - 0.9);
+  body.add(pipSeat);
 
   let proxy: THREE.Mesh | null = null;
   if (castShadow) {

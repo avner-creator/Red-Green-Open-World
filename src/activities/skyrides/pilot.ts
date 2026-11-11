@@ -63,14 +63,26 @@ export class SkyPilot {
     return true;
   }
 
-  take(hooks: PilotHooks): boolean {
+  /**
+   * Pip's back seat on the craft while it flies, published on the player object as
+   * `userData.pipSeat` (the buddy seats Pip there; see docs/streams/foam-sky.md). Null clears it.
+   */
+  setPipSeat(seat: THREE.Object3D | null): void {
+    const ud = this.ctx.player.object.userData as { pipSeat?: THREE.Object3D };
+    if (seat) ud.pipSeat = seat;
+    else delete ud.pipSeat;
+  }
+
+  take(hooks: PilotHooks, pipSeat: THREE.Object3D | null = null): boolean {
     if (!this.canTake()) return false;
+    this.setPipSeat(pipSeat);
     this.hooks = hooks;
     this.lookPitch = 0;
     this.sinceLook = 99;
     this.ctx.player.setExternalController(this.controller);
     if (this.ctx.player.mode !== 'external') {
       this.hooks = null;
+      this.setPipSeat(null);
       return false;
     }
     return true;
@@ -87,6 +99,7 @@ export class SkyPilot {
     const h = this.hooks;
     if (!h) return;
     this.hooks = null;
+    this.setPipSeat(null);
     this.ctx.audio.setLoop('wind', 0);
     this.ctx.audio.setLoop('engine', 0);
     this.releaseCamera();

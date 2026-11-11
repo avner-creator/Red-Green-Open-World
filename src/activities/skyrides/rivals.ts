@@ -46,6 +46,8 @@ export class Rivals {
   readonly planes: RivalPlane[] = [];
   private readonly group = new THREE.Group();
   private loading: Promise<void> | null = null;
+  /** Heroes that finished loading, attached on the next simulation step (never mid-promise). */
+  private pending: (LoadedCharacter | null)[] | null = null;
   private heroIds: string[] = [];
   private landFrom: { p: V3; yaw: number }[] = [];
   private landT = 0;
@@ -89,19 +91,28 @@ export class Rivals {
       p.hero?.object.removeFromParent();
       p.hero = null;
     }
+    this.pending = null;
     this.loading = Promise.all(defs.map((d) => loadCharacter(d).catch(() => null))).then((heroes) => {
       if (this.heroIds.join() !== key) return;
-      heroes.forEach((h, i) => {
-        const p = this.planes[i];
-        if (!h || !p) return;
-        h.object.position.copy(PLANE_DIMS.seat);
-        h.object.traverse((o) => {
-          if ((o as THREE.Mesh).isMesh) o.castShadow = false;
-        });
-        p.model.body.add(h.object);
-        h.play('sit', 1, 0);
-        p.hero = h;
+      this.pending = heroes;
+    });
+  }
+
+  /** Seat heroes that finished loading (called from every per-frame pose). */
+  private attachPending(): void {
+    const heroes = this.pending;
+    if (!heroes) return;
+    this.pending = null;
+    heroes.forEach((h, i) => {
+      const p = this.planes[i];
+      if (!h || !p) return;
+      h.object.position.copy(PLANE_DIMS.seat);
+      h.object.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) o.castShadow = false;
       });
+      p.model.body.add(h.object);
+      h.play('sit', 1, 0);
+      p.hero = h;
     });
   }
 
@@ -240,6 +251,7 @@ export class Rivals {
   }
 
   private pose(p: RivalPlane): void {
+    this.attachPending();
     const root = p.model.root;
     root.position.copy(p.pos);
     root.rotation.set(-p.pitch, p.yaw, p.roll, 'YXZ');

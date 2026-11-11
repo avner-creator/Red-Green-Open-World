@@ -4,8 +4,10 @@
  * result card (medal, stars, both times, gem prize, replay / leave). Bright-on-dark with black
  * outlines so every part reads in the R channel and the G channel alone.
  */
+import { controlKeys } from '../../ui/controlGlyphs';
 import { icon } from '../../ui/icons';
 import type { InputState } from '../../types';
+import { LAPS } from './layout';
 import { MEDALS, formatTime } from './scoring';
 import type { Medal } from './scoring';
 
@@ -74,6 +76,22 @@ const CSS = `
 .rg-fl-btn.alt{background:#fff}
 .rg .rg-fl-btn .ic{width:calc(var(--u,8px)*3.6);height:calc(var(--u,8px)*3.6);color:#15110a}
 .rg-fl-btn kbd{font:inherit;background:#15110a;color:#fff;border-radius:calc(var(--u,8px)*.7);padding:calc(var(--u,8px)*.3) calc(var(--u,8px)*.7)}
+
+.rg-fl-lap{min-width:0}
+.rg-fl-lap.pop{animation:rg-fl-in .45s cubic-bezier(.2,1.5,.4,1)}
+.rg-fl-prize.practice{color:#fff}
+.rg-fl-nogem{position:relative;display:inline-grid;place-items:center}
+.rg-fl-nogem::after{content:"";position:absolute;left:-12%;right:-12%;top:46%;height:calc(var(--u,8px)*.9);background:#000;border:calc(var(--u,8px)*.25) solid #fff;transform:rotate(-38deg);border-radius:calc(var(--u,8px)*.5)}
+.rg-fl-chip{display:flex;align-items:center;gap:calc(var(--u,8px)*.6);background:#10142a;border:calc(var(--u,8px)*.4) dashed #fff;border-radius:calc(var(--u,8px)*2);padding:calc(var(--u,8px)*.4) calc(var(--u,8px)*1.2);
+  font:900 calc(var(--u,8px)*2.8)/1 ui-rounded,"Nunito",system-ui,sans-serif;color:#fff}
+.rg .rg-fl-chip .ic{width:calc(var(--u,8px)*3.4);height:calc(var(--u,8px)*3.4);color:#9fe8ff}
+.rg-fl-jump{position:absolute;left:50%;bottom:calc(var(--u,8px)*3);transform:translateX(-50%);display:none;align-items:center;gap:calc(var(--u,8px)*1.2);pointer-events:none;z-index:6;
+  background:#10142a;border:calc(var(--u,8px)*.5) solid #fff;border-radius:calc(var(--u,8px)*3);padding:calc(var(--u,8px)*.8) calc(var(--u,8px)*1.8);box-shadow:0 calc(var(--u,8px)*.6) 0 #000}
+.rg-fl-jump.on{display:flex}
+.rg-fl-jump.pulse{animation:rg-fl-pulse .5s ease-in-out infinite alternate;border-color:#ffd93b}
+.rg .rg-fl-jump .ic{width:calc(var(--u,8px)*4.4);height:calc(var(--u,8px)*4.4);color:#ffd93b}
+.rg-fl-jump .keys{display:flex;align-items:center;gap:calc(var(--u,8px)*.4)}
+@keyframes rg-fl-pulse{to{transform:translateX(-50%) scale(1.18)}}
 `;
 
 const ARROW = '<svg viewBox="0 0 24 24"><path d="M3 9h10V4l9 8-9 8v-5H3z"/></svg>';
@@ -84,8 +102,10 @@ export interface ResultInfo {
   stars: number;
   friendTime: number;
   beatFriend: boolean;
-  /** Gems paid (0 for a practice run or without the economy). */
+  /** Gems the round added to the wallet: the prize plus stamp / mission bonuses it set off (0 for a practice run or without the economy). */
   prize: number;
+  /** Could not pay: a practice run, no gems (shown as a crossed-out gem). */
+  practice: boolean;
   friendColor: string;
 }
 
@@ -95,6 +115,14 @@ export interface FoamUi {
   countdown(n: number | 'go' | null): void;
   price(state: 'free' | number | null): void;
   result(info: ResultInfo | null, device: InputState['device']): void;
+  /** Update the gem total on the open result card (a stamp or mission bonus landed). */
+  setPrize(gems: number): void;
+  /** The one button of the run (jump) for the active device; pulse = now! null hides it. */
+  jumpHint(device: InputState['device'] | null, pulse: boolean): void;
+  /** Lap counter (1-based) next to the stopwatch. */
+  lap(n: number): void;
+  /** A crossed-out gem chip by the countdown: this run is practice (no gems). */
+  practice(on: boolean): void;
   /** Buttons clicked/tapped since last call. */
   takeClick(): 'replay' | 'exit' | null;
   dispose(): void;
@@ -125,7 +153,13 @@ export function createFoamUi(root: HTMLElement): FoamUi {
     medals.appendChild(el);
     return { el, limit: MEDALS[m] };
   });
-  row.append(clock, medals);
+  const lapEl = document.createElement('div');
+  lapEl.className = 'rg-fl-clock rg-fl-lap';
+  lapEl.setAttribute('data-testid', 'foamlava-lap');
+  lapEl.appendChild(icon('flag'));
+  const lapText = document.createElement('span');
+  lapEl.appendChild(lapText);
+  row.append(lapEl, clock, medals);
   const track = document.createElement('div');
   track.className = 'rg-fl-track';
   track.innerHTML = '<div class="end"></div>';
@@ -148,7 +182,22 @@ export function createFoamUi(root: HTMLElement): FoamUi {
   res.className = 'rg-fl-result';
   res.setAttribute('data-testid', 'foamlava-result');
 
-  root.append(hud, count, priceEl, res);
+  const jump = document.createElement('div');
+  jump.className = 'rg-fl-jump';
+  jump.setAttribute('data-testid', 'foamlava-jump');
+  const practiceChip = document.createElement('div');
+  practiceChip.className = 'rg-fl-chip';
+  practiceChip.setAttribute('data-testid', 'foamlava-practice-chip');
+  practiceChip.style.display = 'none';
+  const ng = document.createElement('span');
+  ng.className = 'rg-fl-nogem';
+  ng.appendChild(icon('gem'));
+  practiceChip.append(ng);
+  hud.appendChild(practiceChip);
+
+  root.append(hud, count, priceEl, res, jump);
+  let prizeText: Text | null = null;
+  let jumpKey = '';
 
   let click: 'replay' | 'exit' | null = null;
   let lastCount: string | null = null;
@@ -224,11 +273,24 @@ export function createFoamUi(root: HTMLElement): FoamUi {
       };
       times.append(line('you', info.time, info.beatFriend), line('friend', info.friendTime, !info.beatFriend));
       res.append(big, stars, times);
-      if (info.prize > 0) {
+      prizeText = null;
+      if (info.practice) {
+        // Practice run: a crossed-out gem and a 0, so "you won but got nothing" never confuses.
+        const p = document.createElement('div');
+        p.className = 'rg-fl-prize practice';
+        p.setAttribute('data-testid', 'foamlava-practice');
+        const g = document.createElement('span');
+        g.className = 'rg-fl-nogem';
+        g.appendChild(icon('gem'));
+        p.append(g, document.createTextNode('0'));
+        res.appendChild(p);
+      } else {
         const p = document.createElement('div');
         p.className = 'rg-fl-prize';
         p.setAttribute('data-testid', 'foamlava-prize');
-        p.append(icon('gem'), document.createTextNode(`+${info.prize}`));
+        prizeText = document.createTextNode(`+${info.prize}`);
+        p.append(icon('gem'), prizeText);
+        p.style.display = info.prize > 0 ? '' : 'none';
         res.appendChild(p);
       }
       const btns = document.createElement('div');
@@ -254,6 +316,30 @@ export function createFoamUi(root: HTMLElement): FoamUi {
       btns.append(mk('replay', 'restart', pad ? 'A' : 'Space'), mk('exit', 'exit', pad ? 'B' : 'R'));
       res.appendChild(btns);
     },
+    setPrize(gems) {
+      if (!prizeText) return;
+      prizeText.textContent = `+${gems}`;
+      (prizeText.parentElement as HTMLElement).style.display = gems > 0 ? '' : 'none';
+    },
+    jumpHint(device, pulse) {
+      const key = device ?? '';
+      if (key !== jumpKey) {
+        jumpKey = key;
+        jump.replaceChildren();
+        if (device) jump.append(controlKeys('jump', device), icon('trampoline'));
+      }
+      jump.classList.toggle('on', !!device);
+      jump.classList.toggle('pulse', !!device && pulse);
+    },
+    lap(n) {
+      lapText.textContent = `${n}/${LAPS}`;
+      lapEl.classList.remove('pop');
+      void lapEl.offsetWidth;
+      lapEl.classList.add('pop');
+    },
+    practice(on) {
+      practiceChip.style.display = on ? 'flex' : 'none';
+    },
     takeClick() {
       const c = click;
       click = null;
@@ -265,6 +351,7 @@ export function createFoamUi(root: HTMLElement): FoamUi {
       count.remove();
       priceEl.remove();
       res.remove();
+      jump.remove();
     },
   };
 }

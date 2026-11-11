@@ -241,7 +241,9 @@ describe('contest rules', () => {
     expect(resultStars(CONTEST.stars[0])).toBe(1);
     expect(resultStars(CONTEST.stars[2] + 10)).toBe(3);
     expect(tourStars(0)).toBe(0);
-    expect(tourStars(3)).toBe(1);
+    expect(tourStars(3)).toBe(0);
+    expect(tourStars(4)).toBe(1);
+    expect(tourStars(10)).toBe(2);
     expect(tourStars(20)).toBe(3);
   });
 
