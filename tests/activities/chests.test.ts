@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AREA,
   ApproachHints,
   ChestLock,
   Loadout,
   RING,
   buttonWorld,
+  keyArea,
   keyCandidates,
   nearestButton,
   pickKeySpot,
@@ -238,5 +240,26 @@ describe('symbol shapes', () => {
       expect(pts.length).toBeGreaterThan(8);
       for (const p of pts) expect(Number.isFinite(p.x + p.y)).toBe(true);
     }
+  });
+});
+
+describe('both-eye key area hint', () => {
+  it('the key is inside the dotted circle but never at its centre; dots stay off the button ring', () => {
+    for (let i = 0; i < 60; i++) {
+      for (const c of keyCandidates(i, 3, -4).slice(0, 40)) {
+        const a = keyArea(i, 3, -4, c.x, c.z);
+        const fromCentre = Math.hypot(c.x - a.x, c.z - a.z);
+        expect(fromCentre).toBeCloseTo(AREA.offset, 5);
+        expect(fromCentre).toBeLessThan(a.r - 0.8);
+        for (const d of [...a.trail, ...a.ring]) expect(Math.hypot(d.x - 3, d.z + 4)).toBeGreaterThan(RING.radius + RING.size / 2 + 0.3);
+        expect(a.ring).toHaveLength(AREA.ringDots);
+        // The trail runs out from the chest toward the circle and stops at its edge.
+        for (const d of a.trail) expect(Math.hypot(d.x - a.x, d.z - a.z)).toBeGreaterThanOrEqual(a.r - 1e-6);
+      }
+    }
+  });
+
+  it('is the same every time for the same chest', () => {
+    expect(keyArea(2, 0, 0, 8, 1)).toEqual(keyArea(2, 0, 0, 8, 1));
   });
 });

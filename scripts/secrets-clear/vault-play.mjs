@@ -11,6 +11,12 @@ for (const [i, d] of doors.entries()) {
     await t.step(30, true);
     await t.shot(`${d.id}-${dist}m`, { channels: dist === 10 });
   }
+  // The rule board, close (as a child walking up to it would see it).
+  {
+    const b = out(d.yaw, -4.4, 6.2);
+    await t.stand(d.x + b.x, d.z + b.z, d.x + out(d.yaw, -4.4, 3.3).x, d.z + out(d.yaw, -4.4, 3.3).z, 10);
+    for (const k of [0, 14, 22, 30]) { await t.step(k ? 8 : 1, true); await t.shot(`${d.id}-board-${k}`); }
+  }
   // Wrong press first (a child guesses), then the right sequence.
   const seq = d.sequence;
   const wrong = [0, 1, 2, 3].find((b) => b !== seq[0]);

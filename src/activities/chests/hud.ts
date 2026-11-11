@@ -55,20 +55,42 @@ export interface ChestHud {
   setKeys(n: number): void;
   /** Show `a → b (+ c…)` for about 1.5 s. */
   flash(from: PictoStep, to: PictoStep[]): void;
-  /** Which pictogram is showing (test hook), e.g. `key>chest`, or '' when none. */
+  /** The last pictogram shown (test hook; kept after it fades), e.g. `key>chest`, or '' before any. */
   readonly showing: string;
   dispose(): void;
 }
 
-let styleRefs = 0;
-let styleEl: HTMLStyleElement | null = null;
+let shared: { root: HTMLElement; hud: ChestHud; refs: number } | null = null;
 
+/**
+ * The HUD pieces for `root`. Chests and secrets share one instance (one key chip, one pictogram
+ * card); each caller disposes its own handle.
+ */
 export function createChestHud(root: HTMLElement): ChestHud {
-  if (styleRefs++ === 0) {
-    styleEl = document.createElement('style');
-    styleEl.textContent = CSS;
-    document.head.appendChild(styleEl);
-  }
+  if (!shared || shared.root !== root) shared = { root, hud: build(root), refs: 0 };
+  shared.refs++;
+  const s = shared;
+  let disposed = false;
+  return {
+    setKeys: (n) => s.hud.setKeys(n),
+    flash: (from, to) => s.hud.flash(from, to),
+    get showing() {
+      return s.hud.showing;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (--s.refs > 0) return;
+      s.hud.dispose();
+      if (shared === s) shared = null;
+    },
+  };
+}
+
+function build(root: HTMLElement): ChestHud {
+  const styleEl = document.createElement('style');
+  styleEl.textContent = CSS;
+  document.head.appendChild(styleEl);
   const chip = document.createElement('div');
   chip.className = 'ch-key';
   chip.append(icon('key'), icon('chest'));
@@ -112,7 +134,6 @@ export function createChestHud(root: HTMLElement): ChestHud {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         card.classList.remove('on');
-        showing = '';
         timer = null;
       }, 1600);
     },
@@ -123,10 +144,7 @@ export function createChestHud(root: HTMLElement): ChestHud {
       if (timer) clearTimeout(timer);
       chip.remove();
       card.remove();
-      if (--styleRefs === 0 && styleEl) {
-        styleEl.remove();
-        styleEl = null;
-      }
+      styleEl.remove();
     },
   };
 }

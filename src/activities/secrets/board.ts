@@ -49,11 +49,11 @@ function draw(g: CanvasRenderingContext2D, t: number): void {
   const opening = clamp01((u - 3.6) / 0.9);
 
   // ── The door (top): three windows with the order shapes, glasses icon on its left.
-  const dx = 118;
-  const dy = 20;
-  const dw = 220;
-  const dh = 128;
-  drawIcon(g, 'glasses', 60, dy + 50, 70, WHITE);
+  const dx = 112;
+  const dy = 22;
+  const dw = 270;
+  const dh = 150;
+  drawIcon(g, 'glasses', 56, dy + 56, 82, WHITE);
   g.save();
   g.beginPath();
   g.rect(dx - 6, dy - 6, dw + 12, dh + 12);
@@ -79,21 +79,21 @@ function draw(g: CanvasRenderingContext2D, t: number): void {
   g.lineWidth = 5;
   g.strokeRect(dx + 6, dy + 6, dw - 12, dh - 12);
   for (let i = 0; i < 3; i++) {
-    const cx = dx + 42 + i * 68;
-    const cy = dy + 56;
+    const cx = dx + 50 + i * 85;
+    const cy = dy + 64;
     const pulse = u < 1.2 && Math.floor(u / 0.4) === i ? 1.2 : 1;
     g.beginPath();
-    g.arc(cx, cy, 27, 0, Math.PI * 2);
+    g.arc(cx, cy, 34, 0, Math.PI * 2);
     g.fillStyle = '#0b0c10';
     g.fill();
     g.lineWidth = 6;
     g.strokeStyle = i < done ? YELLOW : '#555b66';
     g.stroke();
-    drawShape(g, ORDER[i], cx, cy, 15 * pulse, WHITE);
+    drawShape(g, ORDER[i], cx, cy, 20 * pulse, WHITE);
     // 1, 2, 3 pips under each window.
     for (let p = 0; p <= i; p++) {
       g.beginPath();
-      g.arc(cx + (p - i / 2) * 10, cy + 40, 4, 0, Math.PI * 2);
+      g.arc(cx + (p - i / 2) * 13, cy + 50, 5, 0, Math.PI * 2);
       g.fillStyle = WHITE;
       g.fill();
     }
@@ -114,31 +114,31 @@ function draw(g: CanvasRenderingContext2D, t: number): void {
       g.lineCap = 'round';
       g.stroke();
     }
-    drawIcon(g, 'star', sx, sy, 34 + 46 * k, YELLOW);
+    drawIcon(g, 'star', sx, sy, 40 + 56 * k, YELLOW);
   }
 
   // ── The floor pads (bottom), and the little hero hopping between them.
-  const py = H - 70;
-  const padX = (i: number): number => 78 + i * 82;
+  const py = H - 52;
+  const padX = (i: number): number => 66 + i * 90;
   for (let i = 0; i < PADS.length; i++) {
     const order = ORDER.indexOf(PADS[i]);
     const lit = order >= 0 && order < done;
     g.beginPath();
-    g.ellipse(padX(i), py, 36, 17, 0, 0, Math.PI * 2);
+    g.ellipse(padX(i), py, 42, 20, 0, 0, Math.PI * 2);
     g.fillStyle = INK;
     g.fill();
     g.beginPath();
-    g.ellipse(padX(i), py - 4, 31, 13, 0, 0, Math.PI * 2);
+    g.ellipse(padX(i), py - 5, 36, 15, 0, 0, Math.PI * 2);
     g.fillStyle = lit ? YELLOW : '#e9dfc8';
     g.fill();
     g.lineWidth = 4;
     g.strokeStyle = INK;
     g.stroke();
     // The pad's shape stands over it.
-    drawShape(g, PADS[i], padX(i), py - 40, 15, lit ? YELLOW : WHITE);
+    drawShape(g, PADS[i], padX(i), py - 48, 20, lit ? YELLOW : WHITE);
   }
   // Hero: walks in from the left, then hops to each right pad in turn; stays on the last.
-  const home = { x: 22, y: py - 4 };
+  const home = { x: 18, y: py - 4 };
   const at = (k: number): { x: number; y: number } => (k < 0 ? home : { x: padX(PADS.indexOf(ORDER[k])), y: py - 6 });
   let hx: number;
   let hy: number;
@@ -151,7 +151,7 @@ function draw(g: CanvasRenderingContext2D, t: number): void {
     const a = at(k - 1);
     const b = at(k);
     hx = a.x + (b.x - a.x) * easeOut(f);
-    hy = a.y + (b.y - a.y) * f - Math.sin(Math.PI * f) * 34;
+    hy = a.y + (b.y - a.y) * f - Math.sin(Math.PI * f) * 44;
   } else {
     const b = at(2);
     hx = b.x;
@@ -161,7 +161,7 @@ function draw(g: CanvasRenderingContext2D, t: number): void {
   g.ellipse(hx, py + 2, 14, 5, 0, 0, Math.PI * 2);
   g.fillStyle = 'rgba(0,0,0,.45)';
   g.fill();
-  drawIcon(g, 'character', hx, hy - 20, 40, WHITE);
+  drawIcon(g, 'character', hx, hy - 26, 54, YELLOW);
   g.fillStyle = PANEL;
 }
 

@@ -12,12 +12,6 @@ export const SHAPES: readonly ShapeKind[] = ['star', 'moon', 'ring', 'triangle']
 export const DOOR_RULES = {
   buttons: SHAPES.length,
   sequenceLength: 3,
-  /** Button centres along the door, metres from the door centre (left → right, door-local x). */
-  buttonX: [-1.35, -0.45, 0.45, 1.35] as readonly number[],
-  /** Standing zone in front of the door (door-local z) where a press counts. */
-  zoneNear: 0.2,
-  zoneFar: 3.4,
-  zoneHalfWidth: 2.1,
   /**
    * Floor pads: on an arc of this radius round the door centre, at these angles (radians, 0 = straight
    * out of the door, left → right). Walking from one pad to any other never crosses a third.
@@ -70,21 +64,6 @@ export function makeSequence(seed: number, buttons: number = DOOR_RULES.buttons,
     if (!sorted || seq.length < 2) return seq;
   }
   return Array.from({ length: Math.min(len, buttons) }, (_, i) => (i * 2 + 1) % buttons);
-}
-
-/** Which button the player is lined up with (door-local x), or -1 outside the standing zone. */
-export function buttonAt(localX: number, localZ: number): number {
-  if (localZ < DOOR_RULES.zoneNear || localZ > DOOR_RULES.zoneFar || Math.abs(localX) > DOOR_RULES.zoneHalfWidth) return -1;
-  let best = 0;
-  let bestD = Infinity;
-  DOOR_RULES.buttonX.forEach((bx, i) => {
-    const d = Math.abs(localX - bx);
-    if (d < bestD) {
-      bestD = d;
-      best = i;
-    }
-  });
-  return best;
 }
 
 /** World → door-local (x along the door, z out of the door) for a door at (dx, dz) facing `yaw`. */

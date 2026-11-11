@@ -321,9 +321,10 @@ export function createSecrets(ctx: GameContext): Secrets {
     // Start marker (both eyes): a ring on the ground where the arrow trail ends, and a picture sign.
     const sx = def.start.x;
     const sz = def.start.z;
-    const start = buildStartMarker(sx, Math.max(world.waterLevel, h(sx, sz)), sz, surfMat);
+    const start = buildStartMarker(0, 0, 0, surfMat);
     const startCull = distanceCull(start.root, DRAW.pedestal);
     startCull.name = 'secret-start';
+    startCull.position.set(sx, Math.max(world.waterLevel, h(sx, sz)), sz);
     keepNear(startCull); // its own 140 m cull: the start sign is meant to be seen from afar
     ctx.scene.add(startCull);
 
@@ -412,7 +413,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       if (p.pop > 0 && p.pop < 1) p.pop = Math.min(1, p.pop + dt / 1.6);
       p.spin += dt * (p.pop > 0 && p.pop < 1 ? 9 * (1 - p.pop) + 1.2 : 1.2);
       if (cam.distanceTo(p.pedestalCull.position) < ANIMATE_DIST) poseStar(p);
-      if (cam.distanceTo(p.start.root.position) < ANIMATE_DIST) p.start.update(time + p.def.stones.length, p.claimed);
+      if (cam.distanceTo(p.startCull.position) < ANIMATE_DIST) p.start.update(time + p.def.stones.length, p.claimed);
     }
   }
 
@@ -792,6 +793,14 @@ export function createSecrets(ctx: GameContext): Secrets {
 
   function placeArrows(): void {
     arrowsPlaced = true;
+    // Start rings sit on the walkable surface (a platform or paving can be above the terrain).
+    for (const p of paths) {
+      const { x, z } = p.def.start;
+      const g = Math.max(world.waterLevel, h(x, z));
+      const hit = ctx.physics.raycast(tmpP.set(x, g + 4, z), DOWN, 6);
+      const y = hit && hit.point.y > g - 0.5 && hit.point.y < g + 3 ? Math.max(g, hit.point.y) : g;
+      p.startCull.position.y = y;
+    }
     for (const p of paths) placeTrail(`path-${p.def.id}`, p.def.start, null);
     // Chest keys live on the same weak layer: find them among our siblings (read-only).
     const keys = arrows.parent ? arrows.parent.children.filter((o) => o.name === 'chest-key') : [];
@@ -920,7 +929,7 @@ export function createSecrets(ctx: GameContext): Secrets {
           board: boardPhase(time + d.index * 1.7),
           starFly: d.starFly,
         })),
-        starts: paths.map((p) => p.start.root.position.toArray() as [number, number, number]),
+        starts: paths.map((p) => p.startCull.position.toArray() as [number, number, number]),
         arrows: arrows.count,
         trails: trails.map((t) => {
           const f = t.places[0];

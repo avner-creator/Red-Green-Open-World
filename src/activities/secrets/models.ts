@@ -218,8 +218,6 @@ export const VAULT = {
   doorW: 4.5,
   doorH: 3.75,
   doorT: 0.3,
-  /** Height of the button row on the door (old layout; the pads replaced it). */
-  buttonY: 2.35,
   /** The three round windows on the door where the weak eye sees the sequence (door-local). */
   screenY: 2.62,
   screenX: 1.3,
@@ -306,7 +304,7 @@ export interface BoardPlace {
   yaw: number;
 }
 
-export const BOARD = { w: 1.9, h: 1.66, bottom: 0.95 } as const;
+export const BOARD = { w: 2.4, h: 2.1, bottom: 0.75 } as const;
 
 export function buildVault(seed: number, crag: Crag, material: THREE.Material, pads: readonly PadPlace[] = [], board: BoardPlace | null = null): VaultModel {
   const V = VAULT;

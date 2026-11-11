@@ -213,29 +213,40 @@ test('a pedestal pays out once: confetti, stars and fanfare', async () => {
   await save('lake-pedestal');
 });
 
-test('vault: wrong order wobbles and starts over, the weak eye order opens it, treasure inside', async () => {
+test('vault: stepping on pads; wrong order wobbles and starts over, the weak eye order opens it, the prize flies out', async () => {
   await page.evaluate(() => {
     const log: string[] = [];
     const ev = window.__rg!.ctx.events;
     ev.on('stunt', (e) => log.push(`${e.kind}:${e.stars}`));
     ev.on('ui:toast', (e) => log.push(`toast:${e.icon}`));
     ev.on('glasses:result', (e) => log.push(`glasses:${e.mechanic}:${e.tier}:${e.hit}`));
+    ev.on('stamp:earned', (e) => log.push(`stamp:${e.id}`));
     (window as unknown as { __vlog: string[] }).__vlog = log;
   });
   const vlog = (): Promise<string[]> => page.evaluate(() => (window as unknown as { __vlog: string[] }).__vlog.slice());
   const door = (await info()).doors[0];
   const seq = door.sequence;
   expect(new Set(seq).size).toBe(3);
+  // A step onto floor pad `button` (from off the pads) presses it; E on the same pad is a no-op.
   const press = async (button: number): Promise<void> => {
     const [x, z] = await page.evaluate(([b]) => window.__rgSecrets!.standPoint(0, b), [button]);
     const yaw = await page.evaluate(() => window.__rgSecrets!.info().doors[0].yaw + Math.PI);
-    await page.evaluate(({ x, z, yaw }) => {
+    const [ox, oz] = await page.evaluate(() => window.__rgSecrets!.standPoint(0, 1, 6));
+    await page.evaluate(({ x, z, ox, oz, yaw }) => {
       const rg = window.__rg!;
+      rg.teleport(ox, rg.ctx.world.heightAt(ox, oz) + 0.1, oz, yaw);
+      rg.step(1 / 60, 3, false);
       rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, yaw);
       rg.step(1 / 60, 12, false);
-    }, { x, z, yaw });
+    }, { x, z, ox, oz, yaw });
     expect((await info()).doors[0].selected).toBe(button);
-    await use();
+    const before = (await info()).doors[0];
+    if (before.progress > 0 && !before.open) {
+      // After a right step, an extra E on the same pad changes nothing.
+      await use();
+      const after = (await info()).doors[0];
+      expect([after.progress, after.misses, after.open]).toEqual([before.progress, before.misses, before.open]);
+    }
   };
 
   // The closed door blocks the way in.
@@ -267,19 +278,34 @@ test('vault: wrong order wobbles and starts over, the weak eye order opens it, t
   expect(d.progress).toBe(0);
   expect(d.misses).toBe(1);
   expect(d.open).toBe(false);
+  // A wrong step darkens every pad for a moment, then they come back.
+  expect(d.padLooks).toEqual(['dark', 'dark', 'dark', 'dark']);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 40, false));
+  expect((await info()).doors[0].padLooks).toEqual(['idle', 'idle', 'idle', 'idle']);
 
-  for (const b of seq) await press(b);
+  for (const [k, b] of seq.entries()) {
+    await press(b);
+    // Each right step lights its pad (and stays lit).
+    const looks = (await info()).doors[0].padLooks;
+    for (const lit of seq.slice(0, k + 1)) expect(looks[lit]).toBe('lit');
+  }
   d = (await info()).doors[0];
   expect(d.open).toBe(true);
   expect(d.progress).toBe(3);
-  // Let the door slide, then walk in: treasure.
-  await page.evaluate(() => window.__rg!.step(1 / 60, 100, false));
-  await put([ix, d.y + 0.1, iz], 0, 20);
+  // The door sinks and the treasure star flies out to the hero: the prize, without walking in.
+  await page.evaluate(() => window.__rg!.step(1 / 60, 90, false));
+  expect((await info()).doors[0].starFly).toBeGreaterThan(0);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 90, false));
   d = (await info()).doors[0];
+  expect(d.starFly).toBe(1);
   expect(d.treasure).toBe(true);
+  expect(await page.evaluate(() => window.__rgChests!.hud().picto)).toBe('gem>hat+balloon');
+  // The open vault can still be walked into (the gems inside).
+  await put([ix, d.y + 0.1, iz], 0, 20);
   const log = await vlog();
   expect(log).toContain('bullseye:3');
   expect(log).toContain('toast:chest');
+  expect(log.filter((l) => l === 'stamp:secrets')).toHaveLength(1);
   expect(log.filter((l) => l.startsWith('glasses:vaultDoor'))).toEqual(['glasses:vaultDoor:1:true', 'glasses:vaultDoor:1:false', 'glasses:vaultDoor:1:true', 'glasses:vaultDoor:1:true', 'glasses:vaultDoor:3:true']);
   // Treasure screenshot from the doorway.
   const [fx, fz] = await page.evaluate(() => window.__rgSecrets!.standPoint(0, 1, 6));
@@ -324,8 +350,8 @@ test('stones and arrows touch only the weak channel, vault buttons only the stro
       part: 'arrows',
       layer: 'weak',
     },
-    { name: 'sign', from: [dx, door.y + 3, dz], at: [door.x, door.y + 3.4, door.z], part: 'sign', layer: 'weak' },
-    { name: 'buttons', from: [dx, door.y + 3, dz], at: [door.x, door.y + 2.2, door.z], part: 'buttons', layer: 'strong' },
+    { name: 'sign', from: [dx, door.y + 3, dz], at: [door.x, door.y + 2.6, door.z], part: 'sign', layer: 'weak' },
+    { name: 'buttons', from: [dx, door.y + 3, dz], at: [door.x, door.y + 1, door.z], part: 'buttons', layer: 'strong' },
   ];
   for (const v of views) {
     await cam(v.from, v.at, 60);
@@ -346,6 +372,29 @@ test('stones and arrows touch only the weak channel, vault buttons only the stro
     }
   }
   await page.evaluate(() => window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' }));
+});
+
+test('clear without words: start rings and signs at every path, a rule board that plays, a treasure window', async () => {
+  const s = await info();
+  expect(s.starts).toHaveLength(4);
+  for (const [i, p] of s.paths.entries()) {
+    // The ring is where the path's arrow trail ends, on the ground (not on a stone).
+    expect(Math.hypot(s.starts[i][0] - p.start[0], s.starts[i][2] - p.start[1])).toBeLessThan(0.01);
+    const ground = await page.evaluate(([x, z]) => window.__rg!.ctx.world.heightAt(x, z), [p.start[0], p.start[1]]);
+    expect(s.starts[i][1]).toBeGreaterThan(ground - 0.6);
+    expect(Math.abs(s.starts[i][1] - p.stones[0][1])).toBeLessThan(3);
+  }
+  const names = await page.evaluate(() => window.__rg!.ctx.scene.children.map((o) => o.name));
+  expect(names.filter((n) => n === 'secret-start')).toHaveLength(4);
+  expect(names.filter((n) => n === 'vault-board')).toHaveLength(2);
+  // The board is a both-eye object in the main scene, never on a vision layer.
+  expect(await page.evaluate(() => window.__rg!.layerObjects().filter((o) => o.name.startsWith('vault-board') || o.name.startsWith('secret-start')).length)).toBe(0);
+  const phases = new Set<string>();
+  for (let k = 0; k < 8; k++) {
+    phases.add((await info()).doors[0].board);
+    await page.evaluate(() => window.__rg!.step(1 / 60, 50, false));
+  }
+  for (const ph of ['show', 'step1', 'step2', 'step3', 'open']) expect([...phases], ph).toContain(ph);
 });
 
 test('screenshots of every path and the vault (full, R-only, G-only)', async () => {
@@ -369,8 +418,11 @@ test('screenshots of every path and the vault (full, R-only, G-only)', async () 
   const d = s.doors[1];
   const fx = d.x + Math.sin(d.yaw) * 10;
   const fz = d.z + Math.cos(d.yaw) * 10;
-  await cam([fx, d.y + 3, fz], [d.x, d.y + 3.2, d.z], 60);
+  await cam([fx, d.y + 3, fz], [d.x, d.y + 2.4, d.z], 60);
   await save('vault-door');
+  const st = s.paths[1];
+  await cam([st.start[0] + 6, s.starts[1][1] + 3, st.start[1] + 6], [st.start[0], s.starts[1][1] + 1.5, st.start[1]], 60);
+  await save('path-start');
   await page.evaluate(() => (window.__rg!.ctx.uiRoot.style.display = ''));
 });
 
