@@ -222,6 +222,51 @@ test('across the terrace past the friends, and straight at each friend', async (
   expect(fails, fails.join('\n')).toEqual([]);
 });
 
+test('nobody jumps onto or over the counter; a hero put on top hops back out', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const s = window.__rgScoops!.info().site;
+    const cy = Math.cos(s.yaw);
+    const sy = Math.sin(s.yaw);
+    const W = (lx: number, lz: number): [number, number] => [s.x + cy * lx + sy * lz, s.z - sy * lx + cy * lz];
+    const L = (): [number, number, number] => {
+      const p = rg.ctx.player.position;
+      const dx = p.x - s.x;
+      const dz = p.z - s.z;
+      return [cy * dx - sy * dz, p.y - s.y, sy * dx + cy * dz];
+    };
+    let maxY = 0;
+    let minZ = 9;
+    // Jumping at the counter from the front (middle, both ends, the old end slits), holding forward.
+    for (const lx of [0, -3.0, 3.0, -3.6, 3.6]) {
+      const [x, z] = W(lx, 2.9);
+      rg.teleport(x, s.y + 0.6, z, s.yaw + Math.PI);
+      rg.step(1 / 60, 20, false);
+      window.__rgCamera!.setView(s.yaw + Math.PI);
+      for (let i = 0; i < 40; i++) {
+        rg.inject({ moveY: 1, jumpPressed: i % 4 === 0, jump: true });
+        rg.step(1 / 60, 6, false);
+        const p = L();
+        // Inside the shop's width (outside the side walls is open terrace).
+        if (Math.abs(p[0]) < 3.85) {
+          minZ = Math.min(minZ, p[2]);
+          if (p[2] < 2.4) maxY = Math.max(maxY, p[1]);
+        }
+      }
+      rg.inject(null);
+    }
+    // Put on top (a respawn or teleport could): back on the customer side within ~1.5 s.
+    const [tx, tz] = W(-1, 1.72);
+    rg.teleport(tx, s.y + 1.75, tz, s.yaw);
+    rg.step(1 / 60, 100, false);
+    return { maxY, minZ, after: L(), mode: rg.state().playerMode };
+  });
+  expect(r.minZ, JSON.stringify(r)).toBeGreaterThan(2.3);
+  expect(r.maxY, JSON.stringify(r)).toBe(0);
+  expect(r.after[2], JSON.stringify(r)).toBeGreaterThan(2.5);
+  expect(r.mode).toBe('walk');
+});
+
 /** One input edge, then `frames` simulation-only frames. */
 async function press(patch: Partial<InputState>, frames = 2): Promise<void> {
   await page.evaluate(

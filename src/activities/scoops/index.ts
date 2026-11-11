@@ -37,7 +37,7 @@ import {
   ticketFor,
 } from './logic';
 import type { BuildSnapshot, ChooseResult, EffectId, Recipe, SecretId, Tile } from './logic';
-import { FLOOR, JAR, LAYOUT, buildParlour } from './parlour';
+import { FLOOR, FRONT, JAR, LAYOUT, buildParlour } from './parlour';
 import { createSecretTopping } from './secret';
 import { createScoopsUi } from './ui';
 
@@ -620,9 +620,9 @@ export function createScoops(ctx: GameContext): Scoops {
       if (!near) return;
 
       // Behind the counter is a closed room (the shop front is sealed for walking, see FRONT). Only
-      // a teleport, a respawn or a ride ending in there could leave an idle hero inside: hop them
-      // back out to the customer side.
-      if (phase === 'idle' && ctx.player.mode === 'walk' && Math.abs(local.x) < 3.85 && local.z > -2.95 && local.z < 1.3 && local.y > -0.5 && local.y < FLOOR + 1.6) {
+      // a teleport, a respawn or a ride ending in there (or on the counter top) could leave an idle
+      // hero inside: hop them back out to the customer side.
+      if (phase === 'idle' && ctx.player.mode === 'walk' && Math.abs(local.x) < 3.85 && local.z > -2.95 && local.z < FRONT.z1 + 0.05 && local.y > -0.5 && local.y < FLOOR + 2.6) {
         trappedT += dt;
         if (trappedT > 0.5) {
           trappedT = 0;
