@@ -9,6 +9,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { merge, noise, paint, placed } from '../chests/bake';
 import { buildClothCape, buildWearable as buildChestWearable, disposer, lit, mesh, std } from '../chests/wearables';
 import type { CapeSpec, Wearable } from '../chests/wearables';
+import { buildGoofy } from './goofy';
 
 export type { Wearable };
 
@@ -303,6 +304,6 @@ export function buildGear(id: string): Wearable | null {
     case 'glasses-goggles':
       return buildGoggles();
     default:
-      return buildChestWearable(id);
+      return buildGoofy(id) ?? buildChestWearable(id);
   }
 }

@@ -56,9 +56,9 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
     rg.inject(null);
     rg.step(1 / 60, 2, false);
   });
-  await expect(page.getByTestId('shop')).toBeVisible();
+  await expect(page.getByTestId('wardrobe')).toBeVisible();
   expect(await page.evaluate(() => window.__rg!.ctx.economy.buy('hat-propeller'))).toBe('ok');
-  await page.getByTestId('shop-close').click();
+  await page.getByTestId('wardrobe-close').click();
   await page.evaluate(() => window.__rg!.step(1 / 60, 3, false));
   expect(await page.evaluate(() => window.__rg!.state().phase)).toBe('playing');
 

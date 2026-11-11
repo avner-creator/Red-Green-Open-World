@@ -1,4 +1,5 @@
 import { ECON_CSS } from './cssEcon';
+import { WARDROBE_CSS } from './wardrobe/css';
 
 /** All UI CSS, injected once. Sizes use --u (about 1vmin, clamped) so 640x360 up to 4K work. */
 export const UI_CSS = `
@@ -289,6 +290,6 @@ export function injectCss(): void {
   if (injected) return;
   injected = true;
   const el = document.createElement('style');
-  el.textContent = UI_CSS + ECON_CSS;
+  el.textContent = UI_CSS + ECON_CSS + WARDROBE_CSS;
   document.head.appendChild(el);
 }

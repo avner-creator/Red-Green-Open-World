@@ -44,7 +44,7 @@ const dismiss = (page: Page): Promise<void> =>
   page.evaluate(() => (document.querySelector('[data-testid="unlock-moment"].on') as HTMLElement | null)?.click());
 const wallet = (page: Page): Promise<number> => page.evaluate(() => window.__rg!.ctx.profile.wallet);
 
-/** Fixture items with canvas-drawn pictures, in the 'character' tab (empty in the real catalog). */
+/** Fixture items with canvas-drawn pictures (they land in the dressing room's hat/back/face tabs by slot). */
 async function registerFixtures(page: Page): Promise<void> {
   await page.evaluate(() => {
     const calls: string[] = [];
@@ -113,7 +113,7 @@ const hudOverlaps = (page: Page, at = 270): Promise<string[]> =>
       '[data-testid="wallet"]', '[data-testid="combo"]', '[data-testid="stars"]', '[data-testid="missions"]', '[data-testid="timer"]',
       '.wf-compass', '[data-testid="help"]', '[data-testid="touch-jump"]', '[data-testid="touch-use"]', '[data-testid="touch-sprint"]',
       '[data-testid="touch-flop"]', '[data-testid="touch-pause"]', '[data-testid="touch-emote"]', '[data-testid="touch-stick"]',
-      '[data-testid="touch-skill"]', '[data-testid="skill-chip"]',
+      '[data-testid="touch-skill"]', '[data-testid="skill-chip"]', '[data-testid="hud-wardrobe"]',
     ];
     const rs: [string, DOMRect][] = [];
     for (const s of sel) {
@@ -137,7 +137,7 @@ const hudOverlaps = (page: Page, at = 270): Promise<string[]> =>
 
 test.describe('economy ui', () => {
   test('wallet, combo, missions, kiosk shop, wardrobe, end screen, reset', async ({ page }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(240_000); // try-on + buy is one more press per purchase than the old shop
     const { consoleErrors } = await boot(page);
     await page.evaluate(() => window.__rg!.freeze(true));
 
@@ -233,7 +233,7 @@ test.describe('economy ui', () => {
     expect(denyToast.some((t) => t.includes('50')), JSON.stringify(denyToast)).toBe(true);
     await expect(page.getByTestId('combo')).toBeHidden();
 
-    // Walk up to the Gear Shack kiosk and press use: session paused, shop on top.
+    // Walk up to the Gear Shack kiosk and press use: session paused, the dressing room on top.
     await page.evaluate(() => {
       const rg = window.__rg!;
       const a = rg.ctx.world.anchors.gearShack;
@@ -246,21 +246,21 @@ test.describe('economy ui', () => {
       rg.inject(null);
       rg.step(1 / 60, 3, false);
     });
-    await expect(page.getByTestId('shop')).toBeVisible();
+    await expect(page.getByTestId('wardrobe')).toBeVisible();
     expect(await phase(page)).toBe('paused');
     expect(await page.evaluate(() => window.__rg!.ctx.ui.menuOpen)).toBe(true);
-    await expect(page.getByTestId('shop-tab-outfit')).toBeVisible();
-    await expect(page.getByTestId('shop-tab-character')).toBeVisible();
+    await expect(page.getByTestId('shop-tab-head')).toBeVisible();
+    await expect(page.getByTestId('shop-tab-paint')).toBeVisible();
     const fits = async (): Promise<boolean> =>
       page.evaluate(() => {
-        const r = document.querySelector('[data-testid="shop"]')!.getBoundingClientRect();
+        const r = document.querySelector('[data-testid="wardrobe"]')!.getBoundingClientRect();
         const se = document.scrollingElement!;
         return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth && se.scrollHeight <= innerHeight;
       });
     expect(await fits()).toBe(true);
     await save(page, 'shop');
-    const card = (id: string) => page.locator(`[data-testid="shop"] [data-testid="shop-card"][data-item="${id}"]`);
-    const chestId = await page.evaluate(() => window.__rg!.ctx.economy.catalog.find((i) => i.chestOnly && i.category === 'outfit')!.id);
+    const card = (id: string) => page.locator(`[data-testid="wardrobe"] [data-testid="shop-card"][data-item="${id}"]`);
+    const chestId = await page.evaluate(() => window.__rg!.ctx.economy.catalog.find((i) => i.chestOnly && i.slot === 'head')!.id);
     await expect(card('hat-crown')).toHaveAttribute('data-state', 'poor');
     await expect(card(chestId)).toHaveAttribute('data-state', 'chest');
     // Item pictures: the icon at once, then an <img> where a preview exists; the icon where not.
@@ -269,24 +269,28 @@ test.describe('economy ui', () => {
     // depended on machine load).
     expect(
       await page.evaluate(() => {
-        (document.querySelector('[data-testid="shop-tab-character"]') as HTMLElement).click();
+        (document.querySelector('[data-testid="shop-tab-face"]') as HTMLElement).click();
         return (window as unknown as { __previewCalls: string[] }).__previewCalls.length;
       }),
     ).toBeLessThanOrEqual(1);
-    await expect(card('fx-hat').locator('img.pic')).toHaveCount(1);
     await expect(card('fx-plain').locator('img')).toHaveCount(0);
     await expect(card('fx-plain').locator('.pv .ic')).toHaveCount(1);
-    await expect(card('fx-cape')).toHaveAttribute('data-state', 'poor');
     await expect(card('fx-specs')).toHaveAttribute('data-state', 'chest');
     await expect(card('fx-specs').locator('img.pic')).toHaveCount(1);
+    await page.getByTestId('shop-tab-back').click();
+    await expect(card('fx-cape')).toHaveAttribute('data-state', 'poor');
+    await page.getByTestId('shop-tab-head').click();
+    await expect(card('fx-hat').locator('img.pic')).toHaveCount(1);
     await save(page, 'shop-pictures');
     await page.setViewportSize({ width: 667, height: 375 });
     expect(await fits()).toBe(true);
     await page.setViewportSize({ width: 640, height: 360 });
 
-    // Buy: wallet drops, unlock moment, owned + worn.
+    // Try it on (first press), then buy (BUY button): wallet drops, unlock moment, owned + worn.
     const w0 = await wallet(page);
     await card('fx-hat').click();
+    expect(await wallet(page)).toBe(w0);
+    await page.getByTestId('wardrobe-buy').click({ force: true }); // it pulses: never "stable"
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
     await expect(page.locator('[data-testid="unlock-moment"] img.pic')).toHaveCount(1);
     expect(await wallet(page)).toBe(w0 - 12);
@@ -296,9 +300,10 @@ test.describe('economy ui', () => {
     await expect(card('fx-hat')).toHaveAttribute('data-state', 'equipped');
     expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe('fx-hat');
 
-    // Too expensive / chest-only: nothing happens to the wallet.
-    await page.getByTestId('shop-tab-outfit').click();
+    // Too expensive / chest-only: tried on only, nothing happens to the wallet.
     await card('hat-crown').click();
+    await card('hat-crown').click();
+    await card(chestId).click();
     await card(chestId).click();
     expect(await wallet(page)).toBe(w0 - 12);
     expect(await page.evaluate((c) => window.__rg!.ctx.profile.owns('hat-crown') || window.__rg!.ctx.profile.owns(c), chestId)).toBe(false);
@@ -306,7 +311,8 @@ test.describe('economy ui', () => {
     // Another tab by icon; buy a paint with the keyboard.
     await page.getByTestId('shop-tab-paint').click();
     await card('paint-snow').focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter'); // try
+    await page.keyboard.press('Enter'); // buy
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
     await dismiss(page);
     expect(await wallet(page)).toBe(w0 - 22);
@@ -315,7 +321,7 @@ test.describe('economy ui', () => {
     await page.keyboard.press('Escape');
     await step(page, 3);
     expect(await phase(page)).toBe('playing');
-    await expect(page.getByTestId('shop')).toBeHidden();
+    await expect(page.getByTestId('wardrobe')).toBeHidden();
 
     // Wardrobe from the pause menu: wear / take off.
     await page.evaluate(() => {
@@ -325,8 +331,7 @@ test.describe('economy ui', () => {
     await page.getByTestId('pause-wardrobe').click();
     await expect(page.getByTestId('wardrobe')).toBeVisible();
     const wcard = (id: string) => page.locator(`[data-testid="wardrobe"] [data-testid="shop-card"][data-item="${id}"]`);
-    await expect(wcard('hat-crown')).toHaveCount(0);
-    await expect(wcard('emote-wave')).toHaveCount(1);
+    await expect(wcard('hat-crown')).toHaveAttribute('data-state', 'poor');
     await expect(wcard('fx-hat').locator('img.pic')).toHaveCount(1);
     await wcard('fx-hat').click();
     expect(await page.evaluate(() => window.__rg!.ctx.profile.equipped('head'))).toBe(null);
@@ -464,28 +469,30 @@ test.describe('economy ui by touch', () => {
     // Use button → shop; the touch gameplay controls hide while it is open.
     await page.getByTestId('touch-use').tap({ force: true }); // it pulses: never "stable"
     await step(page, 3);
-    await expect(page.getByTestId('shop')).toBeVisible();
+    await expect(page.getByTestId('wardrobe')).toBeVisible();
     expect(await phase(page)).toBe('paused');
     await expect(page.getByTestId('touch-hud')).toBeHidden();
     // Every target is thumb-sized.
     const small = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-testid="shop"] button')]
+      [...document.querySelectorAll('[data-testid="wardrobe"] button')]
         // Layout size (offsetWidth): not shrunk by the panel's pop-in animation.
         .map((b) => [(b as HTMLElement).dataset.testid ?? b.className, (b as HTMLElement).offsetWidth, (b as HTMLElement).offsetHeight] as const)
         .filter(([, w, hgt]) => w > 0 && (w < 44 || hgt < 44))
         .map(([n, w, hgt]) => `${n} ${w}x${hgt}`),
     );
     expect(small).toEqual([]);
-    await page.getByTestId('shop-tab-character').tap();
+    await page.getByTestId('shop-tab-head').tap();
     const w0 = await wallet(page);
-    await page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="fx-hat"]').tap();
+    const fxHat = page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="fx-hat"]');
+    await fxHat.tap(); // try on
+    await fxHat.tap(); // buy
     await expect(page.getByTestId('unlock-moment')).toBeVisible();
     expect(await wallet(page)).toBe(w0 - 12);
     await page.getByTestId('unlock-moment').tap();
     await expect(page.getByTestId('unlock-moment')).toBeHidden();
-    await expect(page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="fx-hat"]')).toHaveAttribute('data-state', 'equipped');
+    await expect(fxHat).toHaveAttribute('data-state', 'equipped');
     expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
-    await page.getByTestId('shop-close').tap();
+    await page.getByTestId('wardrobe-close').tap();
     await step(page, 3);
     expect(await phase(page)).toBe('playing');
     await expect(page.getByTestId('touch-hud')).toBeVisible();

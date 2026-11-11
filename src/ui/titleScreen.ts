@@ -10,6 +10,7 @@ import { buddyPicto } from './buddy/picto';
 import { clear, h } from './dom';
 import { cap, padButton } from './glyphs';
 import { icon } from './icons';
+import { createPictureQueue, itemPicture, picturePending, swapInPicture } from './itemArt';
 import type { Actions, Screen } from './screens';
 import { skillPicto } from './skillPicto';
 import { createWalletChip } from './wallet';
@@ -20,6 +21,9 @@ export interface TitleScreen extends Screen {
   /** Per frame while shown: hero name and device glyphs. */
   update(dt: number): void;
 }
+
+/** Goofy items the title's dress-up button shows in turn. */
+const TEASERS = ['hat-duck', 'hat-viking', 'face-googly', 'back-dragon', 'hat-octopus', 'hat-sombrero', 'face-bigglasses', 'back-balloons'];
 
 const SWAP_L = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15.5 3L6 12l9.5 9z"/></svg>';
 const SWAP_R = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8.5 3L18 12l-9.5 9z"/></svg>';
@@ -73,8 +77,35 @@ export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
 
   const tile = (label: string, testid: string, ...pics: HTMLElement[]): HTMLButtonElement =>
     btn('b d ttile', label, testid, h('span', 'pics', {}, ...pics), h('span', 'lbl', {}, label.toUpperCase()));
-  const gear = tile('Gear', 'title-wardrobe', icon('backpack'), icon('hat'));
-  gear.addEventListener('click', a.openWardrobe);
+  // Dress up: a big button with a hanger and a goofy item that changes every 1.5 s (a teaser:
+  // crazy hats exist, and several are free right away).
+  const tease = h('span', 'tease');
+  const dress = btn(
+    'b dressbtn',
+    'Dress up',
+    'title-wardrobe',
+    h('span', 'drow', {}, icon('hanger'), tease),
+    h('span', 'lbl', {}, 'DRESS UP'),
+  );
+  dress.addEventListener('click', a.openWardrobe);
+  const pics = createPictureQueue(() => el.classList.contains('on'));
+  let teaseIdx = -1;
+  let teaseT = 0;
+  const nextTease = (): void => {
+    const pool = TEASERS.map((id) => ctx.economy.item(id)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (!pool.length) return;
+    teaseIdx = (teaseIdx + 1) % pool.length;
+    const it = pool[teaseIdx]!;
+    tease.replaceChildren(itemPicture(it, it.icon));
+    tease.dataset.item = it.id;
+    tease.classList.remove('in');
+    void tease.offsetWidth;
+    tease.classList.add('in');
+    if (picturePending(it)) pics.request(it, () => swapInPicture(tease, it, it.icon));
+    // Warm the next picture so it is ready when its turn comes.
+    const nx = pool[(teaseIdx + 1) % pool.length];
+    if (nx && picturePending(nx)) pics.request(nx, () => {});
+  };
   const helpKey = h('span', 'hk');
   const help = tile('Help', 'title-help', buddyPicto('question'), helpKey);
   help.addEventListener('click', () => a.openHelp?.());
@@ -89,7 +120,7 @@ export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
     h('div', 'ttop', {}, logo),
     stage,
     h('div', 'tmid', {}, pip, h('div', 'tgap'), hero),
-    h('div', 'tbot', {}, h('div', 'tside l', {}, gear, help), play, h('div', 'tside r', {}, grown)),
+    h('div', 'tbot', {}, h('div', 'tside l', {}, dress, help), play, h('div', 'tside r', {}, grown)),
     wallet.el,
   );
 
@@ -119,6 +150,11 @@ export function createTitle(ctx: GameContext, a: Actions): TitleScreen {
     update(dt) {
       wallet.update(dt);
       refresh();
+      teaseT -= dt;
+      if (teaseT <= 0) {
+        teaseT = 1.5;
+        nextTease();
+      }
     },
     onShow: () => {
       wallet.snap();

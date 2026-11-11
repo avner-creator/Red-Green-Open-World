@@ -5,6 +5,7 @@
  */
 import type { EquipSlot, ShopItem } from '../../types';
 import { OUTFITS, PAINT_COLORS } from '../chests/outfits';
+import { GOOFY_ITEMS } from './goofy';
 
 const outfit = (id: string, slot: EquipSlot, name: string, icon: ShopItem['icon'], price: number): ShopItem => ({
   id, slot, name, icon, price, category: 'outfit',
@@ -63,7 +64,8 @@ export const CHEST_GEAR: readonly ShopItem[] = OUTFITS.map(
   }),
 );
 
-export const GEAR_CATALOG: readonly ShopItem[] = [...SHOP_GEAR, ...CHEST_GEAR];
+/** Goofy items first: they are what the wardrobe opens on. */
+export const GEAR_CATALOG: readonly ShopItem[] = [...GOOFY_ITEMS, ...SHOP_GEAR, ...CHEST_GEAR];
 
 /** Buggy paint colour for an item id (shop paints and chest paints), or null if it is not a paint. */
 export function paintColor(id: string | null): number | null {
