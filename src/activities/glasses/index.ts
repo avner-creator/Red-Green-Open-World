@@ -67,6 +67,8 @@ export interface GlassesTestApi {
   trySite(id: string, row: { x: number; z: number; yaw: number; slot: number }): Record<string, unknown>;
   /** DEV: what is wrong with a site centre right now (static rules, ground, board views by slot). */
   probe(x: number, z: number, yaw: number, playRadius?: number): { problems: string[]; ground: string | null; views: boolean[] };
+  /** DEV: what (if anything) blocks the straight line from `a` to `b`: a collider, a prop mesh or a merged batch (canopies included). */
+  sight(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): string | null;
   /** Phase 2 weave parts (./weave). */
   weave?: WeaveTestApi;
 }
@@ -534,6 +536,16 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
           ground: groundProblem(w, x, z) && `${groundProblem(w, x, z)}: ${blockReason(x, z, GLASSES.siteRadius + 1.5) ?? ''}`,
           views: [0, 1, 2].map((slot) => view(x, z, yaw, boardOf({ id: '', x, z, yaw, slot, near: '' }))),
         };
+      },
+      sight(a, b) {
+        const from = new THREE.Vector3(a.x, a.y, a.z);
+        const d = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
+        const len = d.length();
+        if (len < 0.5) return null;
+        d.normalize();
+        const hit = ctx.physics.raycast(from, d, len - 0.3);
+        if (hit) return `collider at (${hit.point.x.toFixed(1)}, ${hit.point.y.toFixed(1)}, ${hit.point.z.toFixed(1)})`;
+        return sceneHitName(from, d, len - 0.3) ?? sceneHitName(from, d, len - 0.3, true);
       },
       boardRect(id) {
         const mesh = byId(id).board.mesh;
