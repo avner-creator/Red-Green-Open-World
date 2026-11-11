@@ -189,6 +189,37 @@ try {
             await untilPlaying(g);
             rg.step(1 / 60, 300, false);
           },
+          // Foam course: standing on the cannon walkway, looking along the three blowers.
+          'foam-blowers': () => {
+            const f = window.__rgFoam;
+            if (!f) return;
+            const [x, y, z] = f.toWorld(-6.4, 1.2, 8);
+            const [tx, , tz] = f.toWorld(-6.4, 0, 20);
+            at(x, z, tx, tz, y);
+          },
+          // Riding the balloon up (board at the pad, 12 s of the climb).
+          'balloon-ride': () => {
+            const a = A.balloon.position;
+            rg.teleport(a.x + 1.7, ctx.world.heightAt(a.x, a.z) + 0.4, a.z, -Math.PI / 2);
+            rg.step(1 / 60, 10, false);
+            rg.inject({ usePressed: true });
+            rg.step(1 / 60, 1, false);
+            rg.inject(null);
+            rg.step(1 / 30, 360, false);
+          },
+          // Dragon tour in flight (board at the roost, 8 s in).
+          'dragon-tour': () => {
+            const sky = window.__rgSky;
+            if (!sky) return;
+            sky.dragon.tourSeconds = 30;
+            rg.teleport(-32.6, ctx.world.heightAt(-32.6, -125.2) + 0.3, -125.2, Math.PI);
+            rg.step(1 / 60, 10, false);
+            rg.inject({ usePressed: true });
+            rg.step(1 / 60, 1, false);
+            rg.inject(null);
+            for (let i = 0; i < 900 && sky.dragon.phase !== 'tour'; i++) rg.step(1 / 30, 1, false);
+            rg.step(1 / 30, 240, false);
+          },
         };
         const out = [];
         for (const [view, go] of Object.entries(views)) {
