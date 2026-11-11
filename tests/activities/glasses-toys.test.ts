@@ -371,7 +371,8 @@ describe('booth: rules, prizes, demo, basket', () => {
     expect(Array.from((geo.getAttribute('uv').array as Float32Array).subarray(0, uv0.length))).toEqual(Array.from(uv0));
     const tris = geo.getAttribute('position').count / 3;
     console.info(`toys booth + basket: ${tris} triangles (basket ${r.count / 3})`);
-    expect(tris).toBeLessThanOrEqual(2200);
+    // The kit's raised pad drum, rim and glowing bollards (Phase 3 fix round) add ~300 triangles.
+    expect(tris).toBeLessThanOrEqual(2600);
     poseRange(geo, r, new THREE.Matrix4().makeTranslation(0, 1, 0));
     expect((geo.getAttribute('position').array as Float32Array)[r.start * 3 + 1]).toBeCloseTo(r.rest[1] + 1, 5);
     poseRange(geo, r, null);

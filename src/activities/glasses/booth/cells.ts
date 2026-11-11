@@ -51,6 +51,8 @@ export const KIT_CELL = {
 
 export const PROMPTS = ['arch', 'press', 'look', 'backToPad', 'stepPad', 'catch', 'follow', 'aim'] as const;
 export type PromptId = (typeof PROMPTS)[number];
+/** A prompt: a pictogram cell, or 'button' = the Use button of the device in use (key E, pad X, tap). */
+export type BoothPrompt = PromptId | 'button';
 export const PROMPT_CELL0 = 56;
 
 export type LampState = 'off' | 'hit' | 'miss' | 'chase';

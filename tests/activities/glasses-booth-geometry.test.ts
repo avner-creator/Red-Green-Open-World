@@ -90,7 +90,7 @@ describe('booth geometry', () => {
     for (const a of ['position', 'normal', 'uv', 'color']) expect(g.getAttribute(a), a).toBeTruthy();
     expect(g.groups.length).toBe(0); // one material, one draw call
     const count = g.getAttribute('position').count;
-    const names = ['demo', 'padFace', 'padGlow', 'device', 'prompt', 'lamp0', 'lamp1', 'lamp2', 'lamp3', 'lamp4'];
+    const names = ['demo', 'padFace', 'padGlow', 'padPosts', 'device', 'prompt', 'lamp0', 'lamp1', 'lamp2', 'lamp3', 'lamp4'];
     expect([...b.slots.keys()].sort()).toEqual([...names].sort());
     const ranges = [...b.slots.values()].map((s) => [s.start, s.start + s.count]).sort((x, y) => x[0] - y[0]);
     for (let i = 0; i < ranges.length; i++) {

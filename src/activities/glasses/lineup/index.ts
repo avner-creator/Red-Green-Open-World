@@ -19,9 +19,8 @@ import * as THREE from 'three';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier, Interactable } from '../../../types';
 import { withChallenge } from '../../../vision/toolkit';
-import { deviceFor, deviceUv } from '../booth/cells';
+import { deviceFor } from '../booth/cells';
 import type { DeviceId } from '../booth/cells';
-import { setSlotUv } from '../booth/geometry';
 import type { Mechanic, MechanicEnv } from '../types';
 import { aimForReticle, angleBetween, reticleDirection, tolerance } from './aim';
 import type { V3 } from './aim';
@@ -235,19 +234,10 @@ export function create(env: MechanicEnv): Mechanic {
   };
   const offTap = ctx.interactions.add(tap);
 
-  /**
-   * During a try the booth's prompt shows the button of the device in use (key E, gamepad X, a
-   * tapping hand): the kit draws its 'press' picture on every new try, then this swaps the
-   * prompt quad's UVs to the device's button cell of the same atlas (no extra draw call).
-   */
+  /** During a try the booth's prompt is the kit's 'button' prompt (the Use button of the device in use). */
   function showDeviceButton(): void {
-    if (kit.phase() !== 'play') return;
-    const dev = deviceFor(ctx.input.state.device);
-    if (dev === promptDevice) return;
-    const s = kit.booth.build.slots.get('prompt');
-    if (!s) return;
-    setSlotUv(kit.booth.mesh.geometry.getAttribute('uv') as THREE.BufferAttribute, s, deviceUv(dev));
-    promptDevice = dev;
+    // The kit's 'button' prompt follows the device itself; this only records it for debug().
+    if (kit.phase() === 'play') promptDevice = deviceFor(ctx.input.state.device);
   }
 
   function layout(): void {

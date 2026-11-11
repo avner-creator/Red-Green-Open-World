@@ -49,6 +49,11 @@ export interface GlassesSite {
   near: string;
   /** Where the pictogram board stands (on the approach edge of the site, facing `yaw`; see `BOARD_SLOTS`). */
   board: XZ;
+  /**
+   * Where children arrive: the world lays a stepping-stone trail straight from the nearest road
+   * point to the site's edge (`src/world/wayfinding.ts`), so this is that road point.
+   */
+  arrival?: XZ;
 }
 
 export interface FixedSite {

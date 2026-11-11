@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { boot, canvasShot, channelDiff } from './helpers';
-import { channelOnly, channelSpread, COMBOS, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel, layerFrame, maxOf, setEye } from './glasses-helpers';
+import { channelOnly, channelSpread, checkPromptClear, COMBOS, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel, layerFrame, maxOf, setEye } from './glasses-helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -27,6 +27,7 @@ interface GatesKit {
   phase: string;
   results: boolean[];
   fx: Record<string, number>;
+  camHeld?: boolean;
   booth: { frame: number; lamps: string[]; lampMode: string; padMode: string; prompt: string | null };
 }
 interface GatesDebug {
@@ -187,8 +188,6 @@ const C = { left: 'point', right: 'round' }; // shares A's right half
 const CANDS = [B, A, C];
 const BOOTH_OUT = 'booth';
 
-/** Yaw that faces from `from` to `to`. */
-const yawTo = (from: P3, to: { x: number; z: number }): number => Math.atan2(to.x - from.x, to.z - from.z);
 /** Run through arch `i` (front → back), a few frames each side. */
 async function runThrough(d: GatesDebug, i: number): Promise<void> {
   const facing = d.yaw + Math.PI;
@@ -241,6 +240,23 @@ test('gates: a booth from 30 m, idle attract at the pad', async () => {
   expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
   expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
   expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  // Where children arrive: the end of the stepping-stone trail, and 12 m out on that line.
+  const arrive = await page.evaluate(() => {
+    const s = window.__rgGlasses!.sites().find((q) => q.id === 'gates')!;
+    const a = s.arrival!;
+    const w = window.__rg!.ctx.world;
+    const l = Math.hypot(a.x - s.x, a.z - s.z);
+    const at = (dd: number): { x: number; y: number; z: number; yaw: number } => {
+      const x = s.x + ((a.x - s.x) / l) * dd;
+      const z = s.z + ((a.z - s.z) / l) * dd;
+      return { x, y: w.heightAt(x, z), z, yaw: Math.atan2(s.x - x, s.z - z) };
+    };
+    return { end: at(s.radius + 0.4), twelve: at(12) };
+  });
+  await standAt(arrive.end, arrive.end.yaw);
+  await shots(BOOTH_OUT, 'gates-trail-end', true);
+  await standAt(arrive.twelve, arrive.twelve.yaw);
+  await shots(BOOTH_OUT, 'gates-12m', true);
   // Just behind the pad, facing the arches: attract mode (demo loops, pad pulses, lamps twinkle).
   await standAt(d.padBack, d.yaw + Math.PI);
   d = await debug<GatesDebug>('gates');
@@ -249,7 +265,13 @@ test('gates: a booth from 30 m, idle attract at the pad', async () => {
   const f0 = d.kit.booth.frame;
   await step(30);
   expect((await kitOf()).booth.frame, 'the demo flipbook runs').not.toBe(f0);
-  await shots(BOOTH_OUT, 'gates-pad-idle', true);
+  await shots(BOOTH_OUT, 'gates-pad-idle-low', true);
+  // The raised pad stands out of the grass on High too (denser, taller tufts).
+  await page.evaluate(() => window.__rg!.ctx.settings.set({ quality: 'high' }));
+  await standAt(d.padBack, d.yaw + Math.PI, 20);
+  await shots(BOOTH_OUT, 'gates-pad-idle-high', true);
+  await page.evaluate(() => window.__rg!.ctx.settings.set({ quality: 'low' }));
+  await standAt(d.padBack, d.yaw + Math.PI, 20);
   // One draw call for the booth (and everything static of it) at rest.
   expect(await page.evaluate(() => window.__rgGlasses!.signDraws('gates'))).toBe(1);
   await expectDrawBudget(page, 'gates', 6);
@@ -272,6 +294,16 @@ test('gates: step on the pad → 3-2-1-GO → a run; each layer only touches its
   await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left' });
   await standAt(d.pad, d.yaw + Math.PI, 2);
   await shots(BOOTH_OUT, 'gates-run', true);
+  // The ONE play prompt is in view from the pad: central safe area, under no HUD element.
+  for (const [w, h] of [[640, 360], [1280, 720]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.evaluate(() => window.__rg!.render());
+    const c = await checkPromptClear(page, 'gates');
+    expect(c.why, `gates prompt at ${w}x${h}`).toEqual([]);
+  }
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'gates' });
   await expectDrawBudget(page, 'gates', 6);
 });
@@ -352,7 +384,11 @@ test('gates: a round of 3 runs: a hit and a miss through real movement, lamps, c
   expect(d.phase).toBe('celebrate');
   expect(d.kit.booth.lampMode).toBe('chase');
   expect(d.halvesShown).toBe(false);
-  await standAt(d.padBack, yawTo(d.padBack, d.booth), 20);
+  // The child stands beyond the arches facing away: the camera turns back to the booth for the
+  // celebration (held, not fought: look input releases it).
+  expect(d.kit.camHeld, 'camera held on the celebration').toBe(true);
+  expect(await page.evaluate(() => window.__rg!.cameraOverridden())).toBe(true);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 75));
   await shots(BOOTH_OUT, 'gates-celebrate', true);
   let ev = await events();
   expect(ev.results).toEqual([
@@ -361,6 +397,15 @@ test('gates: a round of 3 runs: a hit and a miss through real movement, lamps, c
     { mechanic: 'gates', kind: 'lineUp', tier: 1, hit: true },
   ]);
   expect(ev.toasts, 'no gems before the prize').toBe(0);
+  // The child looks around: the camera is theirs again at once.
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.inject({ lookX: 0.05 });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+  });
+  expect((await kitOf()).camHeld).toBe(false);
+  expect(await page.evaluate(() => window.__rg!.cameraOverridden())).toBe(false);
   await step(240);
   d = await debug<GatesDebug>('gates');
   expect(['cooldown', 'idle']).toContain(d.phase);

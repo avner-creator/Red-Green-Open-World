@@ -8,10 +8,11 @@
 import * as THREE from 'three';
 import type { GameContext, GlassesTier, Interactable } from '../../../types';
 import { deviceFor } from './cells';
-import type { PromptId } from './cells';
+import type { BoothPrompt } from './cells';
 import { createBoothController } from './booth';
 import type { BoothController } from './booth';
 import { BoothFx } from './fx';
+import { PAD_TOP } from './geometry';
 import { RoundMachine } from './round';
 import type { RoundEvent, RoundPhase } from './round';
 import type { BoothSetup, V3 } from './types';
@@ -36,8 +37,19 @@ export interface BoothKit {
   readonly booth: BoothController;
   readonly fx: BoothFx;
   readonly round: RoundMachine;
-  /** Report the current try (ignored outside `play`). `at` = frame-local point for the ✓ / ✗ pop. */
-  report(hit: boolean, at?: V3): void;
+  /**
+   * Report the current try (ignored outside `play`): lights its lamp, pops ✓ / ✗ at `at`
+   * (frame-local; default above the pad), sound, `glasses:result`. `tier`: this try's own tier
+   * (a per-try staircase); default the round's.
+   */
+  report(hit: boolean, at?: V3, tier?: GlassesTier): void;
+  /**
+   * A result that lights no lamp and does not move the round on (e.g. a firefly that got away in
+   * a timed round): ✓ / ✗ pop, sound and `glasses:result` only. Works in any phase.
+   */
+  note(hit: boolean, at?: V3, tier?: GlassesTier): void;
+  /** End the tries now (a timed round, or the game decides): celebration / no-prize with the hits so far. */
+  finish(): void;
   /** Is the hero standing on the start pad? */
   onPad(): boolean;
   /** The round's tier (fixed during a round). */
@@ -52,8 +64,11 @@ export interface BoothKit {
   setActive(on: boolean): void;
   reset(): void;
   dispose(): void;
-  /** Test hooks: start a round now; jump into try 0 (no countdown); pin animation clocks. */
+  /** The hero on the pad facing the play's focus (world feet point and yaw): the pad camera. */
+  padView(): { x: number; y: number; z: number; yaw: number };
+  /** Test hooks: start a round now; jump into try 0 (no countdown); pin animation clocks; cancel. */
   start(): void;
+  cancel(): void;
   forcePlay(tier?: GlassesTier): void;
   pin(t: number): void;
   debug(): Record<string, unknown>;
@@ -76,6 +91,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     fps: setup.demo.fps,
     hold: setup.demo.hold,
     ground,
+    extra: setup.extra,
   });
   booth.mesh.position.set(frame.x, site.y, frame.z);
   booth.mesh.rotation.y = frame.yaw;
@@ -94,11 +110,70 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
   const spec = setup.spec;
   const padR = spec.pad.r ?? 0.95;
   const pad = booth.build.padCenter;
-  const idlePrompt: PromptId | null = spec.pad.walkIn ? 'stepPad' : null;
+  const idlePrompt: BoothPrompt | null = spec.pad.walkIn ? 'stepPad' : null;
   let fxIn = false;
   let wasOnPad = true;
   let active = false;
   let devicePicked = '';
+  /** The pad and the decals are put on the real surface on the first update (colliders exist then). */
+  let settled = false;
+  let padCollider: ReturnType<typeof ctx.physics.addStaticCylinder> | null = null;
+  const DOWN = new THREE.Vector3(0, -1, 0);
+  const probe = new THREE.Vector3();
+  /** Walkable surface under a frame-local point (frame-local y), or null (water, on a prop). */
+  function surface(x: number, z: number): number | null {
+    const w = toWorldXZ(x, z);
+    const g = ctx.world.heightAt(w.x, w.z);
+    if (!ctx.world.isLand(w.x, w.z) || g < ctx.world.waterLevel) return null;
+    const hit = ctx.physics.raycast(probe.set(w.x, g + 3, w.z), DOWN, 6);
+    if (hit && hit.point.y > g + 0.5) return null; // on a prop: leave it
+    return Math.max(g, hit ? hit.point.y : g) - site.y;
+  }
+  function settle(): void {
+    if (settled) return;
+    settled = true;
+    booth.settle(surface);
+    // The drum is solid (the hero steps up onto it); added after the probe so it is not hit.
+    const w = toWorldXZ(pad.x, pad.z);
+    const half = (PAD_TOP + 0.3) / 2;
+    padCollider = ctx.physics.addStaticCylinder(new THREE.Vector3(w.x, site.y + pad.y + PAD_TOP - half, w.z), half, padR + 0.14);
+  }
+
+  // ── the celebration camera: turned to the booth for the celebration, then released ──
+  /** Longest the camera is held (s); look input, vehicles, respawn, pause or leaving release it at once. */
+  const CAM_HOLD_MAX = 4.2;
+  let camHeld = false;
+  let camT = 0;
+  const camFocus = new THREE.Vector3();
+  function camRelease(): void {
+    if (!camHeld) return;
+    camHeld = false;
+    ctx.cameraRig.setOverride(null);
+  }
+  function camHold(): void {
+    if (ctx.player.mode !== 'walk') return;
+    const c = typeof setup.celebrateAt === 'function' ? setup.celebrateAt() : setup.celebrateAt;
+    if (c) toWorld(c, camFocus);
+    else booth.mesh.localToWorld(camFocus.copy(booth.build.boardFront));
+    camHeld = true;
+    camT = 0;
+  }
+  function camStep(dt: number): void {
+    if (!camHeld) return;
+    camT += dt;
+    const look = Math.abs(ctx.input.state.lookX) + Math.abs(ctx.input.state.lookY);
+    if (look > 0.004 || ctx.player.mode !== 'walk' || camT > CAM_HOLD_MAX || (round.phase !== 'celebrate' && round.phase !== 'prize')) {
+      camRelease();
+      return;
+    }
+    const p = ctx.player.position;
+    const yaw = Math.atan2(camFocus.x - p.x, camFocus.z - p.z);
+    let off = yaw - ctx.player.yaw;
+    off = Math.atan2(Math.sin(off), Math.cos(off));
+    // Pulled back, a flatter look: the booth stands tall and beyond the play from where the child ends.
+    ctx.cameraRig.setOverride({ yawOffset: off, distance: 7, height: 1.7 });
+  }
+  const offPhase = ctx.events.on('session:phase', () => camRelease());
   const head = new THREE.Vector3();
   const tmp = new THREE.Vector3();
 
@@ -162,7 +237,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           setup.hooks.onTry(e.index, e.tier);
           booth.setPad('busy');
           // The play prompt floats in front of the booth's picture board (or where the spec says).
-          if (spec.playPromptAt) booth.setPrompt(spec.playPrompt, new THREE.Vector3(spec.playPromptAt.x, spec.playPromptAt.y, spec.playPromptAt.z), 1.25);
+          if (spec.playPromptAt) booth.setPrompt(spec.playPrompt, new THREE.Vector3(spec.playPromptAt.x, spec.playPromptAt.y, spec.playPromptAt.z), spec.playPromptSize ?? 1.25);
           else booth.setPrompt(spec.playPrompt, booth.build.boardFront, 1.45);
           break;
         case 'result':
@@ -174,21 +249,28 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           booth.setPrompt('backToPad', w ? new THREE.Vector3(w.x, w.y, w.z) : undefined);
           break;
         }
-        case 'end':
+        case 'end': {
           setup.hooks.onIdle();
           booth.setPrompt(null);
           booth.setPad('busy');
+          // Turn the camera to the booth: the lamps, the celebration and the prize happen in view.
+          camHold();
           if (e.gems > 0) {
             booth.setLampMode('chase');
             ctx.audio.play('fanfare');
-            // Above the lamps, so the chasing lamps stay in view.
+            // Above the lamps (they stay in view) and right in front of the child, where the
+            // camera now looks.
             const top = booth.mesh.localToWorld(booth.build.topAt.clone());
-            fx.confettiAt(top, 100, 6.5);
+            fx.confettiAt(top, 70, 6.5);
             fx.burst(top, 2.2);
+            const near = nearChild();
+            fx.confettiAt(near, 90, 5);
+            fx.burst(near, 1.6);
           } else {
             ctx.audio.play('boing', { volume: 0.5, pitch: 0.6 });
           }
           break;
+        }
         case 'prizeFly': {
           booth.setLampMode('chase');
           const from = marqueeTop();
@@ -202,6 +284,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
         case 'cancel':
           setup.hooks.onIdle();
           fx.clear();
+          camRelease();
           attract();
           break;
         case 'idle':
@@ -215,8 +298,30 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
   }
 
   const offRespawn = ctx.events.on('player:respawn', () => {
+    camRelease();
     if (round.busy) handle(round.cancel('respawn'));
   });
+
+  /** A point 1.8 m from the child towards the celebration, at head height + 0.8 (in view). */
+  function nearChild(): THREE.Vector3 {
+    const p = ctx.player.position;
+    const dx = camFocus.x - p.x;
+    const dz = camFocus.z - p.z;
+    const l = Math.hypot(dx, dz) || 1;
+    const k = Math.min(1.8, l * 0.5) / l;
+    return new THREE.Vector3(p.x + dx * k, p.y + 2.3, p.z + dz * k);
+  }
+
+  function pop(hit: boolean, at: V3 | undefined, streak: number): void {
+    const p = at ? toWorld(at) : toWorld({ x: pad.x, y: pad.y + 2.2, z: pad.z });
+    fx.pop(hit, p);
+    if (hit) {
+      ctx.audio.play('gem', { pitch: 1 + 0.14 * Math.min(5, Math.max(0, streak - 1)) });
+      fx.confettiAt(p, 36, 4);
+    } else {
+      ctx.audio.play('boing', { volume: 0.55, pitch: 0.78 });
+    }
+  }
 
   const target: Interactable = {
     id: `glasses-booth-${d.slot}`,
@@ -234,22 +339,25 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     booth,
     fx,
     round,
-    report(hit, at) {
-      const ev = round.report(hit);
+    report(hit, at, tier) {
+      const ev = round.report(hit, tier);
       const r = ev.find((x): x is Extract<RoundEvent, { type: 'result' }> => x.type === 'result');
       if (!r) return;
       d.result(r.tier, hit);
       booth.setLamp(r.index, hit ? 'hit' : 'miss');
-      booth.setPrompt(null);
-      const p = at ? toWorld(at) : toWorld({ x: pad.x, y: pad.y + 2.2, z: pad.z });
-      fx.pop(hit, p);
-      if (hit) {
-        ctx.audio.play('gem', { pitch: 1 + 0.14 * Math.min(5, r.streak - 1) });
-        fx.confettiAt(p, 36, 4);
-      } else {
-        ctx.audio.play('boing', { volume: 0.55, pitch: 0.78 });
-      }
+      // Untimed: the prompt goes while the result shows; timed: the play goes on.
+      if (round.rules.time === undefined) booth.setPrompt(null);
+      pop(hit, at, r.streak);
       setup.hooks.onResult?.(r.index, hit);
+      handle(ev.filter((x) => x.type !== 'result'));
+    },
+    note(hit, at, tier) {
+      d.result(tier ?? round.tier, hit);
+      fxOn(true);
+      pop(hit, at, hit ? 1 : 0);
+    },
+    finish() {
+      handle(round.end());
     },
     onPad,
     tier: () => round.tier,
@@ -257,6 +365,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     toWorld,
     toLocal,
     update(dt) {
+      settle();
       const dev = deviceFor(ctx.input.state.device);
       if (dev !== devicePicked) {
         devicePicked = dev;
@@ -275,12 +384,14 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
         fx.update(dt, ctx.camera);
         if (round.phase === 'idle' && !fx.busy) fxOn(false);
       }
+      camStep(dt);
       ctx.camera.getWorldPosition(tmp);
       booth.update(dt, tmp);
     },
     setActive(on) {
       active = on;
       if (!on) {
+        camRelease();
         if (round.busy) handle(round.cancel('far'));
         fxOn(false);
       } else {
@@ -288,6 +399,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       }
     },
     reset() {
+      camRelease();
       round.reset();
       fxOn(false);
       setup.hooks.onIdle();
@@ -295,8 +407,11 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       wasOnPad = true;
     },
     dispose() {
+      camRelease();
       offUse();
       offRespawn();
+      offPhase();
+      if (padCollider) ctx.physics.removeCollider(padCollider);
       fxOn(false);
       ctx.scene.remove(booth.mesh);
       booth.dispose();
@@ -306,6 +421,16 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     start() {
       if (!active || round.phase !== 'idle') return;
       handle(round.start());
+    },
+    cancel() {
+      handle(round.cancel('test'));
+    },
+    padView() {
+      settle();
+      const p = toWorld({ x: pad.x, y: pad.y + 0.02, z: pad.z });
+      const look = setup.look ?? { x: 0, z: 0 };
+      const l = toWorldXZ(look.x, look.z);
+      return { x: p.x, y: p.y, z: p.z, yaw: Math.atan2(l.x - p.x, l.z - p.z) };
     },
     forcePlay(tier) {
       if (round.busy) round.cancel('force');
@@ -329,9 +454,17 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       rounds: round.rounds,
       totalGems: round.totalGems,
       onPad: onPad(),
+      camHeld,
+      settled,
       fxIn,
       fx: fx.live(),
       booth: booth.debug(),
+      /** The prompt in world space now (centre at rest, edge length), for the HUD / screen checks. */
+      promptWorld: (() => {
+        const p = booth.prompt();
+        const w = booth.mesh.localToWorld(p.at.clone());
+        return p.id ? { id: p.id, x: w.x, y: w.y, z: w.z, size: p.size } : null;
+      })(),
     }),
   };
   return kit;

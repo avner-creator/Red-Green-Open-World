@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { boot, canvasShot } from './helpers';
-import { channelOnly, channelSpread, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
+import { channelOnly, channelSpread, checkPromptClear, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
 import { ROADS } from '../../src/world/layout';
 import type { GlassesSiteInfo } from '../../src/activities/glasses';
 import { FIXED_SITES } from '../../src/activities/glasses/sites';
@@ -251,6 +251,138 @@ test('the weave boots with its six parts, all idle (zero draws) away from their 
     expect(p.draws, `${p.id} draws`).toBe(0);
     expect(p.debug, `${p.id} debug`).toBeTruthy();
   }
+});
+
+/**
+ * From where children arrive (the end of the world's stepping-stone trail, and 12 m out on that
+ * line), the booth's lamps, banner and pad are in clear view: nothing of the world (stones,
+ * lantern posts, arches, toys, signs, trees) stands in front of a booth. Logged for every site,
+ * enforced for the games whose layout already uses the arrival (PROMPT_ENFORCED).
+ */
+test('nothing of the world stands in front of a booth, seen from the arrival', async () => {
+  const rows = await page.evaluate(() => {
+    const g = window.__rgGlasses!;
+    const w = window.__rg!.ctx.world;
+    const out: { id: string; blockers: string[] }[] = [];
+    for (const s of g.sites()) {
+      const d = g.boothDebug(s.id) as { booth: unknown } | null;
+      const v = g.boothPadView(s.id);
+      const mq = (g.debug(s.id) as { booth?: { x: number; y: number; z: number } }).booth;
+      if (!d || !v || !mq || !s.arrival) continue;
+      const l = Math.hypot(s.arrival.x - s.x, s.arrival.z - s.z) || 1;
+      const blockers: string[] = [];
+      for (const dd of [s.radius + 0.4, 12]) {
+        const ex = s.x + ((s.arrival.x - s.x) / l) * dd;
+        const ez = s.z + ((s.arrival.z - s.z) / l) * dd;
+        const eye = { x: ex, y: Math.max(w.heightAt(ex, ez), w.waterLevel) + 1.6, z: ez };
+        for (const [what, t] of [['lamps', { x: mq.x, y: mq.y + 3.9, z: mq.z }], ['banner', { x: mq.x, y: mq.y + 4.6, z: mq.z }], ['pad', { x: v.x, y: v.y + 0.5, z: v.z }]] as const) {
+          const hit = g.sight(eye, t);
+          // The booth's own colliders (counter, poles, pad drum) are not in the way.
+          const m = hit?.match(/collider at \(([-\d.]+), [-\d.]+, ([-\d.]+)\)/);
+          const own = m && (Math.hypot(Number(m[1]) - mq.x, Number(m[2]) - mq.z) < 2.2 || Math.hypot(Number(m[1]) - v.x, Number(m[2]) - v.z) < 1.4);
+          if (hit && !own) blockers.push(`${dd.toFixed(0)} m → ${what}: ${hit}`);
+        }
+      }
+      out.push({ id: s.id, blockers });
+    }
+    return out;
+  });
+  console.log(`booths seen from the arrival:\n${rows.map((r) => `${r.id}: ${r.blockers.length ? r.blockers.join('; ') : 'clear'}`).join('\n')}`);
+  for (const r of rows) if (PROMPT_ENFORCED.has(r.id)) expect(r.blockers, `${r.id} booth from the arrival`).toEqual([]);
+});
+
+/**
+ * Games whose play prompt must already pass the pad-camera check (in the central safe area, clear
+ * of every HUD element). The others are measured and logged; their builders add their id here
+ * when they place their prompt with `booth/view.ts` (see the booth README).
+ */
+const PROMPT_ENFORCED = new Set(['gates']);
+
+test('the play prompt is in clear view from the pad: central safe area, never under the HUD', async () => {
+  test.setTimeout(180_000);
+  mkdirSync(`${OUT}/booth`, { recursive: true });
+  const report: string[] = [];
+  const failures: string[] = [];
+  for (const s of sites) {
+    const view = await page.evaluate((id) => window.__rgGlasses!.boothPadView(id), s.id);
+    if (!view) continue;
+    await page.evaluate(({ id, v }) => {
+      const rg = window.__rg!;
+      rg.teleport(v.x, v.y + 0.05, v.z, v.yaw);
+      rg.step(1 / 60, 50, false);
+      window.__rgGlasses!.boothPlay(id);
+      rg.step(1 / 60, 3, false);
+      rg.step(1 / 60, 1);
+    }, { id: s.id, v: view });
+    for (const [w, h] of [[640, 360], [1280, 720]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+      await page.evaluate(() => window.__rg!.render());
+      const c = await checkPromptClear(page, s.id);
+      report.push(`${s.id} ${w}x${h}: ${c.ok ? 'ok' : c.why.join('; ')}`);
+      if (!c.ok && PROMPT_ENFORCED.has(s.id)) failures.push(`${s.id} ${w}x${h}: ${c.why.join('; ')}`);
+      if (w === 640) await canvasShot(page, `${OUT}/booth/prompt-${s.id}-full.png`);
+    }
+    await page.setViewportSize({ width: 640, height: 360 });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+    await page.evaluate((id) => window.__rgGlasses!.boothCancel(id), s.id);
+  }
+  console.log(`booth play prompts from the pad camera:\n${report.join('\n')}`);
+  expect(failures).toEqual([]);
+});
+
+/**
+ * The start pad stands out of the grass: from 8 m in front of it (the approach side), at Low,
+ * Medium and High (the grass gets denser), painting the pad dark changes enough pixels — i.e.
+ * enough of the drum's face, rim and glowing bollards is visible.
+ */
+test('every booth start pad is visible from 8 m at Low, Medium and High', async () => {
+  test.setTimeout(240_000);
+  const rows: string[] = [];
+  const low: string[] = [];
+  for (const quality of ['low', 'medium', 'high'] as const) {
+    await page.evaluate((q) => window.__rg!.ctx.settings.set({ quality: q }), quality);
+    for (const s of sites) {
+      const px = await page.evaluate((id) => {
+        const rg = window.__rg!;
+        const g = window.__rgGlasses!;
+        const v = g.boothPadView(id);
+        if (!v) return -1;
+        // 8 m out from the pad on the approach side (the camera is ~5 m further back).
+        const x = v.x - Math.sin(v.yaw) * 8;
+        const z = v.z - Math.cos(v.yaw) * 8;
+        // Facing a little past it (the pad ~20° off-centre): straight ahead it would sit behind the hero.
+        rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, v.yaw + 0.35);
+        rg.step(1 / 60, 60, false);
+        const shot = (): Uint8Array => {
+          rg.render();
+          const gl = rg.ctx.renderer.getContext();
+          const w = gl.drawingBufferWidth;
+          const h = gl.drawingBufferHeight;
+          const buf = new Uint8Array(w * h * 4);
+          gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+          return buf;
+        };
+        g.boothPadProbe(id, 3);
+        const a = shot();
+        g.boothPadProbe(id, 0);
+        const b = shot();
+        g.boothPadProbe(id, null);
+        let n = 0;
+        for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) > 60) n++;
+        // In 640×360 pixels (Low renders at a lower resolution scale).
+        return Math.round((n * 640 * 360) / (a.length / 4));
+      }, s.id);
+      if (px < 0) continue;
+      rows.push(`${quality} ${s.id}: ${px} px`);
+      await page.evaluate(() => window.__rg!.render());
+      await canvasShot(page, `${OUT}/booth/pad-8m-${quality}-${s.id}.png`);
+      if (px < 400) low.push(`${quality} ${s.id}: only ${px} px of the pad visible`);
+    }
+  }
+  await page.evaluate(() => window.__rg!.ctx.settings.set({ quality: 'low' }));
+  console.log(`start pad visible pixels from 8 m (640×360):\n${rows.join('\n')}`);
+  expect(low).toEqual([]);
 });
 
 test('no errors', async () => {

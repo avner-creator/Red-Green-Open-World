@@ -455,7 +455,7 @@ test('line-up: step on the pad → 3-2-1-GO → a bubble; each layer only its ch
   expect(g.phase).toBe('play');
   expect(g.onPad).toBe(true);
   expect(g.wanted).toBe(1);
-  expect(g.kit.booth.prompt).toBe('press');
+  expect(g.kit.booth.prompt, "the kit's device-button prompt").toBe('button');
   expect(g.promptDevice, 'the play prompt shows the device button').toBe('keyboard');
   await lineupForce({ live: true, aim: 'reticle', target: 0 });
   await page.evaluate(() => window.__rg!.render());

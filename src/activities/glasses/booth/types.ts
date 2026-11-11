@@ -7,10 +7,11 @@
  * the ground under each part.
  */
 import type { GlassesTier } from '../../../types';
-import type { PromptId } from './cells';
+import type * as THREE from 'three';
+import type { BoothPrompt } from './cells';
 import type { DemoKit } from './draw';
 
-export type { PromptId } from './cells';
+export type { BoothPrompt, PromptId } from './cells';
 
 export interface V3 {
   x: number;
@@ -66,8 +67,10 @@ export interface BoothSpec {
    * The prompt shown during a try (e.g. 'arch': run through an arch) and where (default: floating
    * in front of the booth's picture board, which is the safest place: never over the play).
    */
-  playPrompt: PromptId;
+  playPrompt: BoothPrompt;
   playPromptAt?: V3;
+  /** Edge length of the play prompt at `playPromptAt` (m, default 1.25). */
+  playPromptSize?: number;
   /** Where the 3-2-1-GO digits pop up (above the marquee's picture board if left out). */
   countdown?: V3;
   /** Ground decals (chevrons leading to the play, footprints). */
@@ -78,8 +81,14 @@ export interface BoothSpec {
 export type PrizeTable = Readonly<Record<GlassesTier, readonly number[]>>;
 
 export interface RoundRules {
-  /** Tries per round (= lamps). */
+  /** Tries per round (= lamps). In a timed round: the most results that count (lamps). */
   tries: number;
+  /**
+   * Timed round: one play phase of this many seconds instead of tries with beats; every
+   * `report` lights the next lamp; the round ends when the time is up, all lamps are lit or the
+   * game calls `kit.finish()`. The prize is by hits as usual.
+   */
+  time?: number;
   /** Hits needed for any prize. */
   minHits: number;
   prize: PrizeTable;
@@ -130,4 +139,19 @@ export interface BoothSetup {
    * default: above the pad). Gates puts it ahead of the child, beyond the arch they ran through.
    */
   waitPromptAt?: () => V3;
+  /**
+   * The mini-game's own static both-eye geometry, merged into the booth's ONE mesh (frame-local
+   * metres, y relative to the site's y; UVs in the booth atlas: `swatchUv`, `cellUv`, …).
+   */
+  extra?: readonly THREE.BufferGeometry[];
+  /**
+   * Where the camera turns for the celebration (frame-local; default: in front of the booth's
+   * picture board). A function is asked when the tries end (it may use where the child is).
+   */
+  celebrateAt?: V3 | (() => V3);
+  /**
+   * The play's focus: what the hero faces from the pad during a try (frame-local; default the
+   * frame's origin). Used for the pad-camera checks (`kit.padView()`, the prompt e2e check).
+   */
+  look?: { x: number; z: number };
 }

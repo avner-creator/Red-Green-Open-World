@@ -42,6 +42,14 @@ export interface LayoutSpec {
   views?: readonly { x: number; z: number }[];
   /** Optional: no ground prop (bush, rock) on the hero spot or within this many metres of the line camera → hero (default 1.5). */
   foreground?: number;
+  /**
+   * Optional (opt-in): the world point where children arrive (`site.arrival`: the road end of the
+   * world's stepping-stone trail). The candidates then turn the layout towards it (layout +Z
+   * points at the arrival), and `arrivalTargets` (layout-local, e.g. the booth's marquee, pad and
+   * lamps) must be in clear view from the arrival direction at 12 m and 30 m from the site centre.
+   */
+  arrival?: { x: number; z: number };
+  arrivalTargets?: readonly { x: number; z: number; y: number }[];
 }
 
 export interface ChooseOptions {
@@ -89,7 +97,10 @@ export function chooseLayout(ctx: Pick<GameContext, 'world' | 'physics' | 'scene
   // Candidates in order of preference: small moves first, away from the board first.
   const shifts: { x: number; z: number }[] = [];
   for (const dz of [-0.6, -1.0, -0.2, -1.5]) for (const dx of [-0.8, 0, -1.6, 0.8]) shifts.push({ x: dx * side, z: dz });
-  const turns = [0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75].map((t) => t * side);
+  // With an arrival point the turns centre on facing it (clamped: the site keeps its rough heading).
+  const arrivalYaw = spec.arrival ? Math.atan2(spec.arrival.x - site.x, spec.arrival.z - site.z) : null;
+  const base = arrivalYaw === null ? 0 : Math.max(-0.75, Math.min(0.75, Math.atan2(Math.sin(arrivalYaw - site.yaw), Math.cos(arrivalYaw - site.yaw))));
+  const turns = arrivalYaw === null ? [0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75].map((t) => t * side) : [0, -0.2, 0.2, -0.4, 0.4].map((t) => base + t);
   const cands: { shift: { x: number; z: number }; turn: number; rank: number }[] = [];
   shifts.forEach((s, i) => turns.forEach((t, j) => cands.push({ shift: s, turn: t, rank: i + j * 1.5 })));
   cands.sort((a, b) => a.rank - b.rank);
@@ -155,6 +166,8 @@ export function chooseLayout(ctx: Pick<GameContext, 'world' | 'physics' | 'scene
     canopy: THREE.Vector3[];
     problems: number;
     notes: string[];
+    arrivalEyes: THREE.Vector3[];
+    arrivalTargets: THREE.Vector3[];
   }
 
   const evaluate = (c: (typeof cands)[number]): Eval => {
@@ -244,7 +257,23 @@ export function chooseLayout(ctx: Pick<GameContext, 'world' | 'physics' | 'scene
       return { cam: vcam, pen, why, spot: { x: v.x, z: v.z } };
     });
     if (views.length) problems += Math.min(...views.map((v) => v.pen));
-    return { layout: { ...L, shift: c.shift, turn: c.turn, problems }, cam, pivot, targets, views, canopy, problems, notes };
+    // From where children arrive: the booth in clear view at 12 m and 30 m (colliders here; scene
+    // meshes in the costly pass).
+    const arrivalEyes: THREE.Vector3[] = [];
+    const arrivalTargets = (spec.arrivalTargets ?? []).map(toWorld3);
+    if (arrivalYaw !== null && arrivalTargets.length) {
+      for (const dd of [12, 30]) {
+        const ex = site.x + Math.sin(arrivalYaw) * dd;
+        const ez = site.z + Math.cos(arrivalYaw) * dd;
+        if (!ctx.world.isLand(ex, ez)) continue;
+        const eye = new THREE.Vector3(ex, Math.max(ctx.world.heightAt(ex, ez), ctx.world.waterLevel) + 2.6, ez);
+        arrivalEyes.push(eye);
+        arrivalTargets.forEach((t, i) => {
+          if (!physicsClear(eye, t)) bad(`arrival ${dd} m target ${i} blocked`, dd <= 12 ? 2 : 1);
+        });
+      }
+    }
+    return { layout: { ...L, shift: c.shift, turn: c.turn, problems }, cam, pivot, targets, views, canopy, problems, notes, arrivalEyes, arrivalTargets };
   };
 
   // Scene meshes (canopies, decor) for the costly check.
@@ -304,6 +333,11 @@ export function chooseLayout(ctx: Pick<GameContext, 'world' | 'physics' | 'scene
     e.targets.forEach((t, i) => {
       if (!sceneClear(e.cam, t)) note(`scene target ${i}`, 3);
     });
+    if (e.arrivalEyes.length) {
+      e.arrivalTargets.forEach((t, i) => {
+        if (!sceneClear(e.arrivalEyes[0], t)) note(`scene arrival target ${i}`, 2);
+      });
+    }
     const canopyPen = (cam: THREE.Vector3, tag: string, out: string[]): number => {
       let q = 0;
       e.canopy.forEach((t, i) => {
