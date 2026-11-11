@@ -190,6 +190,14 @@ test('the secret topping changes only the weak channel, all 4 combos', async () 
     return canvasShot(page);
   };
   await page.evaluate(() => window.__rg!.step(1 / 60, 1, true));
+  // The jar that holds today's secret is random and the hero camera may look elsewhere: aim the
+  // (frozen) camera straight at the secret so both captures show it, in front of the shop.
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    const w = window.__rgScoops!.secretWorld()!;
+    rg.ctx.camera.lookAt(w[0], w[1], w[2]);
+    rg.ctx.camera.updateMatrixWorld(true);
+  });
   for (const combo of COMBOS) {
     await page.evaluate((eye) => window.__rg!.setEye(eye), combo.eye);
     const withSecret = await frame(true);
