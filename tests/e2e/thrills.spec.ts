@@ -615,9 +615,11 @@ test('walking at the trampoline from any side (no jump) climbs the step rings on
       }
       rg.inject(null);
       out.push({ dir: k, bounced, t: Number(t.toFixed(2)) });
-      // Let the bounce settle before the next approach.
-      for (let i = 0; i < 60 * 15 && ctx.player.mode !== 'walk'; i++) rg.step(1 / 60, 1, false);
+      ctx.player.respawn(); // ends the bounce at once (keeps the session clock for later tests)
+      rg.step(1 / 60, 5, false);
     }
+    rg.start(); // a fresh session clock for the tests that follow
+    rg.step(1 / 60, 5, false);
     return out;
   });
   for (const d of r) {
