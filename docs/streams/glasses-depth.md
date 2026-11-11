@@ -3,9 +3,10 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 is merged into `integration/m1`. Phase 2 is in progress** (started
-2026-11-11 from `origin/integration/m1` at `da704d6`, with the owner's go-ahead; `main` is held
-until two batch 2 fixes land). The Phase 1 sections below describe what was merged.
+**Status: Phase 1 is merged into `integration/m1`. Phase 2 is built on this branch** (started
+2026-11-11 from `origin/integration/m1`, with the owner's go-ahead); QA and the final full test
+run are in progress. The Phase 1 sections below describe what was merged; "Phase 2" is near
+the end.
 
 `npm run verify` is green on the final branch: 664 unit tests and 174 e2e tests passed (see "Test results" at the end).
 
@@ -96,10 +97,9 @@ colliders); line-up bubbles float 8–13 m ahead in the air (no colliders); the 
 25–40 m from the toys site and keeps every print out of anchors, roads, colliders and the
 reserved footprints.
 
-**Asked of the world/UI owners (not done here):** these sites have no beacon, fingerpost arm or
-compass entry yet. Only one is within 55 m of spawn, because the space around the plaza is
-taken; a child will find the others while walking to the Silly Zone, the bridge, the rocket pads
-and the ranch.
+**Wayfinding and clear ground (done by the world owner on `integration/m1`):** the world gives
+each site a beacon and fingerpost entry and keeps scatter, hand-placed trees and road dressing
+off every site (`7d85221`, `105adda`). Both read `FIXED_SITES`, so they follow the table.
 
 ## Vision toolkit (`src/vision/toolkit/`, import from `'../../vision/toolkit'`)
 
@@ -259,30 +259,73 @@ summary's name for odd one out. Numbers: +51 KB gzip of JavaScript (+2.5 %); eac
 - Screenshots (full, R-only, G-only) are written by the specs to `test-results/glasses/` and
   `test-results/glasses-toolkit/`, `test-results/glasses-ui/`.
 
-## Phase 2 (in progress)
+## Phase 2 (built; QA and final checks running)
 
-Base: `origin/integration/m1` (`da704d6`), which has the economy, every attraction, the sites and
-Phase 1. Pushed to `agent/glasses-depth` with plain pushes.
+Base: `origin/integration/m1` (merged in again at `438b801`), which has the economy, every
+attraction, the sites and Phase 1. Pushed to `agent/glasses-depth` with plain pushes.
 
-Goal: weave the toolkit into what exists, each as a small, optional, clearly rewarded layer, with
-the smallest diffs in other owners' folders. All Phase 2 code lives in a new folder
-`src/activities/glasses/weave/<part>/`; every hook put into another owner's folder is listed in
-"Phase 2 edits to other owners' files" below.
+Phase 2 weaves weak-eye play into things that already exist. Each piece is optional (the host
+attraction plays exactly as before if the child ignores it), pays a small gem reward, reports
+its hits and misses with `glasses:result`, and costs nothing when not in use (nothing attached,
+an early return). All Phase 2 code lives in `src/activities/glasses/weave/<part>/`; the part
+contract is `weave/types.ts`, the survey of what each part attaches to is `weave/README.md`,
+and the test API is `window.__rgGlasses.weave.{ids, debug, force, reset, draws}`.
 
-| Part (folder) | What it adds | Kind | State |
-|---|---|---|---|
-| skeleton + hook survey (`weave/`, `weave/README.md`) | part contract, registry, test API; what each part attaches to and the smallest hook it needs | — | building |
-| `bounce/` | weak-eye perfect-bounce timing ring on the giant trampoline | timeIt | waiting |
-| `chute/` | weak-eye parachute-open ring in the skydive; a weak-eye gem that only counts through a strong-eye hoop | timeIt / lineUp | waiting |
-| `hero/` | weak-eye skill-ready ring and combo number over the hero | onHero | waiting |
-| `boost/` | weak-eye boost-pad timing on the buggy race | timeIt | waiting |
-| `fakes/` | "real gem among fakes" at a few gem spots | tellApart | waiting |
-| `shack/` | dot-picture prize code at the Gear Shack | popOut | waiting |
-| results from existing twists | one-line `glasses:result` emits where other attractions already decide a weak-eye hit or miss, so the Auto challenge and the summary cover the whole game | — | waiting |
+| Part | What the child sees and does | Reward | By luck (weak eye shut) | Draw calls in use |
+|---|---|---|---|---|
+| `bounce` (timeIt) | On the giant trampoline a weak-eye ring rides below the hero during a fall and closes at a random moment (35–75 % of the fall). One press of Jump or Use at that moment is a hit. Presses in the last 0.35 s before landing, a held Jump and no press are not counted. Only falls of 1.2 s or more get a ring. | 1 / 2 / 3 gems; +3 for three perfects in a row | 13 % / 11 % / 9 % | ≤ 2 |
+| `chute` (timeIt + lineUp) | In the skydive a weak-eye ring round the hero closes as the height nears a random target (70–120 m); opening the parachute then is a hit (±8 / ±5 / ±3 m). A near miss (within ±20 m) is a miss; anything else and every auto-open is not counted. Also: a strong-eye hoop hangs high in the fall and a weak-eye gem orbits through it; falling through the hoop while the gem is inside is a hit, while it is outside a miss. | 2 / 3 / 5 gems; hoop gem 3 | ring 12 % / 8 % / 4 %; hoop 40 % (so that case is a miss) | ≤ 4 |
+| `hero` (onHero) | A weak-eye ring at the feet shows the skill recharging and pops when it is ready; a weak-eye `×N` floats over the head during a combo. Every 20–40 s one of them sparkles for 1.5 / 1.0 / 0.7 s: firing the skill (ring) or collecting a gem (number) during the sparkle is a hit. | 2 gems | 7–12 % of windows | 2–3 |
+| `boost` (timeIt) | In the buggy race the next weak-eye boost pad gets a weak-eye arch with a beat (period 1.2 s). Driving over the pad on the beat is a "turbo pad"; off the beat is a miss; pads never touched are not counted. The race's own boost is untouched. | 1 / 2 / 3 gems | 28 % / 23 % / 17 % | ≤ 2 |
+| `fakes` (tellApart) | At four ground gem spots (plaza (15, −9), Silly Zone (26, 104), beach (74, 132), beach (−97, −7)) two weak-eye fakes stand with the real gem on a 3.3 m triangle. Collecting the real one first is a hit; touching a fake first is a miss (the real gem still pays as usual). The tell gets finer by tier: spins the other way → 5 facets instead of 8 → no sparkle. | +2 gems | 1 in 3 (about 3.6 gems per minute at most) | 2 |
+| `shack` (popOut) | A dot picture on the Gear Shack's right wall and three gift boxes tagged with shapes; open the box whose shape is hidden in the dots. Wrong box: a nap and a new picture; 1 gem until two wins in a row. | First full-pay win of a session: the cheapest for-sale item the child does not own, free (10 gems if none). Then 3 / 5 / 8 gems | 1 in 3; a guessing bot earns 2.5 gems per minute | 3–4 |
 
-### Phase 2 edits to other owners' files
+Every part has the same automated proofs as the Phase 1 mini-games (`tests/e2e/glasses-weave-*.spec.ts`):
+its layer changes only its own channel for all 4 lens/eye combinations; with the weak layer
+hidden, frames for two different answers or timings are bit-identical; a hit and a miss through
+real play; zero draws when not in use; and the host attraction's own spec still passes.
 
-Filled in as each part lands (file, lines, why).
+**Results from existing glasses twists.** Sixteen twists that other attractions already had now
+report `glasses:result` (21 one-line emits: 17 hits, 4 misses), so the Auto challenge and the
+grown-up summary cover the whole game: carnival (prize balloons, star ring, strength bell,
+lucky duck, glow dodge), sky rides (bonus hoop, golden balloons, dragon treasure and golden),
+foam course secret tiles and stones, Scoops' secret topping, bubble-ball rings, dino-sumo
+balloons and beat, secret paths and the vault doors. The exact lines are in
+`docs/streams/glasses-results.md`; `tests/activities/glasses-results.test.ts` fails if one is
+dropped. Not reported: the racing line and weak-eye arrows (guidance only), and gems, chest keys
+and chest locks (already counted through `gem:collected`, `chest:key`, `chest:opened`).
+
+The summary screen has names for all of them (`KNOWN_NAMES` in `src/ui/glasses/summaryModel.ts`).
+
+### Phase 2 edits to other owners' files (complete list, against `origin/integration/m1`)
+
+| File | Change |
+|---|---|
+| `src/activities/skydive/index.ts` | +9 / −1: read-only `getSkydiveView(ctx)` (phase, height above ground, fall time); the local `agl` became an outer variable |
+| `src/activities/race/index.ts` | +7: read-only `getRaceView(ctx)` (phase, pads, `padsHit`, progress, length) |
+| `src/activities/carnival/games/balloonPop.ts`, `duckPond.ts`, `ringToss.ts` | +1 each: emit on the weak-eye prize |
+| `src/activities/carnival/games/glowDodge.ts`, `strengthBell.ts` | +2 each: emit hit and miss |
+| `src/activities/skyrides/contestScene.ts`, `dragon.ts` | +2 each |
+| `src/activities/foamlava/index.ts`, `bubbleball/index.ts` | +1 each |
+| `src/activities/scoops/index.ts`, `dinosumo/index.ts` | +2 each |
+| `src/activities/secrets/index.ts` | +4 |
+| `tests/e2e/carnival.spec.ts`, `scoops.spec.ts`, `secrets.spec.ts`, `skyrides.spec.ts` | added assertions that the results arrive |
+
+No other file outside `src/activities/glasses/`, `src/vision/`, `src/ui/glasses/` and this
+stream's tests was changed in Phase 2. `src/types.ts`, `src/main.ts`, `src/config.ts` and
+`package.json` are untouched in Phase 2.
+
+### Phase 2 notes and known limits
+
+- The shack's dot-picture board covers the gem roundel on the kiosk's right wall (the world
+  owner's prop). It looks intentional, but it is their wall.
+- The foam course reports every landing on a hidden tile (about 14 per shortcut run). So that
+  bursts like this do not race the Auto challenge, a hit counts toward the staircase only if
+  4 s of play have passed since the last counted hit (the summary still counts every hit).
+- The boost arch can be partly hidden by the buggy or by hills on bends.
+- By-luck rates are highest for `boost` (28 % at tier 1) and the skydive hoop (40 %, reported
+  as a miss when the gem is outside), both by design: the host must stay fun for everyone.
+- Three sites moved after the integration merge (see "Sites: fixed coordinates").
 
 ## Test results
 
