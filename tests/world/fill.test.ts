@@ -63,6 +63,18 @@ describe('island fill', () => {
     expect(bad).toEqual([]);
   });
 
+  it("keeps the toys mini-game's paw-trail meadow walkable", () => {
+    const bad: string[] = [];
+    for (const p of content.fill.placed) {
+      // Meadow (x −65..−12, z 29..109): no solid fill prop reaches into it by more than 0.5 m
+      // (thin lamps and trail-head posts allowed).
+      const dx = Math.max(-65 - p.x, 0, p.x + 12);
+      const dz = Math.max(29 - p.z, 0, p.z - 109);
+      if (Math.hypot(dx, dz) < p.r - 0.5 && !/^(light|post)$/.test(p.kind)) bad.push(`${p.kind} ${p.name} in the toys meadow at ${p.x.toFixed(0)},${p.z.toFixed(0)}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('every toy stands on land and off the roads', () => {
     for (const q of content.fill.toys) {
       expect(h(q.x, q.z), `${q.kind} ${q.x},${q.z}`).toBeGreaterThan(0.5);

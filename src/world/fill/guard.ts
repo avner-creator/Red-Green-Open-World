@@ -7,6 +7,9 @@
  */
 import { ANCHORS, PADS } from '../layout';
 import { GLASSES_WAY } from '../attractions';
+
+/** Paw-trail meadow of the toys mini-game (world x/z bounds). */
+export const TOYS_MEADOW = { x0: -65, x1: -12, z0: 29, z1: 109 } as const;
 import { SITES, inZone, raceCutDistance } from '../sites';
 import { roadEdgeDistance } from '../wayfinding';
 import type { ProcessedRoad } from '../terrain';
@@ -87,6 +90,9 @@ export function makeGuard(inp: GuardInput): Guard {
       if (Math.hypot(x - g.x, z - g.z) < g.r + r + 8) return `glasses ${g.id}`;
       if (Math.hypot(x - g.beacon.x, z - g.beacon.z) < r + 2.5) return `glasses beacon ${g.id}`;
     }
+    // The toys mini-game lays its paw trails anywhere on this meadow: keep solid props and
+    // bouncy toys off it (thin lamps / trail-head posts pass `solid: false`).
+    if (solid && x + r > TOYS_MEADOW.x0 && x - r < TOYS_MEADOW.x1 && z + r > TOYS_MEADOW.z0 && z - r < TOYS_MEADOW.z1) return 'toys meadow';
     for (const s of SITES) {
       for (const f of s.footprint) if (inZone(f, x, z, r + 1)) return `site ${s.anchor}`;
       if (solid) for (const c of s.corridors) if (inZone(c, x, z, r + 0.5)) return `corridor ${s.anchor}`;
