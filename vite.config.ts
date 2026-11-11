@@ -99,5 +99,7 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     exclude: ['tests/e2e/**', 'node_modules/**'],
     environment: 'node',
+    // World-building tests take ~1 s alone but 5+ s when the machine is shared: no flaky timeouts.
+    testTimeout: 30_000,
   },
 });
