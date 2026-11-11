@@ -437,10 +437,16 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
       sp.push(placed(new THREE.BoxGeometry((s.hx ?? 1) * 2, 0.3, (s.hz ?? 1) * 2), s.x, s.top - 0.15, s.z));
     }
     sp.push(placed(new THREE.BoxGeometry(2.5, 0.2, 1.9), BOOTH.x, 2.75, BOOTH.z));
-    sp.push(placed(new THREE.BoxGeometry(12.2, 1.2, 0.5), 0, 3.9, 1.7));
     const proxy = asShadowProxy(new THREE.Mesh(keep(mergeFinished(sp.map((g) => g.toNonIndexed())))));
     proxy.name = 'foam-lava-shadow';
     root.add(proxy);
+    // The arch beam's shadow box is its own proxy and no camera obstacle: the run camera (behind
+    // and above the hero) crosses the thin beam just after the start line, and treating it as solid
+    // snapped the camera into the hero's head for a second every lap (QA6 m4).
+    const beam = asShadowProxy(new THREE.Mesh(keep(placed(new THREE.BoxGeometry(12.2, 1.2, 0.5), 0, 3.9, 1.7).toNonIndexed())));
+    beam.name = 'foam-lava-shadow-arch';
+    beam.userData.cameraIgnore = true;
+    root.add(beam);
   }
 
   // Sign (canvas texture).

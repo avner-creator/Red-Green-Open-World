@@ -37,6 +37,12 @@ export const RUN = {
   /** Downhill carry speed per unit of slope beyond `slipStart`. */
   slipGain: 12,
   floatMaxTilt: 0.2,
+  /** Seconds standing on the ground off the course (behind the start, beside the decks) before a bubble hops you back on. */
+  offCourseHop: 0.9,
+  /** Seconds of pushing the stick without getting anywhere before the bubble hops you back on. */
+  stuckHop: 4,
+  /** Falls in one section (since the last checkpoint) before the helping hand carries you on to the next checkpoint. */
+  helpFalls: 3,
   plankMaxRoll: 0.42,
   blockMaxTilt: 0.2,
 } as const;
@@ -64,7 +70,8 @@ export type SimEvent =
   /** Bumped into the friend (comic boing for both). */
   | { type: 'bump' }
   | { type: 'splash'; x: number; z: number }
-  | { type: 'respawn'; cp: number }
+  /** Back at a checkpoint. `help`: the helping hand carried you on to the next one; `hop`: put back on the course after leaving it or getting stuck. */
+  | { type: 'respawn'; cp: number; help?: boolean; hop?: boolean }
   | { type: 'checkpoint'; cp: number }
   | { type: 'finish'; time: number }
   /** A lap is done: the bubble express floats you back to the start line. `lap` = laps done. */
@@ -217,6 +224,14 @@ export class CourseSim {
   private touchingFriend = false;
   /** Seconds left of a blower knock-back (the stick can't cancel the comic flight). */
   private knockT = 0;
+  /** Falls since the last checkpoint (the helping hand). */
+  sectionFalls = 0;
+  /** Times the helping hand carried you on (this run). */
+  helps = 0;
+  /** Seconds on the ground off the course / pushing without moving (anti-freeze watchdogs). */
+  private offT = 0;
+  private stuckT = 0;
+  private readonly stuckAt = { x: 0, z: 0 };
 
   /** Put the hero on the start line and reset the course for a new run. */
   reset(pos: { x: number; z: number }, yaw = 0): void {
@@ -235,6 +250,12 @@ export class CourseSim {
     this.lap = 0;
     this.liftT = 0;
     this.falls = 0;
+    this.sectionFalls = 0;
+    this.helps = 0;
+    this.offT = 0;
+    this.stuckT = 0;
+    this.stuckAt.x = pos.x;
+    this.stuckAt.z = pos.z;
     this.beard = 0;
     this.coyote = 0;
     this.buffer = 0;
@@ -509,6 +530,27 @@ export class CourseSim {
     this.checkHazards(events);
     if (this.mode !== 'run') return;
     this.checkRope(events);
+    if (this.mode !== 'run') return;
+    this.watchdog(dt, mag, events);
+  }
+
+  /**
+   * Nobody is ever stuck (QA6 B1): standing on the plain ground off the course (walked off the
+   * back of the start deck) or pushing the stick for a few seconds without getting anywhere, a
+   * bubble pops you back onto the course at your checkpoint. Never counts as a fall.
+   */
+  private watchdog(dt: number, push: number, events: SimEvent[]): void {
+    const p = this.p;
+    if (this.grounded && this.ground < 0 && !this.inPit(p.x, p.z)) this.offT += dt;
+    else this.offT = 0;
+    if (Math.hypot(p.x - this.stuckAt.x, p.z - this.stuckAt.z) > 0.6 || p.y > this.lastGroundY + 0.6) {
+      this.stuckAt.x = p.x;
+      this.stuckAt.z = p.z;
+      this.stuckT = 0;
+    } else if (push > 0.3) this.stuckT += dt;
+    if (this.offT < RUN.offCourseHop && this.stuckT < RUN.stuckHop) return;
+    this.respawn();
+    events.push({ type: 'respawn', cp: this.cp, hop: true });
   }
 
   private resolveSides(grounded: boolean, refY: number): void {
@@ -694,6 +736,7 @@ export class CourseSim {
     }
     if (s.cp !== undefined && s.cp === this.cp + 1) {
       this.cp = s.cp;
+      this.sectionFalls = 0;
       events.push({ type: 'checkpoint', cp: s.cp });
     }
     if (s.id === FINISH_ID && this.cp >= 3) {
@@ -702,6 +745,7 @@ export class CourseSim {
         // Lap done: a big bubble scoops you up and floats you back to the start line.
         this.lap++;
         this.cp = 0;
+        this.sectionFalls = 0;
         this.mode = 'lift';
         this.liftT = 0;
         this.liftFrom.x = p.x;
@@ -753,6 +797,7 @@ export class CourseSim {
     this.mode = 'splash';
     this.splashT = 0;
     this.falls++;
+    this.sectionFalls++;
     this.beard = 10;
     this.p.y = Math.max(this.p.y, FOAM_Y - 0.15);
     this.v.x *= 0.15;
@@ -787,8 +832,45 @@ export class CourseSim {
     this.p.z += this.v.z * dt;
     this.p.y = Math.max(FOAM_Y - 1.05, this.p.y - dt * 0.9);
     if (this.splashT < RUN.splashTime) return;
+    if (this.sectionFalls >= RUN.helpFalls) {
+      // Helping hand: the bubble carries you on past the part you keep falling at.
+      this.sectionFalls = 0;
+      this.helps++;
+      if (this.cp < CHECKPOINTS.length - 1) {
+        this.cp++;
+        events.push({ type: 'checkpoint', cp: this.cp });
+        this.respawn();
+      } else this.placeOnFinish();
+      events.push({ type: 'respawn', cp: this.cp, help: true });
+      return;
+    }
     this.respawn();
     events.push({ type: 'respawn', cp: this.cp });
+  }
+
+  /** Helping hand after the last checkpoint: set down at the front of the finish deck (the next step counts it). */
+  private placeOnFinish(): void {
+    const i = SOLIDS.findIndex((s) => s.id === FINISH_ID);
+    const f = SOLIDS[i];
+    this.p.x = f.x;
+    this.p.y = f.top;
+    this.p.z = f.z + (f.hz ?? 0) - 0.6;
+    this.v.x = this.v.y = this.v.z = 0;
+    this.yaw = Math.PI;
+    this.mode = 'run';
+    this.grounded = true;
+    this.ground = i;
+    this.lastGroundY = f.top;
+  }
+
+  /**
+   * End the round where the hero is (the round cap): out of the foam or off the rope first, then
+   * stand still and cheer.
+   */
+  endRound(): void {
+    if (this.mode !== 'run' && this.mode !== 'done') this.respawn();
+    this.mode = 'done';
+    this.v.x = this.v.y = this.v.z = 0;
   }
 
   /** Back to the last checkpoint (foam fall or the R key). */
@@ -802,6 +884,12 @@ export class CourseSim {
     this.mode = 'run';
     this.grounded = true;
     this.ground = -1;
+    this.lastGroundY = c.y;
+    this.offT = 0;
+    this.stuckT = 0;
+    this.stuckAt.x = c.x;
+    this.stuckAt.z = c.z;
+    this.knockT = 0;
     for (let i = 0; i < SOLIDS.length; i++) if (this.surface(i, c.x, c.z) !== null) this.ground = i;
     if (this.rope.state === 'held') {
       this.rope.state = 'return';
