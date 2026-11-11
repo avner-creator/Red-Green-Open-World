@@ -218,25 +218,13 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
     { text: 'Give the dragon a snack, then hop on and fly!', icon: 'dragon', action: 'use', mood: 'excited' },
     { text: 'Jump flaps the wings. Your power button blows bubbles!', icon: 'dragon', action: 'jump', mood: 'silly' },
   ],
-  glowflies: [
-    { text: 'Catch the glow-flies! Run or jump right through them!', icon: 'glasses', action: 'jump', mood: 'excited' },
-    { text: 'Only magic glasses can see them. Fill up the jar!', icon: 'glasses', mood: 'curious' },
-  ],
+  // The six magic-glasses games: one rule-neutral line each (their rounds are being reworked).
+  glowflies: [{ text: 'Catch the glow-flies! Run or jump right through them!', icon: 'glasses', action: 'jump', mood: 'excited' }],
   oddone: [{ text: "Three shapes, one is different. Push that one's button!", icon: 'glasses', action: 'use', mood: 'curious' }],
-  lineup: [
-    { text: 'Stand on the pad. Move the magic ring onto a bubble!', icon: 'glasses', action: 'look', mood: 'curious' },
-    { text: 'Then push the button to pop it!', icon: 'bubble', action: 'use', mood: 'excited' },
-  ],
+  lineup: [{ text: 'Move the magic ring onto a bubble, then pop it!', icon: 'glasses', action: 'use', mood: 'curious' }],
   toys: [{ text: 'I lost my toys! Follow the glowing paw prints to find them!', icon: 'paw', extra: 'glasses', mood: 'curious' }],
-  gates: [
-    { text: 'Look at the sign. Each eye sees half a shape!', icon: 'glasses', mood: 'curious' },
-    { text: 'Put the halves together, then run through that arch!', icon: 'wRun', mood: 'excited' },
-    { text: 'Step on the start plate for a new shape!', icon: 'glasses', mood: 'happy' },
-  ],
-  dotsigns: [
-    { text: 'Look at the dots. A hidden shape pops out!', icon: 'glasses', mood: 'curious' },
-    { text: 'Push the button with that same shape!', icon: 'glasses', action: 'use', mood: 'excited' },
-  ],
+  gates: [{ text: 'Each eye sees half a shape. Run through the matching arch!', icon: 'glasses', mood: 'curious' }],
+  dotsigns: [{ text: 'Find the shape hidden in the dots. Push its button!', icon: 'glasses', action: 'use', mood: 'curious' }],
   vault: [
     { text: 'A secret vault! Magic glasses show three shapes in a row.', icon: 'lock', extra: 'glasses', mood: 'curious' },
     { text: 'Push the door buttons in that same order!', icon: 'lock', action: 'use', mood: 'excited' },
