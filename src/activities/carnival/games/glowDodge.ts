@@ -261,9 +261,14 @@ export function createGlowDodge(env: GameEnv): BoothGame {
       // Player: sidestep within the centre lane, hop on Space.
       const me = lanes[0];
       r.playerOffset.x = clampLane(r.playerOffset.x + input.moveX * MOVE_SPEED * dt, me.center, me.half);
-      if (input.jumpPressed && startHop(me.hop)) {
-        r.playerAct('jump', 0.55);
-        ctx.audio.play('jump', { volume: 0.35, pitch: 1.3 });
+      if (input.jumpPressed) {
+        if (startHop(me.hop)) {
+          r.playerAct('jump', 0.55);
+          ctx.audio.play('jump', { volume: 0.35, pitch: 1.3 });
+        } else if (me.hop.y > 0.05) {
+          // Kicking the air mid-hop: a dizzy wobble on landing (time your hops, don't bunny-hop).
+          r.fumble(0.8);
+        }
       }
 
       // Friends walk towards where they want to be, hop when they decided to.
@@ -287,6 +292,7 @@ export function createGlowDodge(env: GameEnv): BoothGame {
         l.next = r.t + nextGap(r.t, l.rng);
         const plan = planBall(l.rng, who, kind, l, contestantX(r, who), r.t);
         if (r.t + plan.dur > DURATION - 0.05) return; // it would not arrive before the bell
+        if (who > 0) brains[who - 1].lead = r.scores[0] - r.scores[who];
         const willDodge = who === 0 ? false : brains[who - 1].roll(FRIEND_BONUS);
         launch(plan, willDodge, l.rng);
       });

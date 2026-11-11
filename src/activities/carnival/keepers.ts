@@ -47,7 +47,8 @@ function keeperArm(): THREE.BufferGeometry {
 export function keeperSpot(game: GameId): [number, number] {
   const bx = BOOTH_X[game];
   if (game === 'strengthBell') return [bx + 2.0, BOOTH_FRONT_Z - 0.6];
-  if (game === 'glowDodge') return [bx + 2.15, BOOTH_FRONT_Z + 0.55];
+  // Glow Dodge: beside the right friend's lane (never in it), back by the tunnel wall.
+  if (game === 'glowDodge') return [bx + 2.55, BOOTH_FRONT_Z - 0.55];
   return [bx + 1.75, BOOTH_FRONT_Z - 1.05];
 }
 

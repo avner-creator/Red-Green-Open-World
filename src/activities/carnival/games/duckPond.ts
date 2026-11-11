@@ -11,7 +11,7 @@ import { G, Kit, T, kitMaterial } from '../kit';
 import { RIVAL_SKILLS, RivalBrain } from '../rivals';
 import { makeRng } from '../rng';
 import { EYE, aimAt, aimOnPlaneY, arcPoint } from './common';
-import { DUCK_COUNT, DUCK_RESPAWN, LUCKY_COUNT, LUCKY_POINTS, NET_R, POND, catchDucks, clampToPond, duckXZ, duckYaw } from './duckLogic';
+import { EMPTY_STUN, DUCK_COUNT, DUCK_RESPAWN, LUCKY_COUNT, LUCKY_POINTS, NET_R, POND, catchDucks, clampToPond, duckXZ, duckYaw } from './duckLogic';
 import type { BoothGame, GameEnv, RoundApi } from './types';
 
 const SCOOP_TIME = 0.42;
@@ -220,6 +220,7 @@ export function createDuckPond(env: GameEnv): BoothGame {
     fx.pop(p, 0.16, 6);
     ctx.audio.play('splash', { volume: 0.45, pitch: 1.3 });
     let points = 0;
+    if (who === 0 && caught.length === 0) r.fumble(EMPTY_STUN);
     for (const i of caught) {
       const d = ducks[i];
       d.state = 'fly';
@@ -261,7 +262,7 @@ export function createDuckPond(env: GameEnv): BoothGame {
   return {
     id: 'duckPond',
     duration: 30,
-    thresholds: [8, 15],
+    thresholds: [11, 22],
     camera: { distance: 2.5, height: 3.1, fov: 60, lookAhead: 0 },
     aimLimits: { yaw: 0.55, pitchMin: -0.62, pitchMax: -0.12 },
     how: ['aim', 'scoop'],
@@ -346,7 +347,7 @@ export function createDuckPond(env: GameEnv): BoothGame {
             n.z += (dz / d) * step;
           }
         }
-        if (b.tick(dt) && n.scoop < 0) {
+        if (b.tick(dt, r.scores[0] - r.scores[k + 1]) && n.scoop < 0) {
           n.scoop = 0;
           r.friendAct(k, 'wave', 0.4);
         }

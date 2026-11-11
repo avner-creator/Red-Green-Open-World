@@ -18,8 +18,10 @@ export const PEG_H = 0.55;
 export const HAND_Z = 0.7;
 export const MIN_DIST = 1.6;
 export const MAX_DIST = 5.0;
-/** A ring landing within this (xz, m) of a peg drops onto it — generous for small hands. */
-export const CAPTURE = 0.4;
+/** A ring landing within this (xz, m) of a peg drops onto it (the power bar has to be timed). */
+export const CAPTURE = 0.3;
+/** Released too soon (a tap, not a charge): the ring slips out of the hand. */
+export const MIN_CHARGE = 0.14;
 /** Seconds for the power bar to fill from empty to full (it then goes back down). */
 export const CHARGE_TIME = 1.1;
 

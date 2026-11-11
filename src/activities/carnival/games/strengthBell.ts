@@ -488,7 +488,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       }
 
       brains.forEach((b, i) => {
-        if (b.tick(dt)) wants[i] = true;
+        if (b.tick(dt, (r.scores[0] - r.scores[i + 1]) / 3)) wants[i] = true;
         const who = i + 1;
         if (!wants[i] || enter < 1 || stomps[who] >= STOMPS || hops[who] || towers[who].phase !== 'rest' || towers[who].settle > 0) return;
         wants[i] = false;

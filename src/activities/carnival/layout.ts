@@ -35,8 +35,8 @@ export const BOOTH_FRONT_Z = -2.5;
 export const STAND_Z = 1.1;
 /** Friends stand left and right of the player (booth frame). */
 export const FRIEND_SPOTS: readonly (readonly [number, number])[] = [
-  [-1.75, 1.0],
-  [1.75, 1.0],
+  [-2.15, 0.35],
+  [2.15, 0.35],
 ];
 /** Prize shelf (site frame) at the north end of the row, facing +X along the midway. */
 export const SHELF = { x: -16.2, z: -3.2, yaw: Math.PI / 2, slots: 15 } as const;

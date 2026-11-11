@@ -66,7 +66,39 @@ const CSS = `
 .rg .cv-prize{display:flex;align-items:center;gap:calc(var(--u)*1.4);font-size:1.3em}
 .rg .cv-prize img{width:calc(var(--u)*6);height:calc(var(--u)*6)}
 .rg .cv-btns{display:flex;gap:calc(var(--u)*2)}
+.rg .cv-prize.bonus{font-size:1em}
+.rg .cv-prize.bonus .ic{width:calc(var(--u)*4.4);height:calc(var(--u)*4.4)}
+.rg .cv-badge{position:absolute;display:none;align-items:center;justify-content:center;background:var(--panel);border:calc(var(--u)*.5) solid #000;
+  border-radius:50%;box-shadow:0 0 0 calc(var(--u)*.4) #fff}
+.rg .cv-badge svg{width:72%;height:72%}
+.rg .cv-badge.on{display:flex}
+.rg .cv-practice{top:calc(var(--u)*16);left:calc(var(--u)*3.4);width:calc(var(--u)*7);height:calc(var(--u)*7)}
+.rg .cv-count .cv-practice-big{width:calc(var(--u)*10);height:calc(var(--u)*10);display:none;position:static}
+.rg .cv-count .cv-practice-big.on{display:flex}
+.rg .cv-dizzy{left:50%;bottom:calc(var(--u)*14);width:calc(var(--u)*11);height:calc(var(--u)*11);transform:translateX(-50%)}
+.rg .cv-dizzy.on svg{animation:cv-spin .8s linear infinite}
+@keyframes cv-spin{to{transform:rotate(360deg)}}
 `;
+
+/** Practice round (no prize): a gem with a fat line through it. */
+const NO_GEM_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12l4 5-10 12L2 9z" fill="#2a3060" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>' +
+  '<path d="M2 9h20M9 4l3 17 3-17" fill="none" stroke="#fff" stroke-width="1.1"/><path d="M3 21L21 3" stroke="#000" stroke-width="4.4" stroke-linecap="round"/>' +
+  '<path d="M3 21L21 3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
+/** Dizzy (after mashing or a fumble): three little stars in a swirl. */
+const DIZZY_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12m-7 0a7 4 0 1 0 14 0a7 4 0 1 0-14 0" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 2"/>' +
+  '<path d="M5 9.5l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2L2.1 11.6l2-.3z" fill="#fff3a0" stroke="#000" stroke-width=".8"/>' +
+  '<path d="M19 9.5l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" fill="#fff3a0" stroke="#000" stroke-width=".8"/>' +
+  '<path d="M12 13.5l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" fill="#fff" stroke="#000" stroke-width=".8"/></svg>';
+
+function badge(cls: string, svg: string, testid: string): HTMLElement {
+  const b = document.createElement('div');
+  b.className = `cv-badge ${cls}`;
+  b.dataset.testid = testid;
+  b.innerHTML = svg;
+  return b;
+}
 
 let cssDone = false;
 function injectCss(): void {
@@ -133,7 +165,10 @@ export class CarnivalHud {
   private readonly countImg = document.createElement('img');
   private readonly countN = el('span', 'n t', '3');
   private readonly how = el('div', 'cv-how');
-  private readonly count = el('div', 'cv-count', this.countImg, this.countN, this.how);
+  private readonly practiceBig = badge('cv-practice-big', NO_GEM_SVG, 'carnival-practice-big');
+  private readonly count = el('div', 'cv-count', this.countImg, this.countN, this.how, this.practiceBig);
+  private readonly practice = badge('cv-practice', NO_GEM_SVG, 'carnival-practice');
+  private readonly dizzy = badge('cv-dizzy', DIZZY_SVG, 'carnival-dizzy');
   private readonly pop = el('div', 'cv-pop t', '+1');
   private readonly res = el('div', 'cv-res');
   private chips: { root: HTMLElement; score: HTMLElement; value: number }[] = [];
@@ -145,7 +180,7 @@ export class CarnivalHud {
   constructor(parent: HTMLElement) {
     injectCss();
     this.root.dataset.testid = 'carnival-hud';
-    this.root.append(this.board, this.time, this.meter, this.count, this.pop, this.res);
+    this.root.append(this.board, this.time, this.meter, this.count, this.pop, this.res, this.practice, this.dizzy);
     parent.append(this.root);
   }
 
@@ -174,7 +209,20 @@ export class CarnivalHud {
     this.setMeter(null);
   }
 
+  /** "Practice: no prize" marker (big in the countdown, small by the scores during play). */
+  setPractice(on: boolean): void {
+    this.practice.classList.toggle('on', on);
+    this.practiceBig.classList.toggle('on', on);
+  }
+
+  /** Dizzy stars while the hero is stunned. */
+  setDizzy(on: boolean): void {
+    this.dizzy.classList.toggle('on', on);
+  }
+
   hide(): void {
+    this.setPractice(false);
+    this.setDizzy(false);
     this.root.classList.remove('on');
     this.count.classList.remove('on');
     this.res.classList.remove('on');
@@ -242,8 +290,17 @@ export class CarnivalHud {
     this.countN.classList.add('pop');
   }
 
-  showResult(r: RoundResult, contestants: readonly Contestant[], scores: readonly number[], plush: boolean, device: InputState['device']): void {
+  showResult(
+    r: RoundResult,
+    contestants: readonly Contestant[],
+    scores: readonly number[],
+    plush: boolean,
+    device: InputState['device'],
+    extra: { bonus?: number; practice?: boolean } = {},
+  ): void {
     this.setMeter(null);
+    this.setDizzy(false);
+    this.practice.classList.remove('on');
     this.setTime(null);
     this.board.style.display = 'none';
     // Podium: 2nd, 1st, 3rd.
@@ -266,7 +323,18 @@ export class CarnivalHud {
       s.style.animationDelay = `${0.35 + i * 0.25}s`;
       stars.append(s);
     }
-    const prize = el('div', 'cv-prize', icon('gem', 'y'), el('span', 't', `+${r.gems}`));
+    // Exactly what the wallet got: the prize line (a crossed-out gem in a practice round, never
+    // "+0"), then a bonus line (missions / Fun Pass prizes paid during the round).
+    const practice = extra.practice === true;
+    const noGem = el('span', 'ic');
+    noGem.innerHTML = NO_GEM_SVG;
+    const prize = practice ? el('div', 'cv-prize', noGem) : el('div', 'cv-prize', icon('gem', 'y'), el('span', 't', `+${r.gems}`));
+    prize.dataset.testid = 'carnival-prize';
+    prize.dataset.practice = String(practice);
+    const bonus = Math.max(0, Math.round(extra.bonus ?? 0));
+    const bonusRow = el('div', 'cv-prize bonus', icon('jackpot', 'y'), el('span', 't', `+${bonus}`));
+    bonusRow.dataset.testid = 'carnival-bonus';
+    if (practice || bonus <= 0) bonusRow.style.display = 'none';
     if (plush) {
       const img = document.createElement('img');
       img.src = this.url('plush');
@@ -278,7 +346,7 @@ export class CarnivalHud {
     exit.dataset.testid = 'carnival-exit';
     replay.addEventListener('click', () => this.onReplay?.());
     exit.addEventListener('click', () => this.onExit?.());
-    this.res.replaceChildren(podium, stars, prize, el('div', 'cv-btns', replay, exit));
+    this.res.replaceChildren(podium, stars, prize, bonusRow, el('div', 'cv-btns', replay, exit));
     this.res.dataset.place = String(r.place);
     this.res.classList.add('on');
   }

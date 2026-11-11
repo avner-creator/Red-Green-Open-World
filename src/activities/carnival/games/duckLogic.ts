@@ -2,8 +2,10 @@
 
 export const POND = { x: 0, z: -2.4, r: 1.72, waterY: 0.56 } as const;
 export const NET_R = 0.3;
-/** A scoop catches ducks within this distance (xz) of the net centre — generous. */
-export const CATCH_R = 0.48;
+/** A scoop catches ducks within this distance (xz) of the net centre (aim at a duck!). */
+export const CATCH_R = 0.34;
+/** An empty scoop: the hero splashes and wobbles this long. */
+export const EMPTY_STUN = 0.9;
 export const MAX_CATCH = 2;
 export const LUCKY_COUNT = 3;
 export const LUCKY_POINTS = 3;
