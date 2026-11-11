@@ -14,7 +14,9 @@ export type IconId =
   // Carnival Island attractions.
   | 'iCarnival' | 'iIceCream' | 'iBubble' | 'iDino' | 'iFlag' | 'iFoam' | 'iPlane' | 'iDragon'
   // Glasses-play mini-games: one family (magic-glasses mark on a yellow-ringed badge), one symbol each.
-  | 'iGlowflies' | 'iOddone' | 'iLineup' | 'iToys' | 'iGates' | 'iDotsigns';
+  | 'iGlowflies' | 'iOddone' | 'iLineup' | 'iToys' | 'iGates' | 'iDotsigns'
+  // Island fill: the new zones, the bouncy toys and the map board's "you are here".
+  | 'iWheel' | 'iWindmill' | 'iCastle' | 'iLookout' | 'iRainbow' | 'iMushroom' | 'iHere' | 'iPicnic';
 export type PanelId =
   | 'tramp1' | 'tramp2' | 'tramp3'
   | 'bounce1' | 'bounce2'
@@ -28,10 +30,10 @@ export type PictoId = IconId | PanelId;
 
 /**
  * Atlas width (and the unit for UV maths); the atlas is ATLAS_SIZE × ATLAS_H pixels: six 512 px
- * rows of panels and icons, plus a 256 px row of Carnival Island icons and one of glasses-play icons.
+ * rows of panels and icons, plus 256 px rows of Carnival Island, glasses-play and island-fill icons.
  */
 export const ATLAS_SIZE = 2048;
-export const ATLAS_H = 3584;
+export const ATLAS_H = 3840;
 const CELL = 512;
 const COLS = ATLAS_SIZE / CELL;
 
@@ -47,6 +49,8 @@ const ICON_ORDER: IconId[] = [
 const ICON_ROW2: IconId[] = ['iCarnival', 'iIceCream', 'iBubble', 'iDino', 'iFlag', 'iFoam', 'iPlane', 'iDragon'];
 /** Glasses-play icons: a second 256 px row. */
 const ICON_ROW3: IconId[] = ['iGlowflies', 'iOddone', 'iLineup', 'iToys', 'iGates', 'iDotsigns'];
+/** Island-fill icons: a third 256 px row. */
+const ICON_ROW4: IconId[] = ['iWheel', 'iWindmill', 'iCastle', 'iLookout', 'iRainbow', 'iMushroom', 'iHere', 'iPicnic'];
 const GRID_H = 6 * CELL;
 
 /** Pixel rectangles [x, y, size] in the atlas (y down, canvas convention). */
@@ -61,6 +65,7 @@ export const PICTO_RECTS: Readonly<Record<PictoId, readonly [number, number, num
   });
   ICON_ROW2.forEach((id, i) => (r[id] = [i * 256, GRID_H, 256]));
   ICON_ROW3.forEach((id, i) => (r[id] = [i * 256, GRID_H + 256, 256]));
+  ICON_ROW4.forEach((id, i) => (r[id] = [i * 256, GRID_H + 512, 256]));
   return r;
 })();
 
@@ -763,7 +768,171 @@ function arch(c: C2, x: number, y: number, w: number, h: number, col: string, lw
   c.stroke();
 }
 
+// ── Island-fill figures ──
+
+function wheelFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  line(c, [-16, 34, 0, -2, 16, 34], 5, GREY);
+  ellipse(c, 0, -2, 28, 28, null, WHITE, 5);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    line(c, [0, -2, Math.cos(a) * 28, -2 + Math.sin(a) * 28], 2.4, WHITE);
+    disc(c, Math.cos(a) * 28, -2 + Math.sin(a) * 28 + 4, 5.4, i % 2 ? YEL : WHITE);
+  }
+  disc(c, 0, -2, 5, YEL);
+  line(c, [-24, 36, 24, 36], 4, WHITE);
+  c.restore();
+}
+
+function windmillFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  poly(c, [-12, 34, -7, -8, 7, -8, 12, 34], WHITE);
+  poly(c, [-9, -8, 0, -18, 9, -8], YEL);
+  poly(c, [-4, 34, -4, 22, 4, 22, 4, 34], INK);
+  for (let i = 0; i < 4; i++) {
+    c.save();
+    c.translate(0, -12);
+    c.rotate(Math.PI / 4 + (i * Math.PI) / 2);
+    poly(c, [-1.5, -3, 5.5, -3, 5.5, -30, -1.5, -30], i % 2 ? YEL : WHITE);
+    c.restore();
+  }
+  disc(c, 0, -12, 3.2, INK);
+  c.restore();
+}
+
+function castleFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  poly(c, [-30, 32, -30, 6, 30, 6, 30, 32], YEL);
+  for (const tx of [-24, 24]) {
+    poly(c, [tx - 7, 32, tx - 7, -6, tx + 7, -6, tx + 7, 32], WHITE);
+    poly(c, [tx - 8, -6, tx, -20, tx + 8, -6], YEL);
+  }
+  poly(c, [-10, 32, -10, -14, 10, -14, 10, 32], WHITE);
+  for (const bx of [-10, -2, 6]) poly(c, [bx, -14, bx, -19, bx + 4, -19, bx + 4, -14], WHITE);
+  line(c, [0, -14, 0, -30], 2.4, WHITE);
+  poly(c, [0, -30, 11, -26, 0, -22], YEL);
+  ellipse(c, 0, 26, 5, 7, INK);
+  c.restore();
+}
+
+function lookoutFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  line(c, [-14, 34, -10, 0], 4, WHITE);
+  line(c, [14, 34, 10, 0], 4, WHITE);
+  line(c, [-12, 18, 12, 18], 3, WHITE);
+  line(c, [-13, 26, 11, 6], 2.4, WHITE);
+  poly(c, [-16, 0, 16, 0, 16, -4, -16, -4], WHITE);
+  poly(c, [-18, -8, 0, -18, 18, -8], WHITE);
+  line(c, [0, -18, 0, -24], 2.4, WHITE);
+  star(c, 0, -30, 11);
+  c.restore();
+}
+
+function rainbowFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  const cols = [WHITE, YEL, WHITE, YEL];
+  cols.forEach((col, i) => {
+    c.beginPath();
+    c.arc(0, 18, 34 - i * 6.5, Math.PI, 0);
+    c.lineWidth = 5;
+    c.strokeStyle = col;
+    c.stroke();
+  });
+  for (const sx of [-26, 26]) {
+    ellipse(c, sx, 20, 11, 7, WHITE);
+    ellipse(c, sx + 7, 15, 7, 6, WHITE);
+  }
+  c.restore();
+}
+
+function mushroomFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  poly(c, [-8, 30, -10, 2, 10, 2, 8, 30], WHITE);
+  c.beginPath();
+  c.ellipse(0, 4, 30, 24, 0, Math.PI, 0);
+  c.closePath();
+  c.fillStyle = YEL;
+  c.fill();
+  for (const [sx, sy, r] of [[-14, -6, 5], [4, -12, 6], [17, -2, 4], [-2, 0, 3.5]] as [number, number, number][]) disc(c, sx, sy, r, INK);
+  // Bounce arcs over it.
+  dashedCurve(c, -20, -24, -6, -44, 8, -26, 2.6, WHITE);
+  c.restore();
+}
+
+function hereFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  // A big map pin with a little hero inside.
+  c.beginPath();
+  c.arc(0, -8, 26, Math.PI * 0.82, Math.PI * 0.18);
+  c.lineTo(0, 34);
+  c.closePath();
+  c.fillStyle = YEL;
+  c.fill();
+  disc(c, 0, -8, 18, INK);
+  person(c, 0, -6, 0.5, 'stand');
+  c.restore();
+}
+
+function picnicFig(c: C2, x: number, y: number, s: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  poly(c, [-30, 30, -18, 6, 30, 6, 18, 30], WHITE);
+  for (let i = 0; i < 4; i++) line(c, [-27 + i * 12, 30, -15 + i * 12, 6], 3, INK);
+  for (let i = 0; i < 2; i++) line(c, [-24 + i * 6, 18 + i * -6, 24 + i * 6, 18 + i * -6], 3, INK);
+  poly(c, [-10, 4, -6, -14, 12, -14, 16, 4], YEL);
+  line(c, [-4, -14, 0, -26, 6, -26, 10, -14], 3, WHITE);
+  c.restore();
+}
+
 const DRAW: Record<PictoId, (c: C2) => void> = {
+  // ── island-fill icons ──
+  iWheel: (c) => {
+    iconBg(c);
+    wheelFig(c, 50, 50, 1);
+  },
+  iWindmill: (c) => {
+    iconBg(c);
+    windmillFig(c, 50, 54, 1);
+  },
+  iCastle: (c) => {
+    iconBg(c);
+    castleFig(c, 50, 50, 0.95);
+  },
+  iLookout: (c) => {
+    iconBg(c);
+    lookoutFig(c, 50, 54, 1);
+  },
+  iRainbow: (c) => {
+    iconBg(c);
+    rainbowFig(c, 50, 50, 1);
+  },
+  iMushroom: (c) => {
+    iconBg(c);
+    mushroomFig(c, 50, 54, 1);
+  },
+  iHere: (c) => {
+    iconBg(c);
+    hereFig(c, 50, 50, 1);
+  },
+  iPicnic: (c) => {
+    iconBg(c);
+    picnicFig(c, 50, 52, 1);
+  },
   // ── glasses-play icons ──
   iGlowflies: (c) => {
     glassesBg(c);

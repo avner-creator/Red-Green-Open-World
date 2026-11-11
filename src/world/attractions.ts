@@ -120,13 +120,8 @@ const GLASSES_ARM = 0x2e2a6a;
 /** The beacon stands behind the site (away from the approach), this far outside its clear circle. */
 const GLASSES_BEACON_OUT = 3;
 
-/** The sites that get a stepping-stone trail: the two nearest spawn (follows `FIXED_SITES` when sites move). */
-const TRAIL_SITES = new Set(
-  [...FIXED_SITES]
-    .sort((a, b) => Math.hypot(a.x - ANCHORS.spawn.x, a.z - ANCHORS.spawn.z) - Math.hypot(b.x - ANCHORS.spawn.x, b.z - ANCHORS.spawn.z))
-    .slice(0, 2)
-    .map((f) => f.id),
-);
+/** Every site gets a stepping-stone trail from its nearest road (owner playtest: the toys site had none). */
+const TRAIL_SITES = new Set(FIXED_SITES.map((f) => f.id));
 
 export const GLASSES_WAY: readonly GlassesWay[] = FIXED_SITES.filter((f): f is typeof f & { id: GlassesSiteId } => f.id in GLASSES_STYLE).map((f) => {
   const st = GLASSES_STYLE[f.id];

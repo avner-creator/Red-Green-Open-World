@@ -23,7 +23,9 @@ export interface AddOpts {
 /** Cell size (m) for culling and distance LOD inside each merged mesh. */
 const CELL = 16;
 /** Flat or tiny things: decals, road paint, paving, bunting and flags cast no shadow. */
-const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road', 'cloth']);
+// Toys move in the vertex shader: no static shadow proxy (it would not move), so they are never a
+// camera occluder either.
+const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road', 'cloth', 'toy']);
 const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 /**
  * Size classes by bounding radius (m) and how far away each is still drawn, per quality (index 0 =
@@ -76,6 +78,8 @@ interface Layer {
   mesh: THREE.Mesh;
   cells: CellRange[];
   index: THREE.BufferAttribute;
+  /** Vertices selected for the current view (0 = hidden). */
+  count: number;
 }
 
 const cellOf = (x: number, z: number): number => (Math.floor(x / CELL) + 512) * 1024 + Math.floor(z / CELL) + 512;
@@ -126,7 +130,7 @@ function buildLayer(parts: Part[], material: THREE.Material, positionsOnly: bool
   mesh.matrixAutoUpdate = false;
   // Culled per cell in `Batcher.update`.
   mesh.frustumCulled = false;
-  return { mesh, cells, index };
+  return { mesh, cells, index, count: total };
 }
 
 const _frustum = new THREE.Frustum();
@@ -149,10 +153,14 @@ function selectLayer(L: Layer, frustum: THREE.Frustum, cam: THREE.Vector3, maxD:
     const end = cls < 0 ? c.start : c.ends[cls];
     for (let i = c.start; i < end; i++) arr[k++] = i;
   }
+  // Nothing of this material in view: skip the draw call altogether.
+  L.count = k;
+  L.mesh.visible = k > 0;
+  L.mesh.geometry.setDrawRange(0, k);
+  if (k === 0) return;
   L.index.clearUpdateRanges();
   L.index.addUpdateRange(0, k);
   L.index.needsUpdate = true;
-  L.mesh.geometry.setDrawRange(0, k);
 }
 
 export class Batcher {
@@ -171,7 +179,7 @@ export class Batcher {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (matrix) g.applyMatrix4(matrix);
     for (const name of Object.keys(g.attributes)) {
-      if (name !== 'position' && name !== 'normal' && name !== 'color' && name !== 'aWave') g.deleteAttribute(name);
+      if (name !== 'position' && name !== 'normal' && name !== 'color' && name !== 'aWave' && name !== 'aPivot' && name !== 'aAxis') g.deleteAttribute(name);
     }
     if (!g.attributes.normal) g.computeVertexNormals();
     const pos = g.attributes.position;
@@ -198,6 +206,14 @@ export class Batcher {
     }
     if (key === 'cloth' && !g.attributes.aWave) g.setAttribute('aWave', new THREE.BufferAttribute(new Float32Array(n), 1));
     if (key !== 'cloth' && g.attributes.aWave) g.deleteAttribute('aWave');
+    if (key === 'toy') {
+      // Toy parts carry their motion (pivot + kind, axis + speed); plain parts stand still.
+      if (!g.attributes.aPivot) g.setAttribute('aPivot', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+      if (!g.attributes.aAxis) g.setAttribute('aAxis', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+    } else {
+      if (g.attributes.aPivot) g.deleteAttribute('aPivot');
+      if (g.attributes.aAxis) g.deleteAttribute('aAxis');
+    }
     tmpBox.setFromBufferAttribute(pos as THREE.BufferAttribute).getCenter(tmpV);
     tmpBox.getSize(tmpS);
     const r = tmpS.length() / 2;
@@ -274,8 +290,9 @@ export class Batcher {
     const P = this.proxy;
     this.dirty = false;
     if (!P) return;
-    P.mesh.visible = sun?.castShadow === true;
-    if (!sun || !P.mesh.visible) return;
+    const casting = sun?.castShadow === true;
+    P.mesh.visible = casting && P.count > 0;
+    if (!sun || !casting) return;
     // The shadow box follows the camera in texel steps: re-select when it or the camera moved.
     sun.shadow.updateMatrices(sun);
     const sc = sun.shadow.camera;

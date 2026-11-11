@@ -109,7 +109,8 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   LOTS.forEach((lot, i) => house(k, lot, opts, 100 + i * 17));
 
   // ── Plaza furniture ──
-  const benchAngles = [-132, -50, -2, 70, 114, -168];
+  // (−2° gave way: it blocked the straight walk from the plaza to Scoops, QA round 4.)
+  const benchAngles = [-132, -50, 70, 114, -168];
   for (const a of benchAngles) {
     // (angles avoid the five road entrances: −90, −23, 40, 90, 150 degrees)
     const r = THREE.MathUtils.degToRad(a);
@@ -168,7 +169,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   }
   // Planters at the street corners.
   planter(k, -9, -15.5, 3, 1.1, 0, 7);
-  planter(k, 9, -15.5, 3, 1.1, 0, 8);
+  // (The east corner's planter gave way to the island map board, fill/mapboard.ts.)
   // Trees on the ridge slope that closes the view at the end of the street.
   trees.push(
     { x: -14, z: -70, kind: 'oak', scale: 1.1 },

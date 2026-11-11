@@ -5,6 +5,12 @@
  */
 import * as THREE from 'three';
 
+/** Bump slots the toy shader checks (ring buffer, newest overwrite oldest). */
+export const TOY_BUMP_SLOTS = 8;
+
+/** Toy motion kinds (aPivot.w). */
+export const TOY = { still: 0, spin: 1, wobble: 2, pinwheel: 3, sway: 4 } as const;
+
 /** Shared animated uniforms. */
 export const U = {
   time: { value: 0 },
@@ -17,6 +23,11 @@ export const U = {
   sunColor: { value: new THREE.Color(1, 1, 1) },
   /** Wind strength (1 = normal breeze; gusts up to ~1.5). Driven by src/world/life. */
   wind: { value: 1 },
+  /**
+   * Recent bumps of island toys (see toys.ts): xyz = the bumped toy's pivot, w = the game time of the
+   * bump. Toy vertices whose pivot matches a slot wobble / spin up from that time on.
+   */
+  bumps: { value: Array.from({ length: TOY_BUMP_SLOTS }, () => new THREE.Vector4(0, -1e4, 0, -1e4)) },
 };
 
 export const GLSL_NOISE = /* glsl */ `
@@ -54,7 +65,7 @@ export function patch(
 }
 
 export type MatKey =
-  | 'paint' | 'matte' | 'gloss' | 'metal' | 'glass' | 'window' | 'glow' | 'paving' | 'road' | 'cloth' | 'rubber';
+  | 'paint' | 'matte' | 'gloss' | 'metal' | 'glass' | 'window' | 'glow' | 'paving' | 'road' | 'cloth' | 'rubber' | 'toy';
 
 export interface Materials {
   get(key: MatKey): THREE.Material;
@@ -149,7 +160,8 @@ export function createMaterials(): Materials {
     fragment: 'diffuseColor.rgb *= 0.82 + 0.3 * rgNoise(vWorldPos.xz * 1.3 + vWorldPos.y * 1.9) + 0.08 * rgNoise(vWorldPos.xy * 6.0);',
   });
 
-  const map: Record<MatKey, THREE.Material> = { paint, matte, gloss, metal, glass, window, glow: glowBasic, paving, road, cloth, rubber };
+  const toy = createToyMaterial();
+  const map: Record<MatKey, THREE.Material> = { paint, matte, gloss, metal, glass, window, glow: glowBasic, paving, road, cloth, rubber, toy };
   return {
     get: (k) => map[k],
     foliage,
@@ -160,4 +172,75 @@ export function createMaterials(): Materials {
       glowBasic.color.setScalar(1 + 3.5 * U.glow.value);
     },
   };
+}
+
+/**
+ * Island toys and spinners: glossy painted plastic whose vertices move in the vertex shader, so every
+ * toy, pinwheel, windmill sail and big wheel on the island shares one merged, cell-culled mesh (one
+ * draw call). Per vertex: aPivot = (pivot xyz, kind) and aAxis = (axis xyz, speed or size).
+ * - spin: turns about the axis through the pivot at `speed` rad/s (big wheel, windmill sails).
+ * - pinwheel: idles slowly in the wind and whirls up after a bump.
+ * - wobble: a bump squashes it (jelly bounce) and rocks it; `aAxis.w` = toy height.
+ * - sway: rocks gently all the time (spring toys, balloons on sticks), more after a bump.
+ * Bumps come from `U.bumps` (toys.ts writes the bumped toy's pivot and the time).
+ */
+function createToyMaterial(): THREE.MeshStandardMaterial {
+  const toy = std({ roughness: 0.38 });
+  const N = TOY_BUMP_SLOTS;
+  patch(toy, 'rg-toy', {
+    vertexPre: /* glsl */ `
+      attribute vec4 aPivot;
+      attribute vec4 aAxis;
+      uniform vec4 uBumps[${N}];
+      mat3 rgToyM = mat3(1.0);
+      vec3 rgToyT = vec3(0.0);
+      mat3 rgRot(vec3 a, float t) {
+        float c = cos(t); float s = sin(t); float k = 1.0 - c;
+        return mat3(c + a.x * a.x * k, a.y * a.x * k + a.z * s, a.z * a.x * k - a.y * s,
+                    a.x * a.y * k - a.z * s, c + a.y * a.y * k, a.z * a.y * k + a.x * s,
+                    a.x * a.z * k + a.y * s, a.y * a.z * k - a.x * s, c + a.z * a.z * k);
+      }
+      float rgBumpAge() {
+        float age = 1e4;
+        for (int i = 0; i < ${N}; i++) {
+          vec4 b = uBumps[i];
+          if (distance(b.xyz, aPivot.xyz) < 0.05) age = min(age, uTime - b.w);
+        }
+        return age;
+      }
+      void rgToyPrep() {
+        int kind = int(aPivot.w + 0.5);
+        if (kind == 0) return;
+        vec3 ax = normalize(aAxis.xyz + vec3(0.0, 1e-5, 0.0));
+        if (kind == 1) { rgToyM = rgRot(ax, uTime * aAxis.w); }
+        else if (kind == 3) {
+          float e = max(rgBumpAge(), 0.0);
+          float ang = uTime * 0.9 * uWind + (e < 60.0 ? 9.0 * (1.0 - exp(-1.2 * e)) : 9.0);
+          rgToyM = rgRot(ax, ang);
+        } else {
+          float e = max(rgBumpAge(), 0.0);
+          float k = exp(-3.2 * e);
+          float sq = 0.32 * k * sin(e * 15.0);
+          float rock = 0.16 * k * sin(e * 9.0 + 1.0);
+          if (kind == 4) rock += 0.05 * uWind * sin(uTime * 1.7 + aPivot.x * 0.7 + aPivot.z * 0.5);
+          mat3 S = mat3(1.0 + sq * 0.5, 0.0, 0.0, 0.0, 1.0 - sq, 0.0, 0.0, 0.0, 1.0 + sq * 0.5);
+          float sa = sin(aPivot.x * 3.1 + aPivot.z * 1.7);
+          vec3 rax = normalize(vec3(sa, 0.0, cos(aPivot.x * 3.1 + aPivot.z * 1.7)));
+          rgToyM = rgRot(rax, rock) * S;
+        }
+        rgToyT = aPivot.xyz;
+      }`,
+    vertex: 'transformed = rgToyM * (transformed - rgToyT) + rgToyT;',
+  });
+  const base = toy.onBeforeCompile;
+  toy.onBeforeCompile = (shader, renderer) => {
+    base.call(toy, shader, renderer);
+    shader.uniforms.uBumps = U.bumps;
+    // Prepare the toy transform before the normal is used; turn the normal with it.
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <beginnormal_vertex>',
+      '#include <beginnormal_vertex>\nrgToyPrep();\nobjectNormal = normalize(rgToyM * objectNormal);',
+    );
+  };
+  return toy;
 }
