@@ -9,6 +9,8 @@ import {
   ringStars,
   shouldOpenChute,
   stepCanopy,
+  leashSteer,
+  leashWeight,
   stepFreefall,
   terminalFor,
   updateAssist,
@@ -270,11 +272,30 @@ describe('hands-off assist', () => {
     expect(updateAssist({ assist: 1 }, 0.5, DT)).toBeCloseTo(0.5, 6);
   });
 
-  it('full stick under canopy is full manual control even with the rings set', () => {
+  it('full stick under canopy is full manual control near the rings', () => {
     const pos: V3 = { x: 0, y: 100, z: 0 };
     const vel: V3 = { x: 0, y: -5, z: 9 };
     const st: CanopyState = { yaw: 0, turn: 0 };
-    stepCanopy(pos, vel, st, { x: 1, z: 0 }, { x: -50, z: 0 }, 100, DT);
+    stepCanopy(pos, vel, st, { x: 1, z: 0 }, { x: -SKY.leashStart + 2, z: 0 }, 100, DT);
     expect(st.turn).toBeCloseTo(SKY.canopyTurn, 6);
+  });
+
+  it('the leash: far from the rings the canopy turns home even with the stick held away', () => {
+    expect(leashWeight(SKY.leashStart - 1)).toBe(0);
+    expect(leashWeight(SKY.leashFull)).toBeCloseTo(SKY.leashMax, 6);
+    expect(leashWeight(SKY.bowl + 1)).toBe(1);
+    // Hold "straight on" (away from rings at −X) for a minute: the canopy never gets far away.
+    const pos: V3 = { x: 0, y: 300, z: 0 };
+    const vel: V3 = { x: 0, y: -5, z: 9 };
+    const st: CanopyState = { yaw: Math.PI / 2, turn: 0 };
+    let maxD = 0;
+    for (let t = 0; t < 60; t += DT) {
+      stepCanopy(pos, vel, st, { x: Math.sin(st.yaw), z: Math.cos(st.yaw) }, { x: 0, z: 0 }, 300, DT);
+      maxD = Math.max(maxD, Math.hypot(pos.x, pos.z));
+    }
+    expect(maxD).toBeLessThan(SKY.bowl + 25);
+    // Freefall: the leashed stick points mostly home when far out.
+    const s = leashSteer({ x: 100, y: 100, z: 0 }, { x: 1, z: 0 }, { x: 0, z: 0 });
+    expect(s.x).toBeLessThan(0);
   });
 });

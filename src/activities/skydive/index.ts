@@ -18,6 +18,7 @@ import {
   follow,
   freefallAssistSteer,
   glideStars,
+  leashSteer,
   nextBelow,
   ringStars,
   shouldOpenChute,
@@ -29,6 +30,7 @@ import {
 import type { CanopyState, V3 } from './flight';
 import { createWindStreaks } from './fx';
 import { createActionPrompt } from './prompt';
+import { createBoardingModel } from './boardingModel';
 import { HOOPS, createLandingRings } from './rings';
 import { segmentSphereHit } from '../gemLogic';
 
@@ -42,7 +44,11 @@ export interface Skydive {
 }
 
 const DECK = { radius: 2.4, height: 0.14 } as const;
+/** Walk-in boarding: stand this close to the basket centre for `AUTO_BOARD.hold` s → 3-2-1 → up. */
+export const AUTO_BOARD = { radius: 1.95, hold: 1.5, promptRadius: 4.2 } as const;
 const BELLY_PITCH = 1.3;
+/** Share of the climb after which the jump prompt shows and Space jumps. */
+const SKY_JUMP_FROM = 0.9;
 
 /** Read-only ride view for glasses add-ons (src/activities/glasses/weave/chute). */
 export interface SkydiveView { readonly phase: RidePhase; readonly heightAboveGround: number; readonly fallTime: number }
@@ -84,6 +90,38 @@ export function createSkydive(ctx: GameContext): Skydive {
   padGroup.position.copy(pad);
   ctx.scene.add(padGroup);
   const tethers = padModel.tethers;
+  const ropeTop = BALLOON_DIMS.throatY - 0.9 + floorY - pad.y;
+
+  // Boarding dressing: arch + picture sign, hop-in pad with crawling arrows, open basket gate. The
+  // entrance faces where children arrive from (the plaza), snapped to the nearest basket side.
+  const spawnP = ctx.world.anchors.spawn.position;
+  const toSpawn = Math.atan2(spawnP.x - pad.x, spawnP.z - pad.z);
+  const rootYaw = model.root.rotation.y;
+  const quarter = Math.round(Math.atan2(Math.sin(toSpawn - rootYaw), Math.cos(toSpawn - rootYaw)) / (Math.PI / 2));
+  const entranceYaw = rootYaw + (quarter * Math.PI) / 2;
+  const boarding = createBoardingModel({
+    pad,
+    deckTop: DECK.height,
+    yaw: entranceYaw,
+    padDist: BALLOON_DIMS.basketHalf + 0.75,
+    padRadius: 0.62,
+    archDist: 5.4,
+    heightAt: (x, z) => ctx.world.heightAt(x, z),
+  });
+  ctx.scene.add(boarding.group);
+  boarding.gate.rotation.y = (quarter * Math.PI) / 2;
+  model.basket.add(boarding.gate);
+  boarding.setGateOpen(1);
+  const archColliders = [-1, 1].map((s) => {
+    const fwd = new THREE.Vector3(Math.sin(entranceYaw), 0, Math.cos(entranceYaw));
+    const right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+    const p = pad.clone().addScaledVector(fwd, 5.4).addScaledVector(right, s * 1.9);
+    p.y = ctx.world.heightAt(p.x, p.z);
+    return ctx.physics.addStaticCylinder(new THREE.Vector3(p.x, p.y + 1.7, p.z), 1.7, 0.25);
+  });
+  let boardHold = 0;
+  /** A ticket was refused: wait until the child steps away before asking again. */
+  let boardDenied = false;
 
   // Colliders: the deck (walkable) and the basket while it is parked.
   const deckCollider = ctx.physics.addStaticCylinder(new THREE.Vector3(pad.x, pad.y + DECK.height / 2, pad.z), DECK.height / 2, DECK.radius);
@@ -157,6 +195,12 @@ export function createSkydive(ctx: GameContext): Skydive {
     model.basket.rotation.set(balloon === 'parked' ? 0 : Math.sin(time * 0.9) * 0.02, 0, balloon === 'parked' ? 0 : Math.sin(time * 0.75 + 2) * 0.025);
     model.root.position.copy(balloonPos);
     tethers.visible = balloon === 'parked';
+    if (balloon === 'parked') {
+      // Straining at the tethers: the whole balloon tugs upwards and bobs, the ropes stretch.
+      const bob = 0.07 + 0.06 * Math.sin(time * 1.7) + 0.025 * Math.sin(time * 4.3);
+      model.root.position.y += bob;
+      tethers.scale.y = (ropeTop + bob) / ropeTop;
+    }
     // Burner: roaring bursts while climbing, short puffs on the way down, pilot light when parked.
     let want = 0;
     if (balloon === 'carrying' && (ride === 'ascent' || ride === 'board')) {
@@ -285,6 +329,10 @@ export function createSkydive(ctx: GameContext): Skydive {
     if (stars > 0) {
       ctx.events.emit('stunt', { kind: 'bullseye', value: stars, stars });
       ctx.audio.play('star');
+    } else {
+      // Missed the rings but landed safely on the island: still a small prize.
+      ctx.profile.earn(1, 'mission');
+      ctx.events.emit('ui:toast', { icon: 'gem', text: '+1' });
     }
     const glide = Math.round(glideDist);
     if (glide >= SKY.glideStars[0]) {
@@ -353,6 +401,17 @@ export function createSkydive(ctx: GameContext): Skydive {
           const reveal = Math.sin(Math.PI * Math.min(1, ascentFrac / 0.85));
           ctx.cameraRig.setOverride({ distance: 9 + 15 * reveal - 2 * ascentFrac, height: 4 + 8 * reveal - 0.6 * ascentFrac, fov: CAMERA.fov + 6 * ascentFrac, orbitRate: orbit });
           ctx.audio.setLoop('wind', 0.12 + 0.2 * ascentFrac, 0.7);
+          // Nearly at the top: the jump prompt is up and a press jumps right away (no dead time
+          // while the balloon eases to a stop).
+          if (ascentFrac >= SKY_JUMP_FROM) {
+            prompt.show('jump', input.device, 0);
+            if (input.jumpPressed) {
+              prompt.hide();
+              jump();
+              prevChest.set(pos.x, pos.y + 0.85, pos.z);
+              return true;
+            }
+          }
           if (balloonT >= BALLOON.ascentSeconds) {
             enterPhase('top');
             player.setAnimation('wave');
@@ -366,7 +425,7 @@ export function createSkydive(ctx: GameContext): Skydive {
           ctx.audio.setLoop('wind', 0.3, 0.7);
           // Swing round behind the rider (facing the rings) so the jump and steering line up.
           ctx.cameraRig.setOverride({ distance: 7, height: 3.4, fov: CAMERA.fov + 6, yawOffset: 0 });
-          prompt.show('jump', input.device === 'gamepad', phaseT / SKY.autoJumpSeconds);
+          prompt.show('jump', input.device, phaseT / SKY.autoJumpSeconds);
           if ((input.jumpPressed && phaseT > 0.3) || phaseT >= SKY.autoJumpSeconds) {
             prompt.hide();
             jump();
@@ -384,7 +443,9 @@ export function createSkydive(ctx: GameContext): Skydive {
             steer.x += assist.x * w;
             steer.z += assist.z * w;
           }
-          stepFreefall(pos, vel, steer, dt);
+          // The leash: holding one direction can never carry you far from the rings.
+          const leashed = leashSteer(pos, steer, ringTarget);
+          stepFreefall(pos, vel, leashed, dt);
           const surf = surfaceBelow(pos.x, pos.y, pos.z);
           agl = pos.y - surf.y;
           // Face the direction of travel; bank into turns.
@@ -411,7 +472,7 @@ export function createSkydive(ctx: GameContext): Skydive {
           ctx.cameraRig.setOverride({ distance: 4.6, height: 3.9, fov: CAMERA.fov + 6 + 6 * sf, lookAhead: 0.3, yawOffset: 0 });
           ctx.audio.setLoop('wind', 0.25 + 0.75 * sf, 0.8 + 0.6 * sf);
           streaks.update(dt, player.position, velVec.set(vel.x, vel.y, vel.z), sf);
-          if (fallT > SKY.chuteLockout) prompt.show('chute', input.device === 'gamepad', null);
+          if (fallT > SKY.chuteLockout) prompt.show('chute', input.device, null);
           checkHoops();
           if (agl <= 0) return touchdown(surf.y, surf.water);
           if (shouldOpenChute(agl, fallT, input.jumpPressed)) openChute();
@@ -478,12 +539,25 @@ export function createSkydive(ctx: GameContext): Skydive {
   const removeInteract = ctx.interactions.add({
     id: 'balloon',
     position: () => new THREE.Vector3(balloonPos.x, balloonPos.y + 1, balloonPos.z),
-    radius: 3.3,
+    radius: AUTO_BOARD.promptRadius,
     icon: 'balloon',
     enabled: () => ride === 'idle' && balloon === 'parked',
     onUse() {
-      if (ride !== 'idle' || balloon !== 'parked') return;
-      if (!ctx.economy.payTicket('balloon')) return;
+      board();
+    },
+  });
+
+  /** Get in and go up (E at the basket, or walking in and waiting). Returns false without a ticket. */
+  function board(): boolean {
+    if (ride !== 'idle' || balloon !== 'parked' || player.mode !== 'walk') return false;
+    if (!ctx.economy.payTicket('balloon')) {
+      boardDenied = true;
+      return false;
+    }
+    {
+      boardHold = 0;
+      prompt.hide();
+      boarding.setGateOpen(0);
       boardFrom.copy(player.position);
       removeBasketCollider();
       rings.reset();
@@ -494,8 +568,37 @@ export function createSkydive(ctx: GameContext): Skydive {
       player.yaw = model.root.rotation.y;
       player.setExternalController(controller);
       ctx.audio.play('jump');
-    },
-  });
+    }
+    return true;
+  }
+
+  /** Walk-in boarding with a 3-2-1, plus the big button prompt near the basket. */
+  function updateBoarding(dt: number): void {
+    const ready = ride === 'idle' && balloon === 'parked' && player.mode === 'walk' && ctx.session.state.phase === 'playing';
+    const p = player.position;
+    const d = Math.hypot(p.x - pad.x, p.z - pad.z);
+    const onDeck = Math.abs(p.y - floorY) < 1.2;
+    const inside = ready && onDeck && d < AUTO_BOARD.radius;
+    if (d > AUTO_BOARD.radius + 0.6) boardDenied = false;
+    if (inside && !boardDenied) {
+      boardHold += dt;
+      const left = AUTO_BOARD.hold - boardHold;
+      prompt.show('board', ctx.input.state.device, boardHold / AUTO_BOARD.hold, String(Math.max(1, Math.ceil((left / AUTO_BOARD.hold) * 3))));
+      if (left <= 0 && !board()) {
+        boardHold = 0;
+        prompt.hide();
+      }
+    } else {
+      // Within AUTO_BOARD.promptRadius the interaction prompt (balloon + E / A / tap) shows; this
+      // prompt only carries the walk-in countdown.
+      if (boardHold > 0 && ride === 'idle') prompt.hide();
+      boardHold = 0;
+    }
+    // Gate open while parked and waiting; the pad glows brighter as a child gets close.
+    if (ride === 'idle' && balloon === 'parked') boarding.setGateOpen(1);
+    boarding.setVisible(balloon === 'parked');
+    boarding.update(dt, ride === 'idle' ? Math.max(0, 1 - d / 12) * (0.6 + 0.4 * Math.sin(time * 5)) : 0);
+  }
 
   const offPhase = ctx.events.on('session:phase', (e) => {
     if (e.phase !== 'playing') {
@@ -522,6 +625,7 @@ export function createSkydive(ctx: GameContext): Skydive {
       if (!driven && balloon !== 'parked') advanceBalloon(dt);
       else if (!driven) placeBalloon(dt);
       driven = false;
+      updateBoarding(dt);
       rings.update(dt);
     },
     dispose() {
@@ -532,6 +636,8 @@ export function createSkydive(ctx: GameContext): Skydive {
       cleanup();
       removeBasketCollider();
       ctx.physics.removeCollider(deckCollider);
+      for (const c of archColliders) ctx.physics.removeCollider(c);
+      boarding.dispose();
       model.dispose();
       canopy.dispose();
       streaks.dispose();
