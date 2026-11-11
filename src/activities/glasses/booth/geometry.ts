@@ -297,7 +297,7 @@ export function buildBoothGeometry(spec: BoothSpec, ground: (x: number, z: numbe
       const cap = new THREE.OctahedronGeometry(0.13);
       flat(cap, 'sun');
       cap.applyMatrix4(P(x, PAD_POSTS.h + 0.08, z));
-      caps.push(cap.toNonIndexed());
+      caps.push(cap.index ? cap.toNonIndexed() : cap.clone());
       cap.dispose();
     }
     const capGeo = mergeGeometries(caps, false);
