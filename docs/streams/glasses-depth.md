@@ -394,27 +394,40 @@ One follow-up on this branch (`agent/glasses-followup`, merged):
 From owner playtest 4: the gates mini-game ("arches near the beach") was unclear to the owner.
 It is listed by the main session as still to assign after QA 4; nothing was changed here.
 
-## Phase 3: the six mini-games explain themselves (in progress, 2026-11-12)
+## Phase 3: the six mini-games explain themselves (2026-11-12)
 
 Owner after playtest 4: "There are these arches near the beach, I couldn't figure out what they
 did"; nothing explains what the games do or how; make it wild and fun. Target: a non-reading
 8-year-old walking up to any of the six knows within 5 seconds that it is a game, how to start
 it and what to do, without Pip.
 
-**Booth kit** (`src/activities/glasses/booth/`, how-to in its `README.md`): every mini-game gets
-a carnival marquee with the shared magic-glasses mark, bunting, a lamp row (one lamp per try:
-✓ bright / ✗ dim), a picture board with a looping animated demo (a little hero doing the
-action; drawn once at boot, so it can never show the current answer), a glowing start pad with
-the button pictogram for the device in use (or a walk-in footprint pad), a 3-2-1-GO, one bobbing
-prompt at a time, ✓ / ✗ pops, confetti, and a round: idle → countdown → N tries → celebration →
-prize → idle. The whole booth, including everything that changes, is ONE mesh with one shared
-material: the same single draw call the old pictogram board used. Measured on Low: spawn 122
-and Gear Shack 125 draws before and after.
+**Booth kit** (`src/activities/glasses/booth/`, how-to in its `README.md`): every mini-game has
+- a carnival marquee with the shared magic-glasses mark, bunting and a lamp row (one lamp per
+  try: ✓ bright / ✗ dim);
+- a picture board with a looping animated demo — a little hero doing the action, drawn once at
+  boot so it can never show the current answer; `auditDemo` checks every demo is big enough to
+  read at 8 m;
+- a start pad: a raised glowing drum with glowing posts, placed on the real surface on the first
+  update so grass cannot hide it (a test checks it is visible from 8 m on all six sites at Low,
+  Medium and High), with the button pictogram for the device in use, or footprints for walk-in
+  pads;
+- a 3-2-1-GO, ONE bobbing prompt at a time placed where the child looks and clear of the HUD
+  (tested per game against the real HUD at 640×360 and 1280×720), ✓ / ✗ pops, confetti;
+- a round: idle → countdown → tries → celebration → prize → idle. For the celebration the
+  camera turns to where it happens (`celebrateAt`) and lets go at once on look input, respawn,
+  a vehicle, pause or leaving;
+- layouts that face where the child arrives (the end of the world's stepping-stone trail).
 
-**Rule change that comes with it:** games are played in rounds and the prize is paid at the end
-of the round if enough tries were right. This replaces the nap after a miss and the "1 gem until
-two in a row" rule. `glasses:result` is still reported for every try. Glow-flies now fly above
-ground reach (a catch needs a jump) and only during a round.
+The whole booth, including everything that changes, is ONE mesh with one shared material: the
+same single draw call the old pictogram board used. Mini-game layer and booth draws: 5 at spawn
+and 5 at the Gear Shack (pinned as an upper limit in `glasses-framework.spec.ts`); whole frame
+on Low 118 and 122.
+
+**Rule changes that came with it:** games are rounds and the prize is paid at the end of the
+round if enough tries were right (this replaces the nap after a miss and the "1 gem until two in
+a row" rule); `glasses:result` is still reported for every try. Glow-flies fly above ground
+reach (a catch needs a jump), only during a 30 s round. Odd one out's prize follows the round's
+tier like the other games.
 
 | Game | Round | One true sentence for Pip |
 |---|---|---|
@@ -422,13 +435,13 @@ ground reach (a catch needs a jump) and only during a round.
 | `oddone` | Press the pad → 3-2-1 → 5 tries; prize from 3 right | "Stand on the glowing pad and press the button, then five times push the button under the picture that is different." |
 | `dotsigns` | Press the pad → 3-2-1 → 5 pictures; prize from 3 right | "Stand on the glowing pad and press the button, then five times look at the dots and push the button with the shape that pops out." |
 | `lineup` | Step on the pad → 3-2-1 → 5 bubbles, one tap each; prize from 3 pops | "Step on the glowing pad, slide the magic ring over the bubble and press the button to pop it!" |
-| `glowflies` | Step on the pad → 3-2-1 → 35 s to catch 5 flies (lamps blink faster as time runs out); prize from 3 catches | "Step on the pad, then jump right through the glow-flies to catch five before the lamps stop blinking!" |
+| `glowflies` | Step on the pad → 3-2-1 → 30 s to catch 5 flies (the unlit lamps blink faster as time runs out); prize from 3 catches | "Step on the pad, then jump right through the glow-flies — catch five in thirty seconds!" |
 | `toys` | Press the pad → 3-2-1 → one paw trail per round, three toys per session (then free-play trails) | "Press the glowing pad by Pip's basket, then follow the glowing paw prints to find his lost toys — there are three!" |
 
 Guessing does not pay under the round rules (unit-tested bots against the real rounds, gems per
-minute): gates random 4.9 vs seeing 30; odd one out and dot signs random 3.8–4.8 vs seeing 28;
-line-up blind 0 vs seeing 30; glow-flies blind lawn-mower 0.6 (it reaches the prize in ≤ 10 % of
-rounds) vs seeing 44.
+minute): gates random 4.9 vs seeing 30; odd one out and dot signs random ≤ 4.8 vs seeing 28;
+line-up blind 0 (best blind ≤ 8 % per tap) vs seeing 30; glow-flies blind lawn-mower reaches
+the prize in ≤ 8 % of rounds vs 100 % seeing (44 gems per minute).
 
 **Pip lines on `agent/pip-story` (`src/buddy/script.ts`) checked against the final rules:**
 
@@ -440,48 +453,44 @@ rounds) vs seeing 44.
 | oddone | "Three shapes, one is different. Push that one's button!" | yes (does not say how to start) |
 | dotsigns | "Look at the dots. A hidden shape pops out!" / "Push the button with that same shape!" | yes (do not say how to start) |
 | lineup | "Stand on the pad. Move the magic ring onto a bubble!" / "Then push the button to pop it!" | yes |
-| glowflies | "Catch the glow-flies! Run or jump right through them!" | **no** — every fly is above ground reach now, a catch always needs a jump |
+| glowflies | "Catch the glow-flies! Run or jump right through them!" | **no** — every fly is above ground reach, a catch always needs a jump |
 | glowflies | "Only magic glasses can see them. Fill up the jar!" | yes |
 | toys | "I lost my toys! Follow the glowing paw prints to find them!" | yes (does not say to press the pad) |
 
 New facts no line mentions yet: every game starts on a glowing pad with a 3-2-1; games are
-rounds with lamps (win from 2 of 3 or 3 of 5); glow-flies is timed.
+rounds with lamps (win from 2 of 3 or 3 of 5); glow-flies is a 30-second round.
 
-**Wanted from the world owner** (Stream R owns `src/world/`; nothing was edited there):
+**World-dressing wishes for the world owner** (nothing was edited in `src/world/`; re-checked
+after the world fill, which gave every site a stepping-stone trail — the "nothing of the world
+stands in front of a booth, seen from the arrival" test passes for all six):
 
 | Site | Wish | Where (x, z) |
 |---|---|---|
-| odd one out | a 2 m path from the west road to the start pad | pad at (−35.8, 0.6) |
-| odd one out | keep a 4 m circle clear at the approach spot; a crossing on the west road; a signpost arm at spawn pointing west | (−32.9, 6.5); near (−30, 15) |
-| dot signs | a 2 m path from the parklink path to the start pad, with a signpost arm where it joins | pad at (62.8, 8.7) |
-| dot signs | move the red-white pole that stands in front of the booth | near (60, 4) |
-| line-up | a 2.5 m path to the pad and a signpost arm | from (63.5, −78.2) to (72.3, −90.3); arm at (65.2, −80.6) |
-| glow-flies | a 2.5 m path to the pad; move the horse-ride board out of that sightline | from (−55.9, 34.1) to (−65.6, 22.6) |
-| toys | stepping stones (about 0.7 m, every 1.6 m, 2 m corridor) and a signpost arm pointing west | from the south/loop road junction (7, 74) to (−23.5, 69.0) |
+| gates | a tree trunk hides the booth from the loop road about 20 m in | between (46, 82) and the pad at (46.8, 103.8) |
+| toys | from the arrival the booth is half hidden by a crest: lower it, or add a tall signpost | crest near (−12, 66); signpost at about (−8, 66) |
 | toys | keep the meadow the paw trails cross walkable (no new fences, walls or solid props) | x −65…−12, z 29…109 |
-| gates | (to be listed by QA) | pad near (48, 104) |
+| glow-flies | a big ranch sign partly covers the view of the booth from the end of its stepping-stone trail; a horse-ride board stands in the old sightline | trail end near (−55.9, 34.1), pad at (−65.6, 22.6) |
+| line-up | the booth only appears from about 15 m (cliff): a signpost arm on the ridge road | arm at about (65.2, −80.6) |
+| odd one out | a crossing on the west road and a signpost arm at spawn pointing west | near (−30, 15) |
+| dot signs | closed: the red-white poles near (66, 13) belong to the launch pads and now stand beside the approach | — |
 
-### Phase 3 QA (independent, against the 5-second target; before the fix round)
+### Phase 3 QA (independent, against the 5-second target) and the fix round
 
-No blockers; no both-eye difference between answers over time (odd one out, dot signs checked
-frame by frame); each booth is one draw; draws in play 4–5 (budget 6); mini-game layer draws
-1 at spawn and 3 at the Gear Shack (limit 5 / 5); pad to first try about 3 s; rounds 25–40 s.
+No blockers; no both-eye difference between answers over time; each booth one draw; ≤ 6 draws
+in play. Before the fixes: gates' pad was swallowed by grass, its celebration happened behind
+the camera, its prompt was off screen and its demo missed "match the halves"; glow-flies and
+the line-up bubble sat at the top edge of the view; the dot sign showed its blank back to the
+approach; the toy popped out behind a tree with the camera in the trunk; five demos were too
+small. All fixed: the kit changes above, then per game — glow-flies get a pulled-back camera
+during the round and bigger flies; line-up's pad moved 2.8 m towards the arrival and bubbles
+only appear well inside the view; the dot sign faces the arrival, its back is dressed, its
+buttons are spread so the hero hides none, and the circle left the shape set; toys only hides a
+toy where the camera behind the child has a clear view of the pop (no trunk, wall, post or
+bumpable toy within 6 m), 600 of 600 test trails still valid.
 
-| Game | Reads as a game from 30 m | Start obvious in 5 s | Demo understood | One clear prompt | Feedback | Celebration visible |
-|---|---|---|---|---|---|---|
-| gates | partly (trees, leans away) | no (pad in grass) | partly | partly (off screen) | yes | no (behind the camera) |
-| toys | partly (behind a crest) | yes | yes | yes | yes | partly |
-| glowflies | yes | yes | yes | yes | yes | yes |
-| oddone | yes (from 15 m) | yes | yes | yes | yes | yes |
-| lineup | partly (cliff) | yes | yes | partly (bubble at the top edge) | yes | yes |
-| dotsigns | partly (poles, back of the sign) | yes | yes | yes | yes | yes |
-
-Being fixed (kit level first, then per game): every start pad a raised glowing drum on the real
-surface; the camera turns back to the booth for the celebration; the play prompt where the child
-looks and clear of the HUD; bigger, simpler demos (gates: the halves joining first); booths
-facing where the child arrives; glow-flies and the line-up bubble inside the default view; the
-dot sign facing the approach (its blank back dominated the view); the toy's hiding spot clear
-of trees for the camera.
+Known limits: no booth keeper or string lights (less lively than the carnival row); at gates
+the arches still partly hide the booth during the celebration; the ✓ / ✗ pops are see-through
+for weak-eye objects behind them.
 
 ## Test results
 
