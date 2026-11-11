@@ -68,6 +68,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   const model = createPlayerModel();
   const fx = createPlayerFx(model);
   const object = model.root;
+  // Test hook: the wobble layer's head offsets (tests/e2e/wobble.spec.ts).
+  if (ctx.testMode) Object.defineProperty(object.userData, 'wobble', { get: () => model.wobble, enumerable: false });
   ctx.scene.add(object);
   const sfx = createSkillFx(ctx.scene, model.anchors.back);
   // Boot straight into the remembered pick, so only ONE character GLB loads before Play.

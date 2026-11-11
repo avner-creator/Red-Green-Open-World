@@ -60,10 +60,16 @@ interface Saved {
 const spring = (): Spring => ({ x: 0, v: 0 });
 
 export function createWobble(object: THREE.Object3D): Wobble {
+  // Bones first (a mesh may share a bone's name); glTF loading strips dots ("UpperArm.L" → "UpperArmL").
   const find = (...names: string[]): THREE.Object3D | null => {
     for (const n of names) {
-      const b = object.getObjectByName(n);
-      if (b) return b;
+      for (const name of [n, n.replace(/\./g, '')]) {
+        let bone: THREE.Object3D | null = null;
+        object.traverse((o) => {
+          if (!bone && o.name === name && (o as THREE.Bone).isBone) bone = o;
+        });
+        if (bone) return bone;
+      }
     }
     return null;
   };
@@ -74,7 +80,7 @@ export function createWobble(object: THREE.Object3D): Wobble {
   const armR = find('UpperArm.R');
   const tail: THREE.Object3D[] = [];
   for (let i = 1; i <= 6; i++) {
-    const b = object.getObjectByName(`Tail${i}`);
+    const b = find(`Tail${i}`);
     if (b) tail.push(b);
   }
   // Which side each arm hangs on (in the character's own frame), measured on first use.
@@ -163,8 +169,8 @@ export function createWobble(object: THREE.Object3D): Wobble {
         ];
         for (const [bone, side, ph] of arms) {
           // Flail: up-and-out flaps plus a forward/back paddle, each arm on its own beat.
-          const out = air * (0.5 + 0.35 * Math.sin(t * 9.5 + ph));
-          const paddle = air * 0.5 * Math.sin(t * 6.8 + ph * 1.7) + sw * d.arms;
+          const out = air * (0.75 + 0.45 * Math.sin(t * 9.5 + ph));
+          const paddle = air * 0.7 * Math.sin(t * 6.8 + ph * 1.7) + sw * d.arms;
           rotate(bone, Z, side * out);
           rotate(bone, X, paddle);
         }
