@@ -15,8 +15,11 @@ import type { MechanicFactory } from './types';
 export interface MechanicDef {
   id: string;
   kind: GlassesKind;
+  /** Old board pictograms (unused once `booth` is set). */
   pictos: readonly GlassesPicto[];
   create: MechanicFactory;
+  /** The mini-game uses the booth kit (`env.booth`): no pictogram board is built for it. */
+  booth?: boolean;
 }
 
 export const MECHANICS: readonly MechanicDef[] = [
@@ -29,7 +32,7 @@ export const MECHANICS: readonly MechanicDef[] = [
   // Follow the weak-eye paw prints to Pip's lost toy → gems.
   { id: 'toys', kind: 'follow', pictos: ['paw', 'toy', 'gems'], create: toys.create },
   // Two halves (one per eye) show which of three arches to run through → gems.
-  { id: 'gates', kind: 'lineUp', pictos: ['halves', 'arches', 'gems'], create: gates.create },
+  { id: 'gates', kind: 'lineUp', pictos: ['halves', 'arches', 'gems'], create: gates.create, booth: true },
   // The hidden shape of the dot picture is the answer on the three-button pedestal → gems.
   { id: 'dotsigns', kind: 'popOut', pictos: ['dots', 'press', 'gems'], create: dotsigns.create },
 ];

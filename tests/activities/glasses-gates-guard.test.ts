@@ -1,11 +1,11 @@
 /**
- * Guessing must not pay: a random-guess bot vs a perfect player, for both three-choice mechanics,
- * driven by the same pure rules the mechanics use (guard + tier staircase + their timings).
+ * Guessing must not pay: a random-guess bot vs a perfect player for the dot signs, driven by the
+ * same pure rules the mechanic uses (guard + tier staircase + its timings). The gates moved to the
+ * booth kit's rounds (prize by hits): tests/activities/glasses-booth-round.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import type { GlassesTier } from '../../src/types';
 import { DOT_GEMS, DOTSIGNS } from '../../src/activities/glasses/dotsigns/constants';
-import { GATE_GEMS, GATES } from '../../src/activities/glasses/gates/constants';
 import { freshGuard, hitPay, settle } from '../../src/activities/glasses/gates/guard';
 import { nextTier } from '../../src/activities/glasses/gates/kit';
 import { mulberry32 } from '../../src/vision/toolkit/rng';
@@ -38,13 +38,9 @@ function play(rules: Rules, opts: { hitP: number; action: number; minutes: numbe
 
 // Dot signs: a bot can mash the button it stands at (0.3 s); a child who reads the picture takes ~2 s.
 const DOTS: Rules = { gems: DOT_GEMS, naps: DOTSIGNS.nap, afterHit: DOTSIGNS.next };
-// Gates: even a flat-out sprint plate → arch → plate takes ~2 s (the 0.8 s re-arm overlaps the
-// walk back); a child who looks first takes ~6 s.
-const GATE: Rules = { gems: GATE_GEMS, naps: GATES.missPause, afterHit: 0 };
 
 const CASES = [
   { name: 'dot signs', rules: DOTS, bot: 0.3, kid: 2, perfectMin: 25 },
-  { name: 'gates', rules: GATE, bot: 2, kid: 6, perfectMin: 15 },
 ] as const;
 
 describe('random guessing does not pay', () => {
@@ -77,6 +73,5 @@ describe('random guessing does not pay', () => {
     expect(s.gems).toBe(1);
     s = settle(s.guard, true, 8, DOTSIGNS.nap);
     expect(s.gems).toBe(8);
-    expect(settle(s.guard, false, 8, GATES.missPause).nap).toBe(GATES.missPause[0]);
   });
 });

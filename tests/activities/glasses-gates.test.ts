@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GATE_GEMS, GATES } from '../../src/activities/glasses/gates/constants';
+import { GATE_PRIZE, GATES } from '../../src/activities/glasses/gates/constants';
 import { crossesOpening, nextTier, siteFrame } from '../../src/activities/glasses/gates/kit';
 import { archesMatching, archesMatchingBoth, halvesFor, isGateRound, makeGateRound } from '../../src/activities/glasses/gates/round';
 import { sameSymbol } from '../../src/vision/toolkit/halfSymbols';
@@ -107,9 +107,9 @@ describe('progression and rewards', () => {
   });
 
   it('finer tiers pay more gems', () => {
-    expect(GATE_GEMS[1]).toBeGreaterThan(0);
-    expect(GATE_GEMS[2]).toBeGreaterThan(GATE_GEMS[1]);
-    expect(GATE_GEMS[3]).toBeGreaterThan(GATE_GEMS[2]);
+    expect(GATE_PRIZE[1][3]).toBeGreaterThan(0);
+    expect(GATE_PRIZE[2][3]).toBeGreaterThan(GATE_PRIZE[1][3]);
+    expect(GATE_PRIZE[3][3]).toBeGreaterThan(GATE_PRIZE[2][3]);
   });
 
   it('the layout stays inside the site radius', () => {
