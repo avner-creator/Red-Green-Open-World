@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   volumeMaster: 0.8,
   volumeMusic: 0.5,
   volumeSfx: 0.9,
+  voicePip: 1,
   quality: 'medium',
 };
 

@@ -105,11 +105,11 @@ export interface GlassesWay {
 }
 
 /** `turn`: the beacon's bearing from the site centre, relative to straight behind (radians). */
-const GLASSES_STYLE: Record<GlassesSiteId, { icon: IconId; balloon: number; trail?: boolean; turn?: number }> = {
+const GLASSES_STYLE: Record<GlassesSiteId, { icon: IconId; balloon: number; turn?: number }> = {
   glowflies: { icon: 'iGlowflies', balloon: 0xf0c832 },
-  oddone: { icon: 'iOddone', balloon: 0xee6a4a, trail: true },
+  oddone: { icon: 'iOddone', balloon: 0xee6a4a },
   lineup: { icon: 'iLineup', balloon: 0x5cc8f0 },
-  toys: { icon: 'iToys', balloon: 0xc88a50, trail: true },
+  toys: { icon: 'iToys', balloon: 0xc88a50 },
   gates: { icon: 'iGates', balloon: 0xa070e8 },
   // Straight behind is the park path; the beacon goes to the north-west, clear of it and the signs.
   dotsigns: { icon: 'iDotsigns', balloon: 0x6ed07a, turn: (Math.PI * 3) / 4 },
@@ -119,6 +119,14 @@ const GLASSES_ARM = 0x2e2a6a;
 
 /** The beacon stands behind the site (away from the approach), this far outside its clear circle. */
 const GLASSES_BEACON_OUT = 3;
+
+/** The sites that get a stepping-stone trail: the two nearest spawn (follows `FIXED_SITES` when sites move). */
+const TRAIL_SITES = new Set(
+  [...FIXED_SITES]
+    .sort((a, b) => Math.hypot(a.x - ANCHORS.spawn.x, a.z - ANCHORS.spawn.z) - Math.hypot(b.x - ANCHORS.spawn.x, b.z - ANCHORS.spawn.z))
+    .slice(0, 2)
+    .map((f) => f.id),
+);
 
 export const GLASSES_WAY: readonly GlassesWay[] = FIXED_SITES.filter((f): f is typeof f & { id: GlassesSiteId } => f.id in GLASSES_STYLE).map((f) => {
   const st = GLASSES_STYLE[f.id];
@@ -135,7 +143,7 @@ export const GLASSES_WAY: readonly GlassesWay[] = FIXED_SITES.filter((f): f is t
     yaw: f.yaw,
     r,
     beacon: { x: f.x + Math.sin(a) * d, z: f.z + Math.cos(a) * d, h: 11 },
-    trail: !!st.trail,
+    trail: TRAIL_SITES.has(f.id),
   };
 });
 

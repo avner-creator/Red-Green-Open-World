@@ -74,6 +74,7 @@ export function createBeacons(defs: readonly BeaconDef[], atlas: THREE.Texture):
   let lowGeo: THREE.BufferGeometry | null = null;
   const balloons = new THREE.InstancedMesh(fullGeo, balloonMat, n);
   balloons.name = 'beacon:balloons';
+  balloons.userData.cameraIgnore = true; // bobbing: never a camera obstacle
 
   const badgeMat = new THREE.MeshStandardMaterial({
     map: atlas,
@@ -93,10 +94,12 @@ export function createBeacons(defs: readonly BeaconDef[], atlas: THREE.Texture):
   badgeGeo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(rects, 4));
   const badges = new THREE.InstancedMesh(badgeGeo, badgeMat, n);
   badges.name = 'beacon:badges';
+  badges.userData.cameraIgnore = true;
 
   const ropeMat = new THREE.MeshStandardMaterial({ color: 0xf2eee4, roughness: 0.8 });
   const ropes = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.045, 1, 5, 1, true).translate(0, 0.5, 0), ropeMat, n);
   ropes.name = 'beacon:ropes';
+  ropes.userData.cameraIgnore = true;
 
   const col = new THREE.Color();
   defs.forEach((d, i) => balloons.setColorAt(i, col.set(d.color)));

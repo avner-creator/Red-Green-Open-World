@@ -10,7 +10,9 @@
  * see the hoops, so they never aim for them.
  */
 import * as THREE from 'three';
+import type RAPIER from '@dimforge/rapier3d-compat';
 import { CAMERA } from '../../config';
+import { GROUP_VEHICLE, groups } from '../../core/physics';
 import { VisionLayer } from '../../types';
 import type { ExternalController, GameContext, GameSystem, InputState } from '../../types';
 import { stickToWorld } from '../skydive/flight';
@@ -21,6 +23,8 @@ import { acquireFriendPool, releaseFriendPool } from './friends';
 import type { Friend } from './friends';
 import { createRoundHud } from './roundHud';
 import { resolveSite } from './site';
+import { createKickabout, resetKickabout, stepKickabout, KICKABOUT } from './kickabout';
+import type { Walker } from './kickabout';
 import { BALL, BUBBLE, FLIP, MATCH, PITCH, RING, createMatch, matchPrize, matchStars, pitchWalls, stepMatch } from './soccer';
 import type { HumanInput, MatchEvent, MatchState } from './soccer';
 import { createTicket } from './ticket';
@@ -61,6 +65,12 @@ export interface BubbleBallTestApi {
   world(x: number, y: number, z: number): [number, number, number];
   friendsLoaded(): number;
   triangles(): number;
+  /** The ball now (match ball, or the kickabout ball between matches), pitch space. */
+  ball(): { x: number; y: number; z: number; vx: number; vz: number };
+  /** Put the kickabout ball at rest at pitch (x, z) (between matches only). */
+  placeBall(x: number, z: number): void;
+  /** Pitch-space position of a world point (feet y relative to the deck top). */
+  local(x: number, y: number, z: number): [number, number, number];
   /** Show/hide only this game's weak-eye objects (channel tests). */
   layer(visible: boolean): void;
 }
@@ -114,6 +124,25 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   const ticket = createTicket(ctx, 'bubbleBall');
   const pool = acquireFriendPool();
 
+  // ── The ball is a real thing between matches (playtest 3: "he would walk through it") ──
+  // A kinematic Rapier sphere follows the ball so the walk controller is blocked by it, and the
+  // kickabout sim shoves the ball out of the way first, so walking into it pushes it along.
+  const R = ctx.physics.rapier;
+  const ballBody: RAPIER.RigidBody = ctx.physics.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased());
+  // Vehicle group: the walker collides with it, camera rays ignore it (no zoom-in on the ball).
+  const ballCollider = ctx.physics.world.createCollider(
+    R.ColliderDesc.ball(BALL.r).setRestitution(0.8).setFriction(0.3).setCollisionGroups(groups(GROUP_VEHICLE, 0xffff)),
+    ballBody,
+  );
+  const kick = createKickabout();
+  const kickEvents: string[] = [];
+  const walker: Walker = { x: 0, z: 0, y: 0, vx: 0, vz: 0, vy: 0 };
+  let kickSfxT = 0;
+  let ballSquash = 0;
+  let ballSquashV = 0;
+  /** Camera yaw offset (smoothed) that frames the ball and the goal. */
+  let camOff = 0;
+
   // ── State ──
   let phase: Phase = 'idle';
   let match: MatchState | null = null;
@@ -144,6 +173,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     const w = localToWorld(lx, lz, site.yaw);
     return out.set(site.x + w.x, site.deckY + y, site.z + w.z);
   };
+  ballBody.setTranslation(toWorld(0, BALL.r, 0, new THREE.Vector3()), false);
+  placeBall(0);
 
   /** Flip progress → rotation (forward somersault toward the push), eased. */
   const flipAngle = (flipT: number): number => {
@@ -201,12 +232,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   }
 
   function placeBall(dt: number): void {
-    const ball = match?.ball;
-    if (!ball) {
-      ballView.mesh.position.set(0, BALL.r, 0);
-      ballView.proxy.position.copy(ballView.mesh.position);
-      return;
-    }
+    const ball = match?.ball ?? kick.ball;
     // Roll: rotate about (up × velocity) by distance / radius.
     const sp = Math.hypot(ball.vx, ball.vz);
     if (sp > 0.01) {
@@ -214,8 +240,50 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       ballQ.setFromAxisAngle(tmpV2, (sp * dt) / BALL.r);
       ballView.mesh.quaternion.premultiply(ballQ);
     }
-    ballView.mesh.position.set(ball.x, ball.y + BALL.r, ball.z);
+    // Squash-and-stretch on kicks (a quick boing of the whole ball).
+    ballSquashV += (-140 * ballSquash - 10 * ballSquashV) * dt;
+    ballSquash += ballSquashV * dt;
+    const sq = Math.max(-0.25, Math.min(0.25, ballSquash + (match ? 0 : kick.squash)));
+    ballView.mesh.scale.setScalar(BALL.r * (1 + sq * 0.5));
+    ballView.mesh.position.set(ball.x, ball.y + BALL.r * (1 + sq * 0.5), ball.z);
     ballView.proxy.position.copy(ballView.mesh.position);
+    // The blocking collider follows the ball (off during a match: the player is in a bubble then).
+    toWorld(ball.x, ball.y + BALL.r, ball.z, tmpV);
+    ballBody.setNextKinematicTranslation(tmpV);
+  }
+
+  /** Free kickabout while no match is on: the walker shoves the ball, lands on it, scores. */
+  function updateKickabout(dt: number): void {
+    kickSfxT = Math.max(0, kickSfxT - dt);
+    const p = player.position;
+    const l = worldToLocal(p.x - site.x, p.z - site.z, site.yaw);
+    const v = worldToLocal(player.velocity.x, player.velocity.z, site.yaw);
+    walker.x = l.x;
+    walker.z = l.z;
+    walker.y = player.mode === 'walk' ? p.y - site.deckY : 99; // riding something: no contact
+    walker.vx = v.x;
+    walker.vz = v.z;
+    walker.vy = player.velocity.y;
+    kickEvents.length = 0;
+    const r = stepKickabout(kick, walker, dt, walls, kickEvents);
+    if (r.bounce && player.mode === 'walk') {
+      player.launch(tmpV.set(player.velocity.x * 0.6, KICKABOUT.topBounce, player.velocity.z * 0.6));
+      ctx.audio.play('bigBoing', { pitch: 1.2 });
+    }
+    if (r.kicked > 0 && kickSfxT <= 0) {
+      ctx.audio.play('bump', { pitch: 0.9 + Math.min(0.5, r.kicked / 14), volume: Math.min(1, 0.4 + r.kicked / 10) });
+      ctx.audio.play('boing', { pitch: 0.7 + r.kicked / 20, volume: 0.5 });
+      kickSfxT = 0.25;
+    }
+    if (r.wall > 2.5) ctx.audio.play('boing', { pitch: 0.6, volume: Math.min(0.6, r.wall / 10) });
+    if (r.goal) {
+      // A little goal party even without a match: horn, confetti, and the ball pops back.
+      ctx.audio.play('horn', { pitch: 1.1 });
+      ctx.audio.play('fanfare', { volume: 0.6 });
+      const gx = r.goal === 'home' ? PITCH.hx + PITCH.goalDepth * 0.5 : -(PITCH.hx + PITCH.goalDepth * 0.5);
+      confetti.burst(toWorld(gx, 1.6, 0, tmpV), 80);
+    }
+    if (kickEvents.includes('reset')) ctx.audio.play('boing', { pitch: 1.5, volume: 0.5 });
   }
 
   function placeLayer(): void {
@@ -250,6 +318,15 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           break;
         case 'kick':
           ctx.audio.play('bump', { pitch: 0.9 + Math.min(0.5, e.speed / 14), volume: Math.min(1, 0.4 + e.speed / 10) });
+          if (e.power) {
+            // Power kick: a big boing, the ball squashes, the camera thumps.
+            ctx.audio.play('bigBoing', { pitch: 0.8 + rand() * 0.2, volume: e.agent === 0 ? 1 : 0.6 });
+            ballSquashV -= 9;
+            if (e.agent === 0) ctx.cameraRig.shake(0.28);
+          }
+          break;
+        case 'dash':
+          ctx.audio.play('whoosh', { pitch: 1.3 + rand() * 0.2, volume: e.agent === 0 ? 0.9 : 0.35 });
           break;
         case 'wall':
           ctx.audio.play('boing', { pitch: 0.6, volume: Math.min(0.7, e.speed / 10) });
@@ -258,6 +335,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           // The hoop is gone now; the chime tells the weak eye "you did it" (no position hint left).
           ctx.audio.play('star', { pitch: 1.3 });
           ctx.audio.play('gem', { pitch: 1.4, volume: 0.7 });
+          if (e.team === 'home') ctx.events.emit('glasses:result', { mechanic: 'bubbleRing', kind: 'follow', tier: 2, hit: true });
           break;
         case 'kickoff':
           ctx.audio.play('start');
@@ -265,12 +343,15 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           break;
         case 'goal': {
           const home = e.team === 'home';
+          // Goal party: horn, fanfare (or a friendly "oh no" boing), confetti, slow-mo, banner.
+          ctx.audio.play('horn', { pitch: home ? 1 : 0.8, volume: 0.9 });
           ctx.audio.play(home ? 'fanfare' : 'boing', { pitch: home ? 1 : 0.7 });
           if (e.double) ctx.audio.play('star', { pitch: 1.5 });
-          hud.splash('ball', e.points);
-          ctx.cameraRig.shake(home ? 0.35 : 0.15);
+          hud.splash(home ? 'light' : 'dark', e.points);
+          ctx.cameraRig.shake(home ? 0.4 : 0.15);
           const gx = home ? PITCH.hx + PITCH.goalDepth * 0.5 : -(PITCH.hx + PITCH.goalDepth * 0.5);
-          confetti.burst(toWorld(gx, 1.6, 0, tmpV), home ? 140 : 60);
+          confetti.burst(toWorld(gx, 1.6, 0, tmpV), home ? 160 : 70);
+          confetti.burst(toWorld(gx * 0.6, 3, home ? -3 : 3, tmpV), home ? 80 : 30);
           if (home) ctx.events.emit('stunt', { kind: 'bumper', value: e.points, stars: e.points });
           break;
         }
@@ -295,7 +376,12 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     ctx.events.emit('stamp:earned', { id: 'bubbleArena' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${home} – ${away}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
-    if (stars >= 3) confetti.burst(toWorld(0, 3, 0, tmpV), 200);
+    ctx.audio.play('horn', { pitch: stars >= 3 ? 1.15 : 0.9 });
+    if (stars >= 3) {
+      const p = match.agents[0].body;
+      confetti.burst(toWorld(0, 3, 0, tmpV), 200);
+      confetti.burst(toWorld(p.x, 2.5, p.z, tmpV), 120);
+    }
     hud.chip(null, false);
     hud.result(stars, paid, ctx.input.state.device);
     for (const a of match.agents) a.cheer = a.team === (home >= away ? 'home' : 'away') ? 99 : 0;
@@ -308,12 +394,18 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     lastCount = -1;
     hud.hideResult();
     bubbles.setVisible(true);
+    ballCollider.setEnabled(false);
+    camOff = 0;
     for (let i = 0; i < 6; i++) facing[i] = i < 3 ? Math.PI / 2 : -Math.PI / 2;
     placeBubbles();
     placeFriends();
   }
 
   function cleanup(): void {
+    // The ball stays where the match left it (on the pitch floor), and is solid again.
+    if (match) resetKickabout(kick, match.ball.x, match.ball.z);
+    if (Math.abs(kick.ball.x) > PITCH.hx || Math.abs(kick.ball.z) > PITCH.hz - BALL.r) resetKickabout(kick);
+    ballCollider.setEnabled(true);
     phase = 'idle';
     match = null;
     loadToken++;
@@ -324,8 +416,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     ringView.hide();
     sparkle.hide();
     ctx.cameraRig.setOverride(null);
-    ballView.mesh.position.set(0, BALL.r, 0);
-    ballView.proxy.position.copy(ballView.mesh.position);
+    placeBall(0);
     wasFlipping = false;
   }
 
@@ -371,10 +462,24 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       player.yaw = site.yaw + facing[0];
       player.setAnimation(a.cheer > 0 ? 'cheer' : b.y > 0.2 ? 'jump' : speed > 1 ? 'run' : 'idle');
     }
-    // Camera: behind the hero, looking down the pitch at the goal to attack.
-    let off = attackYaw - player.yaw;
+    if (phase === 'result') {
+      // Celebration: the camera swings round to the pitch-centre side of the hero, looking out at
+      // them (never from behind a goal net or a wall).
+      const away = Math.hypot(b.x, b.z) > 1 ? site.yaw + Math.atan2(b.x, b.z) : attackYaw;
+      let off = away - player.yaw;
+      off = Math.atan2(Math.sin(off), Math.cos(off));
+      ctx.cameraRig.setOverride({ distance: 6.2, height: 2.6, fov: CAMERA.fov, lookAhead: 0, yawOffset: off });
+      return;
+    }
+    // Camera: behind the hero, looking down the pitch at the goal to attack, turned a little
+    // toward the ball so the ball and the goal are both in the shot.
+    const ball = match.ball;
+    const toBall = Math.atan2(ball.z - b.z, ball.x - b.x); // pitch space, 0 = +X (attack)
+    const want = Math.max(-0.45, Math.min(0.45, -toBall * 0.45));
+    camOff += (want - camOff) * follow(2.2, dt);
+    let off = attackYaw + camOff - player.yaw;
     off = Math.atan2(Math.sin(off), Math.cos(off));
-    ctx.cameraRig.setOverride({ distance: 7, height: 3.4, fov: CAMERA.fov + 6, lookAhead: 0.3, yawOffset: off });
+    ctx.cameraRig.setOverride({ distance: 8.2, height: 4.3, fov: CAMERA.fov + 8, lookAhead: 0.3, yawOffset: off });
   }
 
   const controller: ExternalController = {
@@ -413,7 +518,9 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       human.z = len > 1 ? l.z / len : l.z;
       human.sprint = input.sprint;
       human.hop = input.jumpPressed;
-      stepMatch(match, dt, { rand, input: human, walls }, events);
+      // Slow-mo for the first moment after a goal (the confetti hangs in the air).
+      const slow = match.phase === 'goal' && match.clock > 0 && match.phaseT < 0.5 ? 0.3 : 1;
+      stepMatch(match, dt * slow, { rand, input: human, walls }, events);
       if (match.phase === 'countdown') {
         const n = Math.ceil(MATCH.countdown - match.phaseT);
         if (n !== lastCount && n > 0 && n <= 3) {
@@ -440,8 +547,28 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     id: 'bubbleball',
     position: () => model.booth,
     radius: 3,
-    icon: 'hand',
+    icon: 'bubble',
     enabled: () => phase === 'idle' && player.mode === 'walk',
+    onUse() {
+      if (phase !== 'idle' || player.mode !== 'walk') return;
+      if (!ticket.pay()) return;
+      ctx.audio.play('click');
+      begin();
+    },
+  });
+
+  // Walk up to the ball on the pitch: E there starts a match too (walk in → 3-2-1).
+  const ballPrompt = new THREE.Vector3();
+  const onDeck = (): boolean => {
+    const l = worldToLocal(player.position.x - site.x, player.position.z - site.z, site.yaw);
+    return Math.abs(l.x) < PITCH.hx && Math.abs(l.z) < PITCH.hz && Math.abs(player.position.y - site.deckY) < 1.5;
+  };
+  const removeBallInteract = ctx.interactions.add({
+    id: 'bubbleball-ball',
+    position: () => toWorld(kick.ball.x, 2 * BALL.r + 0.7, kick.ball.z, ballPrompt),
+    radius: 2.6,
+    icon: 'bubble',
+    enabled: () => phase === 'idle' && player.mode === 'walk' && kick.goalT < 0 && onDeck(),
     onUse() {
       if (phase !== 'idle' || player.mode !== 'walk') return;
       if (!ticket.pay()) return;
@@ -493,6 +620,20 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       world: (x, y, z) => toWorld(x, y, z, new THREE.Vector3()).toArray() as [number, number, number],
       friendsLoaded: () => pool.loaded,
       triangles: () => model.triangles,
+      ball: () => {
+        const b = match?.ball ?? kick.ball;
+        return { x: b.x, y: b.y, z: b.z, vx: b.vx, vz: b.vz };
+      },
+      placeBall: (x, z) => {
+        if (match) return;
+        resetKickabout(kick, x, z);
+        placeBall(0);
+        ballBody.setTranslation(toWorld(x, BALL.r, z, new THREE.Vector3()), true);
+      },
+      local: (x, y, z) => {
+        const l = worldToLocal(x - site.x, z - site.z, site.yaw);
+        return [l.x, y - site.deckY, l.z];
+      },
       layer: (v) => {
         layerOn = v;
         placeLayer();
@@ -504,20 +645,32 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     update(dt) {
       time += dt;
       confetti.update(dt);
-      if (phase === 'idle') return;
+      if (phase === 'idle') {
+        // Kickabout only while someone is close (zero work otherwise).
+        if (player.position.distanceToSquared(arena.position) < 30 * 30 || kick.goalT >= 0) {
+          updateKickabout(dt);
+          placeBall(dt);
+        }
+        return;
+      }
+      if (!match) placeBall(dt); // loading: the ball just sits there
       if (match) {
         placeFriends();
         placeBubbles();
         placeBall(dt);
         placeLayer();
         hud.board({ icon: 'light', value: match.score.home }, { icon: 'dark', value: match.score.away }, match.clock, MATCH.seconds);
-        if (phase === 'match') hud.chip(match.phase === 'play' && match.clock > MATCH.seconds - 8 ? 'hop' : null, ctx.input.state.device === 'gamepad');
+        // The dash-kick key stays on screen all match (pictogram + key), dimmed while recharging.
+        if (phase === 'match') hud.chip(match.phase === 'play' ? 'kick' : null, ctx.input.state.device === 'gamepad', match.agents[0].hopCd > 0);
       }
       for (const f of friends) f.update(dt);
     },
     dispose() {
       offPhase();
       removeInteract();
+      removeBallInteract();
+      ctx.physics.world.removeCollider(ballCollider, false);
+      ctx.physics.world.removeRigidBody(ballBody);
       if (phase !== 'idle' && player.mode === 'external') player.setExternalController(null);
       cleanup();
       for (const c of colliders) ctx.physics.removeCollider(c);

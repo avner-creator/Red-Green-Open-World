@@ -19,6 +19,7 @@ export function sanitizeSettings(input: DeepPartial<GameSettings> | undefined, b
     volumeMaster: clamp(input?.volumeMaster ?? base.volumeMaster, 0, 1),
     volumeMusic: clamp(input?.volumeMusic ?? base.volumeMusic, 0, 1),
     volumeSfx: clamp(input?.volumeSfx ?? base.volumeSfx, 0, 1),
+    voicePip: clamp(input?.voicePip ?? base.voicePip ?? 1, 0, 1),
     quality: input?.quality === 'low' || input?.quality === 'medium' || input?.quality === 'high' ? input.quality : base.quality,
     ...(autoChallenge === undefined ? {} : { autoChallenge }),
   };

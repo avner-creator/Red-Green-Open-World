@@ -146,6 +146,7 @@ export function createRingToss(env: GameEnv): BoothGame {
       env.toWorld(world.set(p.x, p.base + PEG_H, p.z));
       if (bonus) {
         fx.weakPop(world, 0.35, 14);
+        ctx.events.emit('glasses:result', { mechanic: 'ringStar', kind: 'find', tier: 1, hit: true });
         // The star hops to another peg (a new hunt).
         const others = PEGS.map((_, j) => j).filter((j) => j !== bonusPeg);
         bonusPeg = others[Math.floor(r.rng() * others.length)];

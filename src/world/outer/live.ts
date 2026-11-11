@@ -153,6 +153,7 @@ export function createOuterLive(d: OuterLiveDefs): OuterLive {
   buoyGeo.scale(1, 0.85, 1);
   const buoys = new THREE.InstancedMesh(buoyGeo, new THREE.MeshStandardMaterial({ roughness: 0.4 }), d.buoys.length);
   buoys.name = 'outer:buoys';
+  buoys.userData.cameraIgnore = true;
   const col = new THREE.Color();
   d.buoys.forEach((b, i) => buoys.setColorAt(i, col.set(b.color)));
   buoys.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

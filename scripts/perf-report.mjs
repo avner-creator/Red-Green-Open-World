@@ -31,7 +31,7 @@ try {
     await page.goto(`http://localhost:${port}/?test=1&quality=${quality}`);
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 180000 });
     const result = await page.evaluate(
-      ([groups, wantDetail, onlyViews, all]) => {
+      async ([groups, wantDetail, onlyViews, all]) => {
         const rg = window.__rg;
         const ctx = rg.ctx;
         const r = ctx.renderer;
@@ -132,6 +132,12 @@ try {
         };
         const at = (x, z, tx, tz, y) => rg.teleport(x, y ?? ctx.world.heightAt(x, z) + 0.2, z, Math.atan2(tx - x, tz - z));
         const buggyRoot = ctx.scene.getObjectByName('buggy');
+        const untilPlaying = async (g) => {
+          for (let i = 0; i < 600 && g.phase() === 'loading'; i++) {
+            await new Promise((r) => setTimeout(r, 100));
+            rg.step(1 / 60, 1, false);
+          }
+        };
         const views = {
           spawn: () => rg.teleport(A.spawn.position.x, ctx.world.heightAt(A.spawn.position.x, A.spawn.position.z) + 0.2, A.spawn.position.z, A.spawn.yaw),
           park: () => lookAt(A.trampoline, A.bouncePads.position, 16),
@@ -153,15 +159,41 @@ try {
           airstrip: () => at(-12, 20, -12, 46),
           race: () => lookAt(A.raceStart, A.spawn.position, 12),
           icecream: () => lookAt(A.iceCream, A.spawn.position, 12),
+          // Plaza side of the Gear Shack (its gift board, the plaza chest and posts in view).
+          shack: () => lookAt(A.gearShack, A.spawn.position, 10),
           vault: () => {
             const d = window.__rgSecrets?.info().doors[0];
             if (d) lookAt({ position: { x: d.x, z: d.z } }, { x: d.x + Math.sin(d.yaw) * 20, z: d.z + Math.cos(d.yaw) * 20 }, 12);
+          },
+          // During a round (the game's own camera and actors): bubble soccer, then dino sumo.
+          // The friends' models load on demand: wait (real time) until the round leaves 'loading'.
+          'soccer-round': async () => {
+            const g = window.__rgBubbleBall;
+            if (!g) return;
+            const [x, y, z] = g.booth();
+            rg.teleport(x, y + 0.2, z, 0);
+            rg.step(1 / 60, 10, false);
+            g.start();
+            await untilPlaying(g);
+            rg.step(1 / 60, 300, false);
+          },
+          'sumo-round': async () => {
+            const g = window.__rgDinoSumo;
+            if (!g) return;
+            window.__rgBubbleBall?.setClock(0);
+            rg.step(1 / 60, 240, false);
+            const [x, y, z] = g.booth();
+            rg.teleport(x, y + 0.2, z, 0);
+            rg.step(1 / 60, 10, false);
+            g.start();
+            await untilPlaying(g);
+            rg.step(1 / 60, 300, false);
           },
         };
         const out = [];
         for (const [view, go] of Object.entries(views)) {
           if (onlyViews && !onlyViews.includes(view)) continue;
-          go();
+          await go();
           rg.step(1 / 60, 90, false);
           rg.render(); // compile anything new before measuring
           const total = measure();

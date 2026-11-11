@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { VisionLayer } from '../../types';
 import type { VisionApi } from '../../types';
 import { createGlowMaterial, createLayerMaterial } from '../../vision';
+import { UNOCCLUDE_FIX, unoccludable } from '../bubbleball/merge';
 import type { BalloonSlot } from './sumo';
 
 const PLAIN_COLOURS = [0xffffff, 0xfff1a0, 0xc8f4ff, 0xffffff, 0xffe0ef];
@@ -32,7 +33,7 @@ export class Splash {
     material: THREE.Material,
     private readonly rand: () => number = Math.random,
   ) {
-    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), material, max);
+    this.mesh = new THREE.InstancedMesh(unoccludable(new THREE.SphereGeometry(1, 8, 6)), material, max);
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = false;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -78,7 +79,7 @@ export class Splash {
       this.px[k + 2] += this.v[k + 2] * dt;
       const s = this.life[i] > 0 ? this.size[i] * Math.min(1, this.life[i] * 3) : 0;
       this.m.compose(this.p.set(this.px[k], this.px[k + 1], this.px[k + 2]), this.q, this.s.set(s, s * 1.3, s));
-      this.mesh.setMatrixAt(i, this.m);
+      this.mesh.setMatrixAt(i, this.m.multiply(UNOCCLUDE_FIX));
     }
     // No draw call at all while nothing is splashing.
     this.mesh.visible = alive > 0;
@@ -112,8 +113,10 @@ export function createBalloons(vision: VisionApi, slotCount: number, rand: () =>
   const group = new THREE.Group();
   group.name = 'dinosumo-balloons';
   const balloonGeo = new THREE.SphereGeometry(1, 18, 12);
+  // Half-size copy for the instanced plain balloons (not a camera occluder, see merge.ts).
+  const plainGeo = unoccludable(balloonGeo.clone());
   const plainMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0 });
-  const plain = new THREE.InstancedMesh(balloonGeo, plainMat, slotCount);
+  const plain = new THREE.InstancedMesh(plainGeo, plainMat, slotCount);
   plain.name = 'dinosumo-plain-balloons';
   const stringGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 4);
   const stringMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -192,7 +195,7 @@ export function createBalloons(vision: VisionApi, slotCount: number, rand: () =>
         if (slot.kind === 'plain') {
           strings.setMatrixAt(i, m);
           m.compose(p.set(bx, y, bz), q.identity(), s.copy(BALLOON_S).multiplyScalar(grow));
-          plain.setMatrixAt(i, m);
+          plain.setMatrixAt(i, m.multiply(UNOCCLUDE_FIX));
         } else {
           strings.setMatrixAt(i, zero);
           plain.setMatrixAt(i, zero);
@@ -225,6 +228,7 @@ export function createBalloons(vision: VisionApi, slotCount: number, rand: () =>
     dispose() {
       vision.remove(layer);
       balloonGeo.dispose();
+      plainGeo.dispose();
       plainMat.dispose();
       stringGeo.dispose();
       stringMat.dispose();

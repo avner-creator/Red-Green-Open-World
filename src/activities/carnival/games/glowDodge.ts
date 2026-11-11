@@ -311,11 +311,13 @@ export function createGlowDodge(env: GameEnv): BoothGame {
         const l = lanes[who];
         const bonk = hits(b.plan.kind, b.plan.tx, ballAt(b.plan, b.plan.dur, p).y, contestantX(r, who), l.hop.y);
         if (!bonk) {
+          if (who === 0) ctx.events.emit('glasses:result', { mechanic: 'glowDodge', kind: 'follow', tier: 2, hit: true });
           r.score(who, 1);
           if (who > 0) l.want = l.center;
           return false;
         }
         if (who === 0) {
+          ctx.events.emit('glasses:result', { mechanic: 'glowDodge', kind: 'follow', tier: 2, hit: false });
           stretch = -0.38;
           r.playerAct('flop', 0.5);
           ctx.audio.play('boing', { volume: 0.6, pitch: 1.8 });

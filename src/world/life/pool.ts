@@ -23,6 +23,7 @@ export class Pool {
     }
     this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.name = `life-${name}`;
+    this.mesh.userData.cameraIgnore = true; // animals and townsfolk move: never a camera obstacle
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     if (opts.color) {
       this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3).fill(1), 3);

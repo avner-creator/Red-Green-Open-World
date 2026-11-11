@@ -41,9 +41,9 @@ export const INTRO = {
   welcome: { text: 'Hi! I am Pip!', icon: 'pip', extra: 'party', mood: 'excited', hold: 1.4 },
   move: { text: 'Walk with me!', icon: 'paw', action: 'move', mood: 'excited', hold: 2 },
   look: { text: 'Look around!', icon: 'eye', action: 'look', mood: 'curious', hold: 2 },
-  glasses: { text: 'Gems hide! Magic glasses see!', icon: 'glasses', extra: 'gem', mood: 'curious', hold: 2.2 },
+  glasses: { text: 'Magic glasses find hidden gems!', icon: 'glasses', extra: 'gem', mood: 'curious', hold: 2.2 },
   wallet: { text: 'Gems are money!', icon: 'gem', extra: 'wallet', mood: 'proud', callout: HUD.wallet, hold: 2.6 },
-  jump: { text: 'Jump! Hold it!', icon: 'wTrampoline', action: 'jump', mood: 'excited', hold: 2.4 },
+  jump: { text: 'Jump! Hold to go higher!', icon: 'wTrampoline', action: 'jump', mood: 'excited', hold: 2.4 },
   choose: { text: 'Now you choose!', icon: 'target', mood: 'proud', callout: HUD.compass, hold: 2.8 },
   skipped: { text: 'Okay! Have fun!', icon: 'paw', mood: 'happy', hold: 1.2 },
 } satisfies Record<string, ScriptLine>;
@@ -63,7 +63,7 @@ export const TIPS = {
   compass: { text: 'Compass shows fun places!', icon: 'target', mood: 'happy', callout: HUD.compass },
   missions: { text: 'Goals! Finish them for gems!', icon: 'mission', mood: 'excited', callout: HUD.missions },
   help: { text: 'Lost? This button helps!', icon: 'question', mood: 'happy', callout: HUD.help },
-  pip: { text: 'Need me? My button!', icon: 'pip', mood: 'happy', callout: HUD.pip },
+  pip: { text: 'Need me? Use my button!', icon: 'pip', mood: 'happy', callout: HUD.pip },
   combo: { text: 'Grab gems fast for combos!', icon: 'combo', mood: 'excited', callout: HUD.combo },
 } satisfies Record<string, ScriptLine>;
 export type TipId = keyof typeof TIPS | 'skill' | `visit:${Attraction}` | 'chute';
@@ -123,7 +123,6 @@ export const CHUTE = (_k?: KeyNames): ScriptLine => ({ text: 'Parachute now!', i
 
 export const CHEST = {
   findKey: { text: 'Find the key!', icon: 'key', extra: 'chest', mood: 'curious', hold: 2.4 },
-  findSide: { text: 'Now find the keyhole side!', icon: 'key', extra: 'lock', mood: 'curious', hold: 2.4 },
   shape: { text: 'Step on the right shape!', icon: 'key', extra: 'lock', mood: 'curious', hold: 2.4 },
 } satisfies Record<string, ScriptLine>;
 
@@ -150,7 +149,7 @@ export const REACT = {
   flop: { text: 'Silly flop! Boing!', icon: 'flop', mood: 'silly' },
   skill: { text: 'Cool power!', icon: 'bolt', mood: 'excited' },
   emote: { text: 'Dance party!', icon: 'emote', mood: 'silly' },
-  bought: { text: 'Lookin’ sharp!', icon: 'hat', mood: 'proud' },
+  bought: { text: 'Looking sharp!', icon: 'hat', mood: 'proud' },
   unlocked: { text: 'Ooh, new stuff!', icon: 'backpack', mood: 'excited' },
   ticket: { text: 'Wheee! Here we go!', icon: 'ticket', mood: 'excited' },
   jackpot: { text: 'Jackpot! We are rich!', icon: 'jackpot', mood: 'excited' },
@@ -159,7 +158,7 @@ export const REACT = {
   heights: { text: 'So high! Eek!', icon: 'eye', mood: 'worried' },
   landed: { text: 'You did it! Yay!', icon: 'star', mood: 'proud' },
   magic: { text: 'Magic glasses! Great job!', icon: 'glasses', mood: 'proud' },
-  freefall: { text: 'Wheeeee!', icon: 'parachute', mood: 'excited' },
+  freefall: { text: 'Wheee!', icon: 'parachute', mood: 'excited' },
 } satisfies Record<string, ScriptLine>;
 
 /** Trampoline bounce count barks: "One!", "Two!"… */

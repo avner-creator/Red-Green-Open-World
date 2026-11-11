@@ -44,6 +44,11 @@ export interface Skydive {
 const DECK = { radius: 2.4, height: 0.14 } as const;
 const BELLY_PITCH = 1.3;
 
+/** Read-only ride view for glasses add-ons (src/activities/glasses/weave/chute). */
+export interface SkydiveView { readonly phase: RidePhase; readonly heightAboveGround: number; readonly fallTime: number }
+const views = new WeakMap<GameContext, SkydiveView>();
+export const getSkydiveView = (ctx: GameContext): SkydiveView | null => views.get(ctx) ?? null;
+
 export function createSkydive(ctx: GameContext): Skydive {
   const anchor = ctx.world.anchors.balloon;
   const pad = anchor.position.clone();
@@ -120,6 +125,8 @@ export function createSkydive(ctx: GameContext): Skydive {
   const vel: V3 = { x: 0, y: 0, z: 0 };
   const canopyState: CanopyState = { yaw: 0, turn: 0 };
   let fallT = 0;
+  let agl = 0;
+  views.set(ctx, { get phase() { return ride; }, get heightAboveGround() { return agl; }, get fallTime() { return fallT; } });
   let pitch = 0;
   let pitchV = 0;
   let bank = 0;
@@ -379,7 +386,7 @@ export function createSkydive(ctx: GameContext): Skydive {
           }
           stepFreefall(pos, vel, steer, dt);
           const surf = surfaceBelow(pos.x, pos.y, pos.z);
-          const agl = pos.y - surf.y;
+          agl = pos.y - surf.y;
           // Face the direction of travel; bank into turns.
           const hs = Math.hypot(vel.x, vel.z);
           let rate = 0;
@@ -518,6 +525,7 @@ export function createSkydive(ctx: GameContext): Skydive {
       rings.update(dt);
     },
     dispose() {
+      views.delete(ctx);
       offPhase();
       removeInteract();
       if (ride !== 'idle') player.setExternalController(null);

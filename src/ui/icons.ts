@@ -8,7 +8,7 @@ export type UiIconName =
   | IconName
   | 'play' | 'home' | 'gear' | 'grownup' | 'pause' | 'restart' | 'credits' | 'sun' | 'mouse'
   | 'target' | 'speaker' | 'note' | 'bolt' | 'close' | 'back' | 'sparkle' | 'bars1' | 'bars2' | 'bars3'
-  | 'stick' | 'heart';
+  | 'stick' | 'heart' | 'pupVoice';
 
 const S: Record<UiIconName, string> = {
   gem: '<path d="M6 3h12l4 6-10 12L2 9z"/><path class="l" d="M2 9h20M9 3l-2 6 5 12M15 3l2 6-5 12"/>',
@@ -88,6 +88,8 @@ const S: Record<UiIconName, string> = {
   bars2: '<rect x="3" y="15" width="4.500" height="6" rx="1"/><rect x="9.800" y="9" width="4.500" height="12" rx="1"/><rect x="16.500" y="3" width="4.500" height="18" rx="1" style="opacity:.3"/>',
   bars3: '<rect x="3" y="15" width="4.500" height="6" rx="1"/><rect x="9.800" y="9" width="4.500" height="12" rx="1"/><rect x="16.500" y="3" width="4.500" height="18" rx="1"/>',
   stick: '<circle cx="12" cy="12" r="10.500"/><circle class="k" cx="12" cy="12" r="6.800"/><circle cx="12" cy="12" r="4.800"/>',
+  // Puppy head (floppy ears, eyes, nose) with two sound waves: Pip's voice.
+  pupVoice: '<path d="M3.500 6.500L1 13.500l3.200 1.200L5.600 9z"/><path d="M14.500 6.500L17 13.500l-3.200 1.200L12.400 9z"/><ellipse cx="9" cy="12" rx="5.600" ry="6.200"/><circle class="k" cx="6.900" cy="10.800" r="1"/><circle class="k" cx="11.100" cy="10.800" r="1"/><ellipse class="k" cx="9" cy="14.600" rx="1.600" ry="1.100"/><path class="o" d="M18.500 9a4 4 0 0 1 0 6M21 6.500a7.500 7.500 0 0 1 0 11"/><path class="w" d="M18.500 9a4 4 0 0 1 0 6M21 6.500a7.500 7.500 0 0 1 0 11"/>',
   heart: '<path d="M12 21.500C4 15.500 1.500 11.500 1.500 8a5.200 5.200 0 0 1 10.500-1.500A5.200 5.200 0 0 1 22.500 8c0 3.500-2.500 7.500-10.500 13.500z"/>',
 };
 

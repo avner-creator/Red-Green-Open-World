@@ -24,6 +24,11 @@ import { Progress, boostPadDistances, buildTrack, checkpointDistances, leftOf, r
 
 export type RacePhase = 'idle' | 'countdown' | 'racing' | 'finishing' | 'podium' | 'result';
 
+/** Read-only race view for glasses add-ons (src/activities/glasses/weave/boost). */
+export interface RaceView { readonly phase: RacePhase; readonly pads: RaceGlow['pads']; readonly padsHit: number; readonly progress: number; readonly length: number }
+const views = new WeakMap<GameContext, RaceView>();
+export const getRaceView = (ctx: GameContext): RaceView | null => views.get(ctx) ?? null;
+
 export interface Race {
   update(dt: number): void;
   readonly phase: RacePhase;
@@ -178,6 +183,7 @@ export function createRace(ctx: GameContext): Race {
   let padsHit = 0;
   const padLastLap = padDist.map(() => -99);
   const chain = new BoostChain(Math.max(1, padDist.length));
+  views.set(ctx, { get phase() { return phase; }, get pads() { return glow?.pads ?? []; }, get padsHit() { return padsHit; }, get progress() { return playerProg; }, length: L });
   let lastLamp = 0;
   let result: { place: number; stars: number; gems: number } | null = null;
   let finalOrder: string[] = [];
@@ -634,6 +640,7 @@ export function createRace(ctx: GameContext): Race {
       confetti.group.removeFromParent();
       confetti.dispose();
       if (ctx.testMode) delete window.__rgRace;
+      views.delete(ctx);
     },
   };
 }

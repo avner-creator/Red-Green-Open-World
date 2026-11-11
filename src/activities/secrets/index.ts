@@ -21,7 +21,8 @@ import type { GameContext, Interactable } from '../../types';
 import { GROUP_AVATAR, GROUP_VEHICLE, groups } from '../../core/physics';
 import { ROADS } from '../../world/layout';
 import { Confetti } from '../chests/confetti';
-import { ARROWS, arrowTrail, nearestOnPolylines } from './arrowLogic';
+import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from './arrowLogic';
+
 import type { ArrowPlace } from './arrowLogic';
 import { DOOR_RULES, DoorLock, SHAPES, buttonAt, fromDoorLocal, makeSequence, toDoorLocal } from './doorLogic';
 import { STONE, onStone } from './pathLogic';
@@ -32,6 +33,9 @@ import { RING_GLOW } from './models';
 import { distanceCull, surfaceMaterial } from './batch';
 import { buildRoutes, buildVaults } from './routes';
 import type { RouteDef, VaultDef } from './routes';
+
+/** A trail shorter than this is laid again from another direction. */
+const MIN_TRAIL = 3;
 
 export { buildRoutes, buildVaults } from './routes';
 
@@ -297,6 +301,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     ctx.audio.play('fanfare');
     ctx.audio.play('star', { pitch: 1.2 });
     ctx.cameraRig.shake(0.15);
+    ctx.events.emit('glasses:result', { mechanic: 'secretPath', kind: 'follow', tier: 2, hit: true });
   }
 
   function updatePaths(dt: number, playing: boolean): void {
@@ -468,10 +473,12 @@ export function createSecrets(ctx: GameContext): Secrets {
     if (r === 'correct') {
       ctx.audio.play('star', { pitch: 0.9 + 0.2 * d.lock.progress, volume: 0.8 });
       ctx.audio.play('click');
+      ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 1, hit: true });
     } else if (r === 'wrong') {
       d.wobble = 1;
       ctx.audio.play('click');
       ctx.audio.play('boing', { pitch: 0.7, volume: 0.6 });
+      ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 1, hit: false });
     } else if (r === 'opened') {
       d.openT = 0.001;
       removeCollider(d.doorCollider);
@@ -479,6 +486,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       ctx.audio.play('chest');
       ctx.audio.play('fanfare');
       ctx.cameraRig.shake(0.25);
+      ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 3, hit: true });
     }
     setLamps(d);
   }
@@ -579,16 +587,29 @@ export function createSecrets(ctx: GameContext): Secrets {
 
   function placeTrail(target: string, to: { x: number; z: number }, key: THREE.Object3D | null): void {
     const from = nearestOnPolylines(roadLines, to.x, to.z);
-    const places: Trail['places'] = [];
-    for (const a of arrowTrail(from, to)) {
-      if (arrows.count + places.length >= MAX_ARROWS) break;
-      const y = surfaceAt(a.x, a.z);
-      if (y === null) continue;
-      // Tilt to the ground slope.
-      const e = 0.6;
-      const n = new THREE.Vector3(h(a.x - e, a.z) - h(a.x + e, a.z), 2 * e, h(a.x, a.z - e) - h(a.x, a.z + e)).normalize();
-      const q = new THREE.Quaternion().setFromUnitVectors(UP, n).multiply(new THREE.Quaternion().setFromAxisAngle(UP, a.yaw));
-      places.push({ ...a, y, q });
+    const layOut = (start: { x: number; z: number }): Trail['places'] => {
+      const out: Trail['places'] = [];
+      for (const a of arrowTrail(start, to)) {
+        if (arrows.count + out.length >= MAX_ARROWS) break;
+        const y = surfaceAt(a.x, a.z);
+        if (y === null) continue;
+        // Tilt to the ground slope.
+        const e = 0.6;
+        const n = new THREE.Vector3(h(a.x - e, a.z) - h(a.x + e, a.z), 2 * e, h(a.x, a.z - e) - h(a.x, a.z + e)).normalize();
+        const q = new THREE.Quaternion().setFromUnitVectors(UP, n).multiply(new THREE.Quaternion().setFromAxisAngle(UP, a.yaw));
+        out.push({ ...a, y, q });
+      }
+      return out;
+    };
+    let places = layOut(from);
+    // No room on the straight line from the road (cliff edge, water, a wall right there): approach the
+    // target from the nearest turned direction that fits a real trail.
+    if (places.length < MIN_TRAIL) {
+      for (const alt of alternateStarts(from, to)) {
+        const p = layOut(alt);
+        if (p.length > places.length) places = p;
+        if (places.length >= MIN_TRAIL) break;
+      }
     }
     trails.push({ target, start: arrows.count, places, key, visible: true });
     arrows.count += places.length;

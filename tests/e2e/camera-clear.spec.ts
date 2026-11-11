@@ -111,6 +111,121 @@ test('the camera never sits inside geometry or loses the hero at known bad spots
   expect(consoleErrors).toEqual([]);
 });
 
+test('attraction sites, the glasses sites and a gem cluster: camera clear (4 yaws each)', async () => {
+  test.setTimeout(300_000);
+  const list = await page.evaluate(() => {
+    const { world } = window.__rg!.ctx;
+    const a = world.anchors as unknown as Record<string, { position: { x: number; z: number }; yaw: number } | undefined>;
+    const out: { name: string; x: number; z: number }[] = [];
+    const near = (name: string, d: number): void => {
+      const q = a[name];
+      if (q) out.push({ name, x: q.position.x + Math.sin(q.yaw) * d, z: q.position.z + Math.cos(q.yaw) * d });
+    };
+    near('carnivalRow', 0);
+    near('foamCourse', 8);
+    near('iceCream', 6);
+    near('airstrip', 6);
+    near('raceStart', 5);
+    for (const id of ['glowflies', 'oddone', 'lineup', 'toys', 'gates', 'dotsigns']) near(id, 2);
+    // The gem with the most other gems within 8 m.
+    const gems = world.gemSpots.map((g) => g.position);
+    let best = gems[0];
+    let bestN = -1;
+    for (const g of gems) {
+      const n = gems.filter((o) => Math.hypot(o.x - g.x, o.z - g.z) < 8).length;
+      if (n > bestN) [best, bestN] = [g, n];
+    }
+    if (best) out.push({ name: 'gem-cluster', x: best.x, z: best.z });
+    return out;
+  });
+  expect(list.length).toBe(12);
+  const report: string[] = [];
+  for (const s of list) {
+    await page.evaluate(({ x, z }) => {
+      const rg = window.__rg!;
+      rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, 0);
+      rg.step(1 / 60, 30, false);
+    }, s);
+    for (let i = 0; i < 4; i++) {
+      const r = await page.evaluate((y) => {
+        const rg = window.__rg!;
+        const cam = window.__rgCamera!;
+        cam.setView(y, 0.38);
+        rg.step(1 / 60, 45, false);
+        return { ...cam.probe(), st: cam.state() };
+      }, (i / 4) * Math.PI * 2 + 0.4);
+      report.push(`${s.name} yaw${i} blocked=${r.blocked.toFixed(2)} head=${r.headHidden} inside=${r.inside} near=${r.near.toFixed(2)} d=${r.st.distance.toFixed(2)} hits=${r.hits.join(',')}`);
+      if (SHOTS) {
+        await page.evaluate(() => window.__rg!.render());
+        await canvasShot(page, `test-results/camera-clear-${s.name}-${i}.png`);
+      }
+      expect.soft(r.inside, `${s.name} yaw ${i}: camera inside geometry`).toBe(false);
+      expect.soft(r.headHidden, `${s.name} yaw ${i}: hero's head hidden (${r.hits.join(',')})`).toBe(false);
+      expect.soft(r.blocked, `${s.name} yaw ${i}: hero hidden (${r.hits.join(',')})`).toBeLessThanOrEqual(0.34);
+      expect.soft(r.near, `${s.name} yaw ${i}: camera in the hero's head`).toBeGreaterThan(0.9);
+    }
+  }
+  console.log(report.join('\n'));
+});
+
+test('a big moving instanced mesh and layer objects between camera and hero do not move the camera', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const cam = window.__rgCamera!;
+    const { scene, world, camera, player } = rg.ctx;
+    // Open paving on the plaza.
+    rg.teleport(0, world.heightAt(0, 9) + 0.1, 9, 0);
+    cam.setView(0.4, 0.3);
+    rg.step(1 / 60, 60, false);
+    const base = cam.state().distance;
+    // A tree-sized blob of instances half-way between camera and hero (a stand-in for bubbles, dino
+    // suits, balloons), cloned from a tree's instanced mesh so no three.js import is needed.
+    let tree: import('three').InstancedMesh | null = null;
+    scene.traverse((o) => {
+      const im = o as import('three').InstancedMesh;
+      if (!tree && im.isInstancedMesh && /^oak:near/.test(im.name)) tree = im;
+    });
+    if (!tree) return { error: 'no tree' };
+    const src: import('three').InstancedMesh = tree;
+    const mid = player.position.clone().lerp(camera.position, 0.5);
+    const blob = (name: string): import('three').InstancedMesh => {
+      const m = src.clone();
+      m.name = name;
+      m.count = 1;
+      m.position.set(0, 0, 0);
+      m.setMatrixAt(0, src.matrixWorld.clone().makeTranslation(mid.x, mid.y - 2.5, mid.z));
+      m.instanceMatrix.needsUpdate = true;
+      return m;
+    };
+    const actor = blob('test-actor');
+    scene.add(actor);
+    cam.setView(0.4, 0.3);
+    rg.step(1 / 60, 60, false);
+    const withActor = cam.state().distance;
+    actor.removeFromParent();
+    // Control: the same blob as world scenery does push the camera in (so the check can fail).
+    const scenery = blob('test-scenery');
+    scene.getObjectByName('world')!.add(scenery);
+    rg.step(1 / 60, 60, false);
+    const asScenery = cam.state().distance;
+    scenery.removeFromParent();
+    rg.step(1 / 60, 60, false);
+    // A weak-eye and a strong-eye object right in front of the camera.
+    const v = window.__rgVision!;
+    v.addTestObject({ layer: 'weak', distance: base * 0.5, size: 2.5 });
+    v.addTestObject({ layer: 'strong', distance: base * 0.4, size: 2.5 });
+    rg.step(1 / 60, 60, false);
+    const withLayers = cam.state().distance;
+    v.removeTestObjects();
+    return { base, withActor, asScenery, withLayers };
+  });
+  expect(r).not.toHaveProperty('error');
+  const d = r as { base: number; withActor: number; asScenery: number; withLayers: number };
+  expect(Math.abs(d.withActor - d.base), JSON.stringify(d)).toBeLessThan(0.05);
+  expect(d.asScenery, JSON.stringify(d)).toBeLessThan(d.base - 0.5);
+  expect(Math.abs(d.withLayers - d.base), JSON.stringify(d)).toBeLessThan(0.05);
+});
+
 test('no sparkle shards over the hero right after Play (a title-screen pick lands quietly)', async () => {
   const counts = await page.evaluate(async () => {
     const rg = window.__rg!;

@@ -1,22 +1,87 @@
 /**
- * Pip's voice: synthesised "animalese" gibberish (one short pitched syllable per letter, a pitch
- * contour from punctuation and mood) plus little one-shot barks, yips, whines, pants and sniffs.
- * WebAudio only (no recorded speech, no network). Its own lazily created AudioContext, unlocked on
- * the first user gesture; the level follows the master and effects volume settings. A silent
- * no-op in test mode or without WebAudio.
+ * Pip's voice. He speaks his lines in real words: a pre-recorded clip per line
+ * (`public/assets/voice/`, made by `scripts/gen-pip-voice.mjs`), else the browser's on-device speech
+ * (Web Speech, local voices only), else a synthesised "animalese" babble (one short pitched syllable
+ * per letter). Plus little one-shot barks, yips, whines, pants and sniffs.
+ * Its own lazily created AudioContext, unlocked on the first user gesture (clips load only then,
+ * never during boot); the level follows the master and effects volume settings (and `voicePip` when
+ * settings have it). Music is ducked while he talks (when the audio system offers `duckMusic`).
+ * Never talks over himself: a new line or `hush()` stops the current one.
+ * In test mode it makes no sound and only records what it was asked to say (`requests`).
  */
-import type { GameSettings, SettingsApi, EventBus } from '../types';
+import type { AudioApi, GameSettings, SettingsApi, EventBus } from '../types';
 import { CHAR_SECONDS } from './dialogue';
 import type { Mood } from './dialogue';
+import { ClipBank } from './clips';
+import { createSpeaker } from './speech';
+import { clipId } from './voiceLines';
+import { INTRO } from './script';
 
 export type BarkKind = 'yip' | 'bark' | 'whine' | 'pant' | 'sniff' | 'lick';
+
+/** What the voice was asked to say (test hook): the clip id and which path plays it. */
+export interface VoiceRequest {
+  id: string;
+  text: string;
+  source: 'clip' | 'speech' | 'pending' | 'off';
+}
 
 export interface Voice {
   speak(text: string, mood: Mood): void;
   bark(kind: BarkKind): void;
   /** Stop speech now (a line got interrupted). */
   hush(): void;
+  /** Seconds of the recorded clip for this text, once the manifest is loaded (bubble sync). */
+  clipSeconds(text: string): number | null;
+  /** Everything it was asked to say (kept in test mode only). */
+  readonly requests: readonly VoiceRequest[];
   dispose(): void;
+}
+
+/** How long a clip may take to arrive before the line falls back to on-device speech (s). */
+export const CLIP_WAIT = 0.9;
+/** Music level while Pip talks (about −6 dB). */
+export const DUCK_LEVEL = 0.5;
+
+/** Pip's own voice level 0..1 (`voicePip` once settings have it; on by default). */
+export function pipVoiceLevel(s: Readonly<GameSettings>): number {
+  const v = (s as GameSettings & { voicePip?: number }).voicePip;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+}
+
+/** A small pitch/tempo lift per mood for recorded clips (playbackRate). */
+export function moodRate(mood: Mood): number {
+  return mood === 'excited' ? 1.04 : mood === 'silly' ? 1.06 : mood === 'worried' ? 0.97 : 1;
+}
+
+type Ducker = AudioApi & { duckMusic?: (level: number, seconds: number) => void };
+
+const baseUrl = (): string => {
+  try {
+    return import.meta.env.BASE_URL ?? './';
+  } catch {
+    return './';
+  }
+};
+
+/** Test-mode voice: silent, records each request (and whether a clip exists for it). */
+function recorder(): Voice {
+  const bank = new ClipBank(baseUrl());
+  const requests: VoiceRequest[] = [];
+  return {
+    requests,
+    speak(text) {
+      void bank.load();
+      if (requests.length >= 200) return;
+      const source = bank.manifest ? (bank.info(text) ? 'clip' : 'speech') : 'pending';
+      requests.push({ id: clipId(text), text, source });
+    },
+    bark() {},
+    hush() {},
+    // Line timing stays text-based in tests (deterministic intro pacing).
+    clipSeconds: () => null,
+    dispose() {},
+  };
 }
 
 type AudioCtor = new () => AudioContext;
@@ -48,25 +113,38 @@ export function contour(i: number, n: number, end: string, mood: Mood): number {
   return m;
 }
 
-export function createVoice(opts: { settings: SettingsApi; events: EventBus; testMode: boolean }): Voice {
+export function createVoice(opts: { settings: SettingsApi; events: EventBus; testMode: boolean; audio?: AudioApi }): Voice {
   const ctor: AudioCtor | null =
     typeof window === 'undefined' ? null : ((window as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor }).AudioContext ??
       (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext ??
       null);
-  const noop: Voice = { speak() {}, bark() {}, hush() {}, dispose() {} };
-  if (opts.testMode || !ctor) return noop;
+  const noop: Voice = { speak() {}, bark() {}, hush() {}, clipSeconds: () => null, requests: [], dispose() {} };
+  if (opts.testMode) return recorder();
+  if (!ctor) return noop;
 
   let ac: AudioContext | null = null;
   let out: GainNode | null = null;
+  /** Spoken words (clips) go through their own gain: Pip's voice level on top of the effects level. */
+  let talkOut: GainNode | null = null;
   let noise: AudioBuffer | null = null;
   let speech: GainNode | null = null;
+  let clip: AudioBufferSourceNode | null = null;
+  /** Bumped by every speak/hush: a clip that arrives late for an old line is dropped. */
+  let token = 0;
+  const bank = new ClipBank(baseUrl());
+  const speaker = createSpeaker();
 
   const level = (s: Readonly<GameSettings>): number => {
     const v = (x: number): number => Math.max(0, Math.min(1, x)) ** 2;
     return v(s.volumeMaster) * v(s.volumeSfx) * 0.9;
   };
+  /** Words are a bit louder than the babble and follow `voicePip`. */
+  const talkLevel = (s: Readonly<GameSettings>): number => Math.min(1, level(s) * 1.25) * pipVoiceLevel(s);
 
   const unlock = (): void => {
+    speaker.unlock();
+    // Clips load only now (after a gesture, i.e. after boot): the intro first, then the rest.
+    void bank.prefetch(Object.values(INTRO).map((l) => l.text));
     try {
       if (!ac) {
         ac = new ctor();
@@ -76,6 +154,9 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
         comp.threshold.value = -14;
         comp.ratio.value = 4;
         out.connect(comp).connect(ac.destination);
+        talkOut = ac.createGain();
+        talkOut.gain.value = talkLevel(opts.settings.get());
+        talkOut.connect(comp);
         noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
         const d = noise.getChannelData(0);
         let seed = 12345;
@@ -99,7 +180,54 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
   window.addEventListener('touchend', unlock, true);
   const offSettings = opts.events.on('settings:changed', (e) => {
     if (ac && out) out.gain.setTargetAtTime(level(e.settings), ac.currentTime, 0.05);
+    if (ac && talkOut) talkOut.gain.setTargetAtTime(talkLevel(e.settings), ac.currentTime, 0.05);
   });
+
+  const duck = (seconds: number): void => {
+    try {
+      (opts.audio as Ducker | undefined)?.duckMusic?.(DUCK_LEVEL, seconds);
+    } catch {
+      /* the audio system has no ducking: fine */
+    }
+  };
+
+  const stopTalking = (): void => {
+    token++;
+    if (clip) {
+      try {
+        clip.stop();
+      } catch {
+        /* already stopped */
+      }
+      clip.disconnect();
+      clip = null;
+    }
+    speaker.cancel();
+  };
+
+  const playClip = (a: AudioContext, buf: AudioBuffer, mood: Mood): void => {
+    if (!talkOut) return;
+    const src = a.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = moodRate(mood);
+    src.connect(talkOut);
+    src.onended = () => {
+      if (clip === src) clip = null;
+    };
+    src.start(a.currentTime + 0.01);
+    clip = src;
+    duck(buf.duration / src.playbackRate.value + 0.3);
+  };
+
+  /** On-device speech, else babble. */
+  const fallback = (a: AudioContext | null, text: string, mood: Mood): void => {
+    const s = opts.settings.get();
+    if (speaker.ready && speaker.speak(text, Math.min(1, Math.sqrt(talkLevel(s)) * 1.1))) {
+      duck(0.6 + text.length * 0.06);
+      return;
+    }
+    if (a) babble(a, text, mood);
+  };
 
   const ready = (): AudioContext | null => (ac && out && ac.state === 'running' ? ac : null);
 
@@ -173,35 +301,68 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
     o.stop(at + end + 0.02);
   };
 
+  /** The animalese babble (last fallback when there is neither a clip nor an on-device voice). */
+  function babble(a: AudioContext, text: string, mood: Mood): void {
+    if (!out) return;
+    speech?.disconnect();
+    speech = a.createGain();
+    speech.gain.value = pipVoiceLevel(opts.settings.get());
+    speech.connect(out);
+    const t0 = a.currentTime + 0.02;
+    const trimmed = text.trim();
+    const end = /[!?.]$/.test(trimmed) ? trimmed[trimmed.length - 1] : '.';
+    const base = 470 + (mood === 'excited' ? 40 : 0);
+    const n = text.length;
+    let spoken = 0;
+    for (let i = 0; i < n; i++) {
+      const ch = text[i];
+      if (!/[a-z0-9]/i.test(ch)) continue;
+      // Speak roughly every other letter, like a real "animalese" voice: quicker, cuter.
+      if (spoken > 0 && i % 2 === 1 && !/[aeiou]/i.test(ch)) continue;
+      spoken++;
+      const f = base * contour(i, n, end, mood) * (ch === ch.toUpperCase() && /[A-Z]/.test(ch) ? 1.08 : 1);
+      syllable(a, speech, t0 + i * CHAR_SECONDS, f, letterFormant(ch), CHAR_SECONDS * 1.7, 0.16);
+    }
+  }
+
+  const hushBabble = (): void => {
+    const a = ready();
+    if (!a || !speech) return;
+    speech.gain.setTargetAtTime(0, a.currentTime, 0.02);
+    speech = null;
+  };
+
   return {
+    requests: [],
+    clipSeconds: (text) => bank.info(text)?.dur ?? null,
     speak(text, mood) {
+      stopTalking();
+      hushBabble();
+      if (pipVoiceLevel(opts.settings.get()) <= 0) return;
+      const mine = token;
       const a = ready();
-      if (!a || !out) return;
-      speech?.disconnect();
-      speech = a.createGain();
-      speech.gain.value = 1;
-      speech.connect(out);
-      const t0 = a.currentTime + 0.02;
-      const trimmed = text.trim();
-      const end = /[!?.]$/.test(trimmed) ? trimmed[trimmed.length - 1] : '.';
-      const base = 470 + (mood === 'excited' ? 40 : 0);
-      const n = text.length;
-      let spoken = 0;
-      for (let i = 0; i < n; i++) {
-        const ch = text[i];
-        if (!/[a-z0-9]/i.test(ch)) continue;
-        // Speak roughly every other letter, like a real "animalese" voice: quicker, cuter.
-        if (spoken > 0 && i % 2 === 1 && !/[aeiou]/i.test(ch)) continue;
-        spoken++;
-        const f = base * contour(i, n, end, mood) * (ch === ch.toUpperCase() && /[A-Z]/.test(ch) ? 1.08 : 1);
-        syllable(a, speech, t0 + i * CHAR_SECONDS, f, letterFormant(ch), CHAR_SECONDS * 1.7, 0.16);
+      if (!a) {
+        // No WebAudio yet (no gesture so far): on-device speech may still work.
+        fallback(null, text, mood);
+        return;
       }
+      let settled = false;
+      const timer = window.setTimeout(() => {
+        if (settled || mine !== token) return;
+        settled = true;
+        fallback(a, text, mood);
+      }, CLIP_WAIT * 1000);
+      void bank.buffer(a, text).then((buf) => {
+        if (settled || mine !== token) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (buf) playClip(a, buf, mood);
+        else fallback(a, text, mood);
+      });
     },
     hush() {
-      const a = ready();
-      if (!a || !speech) return;
-      speech.gain.setTargetAtTime(0, a.currentTime, 0.02);
-      speech = null;
+      stopTalking();
+      hushBabble();
     },
     bark(kind) {
       const a = ready();
@@ -233,6 +394,8 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
       }
     },
     dispose() {
+      stopTalking();
+      speaker.dispose();
       offSettings();
       window.removeEventListener('pointerdown', unlock, true);
       window.removeEventListener('keydown', unlock, true);

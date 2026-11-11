@@ -170,6 +170,7 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     slider({ ic: 'speaker', label: 'Volume', testid: 'vol-master', ...pct(() => S().volumeMaster, (v) => ctx.settings.set({ volumeMaster: v }), 0) }),
     slider({ ic: 'note', label: 'Music', testid: 'vol-music', ...pct(() => S().volumeMusic, (v) => ctx.settings.set({ volumeMusic: v }), 0) }),
     slider({ ic: 'star', label: 'Sound effects', testid: 'vol-sfx', ...pct(() => S().volumeSfx, (v) => ctx.settings.set({ volumeSfx: v }), 0) }),
+    slider({ ic: 'pupVoice', label: "Pip's voice", testid: 'vol-pip', ...pct(() => S().voicePip, (v) => ctx.settings.set({ voicePip: v }), 0) }),
     row('sparkle', 'Graphics', null, h('div', 'choices', {}, qualityBtn('low', 'bars1', 'Low'), qualityBtn('medium', 'bars2', 'Medium'), qualityBtn('high', 'bars3', 'High'))),
     // No sub-label (QA round 3: it was tiny and ran into the heading); each button shows what it resets.
     row('restart', 'Reset', null, h('div', 'choices', {}, reset, profileReset)),

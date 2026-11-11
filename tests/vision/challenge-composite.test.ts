@@ -89,12 +89,29 @@ function setup(autoChallenge: boolean) {
   const announced: ChallengeModifiers[] = [];
   events.on('glasses:challenge', (e) => announced.push({ ...e.modifiers }));
   const res = (hit: boolean, mechanic = 'glowflies'): void => events.emit('glasses:result', { mechanic, kind: 'follow', tier: 2, hit });
+  let el = 0;
   const start = (): void => {
+    el = 0;
     events.emit('session:phase', { phase: 'playing', previous: 'title' });
     events.emit('session:tick', { remaining: 300, total: 300 });
   };
-  const tick = (elapsed: number): void => events.emit('session:tick', { remaining: 300 - elapsed, total: 300 });
-  return { events, storage, settings, driver, announced, res, start, tick };
+  const tick = (elapsed: number): void => {
+    el = elapsed;
+    events.emit('session:tick', { remaining: 300 - elapsed, total: 300 });
+  };
+  /** Play on for `seconds`, one session tick every 0.25 s (like the game). */
+  const play = (seconds: number): void => {
+    const end = el + seconds;
+    while (el < end - 1e-9) tick(Math.min(end, el + 0.25));
+  };
+  /** `n` hits spaced `hitSpacingSeconds` of play apart (so each one counts); ends on the last hit. */
+  const pacedHits = (n: number, mechanic?: string): void => {
+    for (let i = 0; i < n; i++) {
+      if (i > 0) play(CHALLENGE.hitSpacingSeconds);
+      res(true, mechanic);
+    }
+  };
+  return { events, storage, settings, driver, announced, res, start, tick, play, pacedHits, elapsed: () => el };
 }
 
 const emit = <K extends keyof GameEvents>(t: ReturnType<typeof setup>, k: K, e: GameEvents[K]): void => t.events.emit(k, e);
@@ -115,7 +132,7 @@ describe('challenge driver', () => {
     const before = t.storage.raw();
     t.start();
     t.announced.length = 0;
-    for (let i = 0; i < 6; i++) t.res(true);
+    t.pacedHits(6);
     expect(t.driver.target().level).toBe(2);
     expect(t.announced.map((m) => m.level)).toEqual([1, 2]);
     expect(t.driver.modifiers().weakScale).toBe(1); // not eased yet
@@ -133,8 +150,8 @@ describe('challenge driver', () => {
   it('drought counts playing time from ticks, ignores pauses and timer skips', () => {
     const t = setup(true);
     t.start();
-    for (let i = 0; i < 3; i++) t.res(true);
-    for (let s = 0.25; s <= 39.5; s += 0.25) t.tick(s);
+    t.pacedHits(3); // last hit at 8 s
+    t.play(39.5);
     expect(t.driver.target().level).toBe(1);
     emit(t, 'session:phase', { phase: 'paused', previous: 'playing' });
     t.tick(100);
@@ -146,12 +163,44 @@ describe('challenge driver', () => {
     expect(t.driver.summary().challenge.stepsDown).toBe(1);
     expect(t.driver.summary().seconds).toBe(200);
   });
+  it('bursts are paced: 14 hits in 2 s count once for the staircase, all 14 in the tally', () => {
+    const t = setup(true);
+    t.start();
+    t.play(10);
+    for (let i = 0; i < 14; i++) {
+      t.res(true, 'foamSecret');
+      t.play(0.15);
+    }
+    expect(t.driver.state().streak).toBe(1);
+    expect(t.driver.target().level).toBe(0);
+    expect(t.driver.summary().rows).toEqual([{ mechanic: 'foamSecret', kind: 'follow', tier: 2, hits: 14, misses: 0 }]);
+    // The burst's one counted hit + two paced hits = 3 in a row → one level.
+    t.play(CHALLENGE.hitSpacingSeconds);
+    t.pacedHits(2);
+    expect(t.driver.target().level).toBe(1);
+    // A miss inside a burst steps down at once.
+    t.res(true);
+    t.res(false);
+    expect(t.driver.target().level).toBe(0);
+    // A timer skip is not play: the next hit is still inside the spacing.
+    t.play(CHALLENGE.hitSpacingSeconds);
+    t.res(true);
+    expect(t.driver.state().streak).toBe(1);
+    t.tick(t.elapsed() + 200);
+    t.res(true);
+    expect(t.driver.state().streak).toBe(1);
+    t.play(CHALLENGE.hitSpacingSeconds);
+    t.res(true);
+    expect(t.driver.state().streak).toBe(2);
+  });
   it('existing game events count as hits; only while playing', () => {
     const t = setup(true);
     emit(t, 'chest:key', { chestId: 'a' }); // still on the title screen
     t.start();
     emit(t, 'gem:collected', { id: 'g', count: 1, total: 9, position: null as never });
+    t.play(CHALLENGE.hitSpacingSeconds);
     emit(t, 'chest:key', { chestId: 'a' });
+    t.play(CHALLENGE.hitSpacingSeconds);
     emit(t, 'chest:opened', { chestId: 'a', outfitId: 'hat' });
     expect(t.driver.summary().rows).toEqual([
       { mechanic: 'gems', kind: 'find', tier: 1, hits: 1, misses: 0 },
@@ -169,15 +218,16 @@ describe('challenge driver', () => {
   it('a new session resets; turning the setting off returns to identity at once', () => {
     const t = setup(true);
     t.start();
-    for (let i = 0; i < 9; i++) t.res(true);
+    t.pacedHits(9);
     t.driver.update(100);
     expect(t.driver.modifiers().level).toBe(3);
     emit(t, 'session:phase', { phase: 'title', previous: 'playing' });
     t.start();
     expect(t.driver.modifiers()).toEqual(IDENTITY_MODIFIERS);
     expect(t.driver.summary()).toEqual({ rows: [], seconds: 0, challenge: { enabled: true, level: 0, maxLevel: 6, stepsUp: 0, stepsDown: 0 } });
-    for (let i = 0; i < 6; i++) t.res(true);
+    t.pacedHits(6);
     t.driver.update(100);
+    expect(t.driver.target().level).toBe(2);
     t.settings.set({ autoChallenge: false });
     expect(t.driver.modifiers()).toEqual(IDENTITY_MODIFIERS);
     expect(t.driver.target()).toEqual(IDENTITY_MODIFIERS);

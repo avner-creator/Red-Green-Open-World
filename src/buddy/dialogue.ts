@@ -48,10 +48,18 @@ export function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-/** How long a line stays up: typewriter + a reading hold that grows with the words. */
-export function lineTiming(line: Line): { reveal: number; duration: number } {
-  const reveal = line.text.length * CHAR_SECONDS;
+/**
+ * How long a line stays up: typewriter + a reading hold that grows with the words. With a spoken
+ * clip of `clipSeconds`, the typewriter follows the voice (the words appear as Pip says them) and
+ * the bubble stays up at least until the clip has finished, plus a short beat.
+ */
+export function lineTiming(line: Line, clipSeconds: number | null = null): { reveal: number; duration: number } {
+  let reveal = line.text.length * CHAR_SECONDS;
   const hold = line.hold ?? 1.2 + wordCount(line.text) * 0.32;
+  if (clipSeconds && clipSeconds > 0) {
+    reveal = Math.max(reveal, clipSeconds * 0.85);
+    return { reveal, duration: Math.max(reveal + hold, clipSeconds + 0.35) };
+  }
   return { reveal, duration: reveal + hold };
 }
 
@@ -66,6 +74,8 @@ export class DialogueQueue {
   /** Called when a line starts (UI + voice) and when it ends (null). */
   onChange: (active: ActiveLine | null) => void = () => {};
   onDone: (line: Line, interrupted: boolean) => void = () => {};
+  /** Seconds of the line's voice clip, when known (keeps the bubble up while Pip talks). */
+  clipSeconds: (line: Line) => number | null = () => null;
 
   get queued(): readonly Line[] {
     return this.waiting.map((w) => w.line);
@@ -160,7 +170,7 @@ export class DialogueQueue {
   }
 
   private start(line: Line): void {
-    const { reveal, duration } = lineTiming(line);
+    const { reveal, duration } = lineTiming(line, this.clipSeconds(line));
     this.current = { line, t: 0, reveal, duration };
     this.onChange(this.current);
   }

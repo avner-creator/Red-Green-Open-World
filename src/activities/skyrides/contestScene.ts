@@ -401,6 +401,7 @@ export function createContestScene(ctx: GameContext): ContestScene {
           h.flash = 1;
           weakSparks.burst(h.pos.x, h.pos.y, h.pos.z, 12, 9, 0.7, 0.45);
           got.push('bonusHoop');
+          ctx.events.emit('glasses:result', { mechanic: 'skyBonusHoop', kind: 'lineUp', tier: 2, hit: true });
         }
       }
       for (const c of clouds) {
@@ -420,6 +421,7 @@ export function createContestScene(ctx: GameContext): ContestScene {
           c.pop = 1;
           weakSparks.burst(c.pos.x, c.pos.y, c.pos.z, 16, 10, 0.8, 0.5);
           got.push('golden');
+          ctx.events.emit('glasses:result', { mechanic: 'skyGolden', kind: 'find', tier: 1, hit: true });
         }
       }
       return got;

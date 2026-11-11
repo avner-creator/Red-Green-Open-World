@@ -10,6 +10,12 @@
  * - Visible instanced meshes (trees, bushes, rocks, big props): one crown capsule per instance,
  *   refreshed a few times a second near the player from the live instance matrices.
  *
+ * Only static world scenery counts (`sceneryKind`): instanced meshes under the `world` root (or opted
+ * in with `userData.cameraOccluder = true`), never anything flagged `userData.cameraIgnore = true`
+ * (on it or an ancestor), and never a vision-layer object (weak-/strong-eye objects live in their own
+ * scenes; a `Vision.*` ancestor is refused as well): the camera must not reveal them to the other eye.
+ * Attractions' moving actors (bubbles, suits, balloons) are therefore never obstacles.
+ *
  * Queries are one-sided (a ray only hits a surface it enters), so a hero standing inside a crown
  * or a collider-less prop never snaps the camera into their head.
  */
@@ -38,6 +44,29 @@ interface ProxyEntry {
 
 interface Bake {
   active: boolean;
+}
+
+/** `userData` flag: this object and everything under it never blocks the camera. */
+export const CAMERA_IGNORE = 'cameraIgnore';
+/**
+ * `userData` flag: a big static structure outside the `world` root that should block the camera
+ * (an instanced mesh, or a plain mesh whose own triangles are baked like a shadow proxy).
+ */
+export const CAMERA_OCCLUDER = 'cameraOccluder';
+
+/**
+ * Whether `o` may block the camera: 'ignore' (opted out, a vision-layer object, or a ridden
+ * vehicle), 'world' (static world scenery or opted in) or 'other' (anything else, e.g. an
+ * attraction's own pieces: only their static shadow proxies count, dropped once they move).
+ */
+export function sceneryKind(o: THREE.Object3D): 'ignore' | 'world' | 'other' {
+  let kind: 'world' | 'other' = 'other';
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) {
+    const ud = p.userData as Record<string, unknown> | undefined;
+    if (ud?.[CAMERA_IGNORE] === true || p.name.startsWith('Vision.') || /^(buggy|horse)/.test(p.name)) return 'ignore';
+    if (kind === 'other' && (ud?.[CAMERA_OCCLUDER] === true || (p.name === 'world' && p.parent !== null && (p.parent as THREE.Scene).isScene))) kind = 'world';
+  }
+  return kind;
 }
 
 export interface CameraOccluders {
@@ -151,7 +180,7 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
 
   function onProxy(mesh: THREE.Mesh): void {
     let e = proxies.get(mesh);
-    if (!e && onVehicle(mesh)) {
+    if (!e && (onVehicle(mesh) || sceneryKind(mesh) === 'ignore')) {
       proxies.set(mesh, { stable: 0, matrix: new THREE.Matrix4(), bake: -1, dynamic: true });
       return;
     }
@@ -166,7 +195,13 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
       e = { stable: mesh.matrixAutoUpdate ? 0 : STABLE_SCANS, matrix: mesh.matrixWorld.clone(), bake: -1, dynamic: false };
       proxies.set(mesh, e);
     } else if (e.dynamic) return;
-    else if (!e.matrix.equals(mesh.matrixWorld)) {
+    else if (!e.matrix.equals(mesh.matrixWorld) && e.bake < 0 && e.stable < STABLE_SCANS) {
+      // Moved before it was ever baked (first seen before its first matrix update, or placed a
+      // moment later): start counting again. Things that keep moving never settle.
+      e.matrix.copy(mesh.matrixWorld);
+      e.stable = 0;
+      return;
+    } else if (!e.matrix.equals(mesh.matrixWorld)) {
       // It moved: a vehicle or a ride, not scenery.
       e.dynamic = true;
       if (e.bake >= 0) bakes[e.bake].active = false;
@@ -190,16 +225,25 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
       if (!mesh.isMesh || (o as THREE.SkinnedMesh).isSkinnedMesh) return;
       const proxyOnly = o.layers.mask === 1 << SHADOW_PROXY_LAYER;
       if ((o as THREE.InstancedMesh).isInstancedMesh) {
-        if (!proxyOnly && o.layers.isEnabled(0)) onInstanced(o as THREE.InstancedMesh);
+        // Instance matrices are rewritten every frame by scatter LOD too, so motion cannot be told
+        // apart from culling: only world scenery (or opted-in structures) counts.
+        if (!proxyOnly && o.layers.isEnabled(0) && !instancedSeen.has(o as THREE.InstancedMesh)) {
+          if (sceneryKind(o) === 'world') onInstanced(o as THREE.InstancedMesh);
+          else instancedSeen.add(o as THREE.InstancedMesh);
+        }
         return;
       }
-      if (proxyOnly) onProxy(mesh);
+      // Shadow proxies, and render meshes of big static structures that opted in (baked like a
+      // proxy: their own triangles, dropped as soon as they move).
+      if (proxyOnly || (mesh.userData as Record<string, unknown>)[CAMERA_OCCLUDER] === true) onProxy(mesh);
     });
   }
 
   function visibleChain(o: THREE.Object3D): boolean {
-    for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
-    return true;
+    let p: THREE.Object3D = o;
+    for (; p.parent; p = p.parent) if (!p.visible) return false;
+    // Removed from the scene: no longer an obstacle.
+    return p === scene;
   }
 
   function gather(center: THREE.Vector3): void {

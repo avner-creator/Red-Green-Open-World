@@ -359,6 +359,7 @@ export function createScoops(ctx: GameContext): Scoops {
         jarAnim[res.index].wobble = 1;
         secret.onCone(coneView.topWorld(secretTop));
         ctx.audio.play('key', { pitch: 1.2 });
+        ctx.events.emit('glasses:result', { mechanic: 'scoopsSecret', kind: 'read', tier: 1, hit: true });
         friends.react('cheer');
         break;
       case 'jarWrong':
@@ -366,6 +367,7 @@ export function createScoops(ctx: GameContext): Scoops {
         jarAnim[res.index].wobble = 1;
         ctx.audio.play('bump', { pitch: 1.4, volume: 0.6 });
         ctx.audio.play('tick', { pitch: 0.8 });
+        ctx.events.emit('glasses:result', { mechanic: 'scoopsSecret', kind: 'read', tier: 1, hit: false });
         placeSecret();
         break;
       case 'stage':
@@ -579,8 +581,8 @@ export function createScoops(ctx: GameContext): Scoops {
       effects.update(dt);
       ui.setEffects(effects.active());
       // The friends' character models load only once the game is on (not behind the title screen),
-      // except in test mode, where they load at boot so no model pops in between two compared frames.
-      friends.update(dt, local, near && (ctx.testMode || ctx.session.state.phase !== 'title'));
+      // in test mode too, so the boot request budget (npm run boot:requests) holds there.
+      friends.update(dt, local, near && ctx.session.state.phase !== 'title');
       if (!near) return;
 
       for (let i = timers.length - 1; i >= 0; i--) {

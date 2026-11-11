@@ -60,6 +60,8 @@ for (const touch of [true, false]) {
           rg.ctx.events.emit('combo:changed', { multiplier: 3, streak: 3 });
           rg.ctx.events.emit('stunt', { kind: 'flip', value: 10, stars: 3 } as never);
           rg.ctx.events.emit('gem:collected', { id: 'x', count: 1, total: 9, position: sp.position, combo: 3, value: 1, gain: 3 });
+          // Pip's intro waits for the child's actions, so ask (T / tap Pip) for a bubble.
+          window.__rgBuddy!.ask();
           rg.step(1 / 30, 45, false);
         });
         const bubble = page.getByTestId('pip-bubble');
