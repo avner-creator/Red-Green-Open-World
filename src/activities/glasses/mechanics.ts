@@ -34,5 +34,5 @@ export const MECHANICS: readonly MechanicDef[] = [
   // Two halves (one per eye) show which of three arches to run through → gems.
   { id: 'gates', kind: 'lineUp', pictos: ['halves', 'arches', 'gems'], create: gates.create, booth: true },
   // The hidden shape of the dot picture is the answer on the three-button pedestal → gems.
-  { id: 'dotsigns', kind: 'popOut', pictos: ['dots', 'press', 'gems'], create: dotsigns.create },
+  { id: 'dotsigns', kind: 'popOut', pictos: ['dots', 'press', 'gems'], create: dotsigns.create, booth: true },
 ];

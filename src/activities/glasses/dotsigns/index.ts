@@ -1,39 +1,32 @@
 /**
- * Dot-picture signs (kind `popOut`). A big both-eye sign carries a red-green dot picture: the
- * weak eye gets one dot pattern, the strong eye another (toolkit pair, exactly registered on the
- * dark panel). Each eye alone sees only random dots; the hidden shape exists only between the two
- * eyes. In front, a pedestal with three identical big buttons shows three shapes. Press the one
- * that is hidden in the dots (E / gamepad / touch through `ctx.interactions`) → confetti, a
- * flourish of the sign, fanfare, gems; a wrong one → wobble and boing. A new picture follows.
+ * Dot-picture signs (kind `popOut`), on the booth kit (../booth/README.md).
  *
- * Draw calls: the board (1) + one merged both-eye mesh: sign, pedestal and buttons (1) + weak dots
- * (1) + strong dots (1) + confetti while it flies (1).
+ * A game booth (marquee, demo, 5 lamps) stands behind-left of a big both-eye sign; in front of the
+ * sign a pedestal with three big buttons, and behind them a glowing press pad. Stand on the pad and
+ * press Use → 3-2-1-GO → the sign shows a red-green dot picture (the weak eye gets one dot pattern,
+ * the strong eye another, exactly registered on the dark panel: each eye alone sees only random
+ * dots, the hidden shape exists only between the two eyes) and the buttons show three shapes.
+ * Press the one hidden in the dots (E / gamepad / touch through `ctx.interactions`) → ✓, a bright
+ * lamp, the sign does a flourish; a wrong one → ✗, a dim lamp, a wobble, and the right button bobs.
+ * 5 pictures a round, one straight after the other; 3 or more right → lamps chase, fanfare, the
+ * prize flies out (5 of 5 is the jackpot). Finer pictures after 4 or 5 right, coarser after ≤ 2.
+ *
+ * Between rounds the sign is empty (dark panel) and the buttons are blank.
+ * Draw calls: booth (1) + one merged both-eye mesh: sign, pedestal and buttons (1) + weak dots (1)
+ * + strong dots (1) during a try (+ the kit's fx 2 during a round) ≤ 6.
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier, Interactable } from '../../../types';
-import { createDotPicturePair, DOT_BOARD_GREY, TIERS, withChallenge } from '../../../vision/toolkit';
+import { createDotPicturePair, DOT_BOARD_GREY, FULL_SYMBOL_STYLE, TIERS, withChallenge } from '../../../vision/toolkit';
 import type { DotPicturePair } from '../../../vision/toolkit';
-import {
-  boxGeo,
-  Confetti,
-  createAtlas,
-  createPartMesh,
-  createSiteMaterial,
-  flatUv,
-  nextTier,
-  pivotMatrix,
-  remapUv,
-  siteFrame,
-  squashCurve,
-  wobbleCurve,
-} from '../gates/kit';
+import type { BoothSpec } from '../booth/types';
+import { boxGeo, createAtlas, createPartMesh, createSiteMaterial, flatUv, pivotMatrix, remapUv, siteFrame, squashCurve, wobbleCurve } from '../gates/kit';
 import { CAM_BACK, chooseLayout } from '../gates/layout';
 import type { LayoutSpec } from '../gates/layout';
 import type { Mechanic, MechanicEnv } from '../types';
-import { freshGuard, settle } from '../gates/guard';
-import type { Guard } from '../gates/guard';
-import { DOT_GEMS, DOT_TIERS, DOTSIGNS } from './constants';
+import { DOT_BOOTH, DOT_RULES, DOT_TIERS, DOTSIGNS } from './constants';
+import { DOT_DEMO } from './demo';
 import { shapeButtonCanvas } from './picto';
 import { answerShape, isDotRound, makeDotRound } from './round';
 import type { DotRound } from './round';
@@ -53,18 +46,29 @@ const SWATCHES = {
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
   const D = DOTSIGNS;
+  const mq = DOT_BOOTH.marquee;
+  const mqPt = (lx: number, lz: number): { x: number; z: number } => ({
+    x: mq.x + lx * Math.cos(mq.yaw) + lz * Math.sin(mq.yaw),
+    z: mq.z - lx * Math.sin(mq.yaw) + lz * Math.cos(mq.yaw),
+  });
   const spec: LayoutSpec = {
     // Between two buttons: the default camera then shows all three beside the hero.
     hero: { x: D.buttonX[2] / 2, z: D.heroZ },
     targets: [
       ...[-1, 0, 1].flatMap((sx) => [-1, 0, 1].map((sy) => ({ x: sx * 1.15, z: D.signZ + 0.15, y: D.signY + sy * 1.15 }))),
       ...D.buttonX.map((x) => ({ x, z: D.pedZ, y: D.pedH + 0.12 })),
+      // The booth's lamp row.
+      ...[-0.6, 0.6].map((lx) => ({ ...mqPt(lx, 0), y: 3.2 })),
     ],
     footprint: [
       ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: (sx * D.pedW) / 2, z: D.pedZ + (sz * D.pedD) / 2 }))),
       ...[-1, 1].map((sx) => ({ x: (sx * D.frameW) / 2, z: D.signZ })),
       { x: 0, z: D.signZ },
       { x: 0, z: D.heroZ },
+      // The start pad and the booth's poles and counter.
+      ...[-1, 1].map((sx) => ({ x: D.pad.x + sx * D.pad.r, z: D.pad.z })),
+      { x: D.pad.x, z: D.pad.z + D.pad.r },
+      ...[-1.6, 1.6].flatMap((lx) => [0.1, -0.5].map((lz) => mqPt(lx, lz))),
     ],
     radius: site.radius + 0.4,
     // The four picture corners must be clear of canopies from the play spot and the approach.
@@ -178,38 +182,35 @@ export function create(env: MechanicEnv): Mechanic {
   }
   placeRoots(null);
 
-  const confetti = new Confetti(90);
-  env.add(confetti.mesh, VisionLayer.Both);
-  let fxSeed = 0x85ebca6b;
-  const fxRng = (): number => {
-    fxSeed = (fxSeed + 0x6d2b79f5) >>> 0;
-    let t = fxSeed;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-
   // ───────────── state ─────────────
   let round: DotRound = makeDotRound(env.rng);
   let roundNo = 0;
-  let state: 'open' | 'done' = 'open';
+  /** 'idle': no picture (booth idle, countdown, celebration); 'open': a try asks; 'done': answered. */
+  let state: 'idle' | 'open' | 'done' = 'idle';
   let tier: GlassesTier = 1;
-  let doneT = 0;
   let chosen = -1;
   let hits = 0;
   let misses = 0;
-  let gems = 0;
   let active = false;
   let lastResult: { tier: GlassesTier; hit: boolean; button: number } | null = null;
   let flourish = 1;
-  let guard: Guard = freshGuard();
-  /** Seconds from the answer to the next picture (D.next after a hit, the nap after a miss). */
-  let wait: number = D.next;
-  /** Buttons sunk into the pedestal during a nap (0..1, eased). */
-  let btnSink = 0;
   const btnAnim = D.buttonX.map(() => ({ press: 1, wobble: 1, bob: 1 }));
 
+  /** A blank button face (between rounds): the same dark disc and rim as the shape faces. */
+  function drawBlank(g: CanvasRenderingContext2D): void {
+    g.fillStyle = FULL_SYMBOL_STYLE.rim;
+    g.fillRect(0, 0, 256, 256);
+    g.beginPath();
+    g.arc(128, 128, 116, 0, Math.PI * 2);
+    g.fillStyle = FULL_SYMBOL_STYLE.board;
+    g.fill();
+  }
+
   function drawButtons(): void {
+    if (state === 'idle') {
+      for (let i = 0; i < 3; i++) atlas.drawCell(i, drawBlank, 0.2);
+      return;
+    }
     round.shapes.forEach((s, i) => {
       const src = shapeButtonCanvas(s);
       atlas.drawCell(i, (g) => g.drawImage(src, 0, 0, 256, 256), 0.34);
@@ -238,12 +239,13 @@ export function create(env: MechanicEnv): Mechanic {
     placeRoots(null);
   }
 
+  /** Show the current picture (a try is on). */
   function applyRound(): void {
     state = 'open';
     chosen = -1;
-    doneT = 0;
     drawButtons();
     applyDots();
+    weakRoot.visible = strongRoot.visible = true;
   }
 
   function newRound(): void {
@@ -252,9 +254,15 @@ export function create(env: MechanicEnv): Mechanic {
     applyRound();
   }
 
+  function goIdle(): void {
+    state = 'idle';
+    chosen = -1;
+    weakRoot.visible = strongRoot.visible = false;
+    drawButtons();
+  }
+
   function clearAnims(): void {
     flourish = 1;
-    btnSink = 0;
     body.setPart('sign', null);
     placeRoots(null);
     btnAnim.forEach((a, i) => {
@@ -263,36 +271,48 @@ export function create(env: MechanicEnv): Mechanic {
     });
   }
 
+  // Booth spec heights are relative to the site's y: the countdown at the picture's height.
+  const boothSpec: BoothSpec = {
+    ...DOT_BOOTH,
+    countdown: DOT_BOOTH.countdown && { ...DOT_BOOTH.countdown, y: signY },
+  };
+  const kit = env.booth({
+    frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
+    ground,
+    spec: boothSpec,
+    demo: DOT_DEMO,
+    rules: DOT_RULES,
+    hooks: {
+      onTry(_i, t) {
+        tier = t;
+        clearAnims();
+        newRound();
+      },
+      onIdle() {
+        clearAnims();
+        goIdle();
+      },
+    },
+  });
+
   function press(i: number): void {
-    if (state !== 'open') return;
+    if (state !== 'open' || kit.phase() !== 'play') return;
     const hit = i === round.answer;
-    const t = tier;
     chosen = i;
     state = 'done';
-    doneT = 0;
-    lastResult = { tier: t, hit, button: i };
+    lastResult = { tier, hit, button: i };
     btnAnim[i].press = 0;
-    const settled = settle(guard, hit, DOT_GEMS[t], D.nap);
-    guard = settled.guard;
-    wait = hit ? D.next : settled.nap;
+    ctx.audio.play('click');
     if (hit) {
       hits++;
-      gems += settled.gems;
-      env.pay(settled.gems);
-      ctx.audio.play('click');
-      ctx.audio.play('fanfare');
       flourish = 0;
-      const top = frame.toWorld(0, D.signZ + 0.3);
-      confetti.burst(top.x, site.y + signTop + 0.2, top.z, fxRng, 70, 5);
     } else {
       misses++;
       btnAnim[i].wobble = 0;
-      ctx.audio.play('boing', { volume: 0.55, pitch: 0.8 });
       // After the answer: the right button bobs to show which one it was.
       btnAnim[round.answer].bob = 0;
     }
-    env.result(t, hit);
-    tier = nextTier(t, hit);
+    kit.report(hit, { x: D.buttonX[i], y: btnY + 0.75, z: btnZ + 0.15 });
   }
 
   const m4 = new THREE.Matrix4();
@@ -311,24 +331,16 @@ export function create(env: MechanicEnv): Mechanic {
         placeRoots(flourishM);
       }
     }
-    // Nap after a miss: the buttons sink into the pedestal (prompts are off while state is done).
-    const sinkTo = state === 'done' && !lastResult?.hit && doneT > 0.9 && doneT < wait - 0.4 ? 1 : 0;
-    const sinkWas = btnSink;
-    btnSink += (sinkTo - btnSink) * Math.min(1, dt * 5);
-    if (Math.abs(btnSink - sinkTo) < 1e-3) btnSink = sinkTo;
-    const sinking = btnSink !== sinkWas || btnSink > 0;
     btnAnim.forEach((a, i) => {
-      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1 && !sinking) {
-        return;
-      }
+      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1) return;
       a.press = Math.min(1, a.press + dt / D.press);
       a.wobble = Math.min(1, a.wobble + dt / D.wobble);
       a.bob = Math.min(1, a.bob + dt / 1.2);
-      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1 && btnSink === 0) {
+      if (a.press >= 1 && a.wobble >= 1 && a.bob >= 1) {
         body.setPart(`btn${i}`, null);
         return;
       }
-      const down = (a.press < 1 ? -Math.sin(a.press * Math.PI) * 0.07 : 0) - btnSink * 0.16;
+      const down = a.press < 1 ? -Math.sin(a.press * Math.PI) * 0.07 : 0;
       const bob = a.bob < 1 ? Math.abs(Math.sin(a.bob * Math.PI * 3)) * (1 - a.bob) * 0.22 : 0;
       const k = a.press < 1 ? 1 + Math.sin(a.press * Math.PI) * 0.12 : 1;
       pivotMatrix(D.buttonX[i], btnY, btnZ, k, 1 / k, k, wobbleCurve(a.wobble) * 2.5, down + bob, m4);
@@ -347,7 +359,7 @@ export function create(env: MechanicEnv): Mechanic {
       position: () => p.clone(),
       radius: D.reach,
       icon: 'hand',
-      enabled: () => state === 'open',
+      enabled: () => state === 'open' && kit.phase() === 'play' && active,
       onUse: () => press(i),
     };
     return ctx.interactions.add(target);
@@ -355,16 +367,13 @@ export function create(env: MechanicEnv): Mechanic {
 
   function reset(): void {
     tier = 1;
-    guard = freshGuard();
-    wait = D.next;
     hits = 0;
     misses = 0;
-    gems = 0;
     roundNo = 0;
     lastResult = null;
-    confetti.clear();
     clearAnims();
-    newRound();
+    kit.reset();
+    goIdle();
   }
 
   reset();
@@ -375,30 +384,23 @@ export function create(env: MechanicEnv): Mechanic {
     reset,
     setActive(on) {
       active = on;
-      if (!on) {
-        confetti.clear();
-        clearAnims();
-        if (state === 'done') newRound();
-      }
+      kit.setActive(on);
+      if (!on) clearAnims();
     },
     update(dt) {
+      kit.update(dt);
       animate(dt);
-      confetti.update(dt);
-      if (state === 'done') {
-        doneT += dt;
-        if (doneT >= wait) newRound();
-      }
     },
     dispose() {
       for (const off of offs) off();
       for (const c of colliders) ctx.physics.removeCollider(c);
       colliders.length = 0;
-      for (const o of [body.mesh, weakRoot, strongRoot, confetti.mesh]) env.remove(o);
+      kit.dispose();
+      for (const o of [body.mesh, weakRoot, strongRoot]) env.remove(o);
       body.dispose();
       material.dispose();
       atlas.dispose();
       pair?.dispose();
-      confetti.dispose();
     },
     debug() {
       const pt = (lx: number, lz: number): { x: number; y: number; z: number } => {
@@ -408,29 +410,41 @@ export function create(env: MechanicEnv): Mechanic {
       return {
         active,
         state,
+        phase: kit.phase(),
         tier,
+        roundTier: kit.tier(),
         round: roundNo,
         answer: round.answer,
         answerShape: answerShape(round),
         shapes: [...round.shapes],
         seed: round.seed,
         cells: pairCells,
+        dotsShown: weakRoot.visible,
         chosen,
         hits,
         misses,
-        gems,
+        gems: kit.round.totalGems,
         lastResult,
-        guard: { ...guard },
-        wait,
-        sink: btnSink,
-        confetti: confetti.live,
-        gemsPerTier: { ...DOT_GEMS },
+        kit: kit.debug(),
         yaw: lay.yaw,
         buttons: btnWorld.map((b) => ({ x: b.x, y: b.y, z: b.z })),
         // Where to stand to press each button (in front of the pedestal).
         stand: D.buttonX.map((x) => pt(x, D.heroZ)),
         // The viewing spot the layout was chosen for (between the middle and the right button).
         view: pt(D.buttonX[2] / 2, D.heroZ),
+        pad: pt(D.pad.x, D.pad.z),
+        /** A spot 2.6 m behind the pad (the camera then shows the pad, the sign and the booth). */
+        padBack: pt(D.pad.x, D.pad.z + 2.6),
+        booth: (() => {
+          const b = kit.booth.build.marqueeBox;
+          return pt((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2);
+        })(),
+        /** A spot ~30 m out on the approach, facing the booth and the sign. */
+        far: (() => {
+          const p = pt(D.pad.x, D.pad.z + 28);
+          const t = frame.toWorld(-1.5, D.signZ);
+          return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
+        })(),
         // The approach spot the layout keeps clear (the sign seen from ~7 m).
         approach: pt(lay.view?.x ?? 0, lay.view?.z ?? D.signZ + 7),
         approachYaw: (() => {
@@ -443,18 +457,24 @@ export function create(env: MechanicEnv): Mechanic {
       };
     },
     force(params) {
-      if (typeof params.tier === 'number') tier = Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier;
+      if (params.play) kit.forcePlay(typeof params.tier === 'number' ? (Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier) : undefined);
+      else if (typeof params.tier === 'number' && state !== 'idle') {
+        tier = Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier;
+      }
+      if (params.start) kit.start();
+      if (typeof params.pin === 'number') kit.pin(params.pin);
+      if (state === 'idle') return;
       if (params.newRound) {
         newRound();
         return;
       }
       const r = { shapes: params.shapes ?? round.shapes, answer: params.answer ?? round.answer, seed: params.seed ?? round.seed };
       if (isDotRound(r)) round = { shapes: [...r.shapes], answer: r.answer, seed: r.seed };
-      clearAnims();
-      confetti.clear();
-      applyRound();
+      if (params.shapes !== undefined || params.answer !== undefined || params.seed !== undefined || typeof params.tier === 'number') {
+        clearAnims();
+        applyRound();
+      }
     },
     drawObjects: () => env.tracked(),
   };
 }
-

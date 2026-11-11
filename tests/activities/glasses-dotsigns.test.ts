@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DOT_GEMS, DOT_TIERS } from '../../src/activities/glasses/dotsigns/constants';
+import { DEMO_KIT } from '../../src/activities/glasses/booth/draw';
+import { fullRules, prizeFor, stepTier } from '../../src/activities/glasses/booth/round';
+import { simulate } from '../../src/activities/glasses/booth/sim';
+import { DOT_BOOTH, DOT_PRIZE, DOT_RULES, DOT_TIERS } from '../../src/activities/glasses/dotsigns/constants';
+import { DOT_DEMO } from '../../src/activities/glasses/dotsigns/demo';
 import { shapeImageMask } from '../../src/activities/glasses/dotsigns/picto';
 import { answerShape, isDotRound, makeDotRound } from '../../src/activities/glasses/dotsigns/round';
-import { nextTier } from '../../src/activities/glasses/gates/kit';
 import { generateDotPicture } from '../../src/vision/toolkit/dotPicture';
 import { shapeContains, SHAPE_IDS } from '../../src/vision/toolkit/shapes';
 import { mulberry32 } from '../../src/vision/toolkit/rng';
@@ -113,12 +116,50 @@ describe('dot tiers and rewards', () => {
     expect(DOT_TIERS[3].dotScale).toBeGreaterThanOrEqual(0.6);
   });
 
-  it('pays more for finer pictures; the staircase moves one step each way', () => {
-    expect(DOT_GEMS[2]).toBeGreaterThan(DOT_GEMS[1]);
-    expect(DOT_GEMS[3]).toBeGreaterThan(DOT_GEMS[2]);
-    let t = nextTier(1, true);
-    t = nextTier(t, true);
-    expect(t).toBe(3);
-    expect(nextTier(t, false)).toBe(2);
+  it('5 pictures a round (= 5 lamps), a prize from 3 right, 5 of 5 is the jackpot; finer pays more', () => {
+    expect(DOT_RULES.tries).toBe(5);
+    expect(DOT_BOOTH.lamps).toBe(5);
+    expect(DOT_BOOTH.pad.walkIn).toBe(false);
+    for (const tier of [1, 2, 3] as const) {
+      for (let h = 0; h < 3; h++) expect(prizeFor(DOT_RULES, h, tier)).toBe(0);
+      expect(prizeFor(DOT_RULES, 4, tier)).toBeGreaterThan(prizeFor(DOT_RULES, 3, tier));
+      expect(prizeFor(DOT_RULES, 5, tier)).toBeGreaterThanOrEqual(1.7 * prizeFor(DOT_RULES, 4, tier));
+      if (tier > 1) expect(DOT_PRIZE[tier][5]).toBeGreaterThan(DOT_PRIZE[(tier - 1) as 1 | 2][5]);
+    }
+  });
+
+  it('the tier steps per round: up after 4 or 5 right, down after 2 or fewer', () => {
+    const r = fullRules(DOT_RULES);
+    expect([5, 4, 3, 2, 0].map((h) => stepTier(2, h, r.upAt, r.downBelow))).toEqual([3, 3, 2, 1, 1]);
+  });
+
+  // A bot mashes the button it stands at (0.4 s); a child who reads the picture takes ~2 s.
+  const bot = { hitP: 1 / 3, tryTime: 0.4, restart: 0.5 };
+  const kid = { hitP: 1, tryTime: 2, restart: 1.5 };
+
+  it('a random-guess bot earns ≤ 6 gems per minute at every tier', () => {
+    for (const fixedTier of [undefined, 1, 2, 3] as const) {
+      const r = simulate(DOT_RULES, { ...bot, minutes: 600, fixedTier, seed: 11 });
+      console.info(`dotsigns bot, tier ${fixedTier ?? 'staircase'}: ${r.gemsPerMinute.toFixed(2)} gems/min`);
+      expect(r.gemsPerMinute, `tier ${fixedTier ?? 'staircase'}`).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('a child who sees the shape earns ≥ 25 gems per minute, even at tier 1', () => {
+    const r1 = simulate(DOT_RULES, { ...kid, minutes: 20, fixedTier: 1 });
+    const rs = simulate(DOT_RULES, { ...kid, minutes: 20 });
+    console.info(`dotsigns perfect: tier 1 ${r1.gemsPerMinute.toFixed(1)}, staircase ${rs.gemsPerMinute.toFixed(1)} gems/min`);
+    expect(r1.gemsPerMinute).toBeGreaterThanOrEqual(25);
+    expect(rs.gemsPerMinute).toBeGreaterThanOrEqual(r1.gemsPerMinute);
+    expect(rs.tierEnd).toBe(3);
+  });
+
+  it('the demo flipbook has 4–6 frames and draws each without error', () => {
+    expect(DOT_DEMO.frames).toBeGreaterThanOrEqual(4);
+    expect(DOT_DEMO.frames).toBeLessThanOrEqual(6);
+    const calls: string[] = [];
+    const c = new Proxy({}, { get: (_t, k) => (k === 'canvas' ? {} : (..._a: unknown[]) => calls.push(String(k))), set: () => true }) as unknown as CanvasRenderingContext2D;
+    for (let f = 0; f < DOT_DEMO.frames; f++) DOT_DEMO.draw(c, f, 256, DEMO_KIT);
+    expect(calls.length).toBeGreaterThan(100);
   });
 });
