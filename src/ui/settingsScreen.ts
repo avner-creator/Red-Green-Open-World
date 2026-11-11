@@ -94,7 +94,9 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
 
   let armed = false;
   let armTimer = 0;
-  const reset = h('button', 'b d', { type: 'button', 'data-testid': 'reset' }, icon('restart'), 'Reset');
+  // Reset settings (gear + circular arrow); the hold button next to it resets gems and items.
+  const resetFace = (): (HTMLElement | string)[] => [icon('gear'), icon('restart'), 'Settings'];
+  const reset = h('button', 'b d', { type: 'button', 'aria-label': 'Reset settings', 'data-testid': 'reset' }, ...resetFace());
   reset.addEventListener('click', () => {
     if (!armed) {
       armed = true;
@@ -108,7 +110,7 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
   function disarm(): void {
     armed = false;
     window.clearTimeout(armTimer);
-    reset.replaceChildren(icon('restart'), 'Reset');
+    reset.replaceChildren(...resetFace());
   }
 
   const autoRows = createGlassesSettingsRows(ctx, { openSummary: o.onSummary });
@@ -169,7 +171,8 @@ export function createSettings(ctx: GameContext, o: { onClose(): void; onCalibra
     slider({ ic: 'note', label: 'Music', testid: 'vol-music', ...pct(() => S().volumeMusic, (v) => ctx.settings.set({ volumeMusic: v }), 0) }),
     slider({ ic: 'star', label: 'Sound effects', testid: 'vol-sfx', ...pct(() => S().volumeSfx, (v) => ctx.settings.set({ volumeSfx: v }), 0) }),
     row('sparkle', 'Graphics', null, h('div', 'choices', {}, qualityBtn('low', 'bars1', 'Low'), qualityBtn('medium', 'bars2', 'Medium'), qualityBtn('high', 'bars3', 'High'))),
-    row('restart', 'Reset', 'Settings · Gems and items (hold)', h('div', 'choices', {}, reset, profileReset)),
+    // No sub-label (QA round 3: it was tiny and ran into the heading); each button shows what it resets.
+    row('restart', 'Reset', null, h('div', 'choices', {}, reset, profileReset)),
   ];
 
   // Two tabs so nothing scrolls on a small screen: Glasses / Game.
