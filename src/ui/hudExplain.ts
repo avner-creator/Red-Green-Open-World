@@ -78,6 +78,7 @@ export function createHudExplain(ctx: GameContext, hud: HTMLElement): HudExplain
     }
   };
 
+  const passOpen = (): boolean => !!ctx.uiRoot.querySelector('.pass-over.on, .wf-card.on');
   const el = (c: HudChip): HTMLElement | null => ctx.uiRoot.querySelector<HTMLElement>(SEL[c]);
 
   const place = (): void => {
@@ -103,7 +104,7 @@ export function createHudExplain(ctx: GameContext, hud: HTMLElement): HudExplain
 
   const api: HudExplain = {
     show(c, seconds = 2.6) {
-      if (ctx.session.state.phase !== 'playing') return;
+      if (ctx.session.state.phase !== 'playing' || passOpen()) return;
       if (shown !== c) {
         bubble.replaceChildren(...EXPLAIN_ROWS[c].map((row) => h('div', 'xrow', {}, ...row.map(part))));
         bubble.dataset.chip = c;
@@ -118,6 +119,7 @@ export function createHudExplain(ctx: GameContext, hud: HTMLElement): HudExplain
         if (shown) hide();
         return;
       }
+      if (shown && passOpen()) hide();
       if (shown) {
         left -= dt;
         if (left <= 0 && hoverChip !== shown) hide();
