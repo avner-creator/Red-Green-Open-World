@@ -27,7 +27,7 @@ import { MECHANICS } from './mechanics';
 import type { MechanicDef } from './mechanics';
 import { createGlassesAtlas } from './pictos';
 import { pay, result } from './rewards';
-import { boardOf, FIXED_SITES, groundProblem, searchSite, siteToWorld, staticProblems } from './sites';
+import { boardOf, FIXED_SITES, groundProblem, nearestRoadPoint, searchSite, siteToWorld, staticProblems } from './sites';
 import type { FixedSite, GlassesSite, SiteWorld, XZ } from './sites';
 import { IDENTITY_CHALLENGE } from './types';
 import type { Mechanic, MechanicEnv } from './types';
@@ -48,6 +48,8 @@ export interface GlassesSiteInfo {
   /** Why the startup probe found the fixed site blocked (null when `valid`). */
   problem: string | null;
   board: { x: number; z: number };
+  /** Where children arrive (the road end of the world's stepping-stone trail). */
+  arrival: { x: number; z: number } | null;
 }
 
 /** `window.__rgGlasses` (test mode only). */
@@ -390,6 +392,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
       const board = boardOf(f);
       const site: SiteState = {
         id: f.id, index, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: f.near, board, valid: true, problem: null,
+        arrival: nearestRoadPoint(ROADS, f.x, f.z),
       };
       // Fixed means fixed: a site that something now stands on is reported, never moved.
       const problem = groundProblem(probeWorld(), f.x, f.z);
@@ -503,7 +506,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
     window.__rgGlasses = {
       sites: () => {
         build();
-        return entries.map(({ site: s }) => ({ id: s.id, x: s.x, y: s.y, z: s.z, yaw: s.yaw, radius: s.radius, near: s.near, valid: s.valid, problem: s.problem, board: { ...s.board } }));
+        return entries.map(({ site: s }) => ({ id: s.id, x: s.x, y: s.y, z: s.z, yaw: s.yaw, radius: s.radius, near: s.near, valid: s.valid, problem: s.problem, board: { ...s.board }, arrival: s.arrival ? { ...s.arrival } : null }));
       },
       goto(id) {
         const e0 = byId(id);

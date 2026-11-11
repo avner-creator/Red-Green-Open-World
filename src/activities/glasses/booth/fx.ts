@@ -69,7 +69,9 @@ export class BoothFx {
     this.material.onBeforeCompile = material.onBeforeCompile;
     this.material.customProgramCacheKey = material.customProgramCacheKey;
     this.material.depthTest = false;
-    this.material.depthWrite = false;
+    // It still writes depth: a weak-eye object behind a pop is hidden by it (the layer pass
+    // depth-tests against the main scene), so a pop is never see-through for the weak eye.
+    this.material.depthWrite = true;
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.renderOrder = 50;
     this.mesh.name = 'glasses:booth:fx';

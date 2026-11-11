@@ -16,6 +16,7 @@
  * + strong dots (1) during a try (+ the kit's fx 2 during a round) ≤ 6.
  */
 import * as THREE from 'three';
+import { MARQUEE } from '../booth/geometry';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier, Interactable } from '../../../types';
 import { createDotPicturePair, DOT_BOARD_GREY, FULL_SYMBOL_STYLE, TIERS, withChallenge } from '../../../vision/toolkit';
@@ -58,7 +59,7 @@ export function create(env: MechanicEnv): Mechanic {
       ...[-1, 0, 1].flatMap((sx) => [-1, 0, 1].map((sy) => ({ x: sx * 1.15, z: D.signZ + 0.15, y: D.signY + sy * 1.15 }))),
       ...D.buttonX.map((x) => ({ x, z: D.pedZ, y: D.pedH + 0.12 })),
       // The booth's lamp row.
-      ...[-0.6, 0.6].map((lx) => ({ ...mqPt(lx, 0), y: 3.2 })),
+      ...[-0.6, 0.6].map((lx) => ({ ...mqPt(lx, 0), y: MARQUEE.lampY })),
     ],
     footprint: [
       ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: (sx * D.pedW) / 2, z: D.pedZ + (sz * D.pedD) / 2 }))),

@@ -75,7 +75,8 @@ export function lineupBooth(side: -1 | 1): BoothSpec {
     lamps: LINEUP_RULES.tries,
     pad: { x: LINEUP.pad.x, z: LINEUP.pad.z, r: LINEUP.pad.radius, walkIn: true },
     // During play the prompt quad shows the device's button (E / X / tap): see `index.ts`.
-    playPrompt: 'press',
+    // The prompt is the Use button of the device in use (key E, gamepad X, a tapping hand).
+    playPrompt: 'button',
     decals: [
       // Footprints and chevrons from the approach onto the pad.
       { kind: 'chevron', x: 0, z: LINEUP.pad.z + 2.3, size: 0.9, yaw: 0 },

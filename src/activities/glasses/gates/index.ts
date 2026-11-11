@@ -19,7 +19,9 @@ import { VisionLayer } from '../../../types';
 import type { GlassesTier } from '../../../types';
 import { createFullSymbolTexture, createHalfSymbol, TIERS, withChallenge } from '../../../vision/toolkit';
 import type { HalfSymbolBlock } from '../../../vision/toolkit';
+import { MARQUEE, PAD_TOP } from '../booth/geometry';
 import type { BoothSpec } from '../booth/types';
+import { pickPromptSpot } from '../booth/view';
 import type { Mechanic, MechanicEnv } from '../types';
 import { GATE_BOOTH, GATE_RULES, GATES } from './constants';
 import { GATES_DEMO } from './demo';
@@ -104,7 +106,7 @@ export function create(env: MechanicEnv): Mechanic {
       ...[-1, 0, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * 0.7, z: G.signZ, y: G.signY + sy * 0.7 }))),
       ...G.archX.flatMap((x) => [{ x, z: G.archZ, y: G.plaqueY }, { x, z: G.archZ, y: G.plaqueY + 0.5 }]),
       // The booth's lamp row.
-      ...[-0.5, 0.5].map((lx) => ({ ...mqPt(lx, 0), y: 3.2 })),
+      ...[-0.5, 0.5].map((lx) => ({ ...mqPt(lx, 0), y: MARQUEE.lampY })),
     ],
     footprint: [
       ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: sx * (G.archX[2] + G.outerHalf), z: G.archZ + sz * 0.35 }))),
@@ -121,6 +123,14 @@ export function create(env: MechanicEnv): Mechanic {
     // The approach (~7 m from the sign): the clearest of a few spots, kept in `lay.view`.
     views: [[0, 7], [-2.5, 6.6], [2.5, 6.6], [-4, 5.8], [4, 5.8]].map(([x, dz]) => ({ x, z: G.signZ + dz })),
     foreground: 1.5,
+    // The booth faces where children arrive (the end of the world's stepping-stone trail).
+    arrival: site.arrival,
+    arrivalTargets: [
+      { ...mqPt(0, 0.2), y: MARQUEE.lampY },
+      { ...mqPt(0, 0.2), y: MARQUEE.bannerY },
+      { ...mqPt(-0.8, 0.2), y: MARQUEE.boardY },
+      { x: 0, z: G.padZ, y: 0.5 },
+    ],
   };
   const lay = chooseLayout(ctx, site, spec, { refreshDecor: true });
   const frame = siteFrame(lay);
@@ -326,7 +336,24 @@ export function create(env: MechanicEnv): Mechanic {
 
   // Booth spec heights are relative to the site's y: lift them onto the pad's ground.
   const lift = (p: { x: number; y: number; z: number } | undefined) => (p ? { ...p, y: p.y + padBase } : undefined);
-  const boothSpec: BoothSpec = { ...B, prompt: lift(B.prompt), playPromptAt: lift(B.playPromptAt), countdown: lift(B.countdown) };
+  // The play prompt ("run through an arch") floats near the play, in clear view from the pad's
+  // camera: in the central safe area (never under the HUD), off the hero, the sign and the three
+  // symbol plaques. Picked once from the layout; it never depends on the answer.
+  const promptPick = (() => {
+    const pad = { x: 0, y: padBase + PAD_TOP, z: G.padZ };
+    const keepClear = [
+      { p: { x: 0, y: signCentre.y, z: G.signZ }, size: G.signFrame + 0.2 },
+      ...G.archX.map((x, i) => ({ p: { x, y: archBase[i] + G.plaqueY, z: G.archZ }, size: G.plaque + 0.35 })),
+    ];
+    const cands: { x: number; y: number; z: number }[] = [];
+    for (const z of [-1.1, -0.5, -1.7]) {
+      for (const x of [1.55, -1.55, 1.9, -1.9, 1.2, -1.2]) {
+        for (const h of [1.5, 1.8, 1.2, 2.1, 2.4]) cands.push({ x, y: ground(x, z) + h, z });
+      }
+    }
+    return pickPromptSpot(cands, { pad, look: { x: 0, z: G.archZ }, size: 1.25 + 0.35, keepClear });
+  })();
+  const boothSpec: BoothSpec = { ...B, prompt: lift(B.prompt), playPromptAt: promptPick.at, countdown: lift(B.countdown) };
   const kit = env.booth({
     frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
     ground,
@@ -469,6 +496,7 @@ export function create(env: MechanicEnv): Mechanic {
         tierPreset: { ...TIERS[tier] },
         yaw: lay.yaw,
         layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes, ms: lay.ms },
+        promptFits: promptPick.fits,
         pad: pt(0, G.padZ),
         // Kept for older callers: the pad is where the plate was.
         plate: pt(0, G.padZ),

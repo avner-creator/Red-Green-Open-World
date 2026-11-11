@@ -47,7 +47,7 @@ export const ROUND_DEFAULTS = {
   leaveRadius: 15,
 } as const;
 
-type Full = Required<Omit<RoundRules, 'upAt' | 'downBelow'>> & { upAt: number; downBelow: number };
+type Full = Required<Omit<RoundRules, 'upAt' | 'downBelow' | 'time'>> & { upAt: number; downBelow: number; time?: number };
 
 export function fullRules(r: RoundRules): Full {
   return {
@@ -128,15 +128,40 @@ export class RoundMachine {
     return [{ type: 'start' }, { type: 'count', n: 3 }];
   }
 
-  /** The mini-game reports the current try's outcome (ignored outside `play`). */
-  report(hit: boolean): RoundEvent[] {
+  /**
+   * The mini-game reports the current try's outcome (ignored outside `play`). `tier`: this try's
+   * own tier (games with a per-try staircase); default the round's. In a timed round (`time`)
+   * the play goes on: every report fills the next lamp, and the round ends when all lamps are
+   * lit or the time is up.
+   */
+  report(hit: boolean, tier?: GlassesTier): RoundEvent[] {
     if (this.phase !== 'play') return [];
     this.results.push(hit);
     this.streak = hit ? this.streak + 1 : 0;
     this.quiet = 0;
-    const ev: RoundEvent = { type: 'result', index: this.index, hit, tier: this.tier, streak: this.streak };
+    const ev: RoundEvent = { type: 'result', index: this.index, hit, tier: tier ?? this.tier, streak: this.streak };
+    if (this.rules.time !== undefined) {
+      this.index = this.results.length;
+      if (this.results.length >= this.rules.tries) return [ev, ...this.finish()];
+      return [ev];
+    }
     this.go('beat');
     return [ev];
+  }
+
+  /** Seconds left in a timed round's play (Infinity when untimed or not playing). */
+  get timeLeft(): number {
+    if (this.rules.time === undefined || this.phase !== 'play') return Infinity;
+    return Math.max(0, this.rules.time - this.t);
+  }
+
+  /**
+   * End the tries now (a timed round's time is up, or the game decides): the round goes to the
+   * celebration / no-prize ending with the hits so far. No result is reported for unplayed tries.
+   */
+  end(): RoundEvent[] {
+    if (this.phase !== 'play' && this.phase !== 'beat' && this.phase !== 'wait') return [];
+    return this.finish();
   }
 
   /**
@@ -147,6 +172,7 @@ export class RoundMachine {
     const out: RoundEvent[] = [];
     if (this.phase === 'idle') return out;
     this.t += dt;
+    if (this.phase === 'play' && this.rules.time !== undefined && this.t >= this.rules.time) return this.finish();
     if (this.phase === 'play' || this.phase === 'wait') {
       this.quiet += dt;
       if (this.quiet >= this.rules.stall) return this.cancel('stall');

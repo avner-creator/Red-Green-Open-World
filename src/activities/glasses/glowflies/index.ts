@@ -12,6 +12,7 @@
  * one plays), and during a round the kit's fx (2) ≤ 6.
  */
 import * as THREE from 'three';
+import { MARQUEE } from '../booth/geometry';
 import { PLAYER } from '../../../config';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier } from '../../../types';
@@ -47,7 +48,7 @@ export const PATCH_LAYOUT = {
     { x: 3, z: -1.5, y: 1.7 },
     { x: 0, z: -4, y: 2 },
     // The booth's lamp row.
-    { x: FLY_BOOTH.marquee.x, z: FLY_BOOTH.marquee.z, y: 3.2 },
+    { x: FLY_BOOTH.marquee.x, z: FLY_BOOTH.marquee.z, y: MARQUEE.lampY },
   ],
   jar: { x: 2.4, z: 3.2 },
 } as const;

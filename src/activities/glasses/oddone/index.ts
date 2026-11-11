@@ -20,6 +20,7 @@
  * Draw calls: booth 1 + pedestals 1 + buttons 1 + shapes 1 (+ the kit's fx 2 during a round) ≤ 6.
  */
 import * as THREE from 'three';
+import { MARQUEE } from '../booth/geometry';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier, Interactable } from '../../../types';
 import { TIERS, withChallenge } from '../../../vision/toolkit';
@@ -59,7 +60,7 @@ export function create(env: MechanicEnv): Mechanic {
         { x, z, y: ODD.shapeHeight - ODD.panelRadius },
       ]),
       // The booth's lamp row.
-      ...[-0.6, 0.6].map((lx) => ({ ...mqPt(lx, 0), y: 3.2 })),
+      ...[-0.6, 0.6].map((lx) => ({ ...mqPt(lx, 0), y: MARQUEE.lampY })),
     ],
     footprint: [
       ...P.flatMap(([x, z]) => [-1, 1].map((s) => ({ x: x + s * 0.6, z }))),

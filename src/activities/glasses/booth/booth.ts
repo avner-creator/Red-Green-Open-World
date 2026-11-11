@@ -7,9 +7,9 @@
  */
 import * as THREE from 'three';
 import { cellUv, demoCell, deviceUv, lampUv, promptCell } from './cells';
-import type { DeviceId, LampState, PromptId } from './cells';
+import type { BoothPrompt, DeviceId, LampState } from './cells';
 import { buildBoothGeometry, placeQuad, setSlotColor, setSlotUv } from './geometry';
-import type { BoothGeometry, Slot } from './geometry';
+import type { BoothGeometry, GroundPiece, Slot } from './geometry';
 import type { BoothSpec } from './types';
 
 /**
@@ -58,7 +58,14 @@ export interface BoothController {
    * One prompt at a time: a bobbing pictogram (1 m × `size`) at a frame-local point (the spec's
    * default spot if left out); null hides it.
    */
-  setPrompt(p: PromptId | null, at?: THREE.Vector3, size?: number): void;
+  setPrompt(p: BoothPrompt | null, at?: THREE.Vector3, size?: number): void;
+  /** The prompt now: id, frame-local centre (at rest, without the bob) and edge length (m). */
+  prompt(): { id: BoothPrompt | null; at: THREE.Vector3; size: number };
+  /**
+   * Put the pad and the decals on the real walkable surface: `surface(x, z)` returns the frame-local
+   * surface height under a ground piece's anchor (or null to leave it). Moves only their vertices.
+   */
+  settle(surface: (x: number, z: number) => number | null): void;
   /** Animate (flipbook, lamps, pad pulse, bobbing billboards). `camera` = world camera position. */
   update(dt: number, camera: THREE.Vector3): void;
   /** Test hook: set every animation clock to `t` and re-apply (frames for proofs are then equal). */
@@ -74,10 +81,12 @@ export interface BoothOptions {
   fps?: number;
   hold?: number;
   ground?: (x: number, z: number) => number;
+  /** The mini-game's own static geometry merged into the booth (see `buildBoothGeometry`). */
+  extra?: readonly THREE.BufferGeometry[];
 }
 
 export function createBoothController(material: THREE.Material, o: BoothOptions): BoothController {
-  const build = buildBoothGeometry(o.spec, o.ground);
+  const build = buildBoothGeometry(o.spec, o.ground, o.extra);
   const geo = build.geometry;
   const mesh = new THREE.Mesh(geo, material);
   mesh.name = 'glasses:booth';
@@ -98,6 +107,7 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
     demo: slot('demo'),
     padFace: slot('padFace'),
     padGlow: slot('padGlow'),
+    padPosts: build.slots.get('padPosts') ?? null,
     device: slot('device'),
     prompt: slot('prompt'),
     lamps: [...Array(o.spec.lamps).keys()].map((i) => slot(`lamp${i}`)),
@@ -116,7 +126,7 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
   let padMode: PadMode = 'attract';
   let device: DeviceId = 'keyboard';
   let deviceOn = !o.spec.pad.walkIn;
-  let prompt: PromptId | null = null;
+  let prompt: BoothPrompt | null = null;
   let promptSize = 1;
   const promptAt = build.promptAt.clone();
   const deviceAt = build.padCenter.clone().add(new THREE.Vector3(0, 1.5, 0));
@@ -160,7 +170,8 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
         : padMode === 'wait' ? 1.2 + 0.6 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 2.2))
           : 0.75;
     setSlotColor(color, S.padFace, k);
-    setSlotColor(color, S.padGlow, padMode === 'busy' ? 0.7 : k * 1.25);
+    setSlotColor(color, S.padGlow, padMode === 'busy' ? 0.8 : k * 1.45);
+    if (S.padPosts) setSlotColor(color, S.padPosts, padMode === 'busy' ? 0.9 : k * 1.5);
   }
 
   /** Billboard (yaw only) facing the camera, in mesh-local space. */
@@ -223,6 +234,7 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
       if (d === device) return;
       device = d;
       setSlotUv(uv, S.device, deviceUv(d));
+      if (prompt === 'button') setSlotUv(uv, S.prompt, deviceUv(d));
     },
     showDevice(on) {
       deviceOn = on && !o.spec.pad.walkIn;
@@ -231,8 +243,33 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
       prompt = p;
       promptSize = size;
       if (p) {
-        setSlotUv(uv, S.prompt, cellUv(promptCell(p)));
+        setSlotUv(uv, S.prompt, p === 'button' ? deviceUv(device) : cellUv(promptCell(p)));
         promptAt.copy(at ?? build.promptAt);
+      }
+    },
+    prompt: () => ({ id: prompt, at: promptAt.clone(), size: promptSize }),
+    settle(surface) {
+      const P = pos.array as Float32Array;
+      let padDy = 0;
+      const moved = new Set<GroundPiece>();
+      for (const g of build.groundPieces) {
+        const y = surface(g.x, g.z);
+        if (y === null) continue;
+        // Only ever lift (the terrain mesh / colliders sit above the analytic height): never bury.
+        const dy = Math.max(0, Math.min(0.6, y - g.y));
+        if (dy <= 1e-4) continue;
+        for (let i = g.start; i < g.start + g.count; i++) P[i * 3 + 1] += dy;
+        pos.addUpdateRange(g.start * 3, g.count * 3);
+        g.y += dy;
+        moved.add(g);
+        if (Math.abs(g.x - build.padCenter.x) < 1e-6 && Math.abs(g.z - build.padCenter.z) < 1e-6) padDy = dy;
+      }
+      if (moved.size) pos.needsUpdate = true;
+      if (padDy > 0) {
+        build.padCenter.y += padDy;
+        deviceAt.y += padDy;
+        if (promptAt.distanceTo(build.promptAt) < 1e-6) promptAt.y += padDy;
+        build.promptAt.y += padDy;
       }
     },
     update(dt, camera) {
@@ -253,6 +290,9 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
       device,
       deviceOn,
       prompt,
+      promptAt: { x: promptAt.x, y: promptAt.y, z: promptAt.z },
+      promptSize,
+      padY: build.padCenter.y,
       triangles: build.triangles,
     }),
     dispose() {
