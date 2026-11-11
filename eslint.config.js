@@ -15,8 +15,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['scripts/**', 'tests/**', '*.config.*'],
+    files: ['scripts/**', 'tests/**', '*.config.*', 'tools/**/*.mjs'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly', URL: 'readonly', fetch: 'readonly', setTimeout: 'readonly', window: 'readonly', document: 'readonly', performance: 'readonly' } },
     rules: { 'no-console': 'off' },
+  },
+  {
+    // Offline asset build tools (Node scripts; some run snippets in a headless browser).
+    files: ['tools/**/*.mjs', 'scripts/**/*.mjs'],
+    languageOptions: { globals: { Buffer: 'readonly', __dirname: 'readonly', navigator: 'readonly', Blob: 'readonly', FileReader: 'readonly', setInterval: 'readonly', clearTimeout: 'readonly', clearInterval: 'readonly', TextDecoder: 'readonly', TextEncoder: 'readonly', URLSearchParams: 'readonly' } },
   },
 );
