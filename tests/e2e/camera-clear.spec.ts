@@ -71,6 +71,9 @@ async function spots(page: Page): Promise<Spot[]> {
     at('gearShack-5m', a.gearShack.position.x, a.gearShack.position.z, a.gearShack.yaw, 5);
     const chest = world.chestSpots.reduce((p, c) => (Math.hypot(c.position.x - sp.x, c.position.z - sp.z) < Math.hypot(p.position.x - sp.x, p.position.z - sp.z) ? c : p));
     at('plaza-chest', chest.position.x, chest.position.z, Math.PI, 2.2);
+    // QA6 m7: under the oaks on the plaza's west lawn, and among the pines of the toys meadow.
+    out.push({ name: 'west-lawn', x: -10, z: 20 }, { name: 'west-lawn-oak', x: -6, z: 20 });
+    out.push({ name: 'toys-meadow-pines', x: -40, z: 82.9 });
     return out;
   });
 }
@@ -278,6 +281,40 @@ test('phone viewport: the race podium/result camera and the plaza chevron walk k
     const r = await probe();
     if (r.inside || r.near <= 0.9 || r.headHidden) bad.push(`chevron walk ${i}: ${JSON.stringify(r)}`);
   }
+  // QA6 m7 on the phone: the west lawn's oaks and the toys meadow's pines, 8 yaws each, then the
+  // QA walk north into the pines.
+  for (const [name, x, z] of [['west-lawn', -10, 20], ['west-lawn-oak', -6, 20], ['toys-meadow', -40, 82.9]] as const) {
+    await ph.evaluate(([x0, z0]) => {
+      const rg = window.__rg!;
+      rg.teleport(x0, rg.ctx.world.heightAt(x0, z0) + 0.1, z0, 0);
+      rg.step(1 / 60, 30, false);
+    }, [x, z] as const);
+    for (let i = 0; i < 8; i++) {
+      await ph.evaluate((y) => {
+        window.__rgCamera!.setView(y, 0.38);
+        window.__rg!.step(1 / 60, 45, false);
+      }, (i / 8) * Math.PI * 2);
+      const r = await probe();
+      if (r.inside || r.near <= 0.9 || r.headHidden) bad.push(`${name} yaw ${i}: ${JSON.stringify(r)}`);
+    }
+  }
+  await ph.evaluate(() => {
+    const rg = window.__rg!;
+    rg.teleport(-40, rg.ctx.world.heightAt(-40, 80) + 0.3, 80, 0);
+    rg.step(1 / 60, 40, false);
+  });
+  for (let i = 0; i < 8; i++) {
+    await ph.evaluate(() => {
+      const rg = window.__rg!;
+      rg.inject({ moveY: 1 });
+      rg.step(1 / 60, 15, false);
+      rg.inject(null);
+    });
+    const r = await probe();
+    if (r.inside || r.near <= 0.9 || r.headHidden) bad.push(`toys meadow walk ${i}: ${JSON.stringify(r)}`);
+  }
+  await ph.evaluate(() => window.__rg!.render());
+  await canvasShot(ph, 'test-results/camera-clear-toys-meadow-phone.png');
   // Race one lap on autopilot, then watch the podium and the result card camera orbit.
   const ok = await ph.evaluate(() => {
     const rg = window.__rg!;

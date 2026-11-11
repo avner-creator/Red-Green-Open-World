@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Line } from '../../src/buddy/dialogue';
 import { PRIORITY } from '../../src/buddy/dialogue';
-import { Director, HINT_GAP, IDLE_SECONDS, STUCK_PUSH_SECONDS, STUCK_SECONDS, WANDER_SECONDS } from '../../src/buddy/director';
+import { Director, HINT_GAP, INVITE_IDLE, INVITE_PATIENCE, STUCK_PUSH_SECONDS, WANDER_SECONDS } from '../../src/buddy/director';
 import { REPEAT_SECONDS, ShuffleBag, UNSOLICITED_GAP } from '../../src/buddy/pools';
 import type { DirectorSink, DirectorView, LeadOptions } from '../../src/buddy/director';
 import type { Attraction } from '../../src/buddy/types';
@@ -60,7 +60,7 @@ function tick(d: Director, seconds: number, v: DirectorView = view(), dt = 1 / 3
 const ids = (said: Line[]) => said.map((l) => l.id);
 
 /** Ticks with a pretend dialogue queue: every line keeps Pip busy for `secs` seconds. */
-function talking(secs = 3) {
+function talking(secs = 3, roam = false) {
   const r = setup();
   let now = 0;
   let until = 0;
@@ -72,7 +72,9 @@ function talking(secs = 3) {
   const play = (seconds: number, over: Partial<DirectorView> = {}, dt = 1 / 30): void => {
     for (let t = 0; t < seconds; t += dt) {
       now += dt;
-      r.d.update(dt, view({ busy: now < until, ...over }));
+      // A roaming child walks a 10 m circle round the plaza (exploring: no invitations).
+      const hero = roam ? { x: Math.sin(now / 2) * 10, z: Math.cos(now / 2) * 10 } : undefined;
+      r.d.update(dt, view({ busy: now < until, ...(hero ? { hero } : {}), ...over }));
     }
   };
   return { ...r, play };
@@ -156,7 +158,7 @@ describe('Director: the spoken welcome story', () => {
 
 describe('Director: how-tos and the economy', () => {
   it('first arrival at an attraction says its whole how-to once; asking Pip there says it again', () => {
-    const { d, said, play, store } = talking(2);
+    const { d, said, play, store } = talking(2, true);
     for (const t of ['compass', 'missions', 'timer']) store.markTip(t);
     d.begin(false);
     play(4);
@@ -172,7 +174,7 @@ describe('Director: how-tos and the economy', () => {
   });
 
   it('a focused use prompt (a booth, a vault) gets its own how-to', () => {
-    const { d, said, play, store } = talking(2);
+    const { d, said, play, store } = talking(2, true);
     for (const t of ['compass', 'missions', 'timer']) store.markTip(t);
     d.begin(false);
     play(4);
@@ -349,9 +351,12 @@ describe('Director: rescues', () => {
 describe('Director: tips and nudges', () => {
   it('each HUD tip fires once ever', () => {
     const { d, said, store } = setup();
+    const roam = (secs: number): void => {
+      for (let t = 0; t < secs; t += 1 / 30) d.update(1 / 30, view({ hero: { x: Math.sin(t / 2) * 10, z: Math.cos(t / 2) * 10 } }));
+    };
     d.begin(false);
     said.length = 0;
-    tick(d, 60);
+    roam(60);
     const tips = said.filter((l) => l.id?.startsWith('tip:')).map((l) => l.id);
     expect(tips).toContain('tip:missions');
     expect(tips).toContain('tip:timer');
@@ -359,7 +364,7 @@ describe('Director: tips and nudges', () => {
     // A new session: the same tips do not come back.
     d.begin(false);
     said.length = 0;
-    tick(d, 60);
+    roam(60);
     expect(said.filter((l) => l.id === 'tip:missions' || l.id === 'tip:timer')).toEqual([]);
     expect(store.tipSeen('timer')).toBe(true);
   });
@@ -396,18 +401,23 @@ describe('Director: tips and nudges', () => {
     expect(said.filter((l) => l.text === CHEST.findKey.text).length).toBe(1);
   });
 
-  it('stuck for 40 s suggests the nearest attraction not tried yet; progress resets it', () => {
-    const { d, said, store } = setup();
+  it('standing about for ~13 s: Pip offers the nearest new place and leads; an explorer hears nothing', () => {
+    const { d, said, leads, store } = setup();
     for (const t of ['missions', 'timer', 'skill', 'help', 'pip', 'compass', 'arrows']) store.markTip(t);
     d.begin(false);
     said.length = 0;
-    tick(d, STUCK_SECONDS - 5);
-    d.onWalletChange();
-    tick(d, 10);
-    expect(said.filter((l) => l.id === 'stuck')).toEqual([]);
-    tick(d, STUCK_SECONDS);
-    const s = said.find((l) => l.id === 'stuck');
-    expect(s?.text).toBe('Try the Gear Shack!');
+    tick(d, INVITE_IDLE - 1, view({ heroSpeed: 0 }));
+    expect(said.filter((l) => l.id === 'invite')).toEqual([]);
+    tick(d, 6, view({ heroSpeed: 0 }));
+    const inv = said.filter((l) => l.id === 'invite');
+    expect(inv.map((l) => l.text)).toEqual(['Try the big trampoline!']);
+    expect(d.leadTo).toBe('trampoline');
+    expect(leads.at(-1)).toMatchObject({ x: 58, z: -24 });
+    // Exploring (walking about) instead: no invitation at all.
+    const r = talking(1, true);
+    r.d.begin(false);
+    r.play(60);
+    expect(r.d.invitations).toBe(0);
   });
 
   it('standing still says a playful idle line', () => {
@@ -415,7 +425,7 @@ describe('Director: tips and nudges', () => {
     for (const t of ['missions', 'timer', 'skill', 'help', 'pip', 'compass', 'arrows']) store.markTip(t);
     d.begin(false);
     said.length = 0;
-    tick(d, IDLE_SECONDS + 0.5, view({ heroSpeed: 0 }));
+    tick(d, 45, view({ heroSpeed: 0 }));
     expect(said.some((l) => l.id === 'idle' && l.priority === PRIORITY.idle)).toBe(true);
   });
 
@@ -443,7 +453,7 @@ describe('Director: magic-glasses games', () => {
     const r = setup();
     return r;
   };
-  it('points at the nearest unvisited glasses game early, once per nudge', () => {
+  it('an idle child is offered the nearest glasses game (a new kind); ignored, Pip goes back to following', () => {
     const said: Line[] = [];
     const leads: (V2 | null)[] = [];
     const sink: DirectorSink = {
@@ -461,20 +471,19 @@ describe('Director: magic-glasses games', () => {
     };
     const d = new Director(sink, createBuddyStore(false), () => 0);
     d.begin(false);
-    tick(d, 62);
-    const n = said.find((l) => l.id === 'glasses:nudge');
+    tick(d, INVITE_IDLE + 6, view({ heroSpeed: 0 }));
+    const n = said.find((l) => l.id === 'invite');
     expect(n?.text).toBe('Try the magic toy hunt!');
     expect(leads.at(-1)).toEqual({ x: 10, z: 0 });
-    tick(d, 10);
+    tick(d, INVITE_PATIENCE + 1, view({ heroSpeed: 0 }));
     expect(leads.at(-1)).toBeNull();
-    expect(said.filter((l) => l.id === 'glasses:nudge')).toHaveLength(1);
+    expect(said.filter((l) => l.id === 'invite')).toHaveLength(1);
   });
-  it('does not nudge when a glasses game was already visited, and cheers a hit', () => {
+  it('cheers a glasses hit', () => {
     const { d, said } = setupG();
     d.begin(false);
     d.update(0.1, view({ nearAttraction: 'oddone' }));
-    tick(d, 60);
-    expect(said.some((l) => l.id === 'glasses:nudge')).toBe(false);
+    tick(d, 2);
     d.onGlassesHit();
     expect(said.at(-1)?.icon).toBe('glasses');
   });

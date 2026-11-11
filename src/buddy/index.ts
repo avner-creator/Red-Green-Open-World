@@ -14,7 +14,8 @@
  */
 import * as THREE from 'three';
 import { chestHintState } from '../activities/chests';
-import { GEMS } from '../config';
+import { GEMS, PLAYER } from '../config';
+import { RAY_GROUPS } from '../core/physics';
 import { GIFT_ITEM } from '../activities/gear/goofy';
 import type { Anchor, GameContext, GameSystem } from '../types';
 import { CONTROL_MAP } from '../ui/controlMap';
@@ -34,7 +35,7 @@ import { EXPLAIN } from './script';
 import type { HowToTopic, KeyNames } from './script';
 import { topicOfPrompt } from './topics';
 import { sniffSpot } from './sniff';
-import { Leader } from './guide';
+import { Leader, planPath } from './guide';
 import type { LeadOut } from './guide';
 import { FOLLOW, angleDelta, arrive, catchUpSpeed, followSlot, forward, keepClear, right, shouldTeleport, teleportSpot, turnTowards, yawTo } from './steer';
 import type { V2 } from './steer';
@@ -61,7 +62,7 @@ const VISIT_RADIUS: Record<Attraction, number> = {
   sillyZone: 14,
   ranch: 12,
   carnivalRow: 12,
-  iceCream: 6,
+  iceCream: 8, // the parlour itself is ~6 m across: its front is the place (QA6 M3 dest check)
   bubbleArena: 13,
   dinoRing: 8,
   raceStart: 7,
@@ -136,6 +137,14 @@ export interface BuddyTestApi {
   };
   /** Same as pressing T / tapping Pip: Pip says what to do next (a bubble, deterministically). */
   ask(): void;
+  /** Lead destinations as validated at the start of play (QA6 M3). */
+  dests(): { name: string; raw: [number, number]; dest: [number, number]; moved: boolean; ok: boolean }[];
+  /** Start an invitation lead to an attraction now (as after "Now you choose!"). */
+  invite(name: string): boolean;
+  /** Pip's planned way for the current lead (corner points), if any. */
+  route(): [number, number][] | null;
+  /** The way Pip would plan from (x, z) to a place's lead destination (corner points; null = none). */
+  plan(x: number, z: number, name: string): [number, number][] | null;
 }
 
 declare global {
@@ -176,10 +185,58 @@ export function createBuddy(ctx: GameContext): GameSystem {
    * A hop is fine when it ends on land and nothing (a wall, a fence, a shop) is in the way: rays
    * at knee and chest height (a low rail fence stops the hero but not a chest-high ray; QA round 5).
    */
+  /**
+   * The hero's body swept along a straight walk (QA6 M3: "hero radius, rails included"): a ball of
+   * the hero's radius at hip and head height (above the 0.45 m autostep), against fixed scenery
+   * only (no terrain, no sensors, nothing that moves). Distance to the first hit, or Infinity.
+   */
+  const ROT = { x: 0, y: 0, z: 0, w: 1 };
+  let heroBall: InstanceType<typeof ctx.physics.rapier.Ball> | null = null;
+  const solid = (c: { isSensor(): boolean; shapeType(): number; parent(): { isFixed(): boolean } | null }): boolean => {
+    if (c.isSensor() || c.shapeType() === ctx.physics.rapier.ShapeType.HeightField) return false;
+    const b = c.parent();
+    return !b || b.isFixed();
+  };
+  const sweep = (from: V2, to: V2): number => {
+    const d = Math.hypot(to.x - from.x, to.z - from.z);
+    if (d < 1e-3) return Infinity;
+    const R = ctx.physics.rapier;
+    try {
+      heroBall ??= new R.Ball(PLAYER.radius);
+      const g0 = ctx.world.heightAt(from.x, from.z);
+      const g1 = ctx.world.heightAt(to.x, to.z);
+      let best = Infinity;
+      for (const up of [0.82, 1.3]) {
+        const hit = ctx.physics.world.castShape(
+          { x: from.x, y: g0 + up, z: from.z }, ROT, { x: to.x - from.x, y: g1 - g0, z: to.z - from.z }, heroBall,
+          0, 1, false, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, solid,
+        );
+        if (hit) best = Math.min(best, hit.time_of_impact * d);
+      }
+      return best;
+    } catch {
+      return Infinity;
+    }
+  };
+  /** The hero's body fits here (no fixed scenery in a hero-sized ball at hip and head height). */
+  const roomy = (p: V2): boolean => {
+    const R = ctx.physics.rapier;
+    try {
+      heroBall ??= new R.Ball(PLAYER.radius);
+      const g = ctx.world.heightAt(p.x, p.z);
+      for (const up of [0.82, 1.3]) {
+        if (ctx.physics.world.intersectionWithShape({ x: p.x, y: g + up, z: p.z }, ROT, heroBall, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, solid)) return false;
+      }
+      return true;
+    } catch {
+      return true;
+    }
+  };
   const walkable = (from: V2, to: V2, endSlack = 2.5): boolean => {
     if (!ctx.world.isLand(to.x, to.z)) return false;
     const d = Math.hypot(to.x - from.x, to.z - from.z);
     if (d < 1) return true;
+    if (sweep(from, to) <= d - endSlack) return false;
     const ux = (to.x - from.x) / d;
     const uz = (to.z - from.z) / d;
     const g0 = ctx.world.heightAt(from.x, from.z);
@@ -207,12 +264,65 @@ export function createBuddy(ctx: GameContext): GameSystem {
   const leader = new Leader(walkable, clearRun);
 
   /**
+   * Lead destinations, validated once at the start of play (QA6 M3) with the same planner Pip
+   * leads with: the spot must fit the hero and be reachable from outside (a planned walk from a
+   * ring 14 m out). A blocked anchor moves to the nearest reachable spot within the place's visit
+   * radius. Every lead goes to `dests` (both-eye places only).
+   */
+  interface DestCheck { raw: V2; dest: V2; moved: boolean; ok: boolean }
+  const dests = new Map<Attraction, DestCheck>();
+  const reachable = (c: V2): boolean => {
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const o = { x: c.x + Math.sin(a) * 14, z: c.z + Math.cos(a) * 14 };
+      if (!ctx.world.isLand(o.x, o.z) || ctx.world.heightAt(o.x, o.z) < ctx.world.waterLevel + 0.2 || !roomy(o)) continue;
+      if (planPath(o, c, clearRun, 2.5, 220)) return true;
+    }
+    return false;
+  };
+  const validateDest = (a: Attraction, raw: V2): DestCheck => {
+    if (!ctx.world.isLand(raw.x, raw.z)) return { raw, dest: raw, moved: false, ok: true }; // decks (bungee): as built
+    const rMax = Math.max(0, Math.min(6, VISIT_RADIUS[a] - 2));
+    const yaw0 = anchorOf(a)?.yaw ?? 0;
+    // Nearest first, but the front (the anchor's yaw: where its sign and entrance face) is
+    // preferred: 2 m of extra distance per 30° round from it.
+    const scored: { p: V2; s: number }[] = [{ p: raw, s: 0 }];
+    for (const r of [1.5, 3, 4.5, 6]) {
+      if (r > rMax) break;
+      for (let k = -5; k <= 6; k++) {
+        const ang = yaw0 + (k / 12) * Math.PI * 2;
+        scored.push({ p: { x: raw.x + Math.sin(ang) * r, z: raw.z + Math.cos(ang) * r }, s: r + Math.abs(k) * 2 });
+      }
+    }
+    const cands = scored.sort((a2, b2) => a2.s - b2.s).map((c) => c.p);
+    for (const c of cands) {
+      if (!ctx.world.isLand(c.x, c.z) || !roomy(c) || !reachable(c)) continue;
+      return { raw, dest: c, moved: c !== raw, ok: true };
+    }
+    return { raw, dest: raw, moved: false, ok: false };
+  };
+  /**
+   * Seconds until the check runs (−1 = done): half a second into play, once the attraction sites
+   * built for the session are in the physics world (a query before the first step misses them).
+   */
+  let validateIn = -1;
+  const validateDests = (): void => {
+    validateIn = -1;
+    if (dests.size) return;
+    for (const a of availableAttractions()) {
+      if (a === 'trampoline') continue; // the mat edge facing the hero (computed per lead)
+      const raw = rawAnchor(a);
+      if (raw) dests.set(a, validateDest(a, raw));
+    }
+  };
+
+  /**
    * Nearest free spot to stand (QA round 5, M1: stuck on the Scoops counter): on land above the
    * water, on the bare ground (nothing on top of it), not steep, and no collider within 2 m
    * (a physics shape query). Rings outwards from the hero; on each ring the side towards `toward`
    * first. Null when nothing is free within 14 m.
    */
-  const freeSpot = (toward: V2): { x: number; y: number; z: number } | null => {
+  const freeSpot = (toward: V2, goals: readonly V2[] = []): { x: number; y: number; z: number } | null => {
     const h = ctx.player.position;
     const R = ctx.physics.rapier;
     let shape: InstanceType<typeof R.Cylinder> | null = null;
@@ -237,29 +347,40 @@ export function createBuddy(ctx: GameContext): GameSystem {
     };
     const base = Math.atan2(toward.x - h.x, toward.z - h.z);
     const N = 16;
-    for (const r of [2.5, 3.5, 5, 6.5, 8, 10, 12, 14]) {
-      for (let i = 0; i < N; i++) {
-        // 0, +1, -1, +2, -2 … steps round from the way out.
-        const k = i === 0 ? 0 : Math.ceil(i / 2) * (i % 2 ? 1 : -1);
-        const a = base + (k * Math.PI * 2) / N;
-        const x = h.x + Math.sin(a) * r;
-        const z = h.z + Math.cos(a) * r;
-        if (!ctx.world.isLand(x, z)) continue;
-        const gy = ctx.world.heightAt(x, z);
-        if (gy < ctx.world.waterLevel + 0.2) continue;
-        if (Math.abs(ctx.world.heightAt(x + 0.8, z) - ctx.world.heightAt(x - 0.8, z)) > 0.7) continue;
-        if (Math.abs(ctx.world.heightAt(x, z + 0.8) - ctx.world.heightAt(x, z - 0.8)) > 0.7) continue;
-        let top = gy;
-        try {
-          raycaster.origin.set(x, gy + 8, z);
-          const hit = ctx.physics.raycast(raycaster.origin, raycaster.dir, 12);
-          if (hit) top = hit.point.y;
-        } catch {
-          /* physics not ready */
+    const free = (x: number, z: number): number | null => {
+      if (!ctx.world.isLand(x, z)) return null;
+      const gy = ctx.world.heightAt(x, z);
+      if (gy < ctx.world.waterLevel + 0.2) return null;
+      if (Math.abs(ctx.world.heightAt(x + 0.8, z) - ctx.world.heightAt(x - 0.8, z)) > 0.7) return null;
+      if (Math.abs(ctx.world.heightAt(x, z + 0.8) - ctx.world.heightAt(x, z - 0.8)) > 0.7) return null;
+      let top = gy;
+      try {
+        raycaster.origin.set(x, gy + 8, z);
+        const hit = ctx.physics.raycast(raycaster.origin, raycaster.dir, 12);
+        if (hit) top = hit.point.y;
+      } catch {
+        /* physics not ready */
+      }
+      if (Math.abs(top - gy) > 0.35) return null; // something stands there (a counter, a roof)
+      if (crowded(x, gy, z)) return null;
+      return gy;
+    };
+    // Pass per goal (the destination first): a free spot with a clear straight walk to it. Last
+    // pass: any free spot (the nearest, towards the way out first).
+    for (const goal of [...goals, null]) {
+      if (goal && Math.hypot(goal.x - h.x, goal.z - h.z) > 60) continue;
+      for (const r of [2.5, 3.5, 5, 6.5, 8, 10, 12, 14]) {
+        for (let i = 0; i < N; i++) {
+          // 0, +1, -1, +2, -2 … steps round from the way out.
+          const k = i === 0 ? 0 : Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+          const a = base + (k * Math.PI * 2) / N;
+          const x = h.x + Math.sin(a) * r;
+          const z = h.z + Math.cos(a) * r;
+          const gy = free(x, z);
+          if (gy === null) continue;
+          if (goal && !clearRun({ x, z }, goal)) continue;
+          return { x, y: gy, z };
         }
-        if (Math.abs(top - gy) > 0.35) continue; // something stands there (a counter, a roof)
-        if (crowded(x, gy, z)) continue;
-        return { x, y: gy, z };
       }
     }
     return null;
@@ -346,6 +467,17 @@ export function createBuddy(ctx: GameContext): GameSystem {
     return list.filter((a) => !!anchorOf(a));
   };
 
+  /** Where a lead to `a` goes before validation (the Gear Shack: in front of its counter). */
+  const rawAnchor = (name: Attraction): V2 | null => {
+    const a = anchorOf(name);
+    if (!a) return null;
+    if (name === 'gearShack') {
+      const f = forward(a.yaw);
+      return { x: a.position.x + f.x * 2.8, z: a.position.z + f.z * 2.8 };
+    }
+    return { x: a.position.x, z: a.position.z };
+  };
+
   const attractionPos = (a: Attraction): V2 | null => {
     if (a === 'garage') {
       const car = ctx.vehicles?.all.find((v) => v.kind === 'car');
@@ -355,15 +487,22 @@ export function createBuddy(ctx: GameContext): GameSystem {
     return an ? { x: an.position.x, z: an.position.z } : null;
   };
 
+  /** The place the hero is at: of overlapping circles, the one they are deepest in (QA6 M3). */
   const nearAttraction = (): Attraction | null => {
     const h = hero();
+    let best: Attraction | null = null;
+    let bestK = 1;
     for (const a of availableAttractions()) {
       const p = attractionPos(a);
       if (!p) continue;
       if (a === 'bungee' && Math.abs(ctx.player.position.y - ctx.world.anchors.bungee.position.y) > 5) continue;
-      if (Math.hypot(p.x - h.x, p.z - h.z) < VISIT_RADIUS[a]) return a;
+      const k = Math.hypot(p.x - h.x, p.z - h.z) / VISIT_RADIUS[a];
+      if (k < bestK) {
+        bestK = k;
+        best = a;
+      }
     }
-    return null;
+    return best;
   };
 
   const chestHint = (): ChestHint => {
@@ -398,7 +537,11 @@ export function createBuddy(ctx: GameContext): GameSystem {
     hop(toward) {
       const p = ctx.player;
       if (p.mode !== 'walk') return;
-      const spot = freeSpot(toward);
+      // The path side of the fence (QA6 M3): a free spot from where a straight walk reaches the
+      // lead's destination, else the far end of a clear leg of Pip's planned way, else the nearest.
+      const dest = leader.dest ?? toward;
+      const goals: V2[] = [dest, ...(leader.route ?? []).slice().reverse()];
+      const spot = freeSpot(dest, goals);
       if (spot) {
         // Two rescues did not free the hero: pop them onto the nearest free ground, facing Pip,
         // with a little hop (a comic boing). Pip pops in beside them.
@@ -442,17 +585,15 @@ export function createBuddy(ctx: GameContext): GameSystem {
     anchor(name) {
       const a = anchorOf(name);
       if (!a) return null;
-      if (name === 'gearShack') {
-        const f = forward(a.yaw);
-        return { x: a.position.x + f.x * 2.8, z: a.position.z + f.z * 2.8 };
-      }
+      const v = dests.get(name);
+      if (v) return { ...v.dest };
       if (name === 'trampoline') {
         const h = hero();
         const d = Math.hypot(h.x - a.position.x, h.z - a.position.z) || 1;
         const r = TRAMPOLINE_MAT - 1.5; // on the mat's edge: inside the visit radius
         return { x: a.position.x + ((h.x - a.position.x) / d) * r, z: a.position.z + ((h.z - a.position.z) / d) * r };
       }
-      return { x: a.position.x, z: a.position.z };
+      return rawAnchor(name);
     },
     places() {
       return availableAttractions()
@@ -598,6 +739,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         stampedGlasses = false;
         queue.clear(PRIORITY.story);
         queue.skip();
+        validateIn = 0.5;
         const fresh = introAllowed && !store.flags.intro && ctx.profile.data.lifetimeGems === 0;
         director.begin(fresh);
       }
@@ -964,6 +1106,13 @@ export function createBuddy(ctx: GameContext): GameSystem {
       scale: () => model.object.scale.x,
       history: () => history.slice(),
       ask: () => ask(),
+      dests: () => [...dests].map(([name, c]) => ({ name, raw: [c.raw.x, c.raw.z], dest: [c.dest.x, c.dest.z], moved: c.moved, ok: c.ok })),
+      invite: (name) => director.testInvite(name as Attraction),
+      route: () => leader.route?.map((p) => [p.x, p.z] as [number, number]) ?? null,
+      plan: (x, z, name) => {
+        const d = sink.anchor(name as Attraction);
+        return d ? (planPath({ x, z }, d, clearRun)?.map((p) => [p.x, p.z] as [number, number]) ?? null) : null;
+      },
       voice: () => voice.requests.slice(),
       lead: () => ({
         to: director.leadTo,
@@ -1005,6 +1154,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       gogglesT = Math.max(0, gogglesT - dt);
       if (gogglesT > 0) inp.goggles = true;
       if (playing) updateAssist(dt);
+      if (playing && validateIn >= 0 && (validateIn -= dt) < 0) validateDests();
 
       if (playing) {
         pollPad();
@@ -1024,6 +1174,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
           hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
           busy: queue.busy,
           inGame: ctx.player.mode === 'external',
+          // Only the balloon skydive has a parachute (a trampoline bounce or bungee fall does not).
+          chute: ctx.player.mode === 'external' && extKind === 'balloon',
         };
         director.update(dt, view);
         queue.update(dt);
