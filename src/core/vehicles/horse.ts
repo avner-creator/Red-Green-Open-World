@@ -34,6 +34,8 @@ import type { VehicleInternal, VehiclePublic } from './types';
 const RADIUS = 0.5;
 const HALF = 0.4;
 const CENTRE = RADIUS + HALF;
+/** Nose-to-tail hero blocker (horse space): a lying capsule from rump to chest, at belly-to-back height. */
+const BLOCK = { half: 0.85, radius: 0.42, y: 1.05, forward: 0.2 } as const;
 const REAR_TIME = 1.6;
 
 /** Underdamped spring (landing heave). */
@@ -101,6 +103,15 @@ export function createHorse(
       .setCollisionGroups(groups(GROUP_VEHICLE, 0xffff)),
   );
   const moveGroups = groups(GROUP_VEHICLE, 0xffff & ~GROUP_AVATAR);
+  // The upright capsule only covers the barrel: the hero walked into the head and rump (QA5 M6).
+  // A nose-to-tail capsule that only the hero's controller feels (filter = avatar), so the horse's
+  // own controller and the physics solver ignore it; rays skip it like every vehicle.
+  const blocker = world.createCollider(
+    R.ColliderDesc.capsule(BLOCK.half, BLOCK.radius).setCollisionGroups(groups(GROUP_VEHICLE, GROUP_AVATAR)),
+  );
+  const blockQ = new THREE.Quaternion();
+  const blockP = new THREE.Vector3();
+  const xQuarter = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
   const cc = world.createCharacterController(0.03);
   cc.setUp({ x: 0, y: 1, z: 0 });
   cc.setMaxSlopeClimbAngle((52 * Math.PI) / 180);
@@ -167,6 +178,10 @@ export function createHorse(
 
   const syncCollider = (): void => {
     collider.setTranslation({ x: position.x, y: position.y + CENTRE, z: position.z });
+    blockQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw).multiply(xQuarter);
+    blockP.set(Math.sin(yaw) * BLOCK.forward, BLOCK.y, Math.cos(yaw) * BLOCK.forward).add(position);
+    blocker.setTranslation(blockP);
+    blocker.setRotation(blockQ);
   };
 
   const groundAt = (x: number, z: number, fromY: number): number => {
@@ -530,6 +545,7 @@ export function createHorse(
     },
     onEnter() {
       ridden = true;
+      blocker.setEnabled(false);
       mountT = 0;
       seatLocalValid = false;
       idleTimer = 0;
@@ -537,6 +553,7 @@ export function createHorse(
     },
     onExit() {
       ridden = false;
+      blocker.setEnabled(true);
       rearT = -1;
       model.setReins(null);
       rider?.restore();
@@ -555,6 +572,7 @@ export function createHorse(
       if (soundOn) ctx.audio.setLoop('gallop', 0);
       world.removeCharacterController(cc);
       world.removeCollider(collider, false);
+      world.removeCollider(blocker, false);
       model.dispose();
     },
   };

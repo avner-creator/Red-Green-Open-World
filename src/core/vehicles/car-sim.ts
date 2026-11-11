@@ -100,6 +100,14 @@ export interface CarStepEvents {
 export interface CarSim {
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
+  /**
+   * The chassis as the walking hero feels it: a parentless (fixed) copy that follows the body
+   * after every step. The chassis itself ignores the avatar, so the character controller never
+   * shoves the car (its push impulses sent a parked buggy sliding metres away: QA5 M6).
+   */
+  readonly blocker: RAPIER.Collider;
+  /** Turn the hero blocker on/off (off while someone drives). */
+  setBlocker(on: boolean): void;
   readonly wheels: readonly WheelState[];
   /** Signed forward speed (m/s). */
   readonly forwardSpeed: number;
@@ -180,9 +188,15 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
       .setFriction(0.25)
       .setRestitution(CAR.restitution)
       .setRestitutionCombineRule(R.CoefficientCombineRule.Max)
-      .setCollisionGroups(groups(GROUP_VEHICLE, 0xffff)),
+      .setCollisionGroups(groups(GROUP_VEHICLE, 0xffff & ~GROUP_AVATAR)),
     body,
   );
+  // Membership "vehicle" (camera/gameplay rays skip it), filter "avatar" only: the hero's
+  // controller collides with it, the physics solver and other controllers never do.
+  const blocker = world.createCollider(
+    R.ColliderDesc.roundCuboid(CAR.half.x, CAR.half.y, CAR.half.z, CAR.border).setCollisionGroups(groups(GROUP_VEHICLE, GROUP_AVATAR)),
+  );
+  const blockerOff = new THREE.Vector3();
   const rayGroups = groups(0xffff, 0xffff & ~GROUP_AVATAR);
 
   const wheels: WheelState[] = [];
@@ -288,6 +302,9 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     const r = body.rotation();
     currPos.set(t.x, t.y, t.z);
     currQuat.set(r.x, r.y, r.z, r.w);
+    blockerOff.set(0, 0, CAR.colliderZ).applyQuaternion(currQuat).add(currPos);
+    blocker.setTranslation(blockerOff);
+    blocker.setRotation(currQuat);
     // Chord velocities of the body origin (not Rapier's centre-of-mass linvel, which differs
     // from the origin's motion while the chassis pitches/rolls).
     prevVel.copy(currVel);
@@ -346,7 +363,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     for (const w of wheels) {
       hard.copy(w.local).applyQuaternion(quaternion).add(position);
       const ray = new R.Ray({ x: hard.x, y: hard.y, z: hard.z }, dir);
-      const hit = world.castRay(ray, rayLen, true, R.QueryFilterFlags.EXCLUDE_SENSORS, rayGroups, undefined, body);
+      const hit = world.castRay(ray, rayLen, true, R.QueryFilterFlags.EXCLUDE_SENSORS, rayGroups, blocker, body);
       const free = CAR.restLength;
       if (!hit) {
         w.contact = false;
@@ -538,6 +555,10 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
   return {
     body,
     collider,
+    blocker,
+    setBlocker(on) {
+      if (blocker.isEnabled() !== on) blocker.setEnabled(on);
+    },
     wheels,
     get forwardSpeed() {
       return forwardSpeed;
@@ -575,6 +596,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
     interpolate,
     place,
     dispose() {
+      world.removeCollider(blocker, false);
       world.removeRigidBody(body);
     },
   };

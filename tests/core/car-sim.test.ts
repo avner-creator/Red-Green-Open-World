@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createPhysicsSync } from '../../src/core/physics';
+import { GROUP_AVATAR, createPhysicsSync, groups } from '../../src/core/physics';
 import { CAR, NO_CONTROLS, createCarSim, restHeight, type CarControls, type CarEnv } from '../../src/core/vehicles/car-sim';
 import type { PhysicsApi } from '../../src/types';
 
@@ -176,6 +176,50 @@ describe('buggy parking', () => {
       run(physics, sim, env, NO_CONTROLS, 120);
       expect(sim.position.distanceTo(p0) * 1000).toBeLessThan(1);
       expect((sim.quaternion.angleTo(q0) * 180) / Math.PI).toBeLessThan(0.05);
+    });
+  }
+});
+
+describe('parked buggy vs a walking hero (QA5 M6)', () => {
+  /** A player-like kinematic capsule (same groups and impulse mass as `player.ts`) sprinting into the car. */
+  function shove(fromAngle: number): { moved: number; minLocal: number } {
+    const { physics, env } = flatWorld();
+    const R = physics.rapier;
+    const world = physics.world;
+    const sim = createCarSim(physics, new THREE.Vector3(0, 0, 0), 0);
+    for (let i = 0; i < 60; i++) {
+      physics.step(DT);
+      sim.update(DT, NO_CONTROLS, env);
+    }
+    const start = sim.position.clone();
+    const pos = new THREE.Vector3(Math.sin(fromAngle) * 5, 0, Math.cos(fromAngle) * 5);
+    const cap = world.createCollider(R.ColliderDesc.capsule(0.5, 0.35).setTranslation(pos.x, 0.86, pos.z).setCollisionGroups(groups(GROUP_AVATAR, 0xffff & ~GROUP_AVATAR)));
+    const cc = world.createCharacterController(0.02);
+    cc.setApplyImpulsesToDynamicBodies(true);
+    cc.setCharacterMass(40);
+    let minLocal = Infinity;
+    for (let i = 0; i < 150; i++) {
+      const d = new THREE.Vector3(sim.position.x - pos.x, 0, sim.position.z - pos.z).normalize().multiplyScalar(11 * DT);
+      d.y = -0.01;
+      cc.computeColliderMovement(cap, d, R.QueryFilterFlags.EXCLUDE_SENSORS, groups(GROUP_AVATAR, 0xffff & ~GROUP_AVATAR));
+      const m = cc.computedMovement();
+      pos.x += m.x;
+      pos.z += m.z;
+      cap.setTranslation({ x: pos.x, y: 0.86, z: pos.z });
+      physics.step(DT);
+      sim.update(DT, NO_CONTROLS, env);
+      // Distance from the car's centre, in car space, scaled to the body's half-extents (1 = surface).
+      const l = pos.clone().sub(sim.position).applyQuaternion(sim.quaternion.clone().invert());
+      minLocal = Math.min(minLocal, Math.max(Math.abs(l.x) / (CAR.half.x + CAR.border), Math.abs(l.z - CAR.colliderZ) / (CAR.half.z + CAR.border)));
+    }
+    return { moved: sim.position.distanceTo(start), minLocal };
+  }
+
+  for (let k = 0; k < 8; k++) {
+    it(`a sprinting hero from ${k * 45}° neither shoves the parked car away nor gets inside it`, () => {
+      const r = shove((k * Math.PI) / 4);
+      expect(r.moved).toBeLessThan(0.25);
+      expect(r.minLocal).toBeGreaterThan(1);
     });
   }
 });

@@ -202,6 +202,51 @@ test('an empty flipped car rights itself', async () => {
   expect(s.upY).toBeGreaterThan(0.95);
 });
 
+test('walking into the parked buggy and a horse from 8 directions: solid, nothing shoved (QA5 M6)', async () => {
+  const out = await page.evaluate(() => {
+    const rg = window.__rg!;
+    if (rg.state().playerMode !== 'walk') rg.ctx.player.respawn();
+    rg.step(1 / 60, 10, false);
+    const res: string[] = [];
+    for (const kind of ['car', 'horse'] as const) {
+      const v = rg.ctx.vehicles.all.find((c) => (kind === 'car' ? c.kind === 'car' : c.kind !== 'car'))!;
+      for (let k = 0; k < 8; k++) {
+        const c = v.position.clone();
+        const a = (k * Math.PI) / 4;
+        const sx = c.x + Math.sin(a) * 6;
+        const sz = c.z + Math.cos(a) * 6;
+        rg.teleport(sx, rg.ctx.world.heightAt(sx, sz) + 0.3, sz, Math.atan2(c.x - sx, c.z - sz));
+        rg.step(1 / 60, 20, false);
+        const p = rg.ctx.player.position;
+        let worst = Infinity;
+        for (let i = 0; i < 130; i++) {
+          let dx = v.position.x - p.x;
+          let dz = v.position.z - p.z;
+          const l = Math.hypot(dx, dz) || 1;
+          dx /= l;
+          dz /= l;
+          const cy = rg.ctx.cameraRig.yaw;
+          const s = Math.sin(cy);
+          const co = Math.cos(cy);
+          rg.inject({ moveX: -co * dx + s * dz, moveY: s * dx + co * dz, sprint: true });
+          rg.step(1 / 60, 1, false);
+          const loc = p.clone().sub(v.position).applyQuaternion(v.object.quaternion.clone().invert());
+          // Clearance outside the body footprint (car box / horse nose-to-tail), minus the hero radius.
+          const clear = kind === 'car'
+            ? Math.max(Math.abs(loc.x) - 0.94, Math.abs(loc.z - 0.04) - 1.72)
+            : Math.hypot(loc.x, loc.z - Math.max(-0.7, Math.min(1.1, loc.z))) - 0.42;
+          worst = Math.min(worst, clear);
+        }
+        rg.inject(null);
+        if (worst < 0.2 || v.position.distanceTo(c) > 0.3) res.push(`${kind} from ${k * 45}°: clearance ${worst.toFixed(2)} moved ${v.position.distanceTo(c).toFixed(2)}`);
+        if (rg.state().playerMode !== 'walk') rg.ctx.player.respawn();
+      }
+    }
+    return res;
+  });
+  expect(out).toEqual([]);
+});
+
 test('no console errors while driving', async () => {
   const errors = await page.evaluate(() => window.__rg!.errors);
   expect(errors).toEqual([]);

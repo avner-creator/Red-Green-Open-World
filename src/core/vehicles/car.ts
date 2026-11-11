@@ -348,9 +348,11 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     update,
     onEnter() {
       driven = true;
+      sim.setBlocker(false);
     },
     onExit() {
       driven = false;
+      sim.setBlocker(true);
       Object.assign(controls, NO_CONTROLS);
     },
     exitSpot,
