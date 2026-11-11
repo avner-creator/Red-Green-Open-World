@@ -1,10 +1,15 @@
 /**
- * Glow-flies (kind `follow`): weak-eye fireflies drift over a little meadow patch. Run or jump
- * through one to catch it → a sparkle burst on the weak layer, a rising chime for quick catches,
- * gems, and the both-eye glow jar gets one bead fuller (it only ever shows a count).
+ * Glow-flies (kind `follow`), on the booth kit (../booth/README.md): a game booth stands beside a
+ * glowing walk-in start pad at the edge of a little meadow with a both-eye glow jar. Step on the
+ * pad (or press Use on it) → 3-2-1-GO → weak-eye fireflies come out over the meadow for a timed
+ * round (35 s). Run and jump right through one to catch it → a sparkle burst on the weak layer, ✓
+ * above the hero, a bright lamp, a bead in the jar. Catch 5 before the time runs out (the unlit
+ * lamps blink faster and faster, the last seconds tick); 3 or more win the prize. A fly that gets
+ * away while the hero was within 3 m reports a miss (no lamp); nothing is reported for flies the
+ * child never came near.
  *
- * Draw calls: flies (1) + bursts (1, only while one plays) + jar/meadow (1) + jar sparkle (1, only
- * while it plays) + the board (1) ≤ 5.
+ * Draw calls: booth (1) + jar/meadow (1) + flies (1, only during a round) + bursts (1, only while
+ * one plays), and during a round the kit's fx (2) ≤ 6.
  */
 import * as THREE from 'three';
 import { PLAYER } from '../../../config';
@@ -16,11 +21,13 @@ import { seededRng } from '../idle';
 import { roadClearance, siteToWorld } from '../sites';
 import type { Mechanic, MechanicEnv } from '../types';
 import { FLIES } from './constants';
-import { createGlowInstances, createSparkle } from './fx';
+import { GLOWFLIES_DEMO } from './demo';
+import { createGlowInstances } from './fx';
 import { buildJar } from './jar';
 import { choosePatchLayout } from './layout';
 import { Swarm } from './logic';
 import type { PatchShape, V3 } from './logic';
+import { blinkOn, endTimedRound, FLY_BOOTH, FLY_PAD, FLY_ROUND, FLY_RULES, flyBoothCentre, flyBoothFootprint } from './round';
 
 /** World XZ → site-local (inverse of `siteToWorld`). */
 export function toLocal(site: { x: number; z: number; yaw: number }, wx: number, wz: number): { x: number; z: number } {
@@ -31,14 +38,16 @@ export function toLocal(site: { x: number; z: number; yaw: number }, wx: number,
   return { x: dx * c - dz * s, z: dx * s + dz * c };
 }
 
-/** The patch in its layout frame (hero at the approach edge looks along −Z): view targets, jar. */
+/** The patch in its layout frame (hero on the pad at the approach edge looks along −Z): view targets, jar. */
 export const PATCH_LAYOUT = {
-  hero: { x: 0, z: 6.5 },
+  hero: { x: FLY_PAD.x, z: FLY_PAD.z },
   targets: [
     { x: 0, z: 0, y: 1.7 },
     { x: -3, z: -1.5, y: 1.7 },
     { x: 3, z: -1.5, y: 1.7 },
     { x: 0, z: -4, y: 2 },
+    // The booth's lamp row.
+    { x: FLY_BOOTH.marquee.x, z: FLY_BOOTH.marquee.z, y: 3.2 },
   ],
   jar: { x: 2.4, z: 3.2 },
 } as const;
@@ -46,7 +55,6 @@ export const PATCH_LAYOUT = {
 interface Burst {
   t: number;
   p: V3;
-  tier: GlassesTier;
 }
 
 /**
@@ -84,9 +92,8 @@ function roamGrid(ctx: MechanicEnv['ctx'], env: MechanicEnv, c: { x: number; z: 
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
-  const board = toLocal(site, site.board.x, site.board.z);
-  // Shift/turn the patch so a child at its approach edge sees the meadow, not the board's back.
-  const layout = choosePatchLayout(ctx, site, PATCH_LAYOUT.hero.z, PATCH_LAYOUT.targets);
+  // Shift/turn the patch so a child on the pad sees the meadow and the booth, all inside the site.
+  const layout = choosePatchLayout(ctx, site, PATCH_LAYOUT.hero.z, PATCH_LAYOUT.targets, flyBoothFootprint());
   const centreW = { x: layout.x, z: layout.z };
   const centre = toLocal(site, centreW.x, centreW.z);
   const inLayout = (x: number, z: number): { x: number; z: number } => {
@@ -94,7 +101,8 @@ export function create(env: MechanicEnv): Mechanic {
     return toLocal(site, w.x, w.z);
   };
   const jar = inLayout(PATCH_LAYOUT.jar.x, PATCH_LAYOUT.jar.z);
-  const heroW = siteToWorld(layout, PATCH_LAYOUT.hero.x, PATCH_LAYOUT.hero.z);
+  const boothC = inLayout(flyBoothCentre().x, flyBoothCentre().z);
+  const padL = inLayout(FLY_PAD.x, FLY_PAD.z);
   const roam = roamGrid(ctx, env, centre);
   const patch: PatchShape = {
     cx: centre.x,
@@ -102,15 +110,15 @@ export function create(env: MechanicEnv): Mechanic {
     radius: FLIES.roamRadius,
     allowed: roam,
     avoid: [
-      { x: board.x, z: board.z, r: FLIES.boardClear },
+      { x: boothC.x, z: boothC.z, r: FLIES.boothClear },
       { x: jar.x, z: jar.z, r: FLIES.jarClear },
     ],
   };
 
-  // ── both-eye: jar on its stump + meadow flowers (one mesh), and the jar's sparkle ──
+  // ── both-eye: jar on its stump + meadow flowers (one mesh) ──
   const jarMesh = buildJar({
     jar,
-    avoid: [...patch.avoid, { x: jar.x, z: jar.z, r: 1.4 }],
+    avoid: [...patch.avoid, { x: jar.x, z: jar.z, r: 1.4 }, { x: padL.x, z: padL.z, r: FLY_PAD.r + 0.6 }],
     centre,
     patchRadius: FLIES.patchRadius,
     notches: FLIES.jarNotches,
@@ -124,11 +132,8 @@ export function create(env: MechanicEnv): Mechanic {
   jarMesh.mesh.updateMatrixWorld(true);
   env.add(jarMesh.mesh, VisionLayer.Both);
   const jarWorld = env.local(jar.x, jar.z);
-  const jarTop = new THREE.Vector3(jarWorld.x, site.y + jarMesh.topY + 0.15, jarWorld.z);
   const jarGround = env.groundAt(jarWorld.x, jarWorld.z);
   const collider = ctx.physics.addStaticCylinder(new THREE.Vector3(jarWorld.x, jarGround + 0.8, jarWorld.z), 0.8, 0.6);
-  const sparkle = createSparkle(24, 'glowflies-jar-sparkle', seededRng(0x5a11));
-  env.add(sparkle.mesh, VisionLayer.Both);
 
   // ── weak eye: flies and their catch bursts ──
   const flies = createGlowInstances(FLIES.maxCount, 'fly', 'glowflies-flies');
@@ -139,13 +144,23 @@ export function create(env: MechanicEnv): Mechanic {
   env.add(weak, VisionLayer.WeakOnly);
 
   let seed = 0;
-  let swarm = makeSwarm(1);
+  /** The flies of the round in play (null between rounds: no flies out). */
+  let swarm: Swarm | null = null;
+  let roundTier: GlassesTier = 1;
+  /** Seconds left in the round (from GO). */
+  let left = 0;
+  let elapsed = 0;
+  /** Catches not yet reported to the round (one per frame while it is in `play`). */
+  let pending = 0;
   let caught = 0;
-  let combo = 0;
-  let sinceCatch = Infinity;
+  let totalCaught = 0;
+  let nearMisses = 0;
   let time = 0;
   let active = false;
   let havePrev = false;
+  let tickAt = 0;
+  /** Test hook: the seed the next round's flies use (else drawn from the mechanic's rng). */
+  let nextSeed: number | null = null;
   const prev = { x: 0, y: 0, z: 0 };
   const chest = { x: 0, y: 0, z: 0 };
   let burstList: Burst[] = [];
@@ -154,24 +169,48 @@ export function create(env: MechanicEnv): Mechanic {
   const s = new THREE.Vector3();
   const p = new THREE.Vector3();
   const tmp: V3 = { x: 0, y: 0, z: 0 };
+  const headW = new THREE.Vector3();
 
-  function makeSwarm(sd: number): Swarm {
+  function makeSwarm(sd: number, tier: GlassesTier): Swarm {
     seed = sd >>> 0;
-    return new Swarm({ rng: seededRng(seed), patch, toWorld: (x, z) => env.local(x, z), groundAt: (x, z) => env.groundAt(x, z) });
+    return new Swarm({ rng: seededRng(seed), patch, toWorld: (x, z) => env.local(x, z), groundAt: (x, z) => env.groundAt(x, z), tier });
   }
 
-  function newSession(): void {
-    swarm = makeSwarm(Math.floor(env.rng() * 2 ** 31));
+  /** GO: the flies come out (a new seeded swarm at the round's tier), the jar empties, the clock runs. */
+  function startFlies(tier: GlassesTier): void {
+    roundTier = tier;
+    swarm = makeSwarm(nextSeed ?? Math.floor(env.rng() * 2 ** 31), tier);
+    left = FLY_ROUND.time;
+    elapsed = 0;
+    pending = 0;
     caught = 0;
+    tickAt = Math.ceil(FLY_ROUND.hurry);
     jarMesh.setFill(0);
-    dropTransient();
+    havePrev = false;
   }
+
+  function stopFlies(): void {
+    swarm = null;
+    pending = 0;
+  }
+
+  const kit = env.booth({
+    frame: { x: layout.x, z: layout.z, yaw: layout.yaw },
+    spec: FLY_BOOTH,
+    demo: GLOWFLIES_DEMO,
+    rules: FLY_RULES,
+    hooks: {
+      onTry(i, tier) {
+        if (i === 0) startFlies(tier);
+      },
+      onIdle() {
+        stopFlies();
+      },
+    },
+  });
 
   function dropTransient(): void {
     burstList = [];
-    sparkle.clear();
-    combo = 0;
-    sinceCatch = Infinity;
     havePrev = false;
   }
 
@@ -179,43 +218,59 @@ export function create(env: MechanicEnv): Mechanic {
     flies.setTime(time);
     bursts.setTime(time);
     const mods = env.challenge();
-    swarm.flies.forEach((f, i) => {
-      const preset = withChallenge(f.tier, mods);
-      let alpha = 0;
-      let size = 0;
-      if (f.state !== 'gone') {
-        swarm.position(f, tmp);
-        const born = Math.min(1, f.age / 0.6); // fade in when (re)spawned
-        const leaving = f.state === 'leaving' ? 1 - Math.min(1, f.timer / FLIES.leaveSeconds) : 1;
-        alpha = preset.opacity * born * leaving;
-        size = FLIES.size * preset.size;
-      }
-      m.compose(p.set(tmp.x, tmp.y, tmp.z), q.identity(), s.setScalar(Math.max(size, 1e-4)));
-      flies.set(i, m, preset.level, alpha, f.slot * 1.7);
-    });
-    flies.commit(swarm.flies.length);
-
     let n = 0;
+    if (swarm) {
+      const preset = withChallenge(roundTier, mods);
+      for (const f of swarm.flies) {
+        let alpha = 0;
+        let size = 0;
+        if (f.state !== 'gone') {
+          swarm.position(f, tmp);
+          const born = Math.min(1, f.age / 0.6); // fade in when (re)spawned
+          const leaving = f.state === 'leaving' ? 1 - Math.min(1, f.timer / FLIES.leaveSeconds) : 1;
+          alpha = preset.opacity * born * leaving;
+          size = FLIES.size * preset.size;
+        }
+        m.compose(p.set(tmp.x, tmp.y, tmp.z), q.identity(), s.setScalar(Math.max(size, 1e-4)));
+        flies.set(n++, m, preset.level, alpha, f.slot * 1.7);
+      }
+    }
+    flies.commit(n);
+
+    let k = 0;
     for (const b of burstList) {
-      const k = b.t / FLIES.burstSeconds;
-      const ease = 1 - (1 - k) * (1 - k);
+      const t = b.t / FLIES.burstSeconds;
+      const ease = 1 - (1 - t) * (1 - t);
       // Central flash + a ring of sparks flying out.
       m.compose(p.set(b.p.x, b.p.y, b.p.z), q.identity(), s.setScalar(0.6 + ease * 1.8));
-      bursts.set(n++, m, 1, (1 - k) * 0.8);
+      bursts.set(k++, m, 1, (1 - t) * 0.8);
       for (let j = 0; j < FLIES.burstParticles - 1; j++) {
         const a = (j / (FLIES.burstParticles - 1)) * Math.PI * 2;
         const up = j % 2 === 0 ? 0.8 : -0.2;
         p.set(b.p.x + Math.cos(a) * ease * 1.5, b.p.y + up * ease * 1.1 - ease * ease * 0.4, b.p.z + Math.sin(a) * ease * 1.5);
-        m.compose(p, q.identity(), s.setScalar(0.38 * (1 - k * 0.7)));
-        bursts.set(n++, m, 1, 1 - k);
+        m.compose(p, q.identity(), s.setScalar(0.38 * (1 - t * 0.7)));
+        bursts.set(k++, m, 1, 1 - t);
       }
     }
-    bursts.commit(n);
+    bursts.commit(k);
+  }
+
+  /** The unlit lamps blink, faster as the time runs out; the last seconds tick. */
+  function clockLook(): void {
+    const phase = kit.phase();
+    if (!swarm || (phase !== 'play' && phase !== 'beat')) return;
+    const done = kit.round.results.length;
+    const on = blinkOn(left, elapsed);
+    for (let i = done; i < FLY_RULES.tries; i++) kit.booth.setLamp(i, on ? 'chase' : 'off');
+    if (left <= tickAt && tickAt > 0) {
+      ctx.audio.play('tick', { pitch: 1 + (FLY_ROUND.hurry - tickAt) * 0.05, volume: 0.6 });
+      tickAt--;
+    }
   }
 
   function update(dt: number): void {
     time += dt;
-    sinceCatch += dt;
+    kit.update(dt);
     const pp = ctx.player.position;
     chest.x = pp.x;
     chest.y = pp.y + PLAYER.height / 2;
@@ -225,20 +280,40 @@ export function create(env: MechanicEnv): Mechanic {
     const from = Math.hypot(chest.x - prev.x, chest.y - prev.y, chest.z - prev.z) > maxStep ? chest : prev;
     const inside = Math.hypot(pp.x - centreW.x, pp.z - centreW.z) <= FLIES.insideRadius;
 
-    for (const { fly, at } of swarm.catchAlong(from, chest)) {
-      combo = sinceCatch <= FLIES.comboWindow ? combo + 1 : 0;
-      sinceCatch = 0;
-      if (burstList.length >= FLIES.maxBursts) burstList.shift();
-      burstList.push({ t: 0, p: at, tier: fly.tier });
-      ctx.audio.play('gem', { pitch: 1 + 0.12 * Math.min(combo, 6) + (fly.tier - 1) * 0.08 });
-      caught++;
-      jarMesh.setFill(caught);
-      jarMesh.gulp();
-      sparkle.burst(jarTop, 8 + fly.tier * 2, 0.8);
-      env.pay(FLIES.gems[fly.tier]);
-      env.result(fly.tier, true);
+    const phase = kit.phase();
+    if (swarm && (phase === 'play' || phase === 'beat')) {
+      for (const { at } of swarm.catchAlong(from, chest)) {
+        if (burstList.length >= FLIES.maxBursts) burstList.shift();
+        burstList.push({ t: 0, p: at });
+        pending++;
+        caught++;
+        totalCaught++;
+        jarMesh.setFill(caught);
+        jarMesh.gulp();
+      }
+      for (const ev of swarm.update(dt, inside, chest)) {
+        if (ev.type === 'miss') {
+          // It got away while the hero was near: a miss with no lamp (lamps count catches).
+          nearMisses++;
+          env.result(roundTier, false);
+        }
+      }
+      if (pending > 0 && kit.phase() === 'play') {
+        pending--;
+        // ✓ above the hero's head (the fly is caught: nothing left to give away).
+        headW.set(pp.x, pp.y + PLAYER.height + 0.7, pp.z);
+        kit.report(true, kit.toLocal(headW));
+      }
+      left -= dt;
+      elapsed += dt;
+      clockLook();
+      if (left <= 0 && kit.phase() === 'play') {
+        // Time's up: the round ends with the catches so far (no lamp, no result for the rest).
+        for (let i = kit.round.results.length; i < FLY_RULES.tries; i++) kit.booth.setLamp(i, 'off');
+        endTimedRound(kit.round);
+        ctx.audio.play('whoosh', { volume: 0.4, pitch: 0.8 });
+      }
     }
-    for (const ev of swarm.update(dt, inside, chest)) if (ev.type === 'miss') env.result(ev.tier, false);
 
     Object.assign(prev, chest);
     havePrev = true;
@@ -246,75 +321,102 @@ export function create(env: MechanicEnv): Mechanic {
     for (const b of burstList) b.t += dt;
     burstList = burstList.filter((b) => b.t < FLIES.burstSeconds);
     jarMesh.update(dt);
-    sparkle.update(dt, ctx.camera);
     draw();
   }
 
-  newSession();
-  draw();
+  function reset(): void {
+    stopFlies();
+    caught = 0;
+    totalCaught = 0;
+    nearMisses = 0;
+    nextSeed = null;
+    jarMesh.setFill(0);
+    dropTransient();
+    kit.reset();
+    draw();
+  }
+
+  reset();
+
+  const groundPt = (lx: number, lz: number): { x: number; y: number; z: number } => {
+    const w = siteToWorld(layout, lx, lz);
+    return { x: w.x, y: env.groundAt(w.x, w.z), z: w.z };
+  };
 
   return {
     id: env.id,
     kind: env.kind,
-    reset() {
-      newSession();
-      draw();
-    },
+    reset,
     setActive(on) {
       active = on;
+      kit.setActive(on);
       dropTransient();
       if (!on) {
-        // Nothing lingers while far: bursts and sparkles are gone, the jar stands still.
+        stopFlies();
+        // Nothing lingers while far: bursts are gone, the jar stands still.
         jarMesh.update(10);
-        sparkle.update(0, ctx.camera);
       }
       draw();
     },
     update,
     dispose() {
+      kit.dispose();
       env.remove(weak);
       env.remove(jarMesh.mesh);
-      env.remove(sparkle.mesh);
       ctx.physics.removeCollider(collider);
       flies.dispose();
       bursts.dispose();
       jarMesh.dispose();
-      sparkle.dispose();
     },
     debug() {
-      const tiers = [0, 0, 0];
-      for (const f of swarm.flies) if (f.state === 'alive') tiers[f.tier - 1]++;
+      const pad = groundPt(FLY_PAD.x, FLY_PAD.z);
+      const view = siteToWorld(layout, FLY_PAD.x, FLY_PAD.z + 2.4);
       return {
         active,
+        phase: kit.phase(),
+        tier: kit.tier(),
+        roundTier,
         seed,
         caught,
-        combo,
+        totalCaught,
+        nearMisses,
+        pending,
+        left,
         time,
-        tiers,
+        out: swarm !== null,
         bursts: burstList.length,
+        gems: kit.round.totalGems,
+        kit: kit.debug(),
         jar: { x: jarWorld.x, z: jarWorld.z },
         inside: Math.hypot(ctx.player.position.x - centreW.x, ctx.player.position.z - centreW.z) <= FLIES.insideRadius,
         centre: centreW,
-        // Where a child stands at the patch's approach edge (default camera looks along this yaw).
-        view: { x: heroW.x, z: heroW.z, yaw: layout.yaw + Math.PI },
+        yaw: layout.yaw,
+        pad,
+        /** Just behind the pad (default camera looks along this yaw over the meadow). */
+        view: { x: view.x, z: view.z, yaw: layout.yaw + Math.PI },
+        padBack: groundPt(FLY_PAD.x, FLY_PAD.z + 2.4),
+        booth: groundPt(flyBoothCentre().x, flyBoothCentre().z),
         layoutProblems: layout.problems,
-        flies: swarm.flies.map((f) => {
-          const at = swarm.position(f);
-          return { slot: f.slot, tier: f.tier, state: f.state, age: f.age, life: f.life, gems: FLIES.gems[f.tier], x: at.x, y: at.y, z: at.z };
+        flies: (swarm?.flies ?? []).map((f) => {
+          const at = (swarm as Swarm).position(f);
+          return { slot: f.slot, tier: f.tier, state: f.state, age: f.age, life: f.life, x: at.x, y: at.y, z: at.z };
         }),
       };
     },
     force(params) {
       if (typeof params.seed === 'number') {
-        swarm = makeSwarm(params.seed);
-        dropTransient();
+        nextSeed = params.seed;
+        if (swarm) {
+          swarm = makeSwarm(params.seed, roundTier);
+          dropTransient();
+        }
       }
-      if (typeof params.caught === 'number') {
-        caught = params.caught;
-        jarMesh.setFill(caught);
-      }
+      if (params.play) kit.forcePlay(typeof params.tier === 'number' ? (Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier) : undefined);
+      if (params.start) kit.start();
+      if (typeof params.pin === 'number') kit.pin(params.pin);
+      if (typeof params.left === 'number') left = params.left;
       // Every alive fly this close to the end of its life (seconds); the next update decides.
-      if (typeof params.lifeLeft === 'number') for (const f of swarm.flies) if (f.state === 'alive') f.age = Math.max(0, f.life - params.lifeLeft);
+      if (typeof params.lifeLeft === 'number' && swarm) for (const f of swarm.flies) if (f.state === 'alive') f.age = Math.max(0, f.life - params.lifeLeft);
       if (typeof params.time === 'number') time = params.time;
       draw();
     },

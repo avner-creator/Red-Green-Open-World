@@ -1,13 +1,11 @@
 /**
  * Line-up visuals: the strong-eye soap bubbles (one quad batch, one draw call, their sparkle pop
- * drawn in the same shader on the same layer), the weak-eye magic ring (one quad) and the
- * both-eye aim pad (one merged mesh).
+ * drawn in the same shader on the same layer) and the weak-eye magic ring (one quad). The start /
+ * aim pad is the booth kit's.
  */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { applyFade, baseFragmentHead, baseUniforms, linearGrey } from '../../../vision/toolkit/common';
 import { createQuadBatch } from '../oddone/quadBatch';
-import { LINEUP } from './constants';
 
 /** Four-point sparkle (signed distance, approximate) of size `r` at the origin. */
 const sparkleLib = /* glsl */ `
@@ -158,76 +156,5 @@ export function createHoop(): Hoop {
     },
     commit: () => b.commit(),
     dispose: () => b.dispose(),
-  };
-}
-
-function painted(geo: THREE.BufferGeometry, hex: number): THREE.BufferGeometry {
-  const g = geo.index ? geo.toNonIndexed() : geo;
-  if (g !== geo) geo.dispose();
-  const c = new THREE.Color(hex);
-  const n = g.getAttribute('position').count;
-  const col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return g;
-}
-
-/**
- * The aim pad: a bright cream ring with a dark inner disc and two bright footprints pointing at
- * the bubbles (local −Z). Lies flat (XZ), origin at its centre.
- */
-export function padGeometry(): THREE.BufferGeometry {
-  const { radius, inner } = LINEUP.pad;
-  const flat = (g: THREE.BufferGeometry, y: number): THREE.BufferGeometry => {
-    g.rotateX(-Math.PI / 2);
-    g.translate(0, y, 0);
-    g.deleteAttribute('uv');
-    return g;
-  };
-  const parts = [
-    painted(flat(new THREE.RingGeometry(inner, radius, 48), 0.004), 0xf6efd9),
-    painted(flat(new THREE.CircleGeometry(inner, 48), 0), 0x23253d),
-    painted(flat(new THREE.RingGeometry(inner * 0.86, inner * 0.92, 48), 0.006), 0x6c6aa8),
-  ];
-  for (const side of [-1, 1]) {
-    const sole = flat(new THREE.CircleGeometry(0.13, 20), 0.008);
-    sole.scale(1, 1, 1.9);
-    sole.translate(side * 0.17, 0, 0.05);
-    parts.push(painted(sole, 0xfff1a8));
-    const toe = flat(new THREE.CircleGeometry(0.1, 16), 0.008);
-    toe.translate(side * 0.17, 0, -0.27);
-    parts.push(painted(toe, 0xfff1a8));
-  }
-  const merged = mergeGeometries(parts, false);
-  for (const p of parts) p.dispose();
-  if (!merged) throw new Error('lineup: pad merge failed');
-  return merged;
-}
-
-export function createPad(): { mesh: THREE.Mesh; setGlow(k: number): void; dispose(): void } {
-  const geo = padGeometry();
-  const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.7,
-    metalness: 0,
-    emissive: 0xffffff,
-    emissiveIntensity: 0.08,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.name = 'LineUpPad';
-  mesh.receiveShadow = true;
-  mesh.castShadow = false;
-  return {
-    mesh,
-    setGlow(k) {
-      mat.emissiveIntensity = 0.08 + 0.22 * Math.max(0, Math.min(1, k));
-    },
-    dispose() {
-      geo.dispose();
-      mat.dispose();
-    },
   };
 }

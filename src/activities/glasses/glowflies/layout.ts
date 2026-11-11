@@ -1,12 +1,12 @@
 /**
  * Where the glow-fly patch sits in its site: the patch centre is shifted and the viewing
- * direction turned so that a child at the patch edge on the approach side, with the game's
- * DEFAULT camera behind them, sees the meadow — not the pictogram board, a trunk or a hillside.
- * Deterministic (the world is). Returns the layout frame: the hero stands at layout (0, heroBack)
- * and looks along layout −Z; the patch centre is the layout origin.
+ * direction turned so that a child on the start pad at the patch edge on the approach side, with
+ * the game's DEFAULT camera behind them, sees the meadow and the booth's lamps — not a trunk or a
+ * hillside — and the booth's footprint stays inside the site on clear land. Deterministic (the
+ * world is). Returns the layout frame: the hero stands at layout (0, heroBack) and looks along
+ * layout −Z; the patch centre is the layout origin.
  */
 import * as THREE from 'three';
-import { CAMERA } from '../../../config';
 import type { GameContext } from '../../../types';
 import { CAM_BACK, CAM_UP } from '../gates/layout';
 import { siteToWorld } from '../sites';
@@ -18,13 +18,15 @@ export interface PatchLayout {
   problems: number;
 }
 
-type Site = { x: number; z: number; yaw: number; board: { x: number; z: number } };
+type Site = { x: number; z: number; yaw: number; radius: number };
 
-/** Half the horizontal field of view at 16:9, plus a margin. */
-const HALF_HFOV = Math.atan(Math.tan(THREE.MathUtils.degToRad(CAMERA.fov / 2)) * (16 / 9)) + 0.12;
-const BOARD_HALF = 2.8;
-
-export function choosePatchLayout(ctx: Pick<GameContext, 'world' | 'physics'>, site: Site, heroBack: number, targets: readonly { x: number; z: number; y: number }[]): PatchLayout {
+export function choosePatchLayout(
+  ctx: Pick<GameContext, 'world' | 'physics'>,
+  site: Site,
+  heroBack: number,
+  targets: readonly { x: number; z: number; y: number }[],
+  footprint: readonly { x: number; z: number }[] = [],
+): PatchLayout {
   const down = new THREE.Vector3(0, -1, 0);
   const o = new THREE.Vector3();
   const d = new THREE.Vector3();
@@ -39,8 +41,6 @@ export function choosePatchLayout(ctx: Pick<GameContext, 'world' | 'physics'>, s
     const len = d.length();
     return len < 0.4 || !ctx.physics.raycast(o.copy(a), d.normalize(), len - 0.35);
   };
-  const bx = Math.cos(site.yaw);
-  const bz = -Math.sin(site.yaw);
 
   let best: PatchLayout | null = null;
   let bestScore = Infinity;
@@ -64,13 +64,11 @@ export function choosePatchLayout(ctx: Pick<GameContext, 'world' | 'physics'>, s
       const cam = new THREE.Vector3(cam2.x, hy + CAM_UP, cam2.z);
       if (ctx.world.heightAt(cam2.x, cam2.z) > cam.y - 0.6) p += 5;
       if (!clear(new THREE.Vector3(hero.x, hy + 1.45, hero.z), cam)) p += 4;
-      // The board out of the view cone (centre and both ends).
-      const fwd = L.yaw + Math.PI;
-      for (const k of [-1, 0, 1]) {
-        const px = site.board.x + bx * BOARD_HALF * k - cam.x;
-        const pz = site.board.z + bz * BOARD_HALF * k - cam.z;
-        const ang = Math.abs(Math.atan2(Math.sin(Math.atan2(px, pz) - fwd), Math.cos(Math.atan2(px, pz) - fwd)));
-        if (ang < HALF_HFOV && Math.hypot(px, pz) < 30) p += 3;
+      // The booth and the pad stay inside the site, on clear land.
+      for (const f of footprint) {
+        const w = siteToWorld(L, f.x, f.z);
+        if (Math.hypot(w.x - site.x, w.z - site.z) > site.radius + 0.4) p += 20;
+        else if (blocked(w.x, w.z)) p += 4;
       }
       for (const t2 of targets) {
         const w = siteToWorld(L, t2.x, t2.z);

@@ -111,11 +111,12 @@ test('every site draws its board or booth in ONE draw call', async () => {
 
 /**
  * Draw calls of the six mini-games (boards, booths and everything they track) in the perf report's
- * spawn and Gear Shack views (low quality as in the e2e run). Pinned at what they cost before the
- * booth kit (measured on agent/glasses-depth with the same count: 7 and 7): a booth must not
- * add a draw call there (odd one out is only 37 m from spawn).
+ * spawn and Gear Shack views (low quality as in the e2e run). An UPPER bound: 7 and 7 before the
+ * booth kit; measured 5 and 5 once all six games were on it (fewer separate meshes). A booth must
+ * never add a draw call there (odd one out is only 37 m from spawn). The pin may only go down:
+ * lower it when a change removes a draw, never raise it.
  */
-const PINNED_GLASSES_DRAWS = { spawn: 7, shack: 7 };
+const PINNED_GLASSES_DRAWS = { spawn: 5, shack: 5 };
 
 test('no extra glasses draws at spawn and at the Gear Shack', async () => {
   const counts = await page.evaluate(() => {
@@ -155,7 +156,8 @@ test('no extra glasses draws at spawn and at the Gear Shack', async () => {
     return out;
   });
   console.log(`glasses mini-game draws: spawn ${counts.spawn}, Gear Shack ${counts.shack}`);
-  expect(counts).toEqual(PINNED_GLASSES_DRAWS);
+  expect(counts.spawn, 'glasses draws at spawn').toBeLessThanOrEqual(PINNED_GLASSES_DRAWS.spawn);
+  expect(counts.shack, 'glasses draws at the Gear Shack').toBeLessThanOrEqual(PINNED_GLASSES_DRAWS.shack);
 });
 
 test('every board is visible from goto() and reads in R-only and G-only', async () => {

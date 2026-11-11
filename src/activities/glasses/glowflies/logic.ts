@@ -181,6 +181,8 @@ export interface SwarmOptions {
   toWorld(x: number, z: number): XZ;
   groundAt(x: number, z: number): number;
   count?: number;
+  /** Every fly has this tier (a booth round's tier); else the seeded mix. */
+  tier?: GlassesTier;
 }
 
 /** The flies at one site. Deterministic for a given rng. */
@@ -197,11 +199,13 @@ export class Swarm {
   reset(): void {
     const { rng } = this.o;
     const n = this.o.count ?? FLIES.minCount + Math.floor(rng() * (FLIES.maxCount - FLIES.minCount + 1));
-    const tiers = tierMix(rng, n);
-    // Staggered start: the first flies are already mid-life, so they don't all leave together.
+    const fixed = this.o.tier;
+    const tiers = fixed ? Array.from({ length: n }, () => fixed) : tierMix(rng, n);
+    // Staggered start: the first flies are a little into their lives (they still fade in), so
+    // they don't all leave together.
     this.flies = tiers.map((tier, slot) => {
       const f = this.spawn(slot, tier);
-      f.age = 0.6 + rng() * f.life * 0.5;
+      f.age = rng() * f.life * 0.4;
       return f;
     });
   }
@@ -212,6 +216,7 @@ export class Swarm {
 
   /** The tier the swarm is shortest of (keeps the mix in the air); ties are seeded. */
   nextTier(): GlassesTier {
+    if (this.o.tier) return this.o.tier;
     const counts = [0, 0, 0];
     for (const f of this.flies) if (f.state !== 'gone') counts[f.tier - 1]++;
     const min = Math.min(...counts);
