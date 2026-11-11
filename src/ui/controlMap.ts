@@ -34,7 +34,7 @@ export const CONTROL_MAP: Record<ControlId, ControlDef> = {
   move: { keys: [['W', 'A', 'S', 'D']], pad: [['L']], touch: 'stick', icon: 'stick' },
   look: { keys: [['MOUSE']], pad: [['R']], touch: 'hand', icon: 'eye' },
   jump: { keys: [['␣']], pad: [['A']], touch: 'jump', icon: 'trampoline' },
-  sprint: { keys: [['⇧']], pad: [['RT'], ['L3']], touch: 'bolt', icon: 'bolt' },
+  sprint: { keys: [['⇧']], pad: [['RT'], ['L3']], touch: 'bolt', icon: 'wRun' },
   use: { keys: [['E']], pad: [['X']], touch: 'hand', icon: 'hand' },
   flop: { keys: [['F']], pad: [['B']], touch: 'flop', icon: 'flop' },
   respawn: { keys: [['R']], pad: [['Y']], touch: null, icon: 'restart' },
