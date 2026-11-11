@@ -12,8 +12,19 @@ export const BUBBLE = { r: 0.9, m: 1, bounce: 0.92, h: 2.1, drag: 1.6 } as const
 export const BALL = { r: 0.72, m: 0.4, bounce: 0.86, drag: 0.4 } as const;
 /** A ball resting against a puffy wall this long gets puffed back into play. */
 export const UNSTICK = { seconds: 1.4, speed: 1.6, push: 4.5 } as const;
-export const MATCH = { seconds: 60, countdown: 3, goalPause: 2.6, endPause: 1.6 } as const;
+/** 75-second match; the first team to `target` goals wins at once. */
+export const MATCH = { seconds: 75, countdown: 3, goalPause: 2.6, endPause: 1.6, target: 3 } as const;
 export const MOVE = { speed: 6.4, sprint: 8.2, accel: 18, hopVy: 5.4, hopBoost: 3.2, hopCooldown: 0.8 } as const;
+/**
+ * Dash kick (Space / gamepad A / touch jump): a bouncy lunge in the stick direction. Touching the
+ * ball during it is a power kick (bent a little toward the goal you attack); touching a bubble
+ * flips it head over heels.
+ */
+export const DASH = { speed: 12.5, seconds: 0.3, cooldown: 0.75, vy: 3.4, kick: 13.5, loft: 3.2, aim: 0.45, aiKick: 0.78 } as const;
+/** Physics sub-step: nothing tunnels, even at the 20 Hz frame-time cap. */
+export const SUB_DT = 1 / 120;
+/** Ball top speed (cartoon, not a cannon). */
+export const BALL_MAX = 16;
 export const AI = { speed: 4.6, accel: 11, think: [0.28, 0.6] as const } as const;
 export const FLIP = { impulse: 4.6, seconds: 0.95 } as const;
 export const RING = { r: 1.25, cy: 1.2, life: 9, gap: [3, 6] as const, pass: 1.05, chargeSeconds: 14, drift: 1.3, driftRate: 1.1 } as const;
@@ -39,8 +50,12 @@ export interface Agent {
   /** Unit direction (pitch x, z) the flip tumbles toward (the push). */
   pushX: number;
   pushZ: number;
-  /** Seconds until the next hop is allowed. */
+  /** Seconds until the next dash is allowed. */
   hopCd: number;
+  /** Seconds left of a dash kick, and its direction (pitch space, unit). */
+  dashT: number;
+  dashX: number;
+  dashZ: number;
   /** AI: seconds until it looks at the game again, and its current wish. */
   think: number;
   tx: number;
@@ -93,7 +108,8 @@ export type MatchEvent =
   | { kind: 'goal'; team: Team; points: number; double: boolean }
   | { kind: 'bump'; a: number; b: number; speed: number }
   | { kind: 'flip'; agent: number }
-  | { kind: 'kick'; agent: number; speed: number }
+  | { kind: 'kick'; agent: number; speed: number; power: boolean }
+  | { kind: 'dash'; agent: number }
   | { kind: 'wall'; speed: number }
   | { kind: 'ring' }
   | { kind: 'charge'; team: Team }
@@ -132,8 +148,10 @@ export function pitchWalls(): Segment[] {
 
 /** Kick-off spots: [x, z] per agent index (0 = the player, 1-2 home friends, 3-5 away). */
 export function kickoffSpots(kickoff: Team): [number, number][] {
-  const near = kickoff === 'home' ? -1.4 : -2.6;
-  const farAway = kickoff === 'away' ? 1.4 : 2.6;
+  // The kicker stands just clear of the ball (never inside it).
+  const close = BUBBLE.r + BALL.r + 0.15;
+  const near = kickoff === 'home' ? -close : -2.6;
+  const farAway = kickoff === 'away' ? close : 2.6;
   return [
     [near, 0],
     [-4.6, -3],
@@ -160,6 +178,9 @@ export function createMatch(seconds: number = MATCH.seconds): MatchState {
       pushX: 1,
       pushZ: 0,
       hopCd: 0,
+      dashT: 0,
+      dashX: 1,
+      dashZ: 0,
       think: 0,
       tx: 0,
       tz: 0,
@@ -197,6 +218,7 @@ export function resetPositions(m: MatchState): void {
     b.z = spots[i][1];
     b.vx = b.vz = b.vy = b.y = 0;
     a.flipT = 0;
+    a.dashT = 0;
     a.think = 0.2 + i * 0.07;
   });
   const ball = m.ball;
@@ -259,7 +281,9 @@ export function aiTarget(a: Agent, m: MatchState, nx: number, nz: number): { x: 
     const ahead = (ball.x - me.x) * (aim.x - ball.x) + (ball.z - me.z) * (aim.z - ball.z) > 0;
     const dBack = Math.hypot(back.x - me.x, back.z - me.z);
     if (ahead && dBack < 1.6) {
-      return { x: aim.x + nx * 1.5, z: aim.z + nz * 1.5, hop: toBall < 2.2 && nx > 0.85 };
+      // Lined up behind the ball: shoot (dash kick) now and then, more often near the goal.
+      const near = Math.abs(aim.x - ball.x) < 8 ? 0.4 : 0.12;
+      return { x: aim.x + nx * 1.5, z: aim.z + nz * 1.5, hop: toBall < 2.6 && (nx + 1) / 2 < near + 0.1 * a.skill };
     }
     // Go round the ball rather than through it: sidestep while on the wrong side.
     const side = me.z >= ball.z ? 1 : -1;
@@ -277,16 +301,28 @@ export function aiTarget(a: Agent, m: MatchState, nx: number, nz: number): { x: 
   return { x: x + nx * 0.4, z: z + nz * 0.6, hop: false };
 }
 
-function hop(a: Agent): void {
+/** Start a dash kick toward (dx, dz) (any length; falls back to the current heading). */
+function dash(a: Agent, dx: number, dz: number, out: MatchEvent[], idx: number): void {
   const b = a.body;
-  if (a.hopCd > 0 || b.y > 0.05 || a.flipT > 0) return;
-  b.vy = MOVE.hopVy;
-  const s = Math.hypot(b.vx, b.vz);
-  if (s > 0.5) {
-    b.vx += (b.vx / s) * MOVE.hopBoost;
-    b.vz += (b.vz / s) * MOVE.hopBoost;
+  if (a.hopCd > 0 || b.y > 0.05 || a.flipT > 0 || a.dashT > 0) return;
+  let l = Math.hypot(dx, dz);
+  if (l < 0.2) {
+    dx = b.vx;
+    dz = b.vz;
+    l = Math.hypot(dx, dz);
   }
-  a.hopCd = MOVE.hopCooldown;
+  if (l < 0.2) {
+    dx = a.team === 'home' ? 1 : -1;
+    dz = 0;
+    l = 1;
+  }
+  a.dashX = dx / l;
+  a.dashZ = dz / l;
+  a.dashT = DASH.seconds;
+  a.hopCd = DASH.cooldown;
+  b.vy = DASH.vy;
+  a.squashV += 6; // stretch as it springs off
+  out.push({ kind: 'dash', agent: idx });
 }
 
 export interface StepOptions {
@@ -298,8 +334,26 @@ export interface StepOptions {
 
 const contacts: Contact[] = [];
 
-/** Advance the match by dt. Pushes gameplay events into `out` (cleared first). */
+const subOut: MatchEvent[] = [];
+
+/**
+ * Advance the match by dt (any frame time: it runs in sub-steps of at most `SUB_DT`, so nothing
+ * tunnels). Pushes gameplay events into `out` (cleared first). A press (`input.hop`) is used once.
+ */
 export function stepMatch(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[]): void {
+  out.length = 0;
+  const n = Math.max(1, Math.ceil(dt / SUB_DT - 1e-9));
+  const h = dt / n;
+  const press = o.input.hop;
+  for (let k = 0; k < n; k++) {
+    const sub: StepOptions = k === 0 || !press ? o : { ...o, input: { ...o.input, hop: false } };
+    stepOnce(m, h, sub, subOut);
+    for (const e of subOut) out.push(e);
+    if (m.phase === 'over') break;
+  }
+}
+
+function stepOnce(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[]): void {
   out.length = 0;
   m.phaseT += dt;
   for (const a of m.agents) {
@@ -326,6 +380,11 @@ export function stepMatch(m: MatchState, dt: number, o: StepOptions, out: MatchE
         out.push({ kind: 'over' });
         return;
       }
+      if (Math.max(m.score.home, m.score.away) >= MATCH.target) {
+        m.phase = 'over';
+        out.push({ kind: 'over' });
+        return;
+      }
       resetPositions(m);
       m.phase = 'countdown';
       m.phaseT = MATCH.countdown - 1.2; // a short "go!" after a goal, not a full 3-2-1
@@ -342,9 +401,17 @@ export function stepMatch(m: MatchState, dt: number, o: StepOptions, out: MatchE
 
 function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], live: boolean): void {
   const rivalScale = rivalSkillScale(m.score.home, m.score.away);
-  for (const a of m.agents) {
+  for (let idx = 0; idx < m.agents.length; idx++) {
+    const a = m.agents[idx];
     const b = a.body;
     a.hopCd = Math.max(0, a.hopCd - dt);
+    if (a.dashT > 0) {
+      // Dashing: a fast bouncy lunge, no steering.
+      a.dashT = Math.max(0, a.dashT - dt);
+      const sp = DASH.speed * (a.human ? 1 : 0.7 + 0.25 * a.skill);
+      steerToward(b, a.dashX * sp, a.dashZ * sp, 90, dt);
+      continue;
+    }
     if (a.flipT > 0) {
       a.flipT = Math.max(0, a.flipT - dt);
       continue; // tumbling: no control
@@ -353,14 +420,17 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
       // Celebration / wind-down: friends bounce on the spot, the player can still roll about.
       if (!a.human) {
         steerToward(b, 0, 0, 6, dt);
-        if (a.cheer > 0 && b.y <= 0 && o.rand() < dt * 2.5) hop(a);
+        if (a.cheer > 0 && b.y <= 0 && a.hopCd <= 0 && o.rand() < dt * 2.5) {
+          b.vy = MOVE.hopVy * 0.8;
+          a.hopCd = MOVE.hopCooldown;
+        }
         continue;
       }
     }
     if (a.human) {
       const s = o.input.sprint ? MOVE.sprint : MOVE.speed;
       steerToward(b, o.input.x * s, o.input.z * s, MOVE.accel, dt);
-      if (o.input.hop) hop(a);
+      if (o.input.hop && live) dash(a, o.input.x, o.input.z, out, idx);
       continue;
     }
     a.think -= dt;
@@ -378,7 +448,7 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
     const speed = AI.speed * skill * Math.min(1, d / 1.2);
     steerToward(b, d > 0.01 ? (dx / d) * speed : 0, d > 0.01 ? (dz / d) * speed : 0, AI.accel * skill, dt);
     if (a.wantHop && live) {
-      hop(a);
+      dash(a, dx, dz, out, idx);
       a.wantHop = false;
     }
   }
@@ -396,13 +466,40 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
       const ab = agent.body;
       // A kick: extra push along the contact normal, a loft when hopping or hitting hard.
       const sign = c.a === ballIdx ? -1 : 1;
-      const push = Math.max(0, ab.vx * c.nx * sign + ab.vz * c.nz * sign) * 0.35;
-      m.ball.vx += c.nx * sign * push;
-      m.ball.vz += c.nz * sign * push;
+      const nx = c.nx * sign;
+      const nz = c.nz * sign;
+      m.lastTouch = agent.team;
+      if (agent.dashT > 0) {
+        // Power kick: along the contact, bent toward the goal this team attacks when it is ahead.
+        const aim = aimPoint(agent.team, m.ball.x, m.ball.z);
+        let gx = aim.x - m.ball.x;
+        let gz = aim.z - m.ball.z;
+        const gl = Math.hypot(gx, gz) || 1;
+        gx /= gl;
+        gz /= gl;
+        const w = gx * nx + gz * nz > 0.2 ? DASH.aim : 0;
+        let kx = nx * (1 - w) + gx * w;
+        let kz = nz * (1 - w) + gz * w;
+        const kl = Math.hypot(kx, kz) || 1;
+        kx /= kl;
+        kz /= kl;
+        const power = DASH.kick * (agent.human ? 1 : DASH.aiKick);
+        m.ball.vx = kx * power;
+        m.ball.vz = kz * power;
+        m.ball.vy = Math.max(m.ball.vy, DASH.loft);
+        agent.dashT = 0; // the bubble bounces back off the ball
+        ab.vx -= nx * 2.5;
+        ab.vz -= nz * 2.5;
+        agent.squashV -= 7;
+        out.push({ kind: 'kick', agent: ai, speed: power, power: true });
+        continue;
+      }
+      const push = Math.max(0, ab.vx * nx + ab.vz * nz) * 0.35;
+      m.ball.vx += nx * push;
+      m.ball.vz += nz * push;
       const loft = ab.y > 0.15 ? 4.2 : c.speed > 6 ? 2.4 : 0;
       if (loft > 0 && m.ball.y <= 0.05) m.ball.vy = Math.max(m.ball.vy, loft);
-      m.lastTouch = agent.team;
-      if (c.speed > 1.2) out.push({ kind: 'kick', agent: ai, speed: c.speed });
+      if (c.speed > 1.2) out.push({ kind: 'kick', agent: ai, speed: c.speed, power: false });
       continue;
     }
     const a = m.agents[c.a];
@@ -410,6 +507,25 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
     a.squashV -= c.impulse * 1.4;
     b.squashV -= c.impulse * 1.4;
     if (c.speed > 1.5) out.push({ kind: 'bump', a: c.a, b: c.b, speed: c.speed });
+    // A dash into a bubble always flips the one it hits (comic: everybody bounces, nobody is hurt).
+    const dashA = a.dashT > 0;
+    const dashB = b.dashT > 0;
+    if (dashA !== dashB) {
+      const v = dashA ? c.b : c.a;
+      const ag = m.agents[v];
+      (dashA ? a : b).dashT = 0;
+      if (ag.flipT <= 0) {
+        ag.flipT = FLIP.seconds;
+        const s = v === c.a ? -1 : 1;
+        ag.pushX = c.nx * s;
+        ag.pushZ = c.nz * s;
+        ag.body.vx += ag.pushX * 4;
+        ag.body.vz += ag.pushZ * 4;
+        ag.body.vy = Math.max(ag.body.vy, 3.6);
+        out.push({ kind: 'flip', agent: v });
+      }
+      continue;
+    }
     if (c.impulse >= FLIP.impulse) {
       // The one that was moving into the other less (the "victim") flips; both on a huge hit.
       const va = a.body.vx * c.nx + a.body.vz * c.nz; // after the bounce: victim moves away fastest
@@ -438,6 +554,18 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
   const ball = m.ball;
   const wallHit = collideWalls(ball, o.walls);
   if (wallHit > 2.5) out.push({ kind: 'wall', speed: wallHit });
+  // The ball may have been pushed back off a wall into a bubble: then the bubble gives way (the
+  // ball is pinned), so nobody ever ends up inside the ball, however hard they push.
+  for (let it = 0; it < 2; it++) {
+    let moved = false;
+    for (const a of m.agents) {
+      if (separate(a.body, ball)) {
+        collideWalls(a.body, o.walls);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
   // A ball resting against a puffy wall gets puffed back toward the middle.
   const nearWall = Math.abs(ball.z) > PITCH.hz - ball.r - 0.5 || (Math.abs(ball.x) > PITCH.hx - ball.r - 0.5 && Math.abs(ball.z) > PITCH.goalHalf - 0.2);
   if (live && nearWall && Math.hypot(ball.vx, ball.vz) < UNSTICK.speed) {
@@ -453,9 +581,9 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
   } else m.stuck = 0;
   // Keep the ball's speed sane (cartoon physics, not a cannon).
   const bs = Math.hypot(ball.vx, ball.vz);
-  if (bs > 15) {
-    ball.vx *= 15 / bs;
-    ball.vz *= 15 / bs;
+  if (bs > BALL_MAX) {
+    ball.vx *= BALL_MAX / bs;
+    ball.vz *= BALL_MAX / bs;
   }
 
   // Bonus rings (weak-eye only): appear, live, and charge the ball when it rolls through.
@@ -481,6 +609,28 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
     for (const a of m.agents) if (a.team === team) a.cheer = MATCH.goalPause;
     out.push({ kind: 'goal', team, points, double });
   }
+}
+
+/** Push `mover` fully out of `fixed` (if they overlap at the same height). Returns true if moved. */
+function separate(mover: Body, fixed: Body): boolean {
+  if (mover.ghost || fixed.ghost) return false;
+  if (Math.abs(mover.y + mover.h / 2 - (fixed.y + fixed.h / 2)) >= (mover.h + fixed.h) / 2) return false;
+  const dx = mover.x - fixed.x;
+  const dz = mover.z - fixed.z;
+  const rr = mover.r + fixed.r;
+  const d2 = dx * dx + dz * dz;
+  if (d2 >= rr * rr) return false;
+  const d = Math.sqrt(d2);
+  const nx = d > 1e-6 ? dx / d : 1;
+  const nz = d > 1e-6 ? dz / d : 0;
+  mover.x = fixed.x + nx * rr;
+  mover.z = fixed.z + nz * rr;
+  const vn = mover.vx * nx + mover.vz * nz;
+  if (vn < 0) {
+    mover.vx -= vn * nx;
+    mover.vz -= vn * nz;
+  }
+  return true;
 }
 
 function updateRing(m: MatchState, dt: number, prevBallX: number, rand: () => number, out: MatchEvent[]): void {
