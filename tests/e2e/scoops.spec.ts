@@ -195,6 +195,12 @@ test('the secret topping changes only the weak channel, all 4 combos', async () 
   await page.evaluate(() => {
     const rg = window.__rg!;
     const w = window.__rgScoops!.secretWorld()!;
+    const pl = rg.state().playerPosition;
+    const dx = pl[0] - w[0];
+    const dz = pl[2] - w[2];
+    const len = Math.hypot(dx, dz) || 1;
+    rg.ctx.player.object.visible = false; // an earlier test's big-head effect can fill the view
+    rg.ctx.camera.position.set(w[0] + (dx / len) * 1.1, w[1] + 0.6, w[2] + (dz / len) * 1.1);
     rg.ctx.camera.lookAt(w[0], w[1], w[2]);
     rg.ctx.camera.updateMatrixWorld(true);
   });
@@ -209,6 +215,7 @@ test('the secret topping changes only the weak channel, all 4 combos', async () 
     expect(d.maxB, label).toBe(0);
   }
   await page.evaluate(() => {
+    window.__rg!.ctx.player.object.visible = true;
     window.__rgScoops!.setSecretVisible(null);
     window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' });
   });
