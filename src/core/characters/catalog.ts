@@ -10,6 +10,7 @@
  * Units: metres. Character space = feet at the origin, +Y up, facing +Z, after `scale`.
  */
 import type { PlayerAnim, SkillId } from '../../types';
+import { nativeSkillFor, type PowerId } from '../skills-powers';
 
 export type CharacterId = 'robot' | 'frog' | 'panda' | 'bee' | 'flamingo' | 'rex';
 export type CharacterSkill = SkillId;
@@ -96,7 +97,15 @@ export interface CharacterDef {
   readonly attach: Readonly<Record<AttachPart, AttachPoint>>;
   /** Price in gems; 0 = free from the start. */
   readonly price: number;
+  /**
+   * The classic skill the player runs right now: the hero's chosen power when that is a classic
+   * skill, else its signature (extra powers run beside it, see src/core/skills-powers.ts).
+   */
   readonly skill: CharacterSkill;
+  /** Signature skill (shown first; the default pick). */
+  readonly signature: CharacterSkill;
+  /** Two more powers free from the start (see skills-powers.ts for the pool). */
+  readonly freePowers: readonly [PowerId, PowerId];
   /** Two colours for UI cards (light, dark): picked to differ in brightness in R and G alone. */
   readonly cardColors: readonly [string, string];
   /** Seated pose tweaks (only characters that need them). */
@@ -144,8 +153,15 @@ function astroAttach(headY: number, headZ: number, faceY: number, faceZ: number)
   };
 }
 
+/** A catalog entry whose `skill` follows the hero's chosen power. */
+function hero(d: Omit<CharacterDef, 'skill'>): CharacterDef {
+  const def = { ...d } as CharacterDef;
+  Object.defineProperty(def, 'skill', { get: () => nativeSkillFor(def), enumerable: true });
+  return def;
+}
+
 export const CHARACTERS: readonly CharacterDef[] = [
-  {
+  hero({
     id: 'robot',
     name: 'Bolt',
     backstory: 'Built from spare toaster parts, Bolt jumps twice because once is never enough.',
@@ -172,11 +188,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
       back: { bone: 'Torso', offset: [0, 0.75, -0.26] },
     },
     price: 0,
-    skill: 'doubleJump',
+    signature: 'doubleJump',
+    freePowers: ['rocketBoots', 'dash'],
+    emoteName: 'dance',
     cardColors: ['#f2efe6', '#2b3038'],
     face: { bone: 'Head', eyeAt: [0.17, 1.33, 0.5], eyeR: 0.11, eyeYaw: 0.12, lid: '#d9d4c8', iris: '#16324a', irisLight: '#3f86b8', irisSize: 1.05 },
-  },
-  {
+  }),
+  hero({
     id: 'frog',
     name: 'Hopper',
     backstory: 'Hopper once bounced so high he had to wear a space suit to come back down.',
@@ -188,11 +206,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     emote: { clip: 'Hop', loop: true },
     attach: astroAttach(1.58, 0.15, 1.45, 0.45),
     price: 0,
-    skill: 'superBounce',
+    signature: 'superBounce',
+    freePowers: ['bounceBall', 'doubleJump'],
+    emoteName: 'hop',
     cardColors: ['#e9f7d4', '#1f3a1c'],
     face: { bone: 'Head', eyeAt: [0.27, 1.49, 0.25], eyeR: 0.125, eyeYaw: 0.5, eyePitch: 0.1, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
-  },
-  {
+  }),
+  hero({
     id: 'panda',
     name: 'Mochi',
     backstory: 'Mochi is the fastest snack-fetcher in the galaxy. Blink and you miss her.',
@@ -204,11 +224,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     emote: { clip: 'Dance', loop: true },
     attach: astroAttach(1.68, 0, 1.42, 0.4),
     price: 25,
-    skill: 'dash',
+    signature: 'dash',
+    freePowers: ['rainbowSlide', 'glide'],
+    emoteName: 'dance',
     cardColors: ['#fbe9d6', '#3a1d10'],
     face: { bone: 'Head', eyeAt: [0.2, 1.47, 0.34], eyeR: 0.085, eyeYaw: 0.35, lid: '#e0662a', iris: '#2a160c', blushAt: [0.18, 1.38, 0.36], blushR: 0.045 },
-  },
-  {
+  }),
+  hero({
     id: 'bee',
     name: 'Bumble',
     backstory: 'Bumble’s wings are tiny, but she floats down like a dandelion seed anyway.',
@@ -220,11 +242,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     emote: { clip: 'Wave', loop: true },
     attach: astroAttach(1.55, 0, 1.36, 0.3),
     price: 40,
-    skill: 'glide',
+    signature: 'glide',
+    freePowers: ['bubbleShield', 'doubleJump'],
+    emoteName: 'wave',
     cardColors: ['#fff3b8', '#26200a'],
     face: { bone: 'Head', eyeAt: [0.18, 1.34, 0.28], eyeR: 0.085, eyeYaw: 0.5, lid: '#2a2a2a', iris: '#2a160c', sclera: '#fffdf5', blushAt: [0.16, 1.24, 0.3], blushR: 0.045 },
-  },
-  {
+  }),
+  hero({
     id: 'flamingo',
     name: 'Rosa',
     backstory: 'Rosa stands on one leg so the other one is always ready for a second jump.',
@@ -236,11 +260,13 @@ export const CHARACTERS: readonly CharacterDef[] = [
     emote: { clip: 'Spin', loop: true },
     attach: astroAttach(1.7, 0.08, 1.5, 0.3),
     price: 60,
-    skill: 'doubleJump',
+    signature: 'doubleJump',
+    freePowers: ['glide', 'rainbowSlide'],
+    emoteName: 'spin',
     cardColors: ['#ffe3ee', '#3b1426'],
     face: { bone: 'Head', eyeAt: [0.17, 1.6, 0.12], eyeR: 0.065, eyeYaw: 1.0, lid: '#f08ab0', iris: '#2a160c' },
-  },
-  {
+  }),
+  hero({
     id: 'rex',
     name: 'Stomp',
     backstory: 'Stomp is a very polite dinosaur who makes the ground wobble when he lands.',
@@ -268,7 +294,9 @@ export const CHARACTERS: readonly CharacterDef[] = [
       back: { bone: 'Torso', offset: [0, 1.3, 0.3], rotation: [-Math.PI / 2, 0, 0], scale: 1.2 },
     },
     price: 100,
-    skill: 'groundPound',
+    signature: 'groundPound',
+    freePowers: ['giant', 'superBounce'],
+    emoteName: 'dance',
     cardColors: ['#eef5c8', '#1d2a12'],
     face: { bone: 'Head', eyeAt: [0.15, 1.62, 1.35], eyeR: 0.1, eyeYaw: 0.35, lid: '#bfe868', iris: '#2a160c', blushAt: [0.24, 1.42, 1.45], blushR: 0.06, blushYaw: 1.1 },
     smooth: true,
@@ -278,7 +306,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     seat: {
       bones: { Tail1: [-0.5, 0, 0], Tail2: [-0.15, 0, 0], Tail3: [-0.1, 0, 0], Neck: [0.45, 0, 0] },
     },
-  },
+  }),
 ];
 
 export const CHARACTER_IDS: readonly CharacterId[] = CHARACTERS.map((c) => c.id);
