@@ -130,11 +130,11 @@ export function createDressingRoom(ctx: GameContext, seen: SeenStore, onClose: (
     return look;
   };
   const syncStage = (cheer: boolean): void => {
-    stage.setHero(ctx.player.characterId);
+    stage.setHero(trying?.slot === 'character' ? trying.id : ctx.player.characterId);
     stage.setLook(stageLook(), cheer);
     floatPic.replaceChildren();
     floatPic.classList.remove('on');
-    if (trying && !(WORN as readonly string[]).includes(trying.slot) && trying.slot !== 'emote') {
+    if (trying && !(WORN as readonly string[]).includes(trying.slot) && trying.slot !== 'emote' && trying.slot !== 'character') {
       floatPic.append(art(trying, 'fp'));
       floatPic.classList.add('on');
       retrigger(floatPic, 'pop');
@@ -255,6 +255,7 @@ export function createDressingRoom(ctx: GameContext, seen: SeenStore, onClose: (
     if (st === 'equipped' || st === 'owned') {
       trying = null;
       const on = st === 'equipped';
+      if (on && it.slot === 'character') return; // always wear a hero
       ctx.economy.equip(it.slot, on ? null : it.id);
       ctx.audio.play(on ? 'click' : 'boing', { pitch: 1.3 });
       if (!on && it.slot === 'emote') stage.pose(emoteKind(it.id) ?? 'cheer');

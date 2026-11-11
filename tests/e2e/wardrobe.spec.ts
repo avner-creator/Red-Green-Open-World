@@ -42,6 +42,9 @@ const phase = (page: Page): Promise<string> => page.evaluate(() => window.__rg!.
 const card = (page: Page, id: string) => page.locator(`[data-testid="wardrobe"] [data-testid="shop-card"][data-item="${id}"]`);
 const equipped = (page: Page, slot: string): Promise<string | null> =>
   page.evaluate((s) => window.__rg!.ctx.profile.equipped(s as 'head'), slot);
+/** Tap the unlock moment away (it also leaves by itself after ~2 s of real time). */
+const dismiss = (page: Page): Promise<void> =>
+  page.evaluate(() => (document.querySelector('[data-testid="unlock-moment"].on') as HTMLElement | null)?.click());
 const stageReady = (page: Page): Promise<void> =>
   page.waitForFunction(() => window.__rgWardrobe?.stageReady() === true, undefined, { timeout: 60_000 }).then(() => undefined);
 
@@ -89,12 +92,12 @@ test.describe('dressing room', () => {
     expect(await page.evaluate(() => window.__rg!.ctx.profile.wallet)).toBe(6);
     expect(await equipped(page, 'head')).toBe('hat-pizza');
     await save(page, 'dress-bought', 500);
-    await page.getByTestId('unlock-moment').click();
+    await dismiss(page);
     // Pressing a locked tile twice buys it too (one more press after trying it on).
     await page.getByTestId('shop-tab-face').click();
     await card(page, 'face-bigglasses').click();
     await card(page, 'face-bigglasses').click();
-    await page.getByTestId('unlock-moment').click();
+    await dismiss(page);
     expect(await equipped(page, 'face')).toBe('face-bigglasses');
     expect(await page.evaluate(() => window.__rg!.ctx.profile.wallet)).toBe(1);
     // Keyboard: tab to the next category with E/Q is the nav's job; arrows move between tiles.
@@ -186,8 +189,17 @@ test.describe('dressing room by touch', () => {
     await startGame(page, true);
     if (SHOTS) await page.evaluate(() => window.__rgGear!.enablePreviews(true));
     await expect(page.getByTestId('touch-hud')).toBeVisible();
+    // The hanger button sits above the touch look zone.
+    expect(
+      await page.evaluate(() => {
+        const b = document.querySelector('[data-testid="hud-wardrobe"]')!.getBoundingClientRect();
+        return !!document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.closest('[data-testid="hud-wardrobe"]');
+      }),
+    ).toBe(true);
     await page.getByTestId('hud-wardrobe').tap({ force: true });
+    await step(page, 3);
     await expect(page.getByTestId('wardrobe')).toBeVisible();
+    await expect(page.getByTestId('touch-hud')).toBeHidden();
     expect(await phase(page)).toBe('paused');
     await stageReady(page);
     await card(page, 'hat-chef').tap();

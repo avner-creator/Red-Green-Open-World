@@ -3,8 +3,8 @@ import type { EquipSlot, ShopItem } from '../../types';
 import type { UiIconName } from '../icons';
 
 /** Dressing-room tabs, in order. A tab is a slot ('paint' = the buggy paint). */
-export type DressTab = 'head' | 'face' | 'back' | 'trail' | 'paint' | 'emote' | 'other';
-export const DRESS_TABS: readonly DressTab[] = ['head', 'face', 'back', 'trail', 'paint', 'emote', 'other'];
+export type DressTab = 'head' | 'face' | 'back' | 'trail' | 'paint' | 'emote' | 'hero' | 'other';
+export const DRESS_TABS: readonly DressTab[] = ['head', 'face', 'back', 'trail', 'paint', 'emote', 'hero', 'other'];
 
 export const TAB_ICON: Record<DressTab, UiIconName> = {
   head: 'hat',
@@ -13,6 +13,7 @@ export const TAB_ICON: Record<DressTab, UiIconName> = {
   trail: 'trail',
   paint: 'car',
   emote: 'emote',
+  hero: 'character',
   other: 'sparkle',
 };
 
@@ -26,13 +27,15 @@ export function tabOf(it: ShopItem): DressTab {
       return it.slot;
     case 'carColor':
       return 'paint';
+    case 'character':
+      return 'hero';
     default:
       return 'other';
   }
 }
 
-/** Items the dressing room shows (heroes have their own screen). */
-export const dressable = (it: ShopItem): boolean => it.slot !== 'character';
+/** Items the dressing room shows (all of them: heroes have a tab too, and their own screen). */
+export const dressable = (it: ShopItem): boolean => !!it.id;
 
 /** Tabs that have at least one item, in order. */
 export function dressTabs(catalog: readonly ShopItem[]): DressTab[] {

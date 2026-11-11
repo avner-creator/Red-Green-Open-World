@@ -75,11 +75,11 @@ export const WARDROBE_CSS = `
 }
 
 /* ---------- HUD wardrobe button ---------- */
-.rg .hud .wbtn{position:absolute;left:calc(var(--u)*2.4);top:calc(var(--u)*19);padding:0;border-radius:50%;
-  width:max(56px,calc(var(--u)*11));height:max(56px,calc(var(--u)*11));min-width:0;min-height:0}
-.rg .hud .wbtn .wb-ic .ic,.rg .hud .wbtn .wb-ic{font-size:calc(var(--u)*6.8);color:#15110a;--out:#fff;display:inline-flex}
-.rg .hud .wbtn .wb-key{position:absolute;right:calc(var(--u)*-1.6);bottom:calc(var(--u)*-1.2);font-size:calc(var(--u)*2.4)}
-.rg .hud .wbtn .wb-new{position:absolute;left:calc(var(--u)*-1.4);top:calc(var(--u)*-1.4);display:none;align-items:center;justify-content:center;
+.rg .hud .wbtn{position:absolute;z-index:6;right:calc(var(--u)*1.6);top:calc(var(--u)*21.5);padding:0;border-radius:50%;
+  width:max(56px,calc(var(--u)*9.5));height:max(56px,calc(var(--u)*9.5));min-width:0;min-height:0}
+.rg .hud .wbtn .wb-ic .ic,.rg .hud .wbtn .wb-ic{font-size:max(36px,calc(var(--u)*6));color:#15110a;--out:#fff;display:inline-flex}
+.rg .hud .wbtn .wb-key{position:absolute;left:calc(var(--u)*-1.6);bottom:calc(var(--u)*-1.2);font-size:calc(var(--u)*2.4)}
+.rg .hud .wbtn .wb-new{position:absolute;left:calc(var(--u)*-1.8);top:calc(var(--u)*-1.4);display:none;align-items:center;justify-content:center;
   width:calc(var(--u)*5.2);height:calc(var(--u)*5.2);border-radius:50%;background:#fff;border:calc(var(--u)*.5) solid #000;font-size:calc(var(--u)*3.6);color:#000}
 .rg .hud .wbtn .wb-new .t{-webkit-text-stroke:0;text-shadow:none;color:#000}
 .rg .hud .wbtn .wb-new.on{display:flex;animation:rg-newb .7s ease-in-out infinite alternate}
