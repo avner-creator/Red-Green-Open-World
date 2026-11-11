@@ -1,9 +1,10 @@
 /**
- * Everything Pip says (data only). Rules: at most six words per line, friendly and funny, no
- * health or medical words, and the pictograms carry the meaning (no reading needed): `icon` is
- * the big picture, `action` the button to press (drawn as a key cap / pad button / touch gesture
- * for the active device, so the text never names a key) and `extra` the thing it is for.
- * `tests/buddy/script.test.ts` checks the word counts and the banned words.
+ * Everything Pip says (data only). Rules: at most twelve words per line, kid language, friendly and
+ * funny, no health or medical words, and the pictograms carry the meaning (no reading needed):
+ * `icon` is the big picture, `action` the button to press (drawn as a key cap / pad button / touch
+ * gesture for the active device, so the text never names a key) and `extra` the thing it is for.
+ * How-tos explain RULES, never where a weak-eye or strong-eye object is.
+ * `tests/buddy/script.test.ts` checks the word counts, the banned words and the pool sizes.
  */
 import type { Line, Mood, Priority } from './dialogue';
 import { PRIORITY } from './dialogue';
@@ -17,6 +18,8 @@ export interface ScriptLine {
   mood?: Mood;
   callout?: string;
   hold?: number;
+  /** Pure praise / reaction: spoken with no bubble when Pip's voice is on. */
+  praise?: boolean;
 }
 
 export function line(s: ScriptLine, priority: Priority, id?: string): Line {
@@ -37,81 +40,230 @@ export const HUD = {
 } as const;
 export type HudKey = keyof typeof HUD;
 
+/**
+ * The welcome story (a brand-new player, about 30 s, skippable, the child can already move). Each
+ * beat is one spoken clip; the bubble shows only its pictograms while Pip talks.
+ */
+export const STORY: readonly ScriptLine[] = [
+  { text: "Hi, I'm Pip! Welcome to Carnival Island, a giant fun park!", icon: 'pip', extra: 'party', action: 'move', mood: 'excited', hold: 0.6 },
+  { text: 'Rides and games everywhere! Fly a balloon, bounce, race and play!', icon: 'tent', extra: 'wBalloon', action: 'look', mood: 'excited', hold: 0.6 },
+  { text: 'Sparkly gems hide all over. Your magic glasses find them!', icon: 'glasses', extra: 'gem', mood: 'curious', hold: 0.6 },
+  { text: 'Gems buy rides, goofy hats and cool gear!', icon: 'gem', extra: 'hat', mood: 'proud', callout: HUD.wallet, hold: 0.6 },
+  { text: 'Each new ride earns a stamp. Full Fun Pass, giant prize!', icon: 'mission', extra: 'jackpot', mood: 'excited', callout: HUD.missions, hold: 0.6 },
+  { text: "Let's fill it before sunset! Follow me to the first one!", icon: 'paw', extra: 'wTrampoline', action: 'move', mood: 'excited', hold: 0.8 },
+];
+/** Story beat index at which Pip puts on his own magic glasses. */
+export const STORY_GLASSES_BEAT = 2;
+
 export const INTRO = {
-  welcome: { text: 'Hi! I am Pip!', icon: 'pip', extra: 'party', mood: 'excited', hold: 1.4 },
-  move: { text: 'Walk with me!', icon: 'paw', action: 'move', mood: 'excited', hold: 2 },
-  look: { text: 'Look around!', icon: 'eye', action: 'look', mood: 'curious', hold: 2 },
-  glasses: { text: 'Magic glasses find hidden gems!', icon: 'glasses', extra: 'gem', mood: 'curious', hold: 2.2 },
-  wallet: { text: 'Gems are money!', icon: 'gem', extra: 'wallet', mood: 'proud', callout: HUD.wallet, hold: 2.6 },
-  jump: { text: 'Jump! Hold to go higher!', icon: 'wTrampoline', action: 'jump', mood: 'excited', hold: 2.4 },
-  choose: { text: 'Now you choose!', icon: 'target', mood: 'proud', callout: HUD.compass, hold: 2.8 },
+  jump: { text: 'Jump on the trampoline! Hold jump to bounce higher!', icon: 'wTrampoline', action: 'jump', mood: 'excited', hold: 1.2 },
+  choose: { text: 'Now you choose! The compass shows fun places.', icon: 'target', mood: 'proud', callout: HUD.compass, hold: 1.6 },
   skipped: { text: 'Okay! Have fun!', icon: 'paw', mood: 'happy', hold: 1.2 },
 } satisfies Record<string, ScriptLine>;
 
 /** "Follow me!" towards an attraction (its pictogram shows where). */
-export const follow = (a: Attraction): ScriptLine => ({ text: 'Follow me!', icon: 'paw', extra: ATTRACTIONS[a].icon, mood: 'excited', hold: 1.8 });
+export const follow = (a: Attraction): ScriptLine => ({ text: 'Follow me!', icon: 'paw', action: 'move', extra: ATTRACTIONS[a].icon, mood: 'excited', hold: 1.4 });
+/** Re-prompts while leading (no repeats within a few minutes; then Pip only barks). */
+export const FOLLOW_AGAIN: readonly string[] = ['This way, buddy!', 'Come on, over here!', "Let's go! It's this way!", 'Hurry, it is so fun!', 'Almost there! Follow me!', 'Over here! Woof!'];
 
 /** Pip ran over to help (stuck at a fence, wandering off, standing around). */
 export const RESCUE: ScriptLine = { text: 'This way! Come on!', icon: 'wave', extra: 'paw', mood: 'happy', hold: 1.6 };
 
-export const RETURNING: ScriptLine = { text: 'Welcome back, buddy!', icon: 'wave', mood: 'excited', hold: 1.2 };
+export const RETURNING: ScriptLine = { text: 'Welcome back, buddy! Ready for more fun?', icon: 'wave', mood: 'excited', hold: 1.2 };
 
 /** One-time HUD tips (each one is shown once ever; ids are saved). */
 export const TIPS = {
-  stars: { text: 'Stars for cool tricks!', icon: 'star', mood: 'proud', callout: HUD.stars },
-  timer: { text: 'Sunset means closing time!', icon: 'sun', mood: 'curious', callout: HUD.timer },
-  compass: { text: 'Compass shows fun places!', icon: 'target', mood: 'happy', callout: HUD.compass },
-  missions: { text: 'Goals! Finish them for gems!', icon: 'mission', mood: 'excited', callout: HUD.missions },
-  help: { text: 'Lost? This button helps!', icon: 'question', mood: 'happy', callout: HUD.help },
-  pip: { text: 'Need me? Use my button!', icon: 'pip', mood: 'happy', callout: HUD.pip },
-  combo: { text: 'Grab gems fast for combos!', icon: 'combo', mood: 'excited', callout: HUD.combo },
+  stars: { text: 'Cool tricks earn stars!', icon: 'star', mood: 'proud', callout: HUD.stars },
+  timer: { text: 'When the sun sets, the park closes!', icon: 'sun', mood: 'curious', callout: HUD.timer },
+  compass: { text: 'The compass shows fun places!', icon: 'target', mood: 'happy', callout: HUD.compass },
+  missions: { text: 'Your Fun Pass! New rides and games fill it with stamps.', icon: 'mission', mood: 'excited', callout: HUD.missions },
+  help: { text: 'Lost? This button shows all the controls!', icon: 'question', mood: 'happy', callout: HUD.help },
+  pip: { text: 'Need help? Use my button, and I explain things!', icon: 'pip', mood: 'happy', callout: HUD.pip },
+  combo: { text: 'Grab gems fast for a combo! More gems!', icon: 'combo', mood: 'excited', callout: HUD.combo },
+  arrows: { text: 'Glowing arrows on the ground lead to secrets. Follow them!', icon: 'glasses', extra: 'trail', mood: 'curious' },
 } satisfies Record<string, ScriptLine>;
-export type TipId = keyof typeof TIPS | 'skill' | `visit:${Attraction}` | 'chute';
+export type TipId = keyof typeof TIPS | 'skill' | `visit:${Attraction}` | `howto:${string}` | `econ:${string}` | 'chute';
 
 /** Skill tip: the key cap is filled in from the control map ("Q", "LB"). */
 export function skillTip(_key = ''): ScriptLine {
-  return { text: 'Your super power!', icon: 'bolt', action: 'skill', mood: 'excited', callout: HUD.skill };
+  return { text: 'Your hero has a super power! Try it!', icon: 'bolt', action: 'skill', mood: 'excited', callout: HUD.skill };
 }
 
 /** Explanations when the player asks about a HUD element (T over it). */
 export const EXPLAIN: Partial<Record<HudKey, ScriptLine>> = {
-  wallet: { text: 'Gems are money! Spend them!', icon: 'wallet', mood: 'proud', callout: HUD.wallet },
+  wallet: { text: 'Your gems! Spend them on rides, hats and gear.', icon: 'wallet', mood: 'proud', callout: HUD.wallet },
   stars: TIPS.stars,
   timer: TIPS.timer,
   compass: TIPS.compass,
   missions: TIPS.missions,
-  help: { text: 'All the buttons live here!', icon: 'question', mood: 'happy', callout: HUD.help },
+  help: TIPS.help,
   combo: TIPS.combo,
   pip: { text: "That's me! Woof!", icon: 'pip', mood: 'silly', callout: HUD.pip },
 };
 
-/** Where each attraction is, how to say it and a one-line how-to for the first visit. */
-export const ATTRACTIONS: Record<Attraction, { icon: BuddyPicto; name: string; howTo: (key: KeyNames) => ScriptLine }> = {
-  trampoline: { icon: 'wTrampoline', name: 'big trampoline', howTo: () => INTRO.jump },
-  balloon: { icon: 'wBalloon', name: 'balloon ride', howTo: () => ({ text: 'Hop in! First ride free!', icon: 'wBalloon', action: 'use', extra: 'ticket', mood: 'excited' }) },
-  launchPads: { icon: 'wRocket', name: 'rocket pads', howTo: () => ({ text: 'Step on! Blast off!', icon: 'wRocket', mood: 'excited' }) },
-  garage: { icon: 'wCar', name: 'buggy', howTo: () => ({ text: 'Drive!', icon: 'wCar', action: 'use', mood: 'excited' }) },
-  gearShack: { icon: 'shop', name: 'Gear Shack', howTo: () => ({ text: 'Shop!', icon: 'shop', action: 'use', mood: 'happy' }) },
-  bungee: { icon: 'bungee', name: 'bungee tower', howTo: () => ({ text: 'Jump off! Boing boing!', icon: 'bungee', mood: 'silly' }) },
-  ranch: { icon: 'horse', name: 'pony ranch', howTo: () => ({ text: 'Ride!', icon: 'horse', action: 'use', mood: 'happy' }) },
-  sillyZone: { icon: 'party', name: 'Silly Zone', howTo: () => ({ text: 'Everything is wobbly here!', icon: 'party', mood: 'silly' }) },
-  bouncePads: { icon: 'wPads', name: 'bounce pads', howTo: () => ({ text: 'Bounce, bounce, bounce!', icon: 'wPads', mood: 'excited' }) },
-  carnivalRow: { icon: 'tent', name: 'carnival games', howTo: () => ({ text: 'Play!', icon: 'tent', action: 'use', mood: 'excited' }) },
-  iceCream: { icon: 'cone', name: 'ice-cream shop', howTo: () => ({ text: 'Get a cone!', icon: 'cone', action: 'use', mood: 'happy' }) },
-  bubbleArena: { icon: 'bubble', name: 'bubble ball', howTo: () => ({ text: 'Suit up!', icon: 'bubble', action: 'use', mood: 'silly' }) },
-  dinoRing: { icon: 'dragon', name: 'dino sumo', howTo: () => ({ text: 'Wobble!', icon: 'dragon', action: 'use', mood: 'silly' }) },
-  raceStart: { icon: 'flag', name: 'buggy race', howTo: () => ({ text: 'Race!', icon: 'flag', action: 'use', mood: 'excited' }) },
-  foamCourse: { icon: 'bubble', name: 'foam course', howTo: () => ({ text: "Don't fall in the foam!", icon: 'bubble', mood: 'silly' }) },
-  airstrip: { icon: 'plane', name: 'stunt planes', howTo: () => ({ text: 'Fly!', icon: 'plane', action: 'use', mood: 'excited' }) },
-  dragonRoost: { icon: 'dragon', name: 'dragon ride', howTo: () => ({ text: 'Fly the dragon!', icon: 'dragon', action: 'use', mood: 'excited' }) },
-  // Magic-glasses games: one family icon (the glasses), short wordless-friendly how-tos.
-  glowflies: { icon: 'glasses', name: 'magic glow-flies', howTo: () => ({ text: 'Catch the glow-flies!', icon: 'glasses', mood: 'excited' }) },
-  oddone: { icon: 'glasses', name: 'magic odd-one-out', howTo: () => ({ text: 'Which one is different?', icon: 'glasses', mood: 'curious' }) },
-  lineup: { icon: 'glasses', name: 'magic bubbles', howTo: () => ({ text: 'Line up the sparkly ring!', icon: 'glasses', mood: 'curious' }) },
-  toys: { icon: 'glasses', name: 'magic toy hunt', howTo: () => ({ text: 'Follow my paw prints!', icon: 'paw', mood: 'excited' }) },
-  gates: { icon: 'glasses', name: 'magic gates', howTo: () => ({ text: 'Put the halves together!', icon: 'glasses', mood: 'curious' }) },
-  dotsigns: { icon: 'glasses', name: 'magic dot signs', howTo: () => ({ text: 'Find the hidden shape!', icon: 'glasses', mood: 'curious' }) },
+/** Attractions Pip knows: pictogram and name ("Try the big trampoline!"). */
+export const ATTRACTIONS: Record<Attraction, { icon: BuddyPicto; name: string }> = {
+  trampoline: { icon: 'wTrampoline', name: 'big trampoline' },
+  balloon: { icon: 'wBalloon', name: 'balloon ride' },
+  launchPads: { icon: 'wRocket', name: 'rocket pads' },
+  garage: { icon: 'wCar', name: 'buggy' },
+  gearShack: { icon: 'shop', name: 'Gear Shack' },
+  bungee: { icon: 'bungee', name: 'bungee bridge' },
+  ranch: { icon: 'horse', name: 'pony ranch' },
+  sillyZone: { icon: 'party', name: 'Silly Zone' },
+  bouncePads: { icon: 'wPads', name: 'bounce pads' },
+  carnivalRow: { icon: 'tent', name: 'carnival games' },
+  iceCream: { icon: 'cone', name: 'ice-cream shop' },
+  bubbleArena: { icon: 'bubble', name: 'bubble soccer' },
+  dinoRing: { icon: 'dragon', name: 'dino sumo' },
+  raceStart: { icon: 'flag', name: 'buggy race' },
+  foamCourse: { icon: 'bubble', name: 'foam course' },
+  airstrip: { icon: 'plane', name: 'stunt planes' },
+  dragonRoost: { icon: 'dragon', name: 'dragon ride' },
+  glowflies: { icon: 'glasses', name: 'magic glow-flies' },
+  oddone: { icon: 'glasses', name: 'magic odd-one-out' },
+  lineup: { icon: 'glasses', name: 'magic bubbles' },
+  toys: { icon: 'glasses', name: 'magic toy hunt' },
+  gates: { icon: 'glasses', name: 'magic gates' },
+  dotsigns: { icon: 'glasses', name: 'magic dot signs' },
 };
+
+/** Carnival booths (game ids from src/activities/carnival). */
+export const BOOTHS = ['balloonPop', 'ringToss', 'duckPond', 'strengthBell', 'glowDodge'] as const;
+export type Booth = (typeof BOOTHS)[number];
+
+/** Everything with a spoken how-to: attractions, booths and a few both-eye things. */
+export type HowToTopic = Attraction | `booth:${Booth}` | 'vault' | 'chest' | 'workshop' | 'secrets';
+
+/**
+ * Spoken how-tos (1–3 lines each): what it is and exactly what to do. Said on the first arrival
+ * and again when the child asks Pip there. Each line is true to the attraction's code.
+ */
+export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
+  trampoline: [
+    INTRO.jump,
+    { text: 'Up high, steer with the stick for flips and tricks!', icon: 'star', action: 'move', mood: 'excited' },
+  ],
+  bouncePads: [{ text: 'Step on a bounce pad. It throws you to the next one!', icon: 'wPads', mood: 'excited' }],
+  launchPads: [{ text: 'Stand on a rocket pad and blast up onto the big net!', icon: 'wRocket', mood: 'excited' }],
+  balloon: [
+    { text: 'This balloon flies you sky-high! Hop in the basket!', icon: 'wBalloon', action: 'use', mood: 'excited' },
+    { text: 'At the top, jump out and fly through the gems!', icon: 'parachute', action: 'jump', mood: 'excited' },
+    { text: 'Jump again to open your parachute. Land on the rings!', icon: 'parachute', action: 'jump', extra: 'wTarget', mood: 'happy' },
+  ],
+  garage: [
+    { text: 'Hop in the buggy and drive! Bumps are bouncy and fun!', icon: 'wCar', action: 'use', mood: 'excited' },
+    { text: 'The tool cart gives your buggy silly new parts!', icon: 'gear', action: 'use', extra: 'wCar', mood: 'happy' },
+  ],
+  raceStart: [
+    { text: 'Race two friends, three laps around the roads!', icon: 'flag', action: 'use', mood: 'excited' },
+    { text: 'Magic glasses show boost pads. Three in a row go zoom!', icon: 'glasses', extra: 'bolt', mood: 'curious' },
+  ],
+  gearShack: [{ text: 'The Gear Shack! Spend gems on hats, capes and cool gear!', icon: 'shop', action: 'use', extra: 'hat', mood: 'happy' }],
+  ranch: [{ text: 'Hop on a pony and gallop around the island!', icon: 'horse', action: 'use', mood: 'happy' }],
+  sillyZone: [
+    { text: 'Step on the big round button for a silly flop!', icon: 'flop', mood: 'silly' },
+    { text: 'Bump the mushrooms, push the beach ball, ride the see-saw!', icon: 'party', mood: 'silly' },
+    { text: 'Run through the wiggly tube guys. They just wobble, hehe!', icon: 'wRun', mood: 'silly' },
+  ],
+  bungee: [
+    { text: 'Clip in at the bridge, then dive off the springboard!', icon: 'bungee', action: 'use', mood: 'excited' },
+    { text: 'Jump when the board bounces up for a deeper dive!', icon: 'bungee', action: 'jump', mood: 'excited' },
+  ],
+  carnivalRow: [
+    { text: 'Five carnival games! Walk up to a booth to play!', icon: 'tent', action: 'use', mood: 'excited' },
+    { text: 'Beat your friends to win prizes and gems!', icon: 'star', extra: 'gem', mood: 'proud' },
+  ],
+  'booth:balloonPop': [
+    { text: 'Throw beanbags at the balloons! Look around to aim.', icon: 'balloon', action: 'use', mood: 'excited' },
+    { text: "Magic glasses show prize balloons. They're worth triple!", icon: 'glasses', extra: 'balloon', mood: 'curious' },
+  ],
+  'booth:ringToss': [
+    { text: 'Hold to power up, let go to toss the ring!', icon: 'target', action: 'use', mood: 'excited' },
+    { text: 'Magic glasses show a gold star peg. It counts double!', icon: 'glasses', extra: 'star', mood: 'curious' },
+  ],
+  'booth:duckPond': [
+    { text: 'Aim the net over a duck and scoop it up!', icon: 'target', action: 'use', mood: 'happy' },
+    { text: 'Magic glasses show lucky ducks with stars. Worth three!', icon: 'glasses', extra: 'star', mood: 'curious' },
+  ],
+  'booth:strengthBell': [
+    { text: 'Watch the swinging needle and stomp to ring the bell!', icon: 'star', action: 'jump', mood: 'excited' },
+    { text: 'Magic glasses show the perfect spot on the dial!', icon: 'glasses', extra: 'target', mood: 'curious' },
+  ],
+  'booth:glowDodge': [
+    { text: 'Foam balls roll at you! Jump over, or step aside!', icon: 'bubble', action: 'jump', mood: 'silly' },
+    { text: 'In the dark, magic glasses show the glowing balls!', icon: 'glasses', extra: 'bubble', mood: 'curious' },
+  ],
+  iceCream: [
+    { text: 'Build your own ice cream! Pick with left and right!', icon: 'cone', action: 'move', mood: 'happy' },
+    { text: 'Jump adds it. Then eat it for a silly power!', icon: 'cone', action: 'jump', mood: 'silly' },
+  ],
+  bubbleArena: [
+    { text: 'Bubble soccer! Roll the big ball into the other goal!', icon: 'bubble', action: 'use', mood: 'excited' },
+    { text: 'Jump to dash and kick the ball super hard!', icon: 'bubble', action: 'jump', mood: 'excited' },
+  ],
+  dinoRing: [
+    { text: 'Dino sumo! Bump the other dinos out of the ring!', icon: 'dragon', action: 'use', mood: 'silly' },
+    { text: 'Jump for a big belly charge! Boing!', icon: 'dragon', action: 'jump', mood: 'silly' },
+  ],
+  foamCourse: [
+    { text: 'Race a friend across the foam on floats and blocks!', icon: 'bubble', action: 'use', mood: 'excited' },
+    { text: 'Jump the gaps! If you fall in, try again from the checkpoint.', icon: 'flag', action: 'jump', mood: 'silly' },
+  ],
+  airstrip: [
+    { text: 'Fly the stunt plane! Zoom through hoops and pop cloud balloons!', icon: 'plane', action: 'use', mood: 'excited' },
+    { text: 'Steer where you look. Your power button does loops!', icon: 'plane', action: 'skill', mood: 'excited' },
+  ],
+  dragonRoost: [
+    { text: 'Give the dragon a snack, then hop on and fly!', icon: 'dragon', action: 'use', mood: 'excited' },
+    { text: 'Jump flaps the wings. Your power button blows bubbles!', icon: 'dragon', action: 'jump', mood: 'silly' },
+  ],
+  glowflies: [
+    { text: 'Catch the glow-flies! Run or jump right through them!', icon: 'glasses', action: 'jump', mood: 'excited' },
+    { text: 'Only magic glasses can see them. Fill up the jar!', icon: 'glasses', mood: 'curious' },
+  ],
+  oddone: [{ text: 'Three shapes, one is different. Push the button under it!', icon: 'glasses', action: 'use', mood: 'curious' }],
+  lineup: [
+    { text: 'Stand on the pad. Move the magic ring onto a bubble!', icon: 'glasses', action: 'look', mood: 'curious' },
+    { text: 'Then push the button to pop it!', icon: 'bubble', action: 'use', mood: 'excited' },
+  ],
+  toys: [{ text: 'I lost my toys! Follow the glowing paw prints to find them!', icon: 'paw', extra: 'glasses', mood: 'curious' }],
+  gates: [
+    { text: 'Look at the sign. Each eye sees half a shape!', icon: 'glasses', mood: 'curious' },
+    { text: 'Put the halves together, then run through that arch!', icon: 'wRun', mood: 'excited' },
+    { text: 'Step on the start plate for a new shape!', icon: 'glasses', mood: 'happy' },
+  ],
+  dotsigns: [
+    { text: 'Look at the dots. A hidden shape pops out!', icon: 'glasses', mood: 'curious' },
+    { text: 'Push the button with that same shape!', icon: 'glasses', action: 'use', mood: 'excited' },
+  ],
+  vault: [
+    { text: 'A secret vault! Magic glasses show three shapes in a row.', icon: 'lock', extra: 'glasses', mood: 'curious' },
+    { text: 'Push the door buttons in that same order!', icon: 'lock', action: 'use', mood: 'excited' },
+  ],
+  chest: [
+    { text: 'A treasure chest! Magic glasses help you find its key.', icon: 'chest', extra: 'key', mood: 'curious' },
+    { text: 'Bring the key back and step on the matching symbol!', icon: 'key', extra: 'lock', mood: 'excited' },
+  ],
+  workshop: [{ text: 'Pick silly parts for your buggy! Gems pay for them.', icon: 'gear', action: 'use', extra: 'wCar', mood: 'happy' }],
+  secrets: [
+    TIPS.arrows,
+    { text: 'Some stepping stones only magic glasses see. Hop across!', icon: 'glasses', action: 'jump', mood: 'excited' },
+  ],
+};
+
+/** Economy, explained once at the moment it matters. */
+export const ECON = {
+  gem: { text: 'A gem! Gems are money for rides, hats and gear!', icon: 'gem', extra: 'wallet', mood: 'excited', callout: HUD.wallet },
+  mega: { text: 'A mega gem! The spiky ones are worth five!', icon: 'megaGem', mood: 'excited', callout: HUD.wallet },
+  key: { text: 'You found a key! Bring it back to its chest!', icon: 'key', extra: 'chest', mood: 'excited' },
+  ticket: { text: 'The first ride is free. After that, rides cost gems!', icon: 'ticket', extra: 'gem', mood: 'curious', callout: HUD.wallet },
+  stamp: { text: 'A Fun Pass stamp! Fill the card for giant prizes!', icon: 'mission', extra: 'jackpot', mood: 'proud', callout: HUD.missions },
+  shop: { text: 'Pick something cool! Your gems pay for it.', icon: 'shop', extra: 'gem', mood: 'happy' },
+} satisfies Record<string, ScriptLine>;
+export type EconId = keyof typeof ECON;
+
+export const CHUTE = (_k?: KeyNames): ScriptLine => ({ text: 'Parachute now!', icon: 'parachute', action: 'jump', mood: 'excited' });
 
 export interface KeyNames {
   use: string;
@@ -119,49 +271,51 @@ export interface KeyNames {
   skill: string;
 }
 
-export const CHUTE = (_k?: KeyNames): ScriptLine => ({ text: 'Parachute now!', icon: 'parachute', action: 'jump', mood: 'excited' });
-
+/** Chest context hints (repeat with a long cooldown while the hero stands at a locked chest). */
 export const CHEST = {
-  findKey: { text: 'Find the key!', icon: 'key', extra: 'chest', mood: 'curious', hold: 2.4 },
-  shape: { text: 'Step on the right shape!', icon: 'key', extra: 'lock', mood: 'curious', hold: 2.4 },
+  findKey: { text: 'Find the key with your magic glasses!', icon: 'key', extra: 'chest', mood: 'curious', hold: 2.4 },
+  shape: { text: 'Step on the matching symbol!', icon: 'key', extra: 'lock', mood: 'curious', hold: 2.4 },
 } satisfies Record<string, ScriptLine>;
 
 export const needGems = (n: number): ScriptLine => ({ text: `Need ${n} more gems!`, icon: 'gem', extra: 'ticket', mood: 'worried' });
 
 export const suggest = (a: Attraction): ScriptLine => ({ text: `Try the ${ATTRACTIONS[a].name}!`, icon: ATTRACTIONS[a].icon, extra: 'target', mood: 'curious' });
 
-export const IDLE: ScriptLine[] = [
-  { text: 'I smell adventure!', icon: 'nose', mood: 'curious' },
-  { text: 'Is it snack time?', icon: 'paw', mood: 'silly' },
-  { text: 'Wanna race? Go go go!', icon: 'bolt', mood: 'excited' },
-  { text: 'Your glasses look super cool!', icon: 'glasses', mood: 'happy' },
-  { text: 'Hmm... where next?', icon: 'target', mood: 'curious' },
-  { text: 'Scratch my ears? Hehe!', icon: 'paw', mood: 'silly' },
-];
+/** Reaction pools: at least eight varied lines each, picked from a shuffle bag. */
+const P = (icon: BuddyPicto, mood: Mood, texts: readonly string[]): readonly ScriptLine[] => texts.map((text) => ({ text, icon, mood, praise: true }));
 
-export const REACT = {
-  gem: { text: 'Shiny! Yip yip!', icon: 'gem', mood: 'happy' },
-  combo: { text: 'Combo! Keep going!', icon: 'combo', mood: 'excited' },
-  mega: { text: 'MEGA gem! Wowee!', icon: 'megaGem', mood: 'excited' },
-  stunt: { text: 'Whoa! So high!', icon: 'star', mood: 'excited' },
-  key: { text: 'A key! Nice find!', icon: 'key', mood: 'excited' },
-  chest: { text: 'Treasure! Ooh, shiny!', icon: 'chest', mood: 'proud' },
-  flop: { text: 'Silly flop! Boing!', icon: 'flop', mood: 'silly' },
-  skill: { text: 'Cool power!', icon: 'bolt', mood: 'excited' },
-  emote: { text: 'Dance party!', icon: 'emote', mood: 'silly' },
-  bought: { text: 'Looking sharp!', icon: 'hat', mood: 'proud' },
-  unlocked: { text: 'Ooh, new stuff!', icon: 'backpack', mood: 'excited' },
-  ticket: { text: 'Wheee! Here we go!', icon: 'ticket', mood: 'excited' },
-  jackpot: { text: 'Jackpot! We are rich!', icon: 'jackpot', mood: 'excited' },
-  goalDone: { text: 'Goal done! Woohoo!', icon: 'check', mood: 'proud' },
-  sunset: { text: 'Hurry! Sunset is coming!', icon: 'sun', mood: 'worried' },
-  heights: { text: 'So high! Eek!', icon: 'eye', mood: 'worried' },
-  landed: { text: 'You did it! Yay!', icon: 'star', mood: 'proud' },
-  magic: { text: 'Magic glasses! Great job!', icon: 'glasses', mood: 'proud' },
-  freefall: { text: 'Wheee!', icon: 'parachute', mood: 'excited' },
-} satisfies Record<string, ScriptLine>;
+export const POOLS = {
+  gem: P('gem', 'happy', ['Shiny! Keep them coming!', 'Ooh, sparkly!', "You're a gem finder!", 'Another one! Yip yip!', 'Your gem pile is growing!', 'Gem-tastic!', 'Sparkle, sparkle!', 'Treasure hunter!', 'More gems, more fun!']),
+  mega: P('megaGem', 'excited', ['Whoa, a mega gem!', 'Mega sparkle!', "That one's huge!", 'Super shiny mega gem!', 'Big gem, big smile!', "My tail can't stop wagging!", "Now that's a gem!", 'Ka-ching!']),
+  combo: P('combo', 'excited', ['Combo! Keep going!', 'Gem streak!', 'Grab, grab, grab!', 'Combo time!', 'So speedy!', "Don't stop now!", 'Bigger combo!', 'You are on fire!']),
+  stunt: P('star', 'excited', ['Whoa! So high!', 'Cool trick!', 'Did you see that?', 'Amazing flip!', 'Up in the clouds!', 'Spin-tastic!', 'That was awesome!', 'Again, again!', 'You fly like a bird!']),
+  key: P('key', 'excited', ['Got the key!', 'Jingle jangle!', 'Key time!', 'Good sniffing, buddy!', 'Ooh, a key!', 'Now find its chest!', 'That key looks fancy!', 'Key, key, hooray!']),
+  chest: P('chest', 'proud', ['Treasure! Ooh, shiny!', 'It opened! Yay!', "Look what's inside!", 'New stuff for you!', 'Treasure time!', 'Best team ever!', 'We cracked it!', 'Woohoo, treasure!']),
+  flop: P('flop', 'silly', ['Silly flop! Boing!', 'Oopsie daisy!', 'Floppy hero!', 'Up you get!', 'Hehe, that was funny!', 'Wibble wobble!', 'Splat! Hehe!', 'Bouncy flop!']),
+  landed: P('star', 'proud', ['You did it! Yay!', 'Nice landing!', 'Back on the ground!', 'Smooth landing!', 'Ta-da!', 'What a ride!', 'Ten out of ten!', 'Wow, what a trip!']),
+  magic: P('glasses', 'proud', ['Super spotter!', 'You found it!', 'Super sharp!', 'Your glasses rock!', 'Nailed it!', 'Sharp eyes!', 'Spot on!', 'Magic!']),
+  bought: P('hat', 'proud', ['Looking sharp!', 'So stylish!', 'Ooh, fancy!', 'Love it!', 'Very cool!', 'Snazzy!', 'Fashion star!', 'Looking good!']),
+  stamp: P('mission', 'proud', ['Stamp! Woohoo!', 'Another stamp!', 'Your Fun Pass loves that!', 'Stamp time!', 'One more stamp!', 'Stamped! Next ride?', 'Fun Pass power!', 'Collect them all!']),
+  freefall: P('parachute', 'excited', ['Wheee!', 'Weeeee!', 'Fly, fly, fly!', 'Woo-hoo!', 'So fast!', 'Ears flapping!', 'Sky high!', 'Zoom!']),
+  goal: P('check', 'proud', ['Goal done! Woohoo!', 'You did it!', 'Goal smashed!', 'Done and done!', 'Easy peasy!', 'High paw!', "That's a win!", 'Super job!']),
+  jackpot: P('jackpot', 'excited', ['Jackpot! We are rich!', 'Big prize!', 'Wow, so many gems!', 'Prize time!', 'Jackpot! Yip yip!', 'Rich puppy!', 'Gems, gems, gems!', 'Best day ever!']),
+  idle: [
+    { text: 'I smell adventure!', icon: 'nose', mood: 'curious' },
+    { text: 'Is it snack time?', icon: 'paw', mood: 'silly' },
+    { text: 'Wanna race? Go go go!', icon: 'bolt', mood: 'excited' },
+    { text: 'Your glasses look super cool!', icon: 'glasses', mood: 'happy' },
+    { text: 'Hmm... where next?', icon: 'target', mood: 'curious' },
+    { text: 'Scratch my ears? Hehe!', icon: 'paw', mood: 'silly' },
+    { text: 'I hear the carnival music!', icon: 'note', mood: 'happy' },
+    { text: 'The compass knows fun places!', icon: 'target', mood: 'curious', callout: HUD.compass },
+    { text: 'Let us find more gems!', icon: 'gem', mood: 'excited' },
+  ],
+} satisfies Record<string, readonly ScriptLine[]>;
+export type PoolId = keyof typeof POOLS;
 
 /** Trampoline bounce count barks: "One!", "Two!"… */
-export const COUNT = ['One!', 'Two!', 'Three!', 'Four!', 'Five!', 'Six!', 'Seven!', 'Eight!', 'Nine!', 'Ten!'];
+export const COUNT = ['One!', 'Two!', 'Three!', 'Four!', 'Five!'];
+
+export const SUNSET: ScriptLine = { text: 'Hurry! Sunset is coming!', icon: 'sun', mood: 'worried' };
 
 export { PRIORITY };

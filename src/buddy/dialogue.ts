@@ -26,6 +26,19 @@ export interface Line {
   id?: string;
   /** Seconds the line may wait in the queue before it is dropped (default by priority). */
   ttl?: number;
+  /** Pure praise / reaction: spoken with no bubble when Pip's voice is audible. */
+  praise?: boolean;
+}
+
+export type BubbleMode = 'none' | 'compact' | 'full';
+
+/**
+ * How a line shows: with Pip's voice audible (voice on, audio unlocked, a clip exists) only a
+ * compact pictogram bubble, or nothing for pure praise; with no voice the full text bubble.
+ */
+export function bubbleMode(line: Pick<Line, 'praise'>, audible: boolean): BubbleMode {
+  if (!audible) return 'full';
+  return line.praise ? 'none' : 'compact';
 }
 
 export interface ActiveLine {
