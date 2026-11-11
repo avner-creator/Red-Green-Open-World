@@ -103,8 +103,11 @@ export function create(env: MechanicEnv): Mechanic {
   const padC = kit.booth.build.padCenter;
   const padPos = kit.toWorld({ x: padC.x, y: padC.y, z: padC.z });
   const eye = new THREE.Vector3(padPos.x, padPos.y + 1.6, padPos.z);
-  /** The ✓ / ✗ pops above the hero's head on the pad (frame-local). */
-  const popAt = { x: padC.x, y: padC.y + LINEUP.popY, z: padC.z };
+  /**
+   * The ✓ / ✗ pops beside the hero on the pad, on the side away from the booth (frame-local): the
+   * same place for every bubble, low in the view, never over the sky where the bubbles float.
+   */
+  const popAt = { x: padC.x - side * LINEUP.popSide, y: padC.y + LINEUP.popY, z: padC.z + 0.4 };
 
   // ── spots: open sky / far background behind every bubble, not towards the booth ──
   const raycaster = new THREE.Raycaster();

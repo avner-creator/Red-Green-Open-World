@@ -35,8 +35,9 @@ export const LINEUP = {
     /** Ground must stay this far below a bubble. */
     clearance: 1.6,
   },
-  /** Where the ✓ / ✗ pops: above the pad (the hero's head), never at a bubble. */
-  popY: 2.5,
+  /** Where the ✓ / ✗ pops: beside the hero on the pad (m to the side, height), never at a bubble. */
+  popSide: 1.7,
+  popY: 1.6,
 } as const;
 
 /**

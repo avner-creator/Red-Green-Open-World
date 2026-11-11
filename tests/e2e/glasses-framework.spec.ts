@@ -113,9 +113,10 @@ test('every site draws its board or booth in ONE draw call', async () => {
  * Draw calls of the six mini-games (boards, booths and everything they track) in the perf report's
  * spawn and Gear Shack views (low quality as in the e2e run). Pinned at what they cost before the
  * booth kit (measured on agent/glasses-depth with the same count: 7 and 7): a booth must not
- * add a draw call there (odd one out is only 37 m from spawn).
+ * add a draw call there (odd one out is only 37 m from spawn). 6 and 6 since line-up and glow-flies
+ * moved to the kit (fewer separate meshes: line-up's aim pad is now part of its booth's one mesh).
  */
-const PINNED_GLASSES_DRAWS = { spawn: 7, shack: 7 };
+const PINNED_GLASSES_DRAWS = { spawn: 6, shack: 6 };
 
 test('no extra glasses draws at spawn and at the Gear Shack', async () => {
   const counts = await page.evaluate(() => {
