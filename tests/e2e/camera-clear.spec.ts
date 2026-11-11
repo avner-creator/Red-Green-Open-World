@@ -40,25 +40,29 @@ async function spots(page: Page): Promise<Spot[]> {
     const { world, scene } = window.__rg!.ctx;
     const a = world.anchors;
     const out: { name: string; x: number; z: number }[] = [];
-    // Under the crown of the tree nearest to the spawn (scatter instances, near LOD).
+    // Beside the trunk of the tree nearest to the spawn, and under the crown of one further out
+    // (scatter instances: near LOD), standing on the spawn side.
     const sp = a.spawn.position;
-    let best: [number, number] | null = null;
-    let bestD = Infinity;
+    const trees: [number, number, number][] = [];
     scene.traverse((o) => {
       const im = o as import('three').InstancedMesh;
-      if (!im.isInstancedMesh || !/^(oak|pine|palm):/.test(im.name)) return;
+      if (!im.isInstancedMesh || !/^(oak|pine|palm):near/.test(im.name)) return;
       const mat = new (im.matrixWorld.constructor as { new (): import('three').Matrix4 })();
       for (let i = 0; i < im.count; i++) {
         im.getMatrixAt(i, mat);
         const e = mat.elements;
-        const d = Math.hypot(e[12] - sp.x, e[14] - sp.z);
-        if (d > 6 && d < bestD && world.isLand(e[12] + 1.2, e[14])) {
-          bestD = d;
-          best = [e[12], e[14]];
-        }
+        trees.push([e[12], e[14], Math.hypot(e[12] - sp.x, e[14] - sp.z)]);
       }
     });
-    if (best) out.push({ name: 'tree-near-spawn', x: best[0] + 1.2, z: best[1] });
+    trees.sort((p, q) => p[2] - q[2]);
+    const toward = (t: [number, number, number], d: number): { x: number; z: number } => ({
+      x: t[0] + ((sp.x - t[0]) / t[2]) * d,
+      z: t[1] + ((sp.z - t[1]) / t[2]) * d,
+    });
+    const near = trees.find((t) => t[2] > 6);
+    if (near) out.push({ name: 'tree-near-spawn', ...toward(near, 1.2) });
+    const far = trees.find((t) => t[2] > 25 && world.isLand(toward(t, 2.6).x, toward(t, 2.6).z));
+    if (far) out.push({ name: 'under-crown', ...toward(far, 2.6) });
     const at = (name: string, ax: number, az: number, yaw: number, dist: number): void => {
       out.push({ name, x: ax + Math.sin(yaw) * dist, z: az + Math.cos(yaw) * dist });
     };
@@ -74,7 +78,7 @@ async function spots(page: Page): Promise<Spot[]> {
 test('the camera never sits inside geometry or loses the hero at known bad spots', async () => {
   test.setTimeout(240_000);
   const list = await spots(page);
-  expect(list.length).toBeGreaterThanOrEqual(5);
+  expect(list.length).toBeGreaterThanOrEqual(6);
   const report: string[] = [];
   for (const s of list) {
     await page.evaluate(({ x, z }) => {
@@ -99,10 +103,33 @@ test('the camera never sits inside geometry or loses the hero at known bad spots
       expect.soft(r.inside, `${s.name} yaw ${i}: camera inside geometry`).toBe(false);
       // Low planters/counters may hide the hero's legs; the head and most of the body must show.
       expect.soft(r.headHidden, `${s.name} yaw ${i}: hero's head hidden (${r.hits.join(',')})`).toBe(false);
-      expect.soft(r.blocked, `${s.name} yaw ${i}: hero hidden (${r.hits.join(',')})`).toBeLessThanOrEqual(0.45);
-      expect.soft(r.near, `${s.name} yaw ${i}: camera in the hero's head`).toBeGreaterThan(0.45);
+      expect.soft(r.blocked, `${s.name} yaw ${i}: hero hidden (${r.hits.join(',')})`).toBeLessThanOrEqual(0.34);
+      expect.soft(r.near, `${s.name} yaw ${i}: camera in the hero's head`).toBeGreaterThan(0.9);
     }
   }
   console.log(report.join('\n'));
   expect(consoleErrors).toEqual([]);
+});
+
+test('no sparkle shards over the hero right after Play (a title-screen pick lands quietly)', async () => {
+  const counts = await page.evaluate(async () => {
+    const rg = window.__rg!;
+    const { session, player, scene } = rg.ctx;
+    session.end();
+    session.toTitle();
+    rg.step(1 / 60, 2, false);
+    const next = player.characterId === 'frog' ? 'robot' : 'frog';
+    const swapped = player.setCharacter(next);
+    rg.start();
+    await swapped;
+    const sparks = scene.getObjectByName('skill-sparkles') as import('three').InstancedMesh;
+    const out: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      rg.step(1 / 60, 1, false);
+      out.push(sparks.visible ? sparks.count : 0);
+    }
+    return { out, id: player.characterId, next };
+  });
+  expect(counts.id).toBe(counts.next);
+  expect(counts.out.every((n) => n === 0)).toBe(true);
 });

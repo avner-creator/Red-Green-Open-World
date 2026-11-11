@@ -59,6 +59,8 @@ const ARM = {
   liftUp: 0.6,
   liftDown: -0.32,
   liftRate: 3,
+  /** Extra pitch to look over a low obstacle hiding the hero's body (rad). */
+  seeOver: 0.3,
   /** Camera stays this far above the terrain (m). */
   groundClearance: 0.3,
 } as const;
@@ -124,6 +126,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   const ballSoft = new R.Ball(ARM.softRadius);
   const IDQ = { x: 0, y: 0, z: 0, w: 1 };
   const probeDir = new THREE.Vector3();
+  const seeFrom = new THREE.Vector3();
+  const seeTo = new THREE.Vector3();
+  const seeDir = new THREE.Vector3();
   let lastHit: { phys: number | null; occ: number | null; collider: number } = { phys: null, occ: null, collider: -1 };
 
   /** Distance from `origin` along unit `d` a sphere can travel before touching anything, or null. */
@@ -134,6 +139,18 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     if (ball === ballHard) lastHit = { phys: best, occ: o, collider: hit ? hit.collider.handle : -1 };
     if (o !== null && (best === null || o < best)) best = o;
     return best;
+  }
+
+  /** Is the hero's torso hidden from a camera at `pivot + d·dist` (physics or render occluders)? */
+  function bodyHidden(d: THREE.Vector3, dist: number): boolean {
+    seeFrom.copy(pivot).addScaledVector(d, dist);
+    seeTo.copy(ctx.player.position).setY(ctx.player.position.y + CAM.pivotHeight * 0.5);
+    seeDir.subVectors(seeTo, seeFrom);
+    // Stop short of the hero: whatever they stand in (a planter) is not the camera's to fix.
+    const len = seeDir.length() - 0.6;
+    if (len <= 0.1) return false;
+    seeDir.normalize();
+    return ctx.physics.raycast(seeFrom, seeDir, len) !== null || occluders.cast(seeFrom, seeDir, len, 0) !== null;
   }
 
   /** Unit arm direction for `p` (pitch) at the current yaw, with the override's extra height. */
@@ -273,6 +290,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         }
         // Keep the current swing while it is still needed (no flip-flopping between frames).
         if (liftTarget === 0 && Math.abs(lift) > 0.02) liftTarget = lift;
+      } else if (bodyHidden(armDir(pitch, probeDir), Math.min(wantDistance, baseD))) {
+        // A planter, counter or bush between the camera and the hero's body: look over it.
+        liftTarget = Math.min(ARM.seeOver, CAM.maxPitch - pitch);
       }
     }
     lift += (liftTarget - lift) * damp(ARM.liftRate, dt);
