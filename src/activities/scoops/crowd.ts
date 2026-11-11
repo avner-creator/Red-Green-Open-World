@@ -71,18 +71,34 @@ export function stepAside(home: P2, hero: P2, table: P2 | null, out: P2 = { x: 0
 /** Keep a friend's centre on the customer side, off the counter, walls and terrace table. */
 export function clampToArea(p: P2, table: P2 | null): P2 {
   const a = CROWD.area;
-  p.x = Math.max(-a.x, Math.min(a.x, p.x));
-  p.z = Math.max(a.z0, Math.min(a.z1, p.z));
-  if (table) {
-    const min = 0.5 + CROWD.friendR + 0.05;
-    const dx = p.x - table.x;
-    const dz = p.z - table.z;
-    const d = Math.hypot(dx, dz);
-    if (d < min) {
-      const ux = d < 1e-3 ? 1 : dx / d;
-      const uz = d < 1e-3 ? 0 : dz / d;
-      p.x = table.x + ux * min;
-      p.z = table.z + uz * min;
+  const box = (): void => {
+    p.x = Math.max(-a.x, Math.min(a.x, p.x));
+    p.z = Math.max(a.z0, Math.min(a.z1, p.z));
+  };
+  box();
+  if (!table) return p;
+  const min = 0.5 + CROWD.friendR + 0.05;
+  const dx = p.x - table.x;
+  const dz = p.z - table.z;
+  const d = Math.hypot(dx, dz);
+  if (d >= min) return p;
+  // Out of the table the shortest way that stays in the area (radially, else round the side).
+  const ux = d < 1e-3 ? 1 : dx / d;
+  const uz = d < 1e-3 ? 0 : dz / d;
+  p.x = table.x + ux * min;
+  p.z = table.z + uz * min;
+  box();
+  if (Math.hypot(p.x - table.x, p.z - table.z) < min - 1e-9) {
+    // Pinned against the area's edge: slide along it until clear.
+    const ex = p.x - table.x;
+    const off = Math.sqrt(Math.max(0, min * min - ex * ex));
+    p.z = p.z >= table.z ? table.z + off : table.z - off;
+    if (p.z > a.z1 || p.z < a.z0) {
+      p.z = Math.max(a.z0, Math.min(a.z1, p.z));
+      const ez = p.z - table.z;
+      const offX = Math.sqrt(Math.max(0, min * min - ez * ez));
+      p.x = table.x + (p.x >= table.x ? offX : -offX);
+      if (Math.abs(p.x) > a.x) p.x = table.x + offX; // the side towards the middle is always open
     }
   }
   return p;

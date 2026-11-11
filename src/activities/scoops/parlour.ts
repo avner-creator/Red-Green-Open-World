@@ -57,6 +57,9 @@ export const LAYOUT = {
 
 export const JAR = { radius: 0.19, height: 0.42 } as const;
 
+/** Flower boxes' centre z: they butt against the corner pillars (no hero-sized notch between). */
+const FLOWER_Z = 3.05;
+
 export interface ParlourCollider {
   /** Centre (local) and half extents, yaw relative to the parlour. */
   kind: 'box' | 'cyl';
@@ -238,9 +241,9 @@ function floorAndTerrace(k: Kit): void {
   }
   // Flower boxes either side of the front.
   for (const sx of [-1, 1]) {
-    k.box(sx * 3.95, FLOOR + 0.25, 3.3, 0.5, 0.5, 1.2, WOOD);
+    k.box(sx * 3.95, FLOOR + 0.25, FLOWER_Z, 0.5, 0.5, 1.2, WOOD);
     for (let j = 0; j < 6; j++) {
-      const fz = 2.85 + j * 0.18;
+      const fz = FLOWER_Z - 0.45 + j * 0.18;
       k.add(sphere(6, 4), j % 2 ? 0xffffff : 0xffd93b, T(sx * 3.95 + (j % 2 ? 0.1 : -0.1), FLOOR + 0.6, fz, 0, 0.09, 0.07, 0.09));
       k.add(sphere(6, 4), 0x2f5a2a, T(sx * 3.95, FLOOR + 0.5, fz, 0, 0.13, 0.08, 0.1));
     }
@@ -342,8 +345,8 @@ export function buildParlour(): Parlour {
       h: new THREE.Vector3(FRONT.x, (FRONT.top - FLOOR) / 2, (FRONT.z1 - FRONT.z0) / 2),
       heroOnly: true,
     },
-    { kind: 'box', c: new THREE.Vector3(-3.95, FLOOR + 0.25, 3.3), h: new THREE.Vector3(0.25, 0.25, 0.6) },
-    { kind: 'box', c: new THREE.Vector3(3.95, FLOOR + 0.25, 3.3), h: new THREE.Vector3(0.25, 0.25, 0.6) },
+    { kind: 'box', c: new THREE.Vector3(-3.95, FLOOR + 0.25, FLOWER_Z), h: new THREE.Vector3(0.25, 0.25, 0.6) },
+    { kind: 'box', c: new THREE.Vector3(3.95, FLOOR + 0.25, FLOWER_Z), h: new THREE.Vector3(0.25, 0.25, 0.6) },
   ];
 
   return {

@@ -294,7 +294,8 @@ export function createFriends(parent: THREE.Object3D, playerId: string, env?: Fr
         if (env && f.char) {
           const want = fadeFor(f.pos, camL, pivotL);
           const k = want < f.opacity ? 1 - Math.exp(-14 * dt) : 1 - Math.exp(-5 * dt);
-          const o = Math.abs(want - f.opacity) < 0.01 ? want : f.opacity + (want - f.opacity) * k;
+          // Camera inside the friend: gone at once (never a frame filled with fur).
+          const o = want === 0 || Math.abs(want - f.opacity) < 0.01 ? want : f.opacity + (want - f.opacity) * k;
           if (o !== f.opacity) setOpacity(f, o);
         }
         f.char?.update(dt);
