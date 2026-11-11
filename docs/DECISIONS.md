@@ -73,3 +73,6 @@
 - Pip the puppy buddy is procedural (2 skinned draws + shadow proxy), not a CC0 GLB. Reason: eye tracking, blinks, eyebrows and ear/tail springs need a custom rig, and the CC0 animal packs are realistic-proportioned, not "big head, big eyes".
 - Pip's intro is skipped by any NON-game key (Enter, Backspace, letters other than the controls) or a tap on the bubble, not WASD/Space/E. Reason: kids press the move keys at once, which must not skip the tour; the tour never blocks movement.
 - In `?test=1` Pip is visible but silent unless `&buddy=1` (talk) or `&buddyIntro=1` (talk + tour). Reason: other specs must not see bubbles or callouts.
+- Batch 2 site conflict (carnival boardwalk over the rooftops secret start, foam course over the village vault): the secret pieces move, attractions and sites stay. Reason: secrets live in one folder; attraction coordinates are baked into two streams.
+- Batch 2 is held on `integration/m1` (not `main`) until the one red e2e test and the Medium render budget are fixed. Reason: `main` only moves when verify is green, and every view is over budget.
+- R releases every ride, including the horse and rocket/trampoline flight (overrides "stay mounted on R"). Reason: one rule kids can rely on.

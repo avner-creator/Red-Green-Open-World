@@ -18,3 +18,12 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - Fun pass, main-session share on `main` (233 unit, 54 e2e): faster movement, giant trampoline with air tricks, bigger pads, rocket pads + net, wayfinding (beacons, fingerpost, waymarks, how-to boards, HUD compass, controls card), assisted parachute, freefall camera. Open follow-ups: fingerpost arms out of frame at spawn, compass icon overlap, skydive haze, draw calls, accidental flip on the mat.
 - On `main` (71 e2e): touch/mobile controls (stream A), six CC0 characters (stream B) wired with skills, emotes and a character-select onboarding, UI/thrills/world fix rounds. Known: whole-frame draw calls over budget (perf task running); locked characters can't be bought until the economy stream lands; touch and audio untested on real devices.
 - Batch 1 on `main` (494 unit, 129 e2e): economy (stream C), bungee + Silly Zone (E), secret paths (F), horse (D), Scoops ice-cream (K), car-shake fix (fixed-step handling + interpolation; jerk at 144 Hz 161 → 0.22), `register.ts` auto-discovery. QA round 2: red-green core good; blockers were triangle budget (fixed on `agent/world-budget`) and locked heroes (fixed by the economy merge).
+
+## Batch 2 merged to `integration/m1` (2026-11-12 ~00:45 UTC)
+- On `integration/m1` (3b89245): Pip, symbol-lock chests, boot/loading, living island, outer island, bumper arena, carnival games, foam lava, sky rides, buggy race, attraction sites, shared glue (ticket API, move modifiers, ride-release tests). 708/708 unit, 177/178 e2e.
+- Not on `main` yet. In flight, all branched from `integration/m1`:
+  - `agent/secrets-resite`: move the rooftops secret start and village vault off the new sites; batch secrets' draws.
+  - `agent/perf-budget2`: Medium is over budget in every view (275–424 draws, up to 683k triangles); batching and LOD for attractions.
+  - `agent/e2e-speed`: e2e suite 12–16 min → target ≤ 8.
+- Waiting: Stream P (`agent/glasses-depth`) Phase 1 "ready to merge" from the owner.
+- Open minor defects: Pip's bubble overlaps combo/stars badges at 667×375 touch; rocket pads block a child with 0 gems; carnival free play is per attraction, not per booth; site screenshots not yet checked by eye.
