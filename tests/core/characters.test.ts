@@ -87,7 +87,8 @@ describe('character catalog', () => {
         if (c.face) {
           expect(names).toContain(c.face.bone);
           expect(c.face.eyeR).toBeGreaterThan(0.04);
-          expect(c.face.eyeR).toBeLessThan(0.16);
+          // Up to 0.18: the frog's big eyes cover its model's own dark lenses.
+          expect(c.face.eyeR).toBeLessThan(0.18);
           // The eyes sit in the head: near the head anchor.
           const [x, y, z] = c.face.eyeAt;
           const [, hy, hz] = c.attach.head.offset;

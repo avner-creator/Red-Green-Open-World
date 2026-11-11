@@ -31,6 +31,13 @@ test('radio: M cycles three different stations, chip shows, survives reload', as
   expect(seen).not.toContain('auto');
   await expect(chip).toHaveClass(/on/);
   await expect(chip).toHaveAttribute('data-station', seen[2] ?? '');
+  // The station reads as a big picture; its name is a small caption (QA5 m: no word-only chip).
+  const sizes = await chip.evaluate((c) => {
+    const pic = c.querySelector('[data-testid="radio-chip-pic"]')!.getBoundingClientRect();
+    const t = c.querySelector('.t')!.getBoundingClientRect();
+    return { pic: pic.height, text: t.height };
+  });
+  expect(sizes.pic).toBeGreaterThan(sizes.text * 1.8);
 
   const last = seen[2];
   await page.reload();

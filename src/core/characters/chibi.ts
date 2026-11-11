@@ -79,6 +79,11 @@ export function applyChibi(object: THREE.Object3D, model: THREE.Object3D, def: C
   }
   const aims: Aim[] = [];
   const tilts: Tilt[] = [];
+  const sinks: { bone: THREE.Object3D; dy: number; saved: number }[] = [];
+  for (const [name, frac] of Object.entries(def?.sink ?? {})) {
+    const bone = findNode(model, name);
+    if (bone) sinks.push({ bone, dy: bone.position.y * frac, saved: 0 });
+  }
   for (const a of def?.aim ?? []) {
     const bone = findNode(model, a.bone);
     const child = findNode(model, a.child);
@@ -91,6 +96,7 @@ export function applyChibi(object: THREE.Object3D, model: THREE.Object3D, def: C
 
   let weight = 0;
   let applied = false;
+  let sunk = false;
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const want = new THREE.Vector3();
@@ -104,6 +110,8 @@ export function applyChibi(object: THREE.Object3D, model: THREE.Object3D, def: C
   return {
     lift,
     restore() {
+      if (sunk) for (const k of sinks) k.bone.position.y = k.saved;
+      sunk = false;
       if (!applied) return;
       // Reverse order: aims were applied parent-first.
       for (let i = aims.length - 1; i >= 0; i--) aims[i].bone.quaternion.copy(aims[i].saved);
@@ -111,6 +119,14 @@ export function applyChibi(object: THREE.Object3D, model: THREE.Object3D, def: C
       applied = false;
     },
     update(dt, anim) {
+      if (sinks.length && !sunk) {
+        for (const k of sinks) {
+          k.saved = k.bone.position.y;
+          k.bone.position.y -= k.dy;
+        }
+        sunk = true;
+        object.updateMatrixWorld(true);
+      }
       if (!aims.length && !tilts.length) return;
       const target = anim && RELAX_FULL.has(anim) ? 1 : anim && RELAX_HALF.has(anim) ? 0.5 : 0;
       const k = 1 - Math.exp(-dt * 6);

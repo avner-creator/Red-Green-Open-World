@@ -192,12 +192,14 @@ test('hints once, boing without key, wrong shape sinks, right shape opens; resta
   const overHead = await page.evaluate(() => window.__rg!.ctx.player.position.y);
   expect(ci.keyNow[1] - overHead).toBeGreaterThan(1.8);
 
-  // Back at the chest with the key: "Step on the right shape!" once; the prompt shows the lock.
+  // Back at the chest with the key: "Step on the right shape!" once; the prompt shows a foot on a tile
+  // (the real action), the tiles pulse and the one E would press stands up (QA5 m4).
   await stand(ax, az, 0, false);
   await page.evaluate(() => window.__rg!.step(1 / 60, 60, false));
-  expect((await log()).filter((l) => l.startsWith('toast:lock'))).toEqual(['toast:lock:Step on the right shape!']);
+  expect((await log()).filter((l) => l.startsWith('toast:step'))).toEqual(['toast:step:Step on the right shape!']);
   expect((await log()).filter((l) => l.startsWith('toast:key'))).toEqual(['toast:key:Find the key!']);
-  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.icon ?? null)).toBe('lock');
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.icon ?? null)).toBe('step');
+  await expect(page.getByTestId('prompt')).toHaveClass(/\bon\b/);
   expect((await info())[0].badge).toBe('use');
 
   // A wrong shape: friendly wobble, the button sinks for 2 s, nothing opens, no penalty, try again.
@@ -228,7 +230,7 @@ test('hints once, boing without key, wrong shape sinks, right shape opens; resta
   expect(await log()).toEqual([
     'toast:key:Find the key!',
     'key:chest0',
-    'toast:lock:Step on the right shape!',
+    'toast:step:Step on the right shape!',
     'opened:chest0:hat-explorer',
     'unlocked:hat-explorer',
     'equipped:hat-explorer:head',
@@ -269,6 +271,8 @@ test('opens from every direction (stepping on the shape from 4 sides, and with E
       const l = Math.hypot(dx, dz);
       await stand(b.x + (dx / l) * 0.95, b.z + (dz / l) * 0.95, 0, false);
       expect((await info())[i].open).toBe(false);
+      // The tile E would press is the highlighted one: this right button.
+      expect((await info())[i].eTile).toBe(c.buttons.findIndex((bb) => bb.x === b.x && bb.z === b.z));
       await use();
     }
     await page.evaluate(() => window.__rg!.step(1 / 60, 10, false));

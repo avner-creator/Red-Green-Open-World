@@ -67,8 +67,9 @@ const CSS = `
   background:linear-gradient(180deg,#2b3360f2,#10142af2);border:calc(var(--u)*.6) solid #fff;border-radius:calc(var(--u)*4);
   box-shadow:0 0 0 calc(var(--u)*.45) #000;opacity:0;transform:translateX(calc(var(--u)*2)) scale(.85);transition:opacity .15s,transform .2s cubic-bezier(.2,1.6,.4,1)}
 .rgr-chip.on{opacity:1;transform:none}
-.rgr-chip .ic{font-size:1.5em}
-.rgr-chip .t{-webkit-text-stroke:calc(var(--u)*.7) #000;paint-order:stroke fill;text-shadow:0 calc(var(--u)*.3) 0 #000;white-space:nowrap}
+/* The station's pictogram is the message (no reading needed); its name is a small caption. */
+.rgr-chip .ic.st{font-size:2.5em}
+.rgr-chip .t{font-size:.62em;opacity:.9;-webkit-text-stroke:calc(var(--u)*.55) #000;paint-order:stroke fill;text-shadow:0 calc(var(--u)*.25) 0 #000;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.rgr-chip,.rgr-btn{transition:none}}
 `;
 
@@ -108,7 +109,10 @@ export function mountRadio(testMode: boolean): RadioUi | null {
   const show = (id: StationId): void => {
     const st = STATIONS.find((s) => s.id === id);
     if (!st) return;
-    chip.replaceChildren(iconEl(id), Object.assign(document.createElement('span'), { className: 't', textContent: st.name }));
+    const pic = iconEl(id);
+    pic.classList.add('st');
+    pic.dataset.testid = 'radio-chip-pic';
+    chip.replaceChildren(pic, Object.assign(document.createElement('span'), { className: 't', textContent: st.name }));
     chip.dataset.station = id;
     chip.classList.add('on');
     clearTimeout(hideTimer);

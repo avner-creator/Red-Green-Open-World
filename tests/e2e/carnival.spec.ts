@@ -204,6 +204,39 @@ test('a key-masher (Space every 0.5 s, A/D wiggle) gets at most 1 star at every 
   console.log(`carnival masher:\n${rows.join('\n')}`);
 });
 
+test('mashing makes the hero dizzy and says so (player:dizzy, for the guide)', async () => {
+  const id = playable[0];
+  const r = await page.evaluate(
+    ({ id }) => {
+      const c = window.__rgCarnival!;
+      const rg = window.__rg!;
+      const got: string[] = [];
+      const off = rg.ctx.events.on('player:dizzy', (e) => got.push(`${e.source}:${e.game}:${e.seconds}`));
+      c.autopilot(false);
+      rg.setRemaining(240);
+      rg.ctx.profile.earn(10, 'test');
+      c.start(id);
+      for (let k = 0; k < 30 * 20 && c.info().phase !== 'play'; k++) rg.step(1 / 30, 1, false);
+      const phase = c.info().phase;
+      // Six presses in a fifth of a second.
+      for (let k = 0; k < 12; k++) {
+        rg.inject({ jumpPressed: k % 2 === 0, usePressed: false });
+        rg.step(1 / 30, 1, false);
+      }
+      rg.inject(null);
+      rg.step(1 / 30, 2, false);
+      off();
+      c.exit();
+      rg.step(1 / 30, 3, false);
+      return { phase, got };
+    },
+    { id },
+  );
+  expect(r.phase).toBe('play');
+  expect(r.got.length).toBe(1);
+  expect(r.got[0]).toMatch(new RegExp(`^carnival:${id}:`));
+});
+
 test('weak-eye-only booth objects touch only the weak channel, all 4 combos', async () => {
   test.setTimeout(240_000);
   for (const id of playable) {

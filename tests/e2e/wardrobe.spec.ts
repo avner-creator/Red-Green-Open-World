@@ -176,6 +176,26 @@ test.describe('dressing room', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('every tile gets its own picture, also after an earlier opening without previews and after a tab switch', async ({ page }) => {
+    test.setTimeout(180_000);
+    const { consoleErrors } = await boot(page);
+    // First opening with previews off (the test-mode default): tiles show icons.
+    await page.getByTestId('title-wardrobe').click();
+    await expect(page.getByTestId('wardrobe')).toBeVisible();
+    await page.waitForTimeout(2500); // the picture queue runs through every tile (no pictures yet)
+    await page.getByTestId('wardrobe-close').click();
+    // Previews on (as in a real build), open again: pictures must arrive, each item its own (QA5 M4).
+    await page.evaluate(() => window.__rgGear!.enablePreviews(true));
+    await page.getByTestId('title-wardrobe').click();
+    const distinct = (): Promise<number> =>
+      page.evaluate(() => new Set([...document.querySelectorAll<HTMLImageElement>('[data-testid="wardrobe-grid"] img')].map((i) => i.src)).size);
+    await expect.poll(distinct, { timeout: 90_000, intervals: [1000] }).toBeGreaterThanOrEqual(6);
+    await page.getByTestId('shop-tab-face').click();
+    await expect.poll(distinct, { timeout: 60_000, intervals: [1000] }).toBeGreaterThanOrEqual(4);
+    await page.getByTestId('wardrobe-close').click();
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('the first free hat arrives within the first minute', async ({ page }) => {
     const { consoleErrors } = await boot(page);
     const r = await page.evaluate(() => {

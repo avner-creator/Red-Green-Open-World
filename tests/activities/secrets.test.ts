@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { buildTerrain, sampleHeight } from '../../src/world/terrain';
 import { PATH_RULES, STONE, checkPath, edgeGap, helixStones, minClearance, onStone, stonesAlong } from '../../src/activities/secrets/pathLogic';
 import type { Stone } from '../../src/activities/secrets/pathLogic';
-import { DOOR_RULES, DoorLock, fromDoorLocal, makeSequence, padAt, padLocal, toDoorLocal } from '../../src/activities/secrets/doorLogic';
+import { DOOR_RULES, DoorLock, PadStepper, fromDoorLocal, makeSequence, padAt, padLocal, toDoorLocal } from '../../src/activities/secrets/doorLogic';
 import { boardPhase, BOARD_LOOP } from '../../src/activities/secrets/board';
 import { buildRoutes, buildVaults } from '../../src/activities/secrets/routes';
 import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from '../../src/activities/secrets/arrowLogic';
@@ -181,7 +181,7 @@ describe('vault doors', () => {
     }
     expect(padAt(0, 0.5)).toBe(-1);
     expect(padAt(0, 6)).toBe(-1);
-    expect(padAt(0, DOOR_RULES.padArc)).toBe(-1); // between the two middle pads
+    expect(padAt(0, 2.0)).toBe(-1); // between the two near pads
   });
 
   test('walking straight from any pad to any other never steps on a third', () => {
@@ -197,6 +197,59 @@ describe('vault doors', () => {
         }
       }
     }
+  });
+
+  test('a straight walk between two pads keeps well clear of every other pad (a wobbly walk too; QA5 M5)', () => {
+    for (let a = 0; a < DOOR_RULES.buttons; a++) {
+      for (let b = a + 1; b < DOOR_RULES.buttons; b++) {
+        const pa = padLocal(a);
+        const pb = padLocal(b);
+        const dx = pb.x - pa.x;
+        const dz = pb.z - pa.z;
+        const len = Math.hypot(dx, dz);
+        for (let c = 0; c < DOOR_RULES.buttons; c++) {
+          if (c === a || c === b) continue;
+          const pc = padLocal(c);
+          const t = Math.max(0, Math.min(1, ((pc.x - pa.x) * dx + (pc.z - pa.z) * dz) / (len * len)));
+          const gap = Math.hypot(pa.x + dx * t - pc.x, pa.z + dz * t - pc.z);
+          // Half a metre of sideways wobble still stays off pad c.
+          expect(gap, `${a}->${b} near ${c}`).toBeGreaterThan(DOOR_RULES.padStep + 0.4);
+        }
+      }
+    }
+  });
+
+  test('a pad counts only on a deliberate step: dwell or a centred step, never a quick crossing', () => {
+    const p = padLocal(1);
+    const dt = 1 / 60;
+    // Walk across pad 1 at walking speed, 0.45 m from its centre: never pressed.
+    const s = new PadStepper();
+    const pressed: number[] = [];
+    for (let x = p.x - 2; x <= p.x + 2; x += 6.5 * dt) {
+      const r = s.update(x, p.z + 0.45, dt);
+      if (r >= 0) pressed.push(r);
+    }
+    expect(pressed).toEqual([]);
+    // Stop on the pad's edge: pressed once the dwell fills (~0.35 s), once only.
+    s.reset();
+    const at: number[] = [];
+    for (let k = 0; k < 60; k++) {
+      expect(s.fill).toBeLessThanOrEqual(1);
+      if (s.update(p.x, p.z + 0.45, dt) >= 0) at.push(k);
+    }
+    expect(at.length).toBe(1);
+    expect(at[0] * dt).toBeGreaterThan(DOOR_RULES.padDwell - 2 * dt);
+    expect(at[0] * dt).toBeLessThan(DOOR_RULES.padDwell + 2 * dt);
+    expect(s.fill).toBe(0);
+    // A step right into the middle counts at once.
+    s.reset();
+    expect(s.update(p.x, p.z + 0.1, dt)).toBe(1);
+    // Leave and come back: a new step.
+    s.update(p.x, p.z + 3, dt);
+    expect(s.update(p.x + 0.05, p.z, dt)).toBe(1);
+    // Disabled (door open, not walking): nothing.
+    s.reset();
+    expect(s.update(p.x, p.z, dt, false)).toBe(-1);
   });
 
   test('the rule board loops: show the order, three steps, open', () => {
