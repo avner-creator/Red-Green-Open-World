@@ -904,7 +904,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
 
       if (playing) {
         ui.setDevice(ctx.input.state.device);
-        const ps = queue.current ? pipScreen() : null;
+        // Every frame: a line that starts now is placed over where Pip is.
+        const ps = pipScreen();
         pipOnScreen = !queue.current || !!ps?.on;
         ui.update(dt, queue.revealFraction(), ps, heroRect());
       }

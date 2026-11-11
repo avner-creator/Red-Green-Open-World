@@ -26,7 +26,8 @@ async function step(page: Page, seconds: number, inject: Record<string, number |
 async function shot(page: Page, name: string): Promise<void> {
   mkdirSync(DIR, { recursive: true });
   await page.evaluate(() => window.__rg!.step(1 / 60, 1, true));
-  await page.screenshot({ path: `${DIR}/${name}.png`, animations: 'disabled', timeout: 90_000 });
+  // For human eyes only: a slow software-rendered screenshot must not fail the test.
+  await page.screenshot({ path: `${DIR}/${name}.png`, animations: 'disabled', timeout: 90_000 }).catch((e: unknown) => console.warn(`screenshot ${name}: ${String(e)}`));
 }
 
 const bubbleBox = (page: Page) =>
