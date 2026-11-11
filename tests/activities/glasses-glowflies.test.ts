@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PLAYER } from '../../src/config';
 import { FLIES } from '../../src/activities/glasses/glowflies/constants';
 import { flyLocal, makePath, pathExtent, segmentPointDistance, Swarm, tierMix } from '../../src/activities/glasses/glowflies/logic';
 import type { PatchShape } from '../../src/activities/glasses/glowflies/logic';
@@ -85,17 +86,33 @@ describe('catch test', () => {
     expect(s.catchAlong(p, p).map((c) => c.fly.slot)).not.toContain(0);
   });
 
-  it('respects the 1.1 m radius', () => {
+  it('respects the catch radius', () => {
     const s = swarm(9);
     const p = s.position(s.flies[1]);
+    const r = FLIES.catchRadius;
     s.flies.forEach((f, i) => i !== 1 && (f.state = 'gone'));
-    expect(s.catchAlong({ x: p.x + 1.2, y: p.y, z: p.z }, { x: p.x + 1.2, y: p.y, z: p.z })).toEqual([]);
-    expect(s.catchAlong({ x: p.x + 1.0, y: p.y, z: p.z }, { x: p.x + 1.0, y: p.y, z: p.z }).length).toBe(1);
+    expect(s.catchAlong({ x: p.x + r + 0.1, y: p.y, z: p.z }, { x: p.x + r + 0.1, y: p.y, z: p.z })).toEqual([]);
+    expect(s.catchAlong({ x: p.x + r - 0.1, y: p.y, z: p.z }, { x: p.x + r - 0.1, y: p.y, z: p.z }).length).toBe(1);
+  });
+
+  it('every fly is above reach from the ground: catching one takes a jump', () => {
+    expect(FLIES.minHeight).toBeGreaterThan(PLAYER.height / 2 + FLIES.catchRadius);
+    const apex = (PLAYER.jumpSpeed * PLAYER.jumpSpeed) / (2 * PLAYER.gravity);
+    expect(FLIES.maxHeight).toBeLessThan(PLAYER.height / 2 + apex + FLIES.catchRadius - 0.1);
   });
 });
 
 describe('tier mix and rewards', () => {
-  it('5–7 flies, every tier in the air, deterministic per seed', () => {
+  it("a booth round: every fly has the round's tier, also after a respawn", () => {
+    for (const tier of [1, 2, 3] as const) {
+      const s = new Swarm({ rng: seededRng(5), patch, toWorld, groundAt: ground, tier });
+      expect(s.flies.length).toBe(FLIES.minCount);
+      expect(s.flies.every((f) => f.tier === tier)).toBe(true);
+      expect(s.nextTier()).toBe(tier);
+    }
+  });
+
+  it('a few flies, every tier in the air without a round tier, deterministic per seed', () => {
     for (let seed = 1; seed <= 50; seed++) {
       const s = swarm(seed);
       expect(s.flies.length).toBeGreaterThanOrEqual(FLIES.minCount);

@@ -24,7 +24,7 @@ export interface MechanicDef {
 
 export const MECHANICS: readonly MechanicDef[] = [
   // Catch the drifting weak-eye fireflies by running through them → gems.
-  { id: 'glowflies', kind: 'follow', pictos: ['firefly', 'run', 'gems'], create: glowflies.create },
+  { id: 'glowflies', kind: 'follow', pictos: ['firefly', 'run', 'gems'], create: glowflies.create, booth: true },
   // Three weak-eye shapes: press the button under the different one → gems.
   { id: 'oddone', kind: 'tellApart', pictos: ['odd', 'press', 'gems'], create: oddone.create },
   // Stand on the pad, put the weak-eye magic ring over the strong-eye bubble and press → it pops → gems.

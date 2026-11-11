@@ -1,17 +1,28 @@
 /**
- * Seeing matters: a simulated hero who can see the flies (heads for the nearest one, jumps for
- * high ones) must catch far more per minute than one who cannot (lawn-mower laps at sprint
- * speed with random jumps). Pure simulation on the real swarm logic and tuning.
+ * Seeing matters, against the REAL round rules: a simulated hero starts on the pad at the meadow's
+ * edge; after 3-2-1-GO the flies come out and the round runs for `FLY_ROUND.time` seconds or until
+ * 5 catches. One who can see the flies (heads for the nearest one, jumps for high ones) must reach
+ * the prize (3 catches) in > 90 % of rounds; a blind lawn-mower (laps at sprint speed with random
+ * jumps) in < 15 %. Gems per minute include walking back to the pad between rounds.
  */
 import { describe, expect, it } from 'vitest';
 import { PLAYER } from '../../src/config';
+import { RoundMachine } from '../../src/activities/glasses/booth/round';
 import { FLIES } from '../../src/activities/glasses/glowflies/constants';
 import { Swarm } from '../../src/activities/glasses/glowflies/logic';
-import type { PatchShape, V3 } from '../../src/activities/glasses/glowflies/logic';
+import type { Fly, PatchShape, V3 } from '../../src/activities/glasses/glowflies/logic';
+import { endTimedRound, flyBoothCentre, FLY_PAD, FLY_ROUND, FLY_RULES } from '../../src/activities/glasses/glowflies/round';
 import { seededRng } from '../../src/activities/glasses/idle';
+import type { GlassesTier } from '../../src/types';
 
 const R = FLIES.roamRadius;
-const patch: PatchShape = { radius: R, avoid: [{ x: -3, z: 6, r: FLIES.boardClear }] };
+const patch: PatchShape = {
+  radius: R,
+  avoid: [
+    { x: flyBoothCentre().x, z: flyBoothCentre().z, r: FLIES.boothClear },
+    { x: 2.4, z: 3.2, r: FLIES.jarClear },
+  ],
+};
 const DT = 1 / 30;
 const CHEST = PLAYER.height / 2;
 
@@ -40,46 +51,62 @@ function physics(h: Hero): void {
   }
 }
 
-function moveTo(h: Hero, tx: number, tz: number): void {
+function moveTo(h: Hero, tx: number, tz: number, speed: number = PLAYER.sprintSpeed): boolean {
   const dx = tx - h.x;
   const dz = tz - h.z;
   const d = Math.hypot(dx, dz);
-  const step = PLAYER.sprintSpeed * DT;
+  const step = speed * DT;
   if (d <= step) {
     h.x = tx;
     h.z = tz;
-  } else {
-    h.x += (dx / d) * step;
-    h.z += (dz / d) * step;
+    return true;
   }
+  h.x += (dx / d) * step;
+  h.z += (dz / d) * step;
+  return false;
 }
 
-type Brain = (h: Hero, s: Swarm, t: number, rng: () => number) => void;
+type Brain = (h: Hero, s: Swarm, rng: () => number) => void;
 
 /** Sees the flies: runs to the nearest one, jumps when it is above reach. */
-const seeing: Brain = (h, s) => {
-  let best: V3 | null = null;
-  let bd = Infinity;
-  for (const f of s.flies) {
-    if (f.state !== 'alive') continue;
-    const p = s.position(f);
-    const d = Math.hypot(p.x - h.x, p.z - h.z);
-    if (d < bd) {
-      bd = d;
-      best = p;
+const seeing = (): Brain => chaser(PLAYER.sprintSpeed, 0);
+/** A slower child who sees them: walks (no sprint) and takes 0.6 s to pick the next fly. */
+const walker = (): Brain => chaser(PLAYER.walkSpeed, 0.6);
+
+function chaser(speed: number, think: number): Brain {
+  let wait = 0;
+  let aim: Fly | null = null;
+  return (h, s) => {
+    if (!aim || aim.state !== 'alive') {
+      aim = null;
+      wait += DT;
+      if (wait < think) return;
+      wait = 0;
+      let bd = Infinity;
+      for (const f of s.flies) {
+        if (f.state !== 'alive') continue;
+        const p = s.position(f);
+        const d = Math.hypot(p.x - h.x, p.z - h.z);
+        if (d < bd) {
+          bd = d;
+          aim = f;
+        }
+      }
+      if (!aim) return;
     }
-  }
-  if (!best) return;
-  moveTo(h, best.x, best.z);
-  if (bd < 2.2 && best.y - CHEST > FLIES.catchRadius * 0.8) jump(h);
-};
+    const p = s.position(aim);
+    const d = Math.hypot(p.x - h.x, p.z - h.z);
+    moveTo(h, p.x, p.z, speed);
+    if (d < 2.2 && p.y - CHEST > FLIES.catchRadius * 0.8) jump(h);
+  };
+}
 
 /** Cannot see them: lawn-mower laps over the roaming disc (rows 2 m apart), random jumps. */
 function blind(): Brain {
   let row = -R;
   let dir = 1;
   let target: { x: number; z: number } | null = null;
-  return (h, _s, _t, rng) => {
+  return (h, _s, rng) => {
     if (!target || (Math.abs(h.x - target.x) < 0.05 && Math.abs(h.z - target.z) < 0.05)) {
       const half = Math.sqrt(Math.max(0, R * R - row * row));
       if (target && Math.abs(h.x - dir * half) < 0.1) {
@@ -95,33 +122,126 @@ function blind(): Brain {
   };
 }
 
-/** Catches per minute over `minutes` for a brain, averaged over a few seeds. */
-function catchRate(make: () => Brain, minutes = 6, seeds = [1, 2, 3, 4, 5, 6, 7, 8]): number {
-  let total = 0;
-  for (const seed of seeds) {
-    const swarm = new Swarm({ rng: seededRng(seed), patch, toWorld: (x, z) => ({ x, z }), groundAt: () => 0 });
-    const rng = seededRng(seed * 31 + 7);
-    const brain = make();
-    const h: Hero = { x: 0, z: R + 1, y: 0, vy: 0, grounded: true };
-    let prev: V3 = { x: h.x, y: CHEST, z: h.z };
-    for (let t = 0; t < minutes * 60; t += DT) {
-      brain(h, swarm, t, rng);
-      physics(h);
-      const cur: V3 = { x: h.x, y: h.y + CHEST, z: h.z };
-      total += swarm.catchAlong(prev, cur).length;
-      swarm.update(DT, true, cur);
-      prev = cur;
-    }
-  }
-  return total / (minutes * seeds.length);
+interface RunStats {
+  rounds: number;
+  prized: number;
+  catches: number[];
+  gemsPerMinute: number;
+  nearMisses: number;
 }
 
-describe('glow-flies: seeing them matters', () => {
-  it('a seeing hero catches at least 4× as many as a blind lawn-mower', () => {
-    const see = catchRate(() => seeing);
-    const blindRate = catchRate(blind);
-    console.log(`glow-flies catches/min: seeing ${see.toFixed(1)}, blind ${blindRate.toFixed(1)}, ratio ${(see / Math.max(blindRate, 1e-6)).toFixed(1)}`);
-    expect(see).toBeGreaterThan(3);
-    expect(see).toBeGreaterThanOrEqual(4 * blindRate);
+/**
+ * Play `minutes` of rounds with the real round machine: start on the pad, countdown, the timed
+ * round, celebration / prize / cool-down, then run back to the pad and start again.
+ */
+function playRounds(make: () => Brain, seed: number, minutes: number, fixedTier?: GlassesTier): RunStats {
+  const m = new RoundMachine(FLY_RULES);
+  const rng = seededRng(seed * 31 + 7);
+  const h: Hero = { x: FLY_PAD.x, z: FLY_PAD.z, y: 0, vy: 0, grounded: true };
+  let swarm: Swarm | null = null;
+  let brain = make();
+  let left = 0;
+  let pending = 0;
+  let gems = 0;
+  let near = 0;
+  let prized = 0;
+  const catches: number[] = [];
+  let prev: V3 = { x: h.x, y: CHEST, z: h.z };
+  let k = 0;
+  for (let t = 0; t < minutes * 60; t += DT) {
+    if (fixedTier) m.tier = fixedTier;
+    if (m.phase === 'idle') {
+      // Back to the pad, then step on it (starts the round).
+      if (moveTo(h, FLY_PAD.x, FLY_PAD.z)) m.start();
+    }
+    for (const e of m.step(DT)) {
+      if (e.type === 'try' && e.index === 0) {
+        swarm = new Swarm({ rng: seededRng(seed * 1000 + k++), patch, toWorld: (x, z) => ({ x, z }), groundAt: () => 0, tier: e.tier });
+        brain = make();
+        left = FLY_ROUND.time;
+        pending = 0;
+      } else if (e.type === 'end') {
+        catches.push(e.hits);
+        if (e.hits >= FLY_RULES.minHits) prized++;
+        swarm = null;
+      } else if (e.type === 'pay') gems += e.gems;
+    }
+    const playing = swarm !== null && (m.phase === 'play' || m.phase === 'beat');
+    if (playing && swarm) brain(h, swarm, rng);
+    physics(h);
+    const cur: V3 = { x: h.x, y: h.y + CHEST, z: h.z };
+    if (playing && swarm) {
+      pending += swarm.catchAlong(prev, cur).length;
+      for (const ev of swarm.update(DT, true, cur)) if (ev.type === 'miss') near++;
+      if (pending > 0 && m.phase === 'play') {
+        m.report(true);
+        pending--;
+      }
+      left -= DT;
+      if (left <= 0) endTimedRound(m);
+    }
+    prev = cur;
+  }
+  return { rounds: catches.length, prized, catches, gemsPerMinute: gems / minutes, nearMisses: near };
+}
+
+function stats(make: () => Brain, fixedTier?: GlassesTier, seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], minutes = 10): { share: number; mean: number; gemsPerMinute: number; rounds: number } {
+  let rounds = 0;
+  let prized = 0;
+  let caught = 0;
+  let gpm = 0;
+  for (const s of seeds) {
+    const r = playRounds(make, s, minutes, fixedTier);
+    rounds += r.rounds;
+    prized += r.prized;
+    caught += r.catches.reduce((a, b) => a + b, 0);
+    gpm += r.gemsPerMinute;
+  }
+  return { share: prized / Math.max(1, rounds), mean: caught / Math.max(1, rounds), gemsPerMinute: gpm / seeds.length, rounds };
+}
+
+describe('glow-flies rounds: seeing them matters', () => {
+  for (const tier of [1, 2, 3] as const) {
+    it(`tier ${tier}: a seeing hero reaches the prize in > 90 % of rounds, a blind lawn-mower in < 15 %`, () => {
+      const see = stats(seeing, tier);
+      const walk = stats(walker, tier);
+      const bl = stats(blind, tier);
+      console.info(
+        `glow-flies tier ${tier}: seeing ${(see.share * 100).toFixed(0)} % prized (${see.mean.toFixed(1)} catches, ${see.gemsPerMinute.toFixed(1)} gems/min, ${see.rounds} rounds); ` +
+          `blind ${(bl.share * 100).toFixed(0)} % (${bl.mean.toFixed(1)} catches, ${bl.gemsPerMinute.toFixed(2)} gems/min, ${bl.rounds} rounds)`,
+      );
+      console.info(`glow-flies tier ${tier}: walking child ${(walk.share * 100).toFixed(0)} % prized (${walk.mean.toFixed(1)} catches, ${walk.gemsPerMinute.toFixed(1)} gems/min)`);
+      expect(see.share).toBeGreaterThan(0.9);
+      expect(walk.share).toBeGreaterThan(0.9);
+      expect(bl.share).toBeLessThan(0.15);
+      expect(bl.gemsPerMinute).toBeLessThanOrEqual(6);
+    });
+  }
+
+  it('gems per minute: a seeing child ≥ 25 at tier 1 (and more climbing the tiers), a blind one ≤ 6', () => {
+    const t1 = stats(seeing, 1);
+    const st = stats(seeing);
+    const bl = stats(blind);
+    console.info(`glow-flies gems/min: seeing tier 1 ${t1.gemsPerMinute.toFixed(1)}, staircase ${st.gemsPerMinute.toFixed(1)}; blind staircase ${bl.gemsPerMinute.toFixed(2)}`);
+    expect(t1.gemsPerMinute).toBeGreaterThanOrEqual(25);
+    expect(st.gemsPerMinute).toBeGreaterThanOrEqual(t1.gemsPerMinute * 0.95);
+    expect(bl.gemsPerMinute).toBeLessThanOrEqual(6);
+  });
+
+  it('time up ends the round quietly with the catches so far', () => {
+    const m = new RoundMachine(FLY_RULES);
+    m.start();
+    for (let i = 0; i < 400 && m.phase !== 'play'; i++) m.step(DT);
+    m.report(true);
+    m.step(DT);
+    m.report(true);
+    m.step(DT);
+    m.report(true);
+    m.step(DT);
+    expect(m.phase).toBe('play');
+    endTimedRound(m);
+    expect(m.results).toEqual([true, true, true, false, false]);
+    const ev = m.step(DT);
+    expect(ev).toContainEqual({ type: 'end', hits: 3, gems: FLY_RULES.prize[1][3] });
   });
 });
