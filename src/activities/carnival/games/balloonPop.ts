@@ -175,6 +175,7 @@ export function createBalloonPop(env: GameEnv): BoothGame {
         if (s.prize) {
           fx.weakPop(world, 0.42, 16);
           ctx.audio.play('boing', { volume: 0.7, pitch: 2.1 });
+          if (shot.data.who === 0) ctx.events.emit('glasses:result', { mechanic: 'balloonPrize', kind: 'find', tier: 1, hit: true });
         } else {
           fx.pop(world, 0.3, 10);
           ctx.audio.play('boing', { volume: 0.55, pitch: 1.8 + rng() * 0.3 });
