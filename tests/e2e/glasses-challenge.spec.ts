@@ -56,6 +56,23 @@ async function results(n: number, hit: boolean, mechanic = 'glowflies', kind: Gl
   );
 }
 
+/**
+ * `n` hits that each count for the staircase: before every hit, a little more than the hit
+ * spacing (4 s) of play is stepped without drawing (no easing happens without a render).
+ */
+async function pacedHits(n: number, mechanic = 'glowflies'): Promise<void> {
+  await page.evaluate(
+    ({ n, mechanic }) => {
+      const rg = window.__rg!;
+      for (let i = 0; i < n; i++) {
+        rg.step(1 / 20, 90, false); // 4.5 s of play
+        rg.ctx.events.emit('glasses:result', { mechanic, kind: 'follow', tier: 2, hit: true });
+      }
+    },
+    { n, mechanic },
+  );
+}
+
 const level = (): Promise<number> => page.evaluate(() => window.__rg!.ctx.vision.challenge!().level);
 
 test.beforeAll(async ({ browser }) => {
@@ -120,12 +137,15 @@ test('forced weak / strong scales keep the channel rule, all 4 lens/eye combos',
 test('Auto challenge on: hits make the weak object fainter, never touching blue; calibration never saved', async () => {
   await page.evaluate(() => window.__rg!.ctx.settings.set({ autoChallenge: true }));
   const saved = await page.evaluate(() => ({ eye: window.__rg!.ctx.settings.get().eye, raw: localStorage.getItem('rgow.settings.v1') }));
+  // Paced hits step play time (the world moves), so the identity frames are taken after them:
+  // a render with dt 0 never eases, so the picture is still exactly the calibrated one.
+  await pacedHits(6);
   const idOn = await frame();
   const idOff = await frame({ weak: false, strong: true });
   const idNone = await frame({ weak: false, strong: false });
-
-  await results(6, true);
-  expect(await level()).toBe(0); // eased: nothing pops
+  // Eased: nothing pops (a dt-0 render takes the new level number but moves no scale).
+  const still = await page.evaluate(() => window.__rg!.ctx.vision.challenge!());
+  expect([still.weakScale, still.strongScale, still.sizeScale]).toEqual([1, 1, 1]);
   expect(await page.evaluate(() => window.__rgChallenge!.target().level)).toBe(2);
   await page.evaluate(() => window.__rgChallenge!.advance(1));
   const mid = await page.evaluate(() => window.__rg!.ctx.vision.challenge!());
@@ -152,7 +172,7 @@ test('Auto challenge on: hits make the weak object fainter, never touching blue;
   expect(channelDiff(idOn, chOn).maxB).toBe(0);
 
   // Up to the top and back down again: the saved calibration never changes.
-  await results(15, true);
+  await pacedHits(12);
   await page.evaluate(() => window.__rgChallenge!.advance(20));
   expect(await level()).toBe(6);
   await results(6, false);
@@ -185,7 +205,7 @@ test('clamps: effective weak strength ≤ calibrated, contrast ≥ 0.4 at every 
 });
 
 test('misses and the drought step back; a new session and turning it off reset to identity', async () => {
-  await results(6, true);
+  await pacedHits(6);
   expect(await page.evaluate(() => window.__rgChallenge!.target().level)).toBe(2);
   await results(1, false);
   expect(await page.evaluate(() => window.__rgChallenge!.target().level)).toBe(1);
@@ -195,13 +215,13 @@ test('misses and the drought step back; a new session and turning it off reset t
   expect(st.level).toBe(0);
   expect(st.seconds).toBeGreaterThan(40);
 
-  await results(3, true);
+  await pacedHits(3);
   await page.evaluate(() => window.__rgChallenge!.settle());
   expect(await level()).toBe(1);
   await page.evaluate(() => window.__rg!.start());
   expect(await page.evaluate(() => window.__rg!.ctx.vision.challenge!())).toEqual({ level: 0, maxLevel: 6, weakScale: 1, strongScale: 1, sizeScale: 1 });
 
-  await results(3, true);
+  await pacedHits(3);
   await page.evaluate(() => window.__rgChallenge!.settle());
   expect(await level()).toBe(1);
   await page.evaluate(() => window.__rg!.ctx.settings.set({ autoChallenge: false }));
@@ -279,8 +299,41 @@ test('sessionSummary counts what was emitted', async () => {
   ]);
   expect(s.seconds).toBeGreaterThanOrEqual(1.75);
   expect(s.seconds).toBeLessThanOrEqual(2.05);
-  // glowflies: hit, hit, miss (0, no step) · oddOneOut 4 hits · key → 5 in a row = 1 step up.
-  expect(s.challenge).toEqual({ enabled: true, level: 1, maxLevel: 6, stepsUp: 1, stepsDown: 0 });
+  // All emitted at once: only the first hit counts for the staircase (paced), the miss resets it.
+  expect(s.challenge).toEqual({ enabled: true, level: 0, maxLevel: 6, stepsUp: 0, stepsDown: 0 });
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.ctx.settings.set({ autoChallenge: false });
+    rg.start();
+  });
+});
+
+test('a burst of 14 hits in 2 s raises the level by at most one; the summary keeps all 14', async () => {
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.ctx.settings.set({ autoChallenge: true });
+    rg.start();
+  });
+  await pacedHits(2); // two counted hits: one more counted hit steps up
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.step(1 / 20, 90, false);
+    const before = window.__rgChallenge!.target().level;
+    for (let i = 0; i < 14; i++) {
+      rg.ctx.events.emit('glasses:result', { mechanic: 'foamSecret', kind: 'find', tier: 2, hit: true });
+      rg.step(1 / 20, 3, false); // 14 × 0.15 s ≈ 2 s of play
+    }
+    return { before, after: window.__rgChallenge!.target().level, st: window.__rgChallenge!.staircase() };
+  });
+  expect(r.before).toBe(0);
+  expect(r.after - r.before).toBeLessThanOrEqual(1);
+  expect(r.after).toBe(1); // the burst's first hit completed the streak; the other 13 were paced out
+  expect(r.st.stepsUp).toBe(1);
+  const s = await page.evaluate(() => window.__rg!.ctx.vision.sessionSummary!());
+  expect(s.rows).toEqual([
+    { mechanic: 'glowflies', kind: 'follow', tier: 2, hits: 2, misses: 0 },
+    { mechanic: 'foamSecret', kind: 'find', tier: 2, hits: 14, misses: 0 },
+  ]);
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.ctx.settings.set({ autoChallenge: false });
