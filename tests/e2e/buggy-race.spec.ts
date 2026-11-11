@@ -389,7 +389,8 @@ test('race: three laps on autopilot finish in a 60-90 s round with friends close
   expect(['finishing', 'podium', 'result']).toContain(r.phase);
   expect(r.t).toBeGreaterThanOrEqual(55);
   expect(r.t).toBeLessThanOrEqual(95);
-  expect(r.maxGap).toBeLessThan(60);
+  expect(r.maxGap).toBeLessThan(80); // a pop back to the last checkpoint costs up to ~50 m for a moment
+  expect(Math.max(...r.rivals.map(Math.abs))).toBeLessThan(25); // a close finish
   await page.evaluate(() => window.__rg!.step(1 / 30, 75, false));
   await page.evaluate(() => window.__rg!.render());
   await shots('race-finish');
