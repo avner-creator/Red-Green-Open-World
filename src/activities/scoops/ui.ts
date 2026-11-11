@@ -37,11 +37,27 @@ export interface ScoopsUi {
   /** Little shake on the selected tile (full / not allowed). */
   nope(): void;
   showNeed(gems: number): void;
-  showResult(r: { stars: number; gems: number | null; recipe: boolean; secret: boolean }): void;
+  /**
+   * Result: stars, the prize (`gems`; null = no wallet), a bonus line (other gems the wallet got,
+   * e.g. a mission or Fun Pass prize) and, in a practice cone, a crossed-out gem instead of a prize.
+   */
+  showResult(r: { stars: number; gems: number | null; recipe: boolean; secret: boolean; bonus?: number; practice?: boolean }): void;
+  /** "Practice cone: no prize" marker while building. */
+  setPractice(on: boolean): void;
   setEffects(list: { id: EffectId; remaining: number }[]): void;
   readonly el: HTMLElement;
   dispose(): void;
 }
+
+/** Practice cone (no prize): a gem with a fat line through it. */
+const NO_GEM_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12l4 5-10 12L2 9z" fill="#2a3060" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>' +
+  '<path d="M2 9h20M9 4l3 17 3-17" fill="none" stroke="#fff" stroke-width="1.1"/><path d="M3 21L21 3" stroke="#000" stroke-width="4.4" stroke-linecap="round"/>' +
+  '<path d="M3 21L21 3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
+/** Bonus (mission / Fun Pass prizes paid at the same time): a ribbon medal. */
+const BONUS_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2l3 7M17 2l-3 7" stroke="#fff" stroke-width="3" stroke-linecap="round"/><circle cx="12" cy="15" r="7" fill="#fff3a0" stroke="#000" stroke-width="1.8"/>' +
+  '<path d="M12 10.5l1.5 3 3.2.4-2.4 2.2.6 3.2-2.9-1.6-2.9 1.6.6-3.2-2.4-2.2 3.2-.4z" fill="#fff" stroke="#000" stroke-width="1"/></svg>';
 
 const CSS = `
 .rg-scoops{position:absolute;inset:0;pointer-events:none;font:900 3.2vmin/1 ui-rounded,"Nunito","Trebuchet MS",system-ui,sans-serif;color:#fff;z-index:6}
@@ -70,7 +86,8 @@ const CSS = `
 .rg-scoops .sc-meter{position:absolute;left:50%;bottom:17.5vmin;transform:translateX(-50%);display:flex;gap:1vmin}
 .rg-scoops .sc-meter i{width:3.4vmin;height:3.4vmin;border-radius:50%;border:.45vmin solid #fff;background:#10142a;box-shadow:0 .4vmin 0 #000}
 .rg-scoops .sc-meter i.sc-on{background:#ffd93b;border-color:#000;box-shadow:0 0 0 .35vmin #fff}
-.rg-scoops .sc-keys{position:absolute;left:2.4vmin;bottom:2.4vmin;display:flex;flex-direction:column;gap:1.1vmin}
+/* Bottom-right, a 2 × 2 grid: clear of the controls card and the Pip button (bottom-left) and of the exit button above. */
+.rg-scoops .sc-keys{position:absolute;right:2.4vmin;bottom:2.4vmin;display:grid;grid-template-columns:auto auto;gap:1.1vmin 2vmin}
 .rg-scoops .sc-key{display:flex;align-items:center;gap:.8vmin}
 .rg-scoops .sc-cap{min-width:5.6vmin;height:5.6vmin;padding:0 1vmin;border-radius:1.2vmin;background:linear-gradient(180deg,#ffe97a,#ffd93b 55%,#f2b400);border:.45vmin solid #000;
   box-shadow:0 0 0 .3vmin #fff,0 .7vmin 0 .3vmin #000;display:grid;place-items:center;color:#15110a;font-size:3vmin}
@@ -86,6 +103,11 @@ const CSS = `
 .rg-scoops .sc-card .sc-prize svg{width:5vmin;height:5vmin}
 .rg-scoops .sc-card .sc-ok{position:absolute;right:-2.2vmin;bottom:-2.2vmin;width:7vmin;height:7vmin;opacity:0;transform:scale(.4);transition:all .25s}
 .rg-scoops .sc-card.sc-match .sc-ok{opacity:1;transform:scale(1)}
+.rg-scoops .sc-practice{position:absolute;left:2.4vmin;top:16vmin;width:9vmin;height:9vmin;border-radius:50%;background:#10142a;border:.55vmin solid #fff;
+  display:none;place-items:center;box-shadow:0 .7vmin 0 #000}
+.rg-scoops .sc-practice.sc-on{display:grid}
+.rg-scoops .sc-practice svg{width:72%;height:72%}
+.rg-scoops .sc-result .sc-bonus svg{width:6vmin;height:6vmin}
 .rg-scoops .sc-need,.rg-scoops .sc-result{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.6);opacity:0;transition:all .25s;
   display:flex;align-items:center;gap:1.4vmin;padding:2vmin 3vmin;border-radius:3vmin;background:rgba(16,20,42,.9);border:.6vmin solid #fff;box-shadow:0 1vmin 0 #000;font-size:6vmin}
 .rg-scoops .sc-need.sc-on,.rg-scoops .sc-result.sc-on{opacity:1;transform:translate(-50%,-50%) scale(1)}
@@ -155,7 +177,10 @@ export function createScoopsUi(root: HTMLElement, handlers: UiHandlers): ScoopsU
   const prize = h('div', 'sc-prize', `${GEM_SVG}<span class="sc-num">+${SCOOPS.prizeRecipe}</span>`);
   const ok = h('div', 'sc-ok', CHECK_SVG);
   card.append(face, pic, prize, ok);
-  station.append(stages, meter, bar, keys, exit, card);
+  const practiceEl = h('div', 'sc-practice');
+  practiceEl.dataset.testid = 'scoops-practice';
+  practiceEl.innerHTML = NO_GEM_SVG;
+  station.append(stages, meter, bar, keys, exit, card, practiceEl);
   const need = h('div', 'sc-need');
   need.setAttribute('data-testid', 'scoops-need');
   const result = h('div', 'sc-result');
@@ -293,9 +318,20 @@ export function createScoopsUi(root: HTMLElement, handlers: UiHandlers): ScoopsU
       clearTimeout(needTimer);
       needTimer = window.setTimeout(() => need.classList.remove('sc-on'), 2200);
     },
+    setPractice(on) {
+      practiceEl.classList.toggle('sc-on', on);
+    },
     showResult(r) {
       const stars = [0, 1, 2].map((i) => STAR_SVG.replace('<svg', `<svg class="${i < r.stars ? '' : 'sc-dim'}"`)).join('');
-      result.innerHTML = `<div class="sc-stars">${stars}</div>${r.gems !== null ? `${GEM_SVG}<span class="sc-num">+${r.gems}</span>` : ''}`;
+      const bonus = Math.max(0, Math.round(r.bonus ?? 0));
+      const prize = r.practice
+        ? `<span class="sc-nogem" data-testid="scoops-result-practice">${NO_GEM_SVG}</span>`
+        : r.gems !== null
+          ? `${GEM_SVG}<span class="sc-num" data-testid="scoops-result-gems">+${r.gems}</span>`
+          : '';
+      const bonusHtml = !r.practice && bonus > 0 ? `<span class="sc-bonus">${BONUS_SVG}<span class="sc-num" data-testid="scoops-result-bonus">+${bonus}</span></span>` : '';
+      result.innerHTML = `<div class="sc-stars">${stars}</div>${prize}${bonusHtml}`;
+      practiceEl.classList.remove('sc-on');
       result.classList.add('sc-on');
       clearTimeout(resultTimer);
       resultTimer = window.setTimeout(() => result.classList.remove('sc-on'), 2600);
