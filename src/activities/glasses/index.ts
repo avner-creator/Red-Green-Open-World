@@ -26,6 +26,8 @@ import { boardOf, FIXED_SITES, groundProblem, searchSite, siteToWorld, staticPro
 import type { FixedSite, GlassesSite, SiteWorld, XZ } from './sites';
 import { IDENTITY_CHALLENGE } from './types';
 import type { Mechanic, MechanicEnv } from './types';
+import { createWeave } from './weave';
+import type { WeaveTestApi } from './weave';
 
 export type { Mechanic, MechanicEnv } from './types';
 
@@ -63,6 +65,8 @@ export interface GlassesTestApi {
   trySite(id: string, row: { x: number; z: number; yaw: number; slot: number }): Record<string, unknown>;
   /** DEV: what is wrong with a site centre right now (static rules, ground, board views by slot). */
   probe(x: number, z: number, yaw: number, playRadius?: number): { problems: string[]; ground: string | null; views: boolean[] };
+  /** Phase 2 weave parts (./weave). */
+  weave?: WeaveTestApi;
 }
 
 declare global {
@@ -554,9 +558,15 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
     };
   }
 
+  const weave = createWeave(ctx, { countDraws });
+
   return {
-    update,
+    update(dt) {
+      update(dt);
+      weave.update(dt);
+    },
     dispose() {
+      weave.dispose?.();
       offPhase();
       for (const e of entries) {
         e.mech.dispose();
