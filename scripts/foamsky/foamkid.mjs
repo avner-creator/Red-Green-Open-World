@@ -7,7 +7,7 @@ const fo = (expr, a) => page.evaluate(expr, a);
 const W = (x, z) => fo(([x, z]) => window.__rgFoam.toWorld(x, 0, z), [x, z]);
 const PLAN = [
   [3.4, 3.9], [4.2, 6.3], [2.6, 8.4], [4.1, 10.6],
-  [3.5, 13.3], [2.6, 14.9], [3.6, 16.5], [2.8, 18.0], [3.3, 20.8],
+  [3.5, 13.0], [2.6, 14.9], [3.6, 16.5], [2.8, 18.0], [3.3, 20.8],
   [2.7, 23.4], [3.9, 24.5], [2.7, 25.6], [3.9, 26.7], [3.3, 27.9],
   [3.3, 35.95], [3.3, 39.0], [1.9, 40.3, 0.6],
   [-3.8, 40.2, 0.6], [-3.8, 37.0],
@@ -17,14 +17,6 @@ const local = () => fo(() => { const s = window.__rgFoam.sim; return { x: s.p.x,
 const PROBE = process.env.PROBE !== '0';
 try {
   const booth = await fo(() => window.__rgFoam.booth());
-  if (PROBE) {
-    const props = {
-      booth: [0, -2.2], archL: [5.75, 1.7], archR: [-5.75, 1.7], blower0: [-6.65, 19.6], blower1: [-6.65, 15.4],
-      machine: [-6.7, -0.6], ropePostN: [-0.6, 42.8], towerA: [3.3, 40.3], cp1: [3.3, 20.8], rimEast: [5.8, 12], rimWest: [-5.8, 30], rimNorth: [0, 43.6],
-    };
-    for (const [n, [x, z]] of Object.entries(props)) { const w = await W(x, z); await probe8(g, n, w[0], w[2]); }
-    await shot('probe-end');
-  }
   await tp(booth[0] + 6, booth[2] + 3, -Math.PI / 2);
   await shot('approach');
   const r = await walkTo(booth[0], booth[2], { tol: 1.0 });
@@ -63,6 +55,15 @@ try {
   await tap('KeyR'); await step(40);
   console.log('after R', await fo(() => window.__rgFoam.phase()), await st());
   await shot('left');
+  await page.evaluate(() => window.__rg.ctx.profile.earn(3, 'test'));
+  if (PROBE) {
+    const props = {
+      booth: [0, -2.2], archL: [5.75, 1.7], archR: [-5.75, 1.7], blower0: [-6.65, 19.6], blower1: [-6.65, 15.4],
+      machine: [-6.7, -0.6], ropePostN: [-0.6, 42.8], towerA: [3.3, 40.3], cp1: [3.3, 20.8], rimEast: [5.8, 12], rimWest: [-5.8, 30], rimNorth: [0, 43.6],
+    };
+    for (const [n, [x, z]] of Object.entries(props)) { const w = await W(x, z); await probe8(g, n, w[0], w[2]); }
+    await shot('probe-end');
+  }
 } finally {
   await g.close();
 }

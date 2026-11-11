@@ -7,6 +7,7 @@
 import { controlKeys } from '../../ui/controlGlyphs';
 import { icon } from '../../ui/icons';
 import type { InputState } from '../../types';
+import { LAPS } from './layout';
 import { MEDALS, formatTime } from './scoring';
 import type { Medal } from './scoring';
 
@@ -76,6 +77,8 @@ const CSS = `
 .rg .rg-fl-btn .ic{width:calc(var(--u,8px)*3.6);height:calc(var(--u,8px)*3.6);color:#15110a}
 .rg-fl-btn kbd{font:inherit;background:#15110a;color:#fff;border-radius:calc(var(--u,8px)*.7);padding:calc(var(--u,8px)*.3) calc(var(--u,8px)*.7)}
 
+.rg-fl-lap{min-width:0}
+.rg-fl-lap.pop{animation:rg-fl-in .45s cubic-bezier(.2,1.5,.4,1)}
 .rg-fl-prize.practice{color:#fff}
 .rg-fl-nogem{position:relative;display:inline-grid;place-items:center}
 .rg-fl-nogem::after{content:"";position:absolute;left:-12%;right:-12%;top:46%;height:calc(var(--u,8px)*.9);background:#000;border:calc(var(--u,8px)*.25) solid #fff;transform:rotate(-38deg);border-radius:calc(var(--u,8px)*.5)}
@@ -116,6 +119,8 @@ export interface FoamUi {
   setPrize(gems: number): void;
   /** The one button of the run (jump) for the active device; pulse = now! null hides it. */
   jumpHint(device: InputState['device'] | null, pulse: boolean): void;
+  /** Lap counter (1-based) next to the stopwatch. */
+  lap(n: number): void;
   /** A crossed-out gem chip by the countdown: this run is practice (no gems). */
   practice(on: boolean): void;
   /** Buttons clicked/tapped since last call. */
@@ -148,7 +153,13 @@ export function createFoamUi(root: HTMLElement): FoamUi {
     medals.appendChild(el);
     return { el, limit: MEDALS[m] };
   });
-  row.append(clock, medals);
+  const lapEl = document.createElement('div');
+  lapEl.className = 'rg-fl-clock rg-fl-lap';
+  lapEl.setAttribute('data-testid', 'foamlava-lap');
+  lapEl.appendChild(icon('flag'));
+  const lapText = document.createElement('span');
+  lapEl.appendChild(lapText);
+  row.append(lapEl, clock, medals);
   const track = document.createElement('div');
   track.className = 'rg-fl-track';
   track.innerHTML = '<div class="end"></div>';
@@ -319,6 +330,12 @@ export function createFoamUi(root: HTMLElement): FoamUi {
       }
       jump.classList.toggle('on', !!device);
       jump.classList.toggle('pulse', !!device && pulse);
+    },
+    lap(n) {
+      lapText.textContent = `${n}/${LAPS}`;
+      lapEl.classList.remove('pop');
+      void lapEl.offsetWidth;
+      lapEl.classList.add('pop');
     },
     practice(on) {
       practiceChip.style.display = on ? 'flex' : 'none';

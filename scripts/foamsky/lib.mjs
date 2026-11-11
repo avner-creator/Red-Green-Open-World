@@ -108,7 +108,7 @@ export async function open(dirName, { query = '', width = 960, height = 540 } = 
  * `dist` m away, hold the keys toward the centre for `secs` (re-aimed every 6 frames) and record
  * the closest approach and whether the hero ever got past the centre (a pass-through).
  */
-export async function probe8(g, name, x, z, { dist = 4, secs = 2.2, sprint = false, minClear = 0.3 } = {}) {
+export async function probe8(g, name, x, z, { dist = 4, secs = 2.2, sprint = false, minClear = 0.3, leave = null } = {}) {
   const out = [];
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;
@@ -131,9 +131,12 @@ export async function probe8(g, name, x, z, { dist = 4, secs = 2.2, sprint = fal
       if (along < -minClear) passed = true;
     }
     await g.release();
+    // A walk-in start pad may have started a ride: leave it (R) and do not count this direction.
+    if ((await g.page.evaluate(() => window.__rg.state().playerMode)) === 'external') { await g.tap('KeyR'); await g.step(20); out.push({ dir: k, minD: 99, passed: false, ride: true }); continue; }
     out.push({ dir: k, minD: +minD.toFixed(2), passed });
   }
   const bad = out.filter((o) => o.passed);
-  console.log(`[probe] ${name} @${x.toFixed(1)},${z.toFixed(1)} minD ${Math.min(...out.map((o) => o.minD)).toFixed(2)} passThrough ${bad.length ? bad.map((b) => b.dir).join(',') : 'none'}`);
+  const rides = out.filter((o) => o.ride).map((o) => o.dir);
+  console.log(`[probe] ${name} @${x.toFixed(1)},${z.toFixed(1)} minD ${Math.min(...out.map((o) => o.minD)).toFixed(2)} passThrough ${bad.length ? bad.map((b) => b.dir).join(',') : 'none'}${rides.length ? ` (pad started a ride from ${rides.join(',')})` : ''}`);
   return out;
 }

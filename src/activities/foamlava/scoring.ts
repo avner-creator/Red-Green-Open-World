@@ -5,10 +5,11 @@
  * ~15 s. Kids take about 1.5-2.5x that with a splash or two, so gold needs a clean, quick run,
  * and the friend (~35 s with one comic splash) loses to an 8-year-old who keeps going.
  */
-import { CANNONS } from './layout';
+import { CANNONS, LAPS, LIFT } from './layout';
 import { cannonState } from './sim';
 
-export const MEDALS = { gold: 22, silver: 30, bronze: 42 } as const;
+/** Two laps (see LAPS) plus the bubble express in between. */
+export const MEDALS = { gold: 42, silver: 58, bronze: 80 } as const;
 
 export type Medal = 'gold' | 'silver' | 'bronze' | 'ribbon';
 
@@ -73,10 +74,10 @@ const LEGS: readonly Leg[] = [
   { to: [1.5, 0.3, 9.3], dur: 1.8, anim: 'flop' },
   { to: [2.6, 1.05, 8.4], dur: 0.7, hop: 1.4, anim: 'jump' }, // pops back out, foamy
   { to: [4.1, 1.05, 10.6], dur: 1.2 },
-  { to: [3.5, 1.25, 13.3], dur: 1.0, hop: 0.6, anim: 'jump' },
-  { to: [2.6, 1.5, 14.9], dur: 0.8, hop: 0.6, anim: 'jump' },
-  { to: [3.6, 1.75, 16.5], dur: 0.8, hop: 0.6, anim: 'jump' },
-  { to: [2.8, 2.0, 18.0], dur: 0.8, hop: 0.6, anim: 'jump' },
+  { to: [3.5, 1.15, 13.0], dur: 1.0, hop: 0.6, anim: 'jump' },
+  { to: [2.6, 1.4, 14.9], dur: 0.8, hop: 0.6, anim: 'jump' },
+  { to: [3.6, 1.65, 16.5], dur: 0.8, hop: 0.6, anim: 'jump' },
+  { to: [2.8, 1.9, 18.0], dur: 0.8, hop: 0.6, anim: 'jump' },
   { to: [3.3, 2.0, 20.8], dur: 1.1 },
   { to: [2.7, 2.0, 23.4], dur: 1.0 },
   { to: [3.9, 2.15, 24.5], dur: 0.8 },
@@ -96,11 +97,14 @@ const LEGS: readonly Leg[] = [
   { to: [-3.6, 1.0, 0.6], dur: 0.9, hop: 1.9, anim: 'jump' }, // bubble bounce to the finish
 ];
 
+/** The friend's whole round: every lap, with the bubble express back to the start in between. */
+const ROUND: readonly Leg[] = Array.from({ length: LAPS }, (_, lap) => (lap === 0 ? LEGS : [{ to: FRIEND_START, dur: LIFT.seconds, hop: LIFT.height, anim: 'jump' } as Leg, ...LEGS])).flat();
+
 /** Build the friend's keyframes (cannon waits resolved against the run clock). */
 export function ghostTimeline(): GhostKey[] {
   const keys: GhostKey[] = [{ t: 0, x: FRIEND_START[0], y: FRIEND_START[1], z: FRIEND_START[2], hop: 0, anim: 'idle' }];
   let t = 0;
-  for (const leg of LEGS) {
+  for (const leg of ROUND) {
     const last = keys[keys.length - 1];
     if (leg.waitCannon) {
       // Wait (idle) for the moment the first cannon has just finished puffing.

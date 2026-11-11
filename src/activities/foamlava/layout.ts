@@ -10,6 +10,10 @@
  * bubbles) and safe stepping stones where kids tend to slip.
  */
 
+/** Laps per round (the bubble express floats you from the finish deck back to the start). */
+export const LAPS = 2;
+export const LIFT = { seconds: 1.8, height: 3.2 } as const;
+
 /** Top of the foam "lava", metres above course ground. Touching it = a foamy flop. */
 export const FOAM_Y = 0.7;
 
@@ -63,10 +67,10 @@ export const SOLIDS: readonly SolidDef[] = [
   cyl('float2', 'float', 2.6, 8.4, 1.05, 1.2),
   cyl('float3', 'float', 4.1, 10.6, 1.05, 1.2),
   // 2. Upside-down bins, a little staircase.
-  cyl('bin0', 'bin', 3.5, 13.3, 1.25, 0.75),
-  cyl('bin1', 'bin', 2.6, 14.9, 1.5, 0.75),
-  cyl('bin2', 'bin', 3.6, 16.5, 1.75, 0.75),
-  cyl('bin3', 'bin', 2.8, 18.0, 2.0, 0.75),
+  cyl('bin0', 'bin', 3.5, 13.0, 1.15, 0.75),
+  cyl('bin1', 'bin', 2.6, 14.9, 1.4, 0.75),
+  cyl('bin2', 'bin', 3.6, 16.5, 1.65, 0.75),
+  cyl('bin3', 'bin', 2.8, 18.0, 1.9, 0.75),
   // Checkpoint 1.
   box('cp1', 'deck', LANE_A, 20.8, 2.0, 2.0, 1.6, { cp: 1 }),
   // 3. Balance blocks (they wobble like the floats, only stiffer).
@@ -153,10 +157,10 @@ export const ROUTE: readonly { x: number; y: number; z: number; cp: number }[] =
   { x: 4.2, y: 1.05, z: 6.3, cp: 0 },
   { x: 2.6, y: 1.05, z: 8.4, cp: 0 },
   { x: 4.1, y: 1.05, z: 10.6, cp: 0 },
-  { x: 3.5, y: 1.25, z: 13.3, cp: 0 },
-  { x: 2.6, y: 1.5, z: 14.9, cp: 0 },
-  { x: 3.6, y: 1.75, z: 16.5, cp: 0 },
-  { x: 2.8, y: 2.0, z: 18.0, cp: 0 },
+  { x: 3.5, y: 1.15, z: 13.0, cp: 0 },
+  { x: 2.6, y: 1.4, z: 14.9, cp: 0 },
+  { x: 3.6, y: 1.65, z: 16.5, cp: 0 },
+  { x: 2.8, y: 1.9, z: 18.0, cp: 0 },
   { x: LANE_A, y: 2.0, z: 20.8, cp: 1 },
   { x: 2.7, y: 2.0, z: 23.4, cp: 1 },
   { x: 3.9, y: 2.15, z: 24.5, cp: 1 },

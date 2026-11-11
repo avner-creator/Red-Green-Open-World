@@ -66,6 +66,10 @@ export interface FoamLavaTestApi {
   friendReady(): boolean;
   /** Show/hide only this course's weak-eye objects (channel test control). */
   setWeakVisible(on: boolean): void;
+  /** World centre (at hip height), footprint radius and id of every solid prop and rim wall. */
+  props(): { id: string; x: number; z: number; r: number; bottom: number; top: number }[];
+  /** Walk-in start pad: world centre and fill 0..1. */
+  pad(): { at: [number, number, number]; fill: number };
 }
 
 declare global {
@@ -105,6 +109,14 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   vis.weakRoot.updateMatrixWorld(true);
   ctx.vision.add(vis.weakRoot, VisionLayer.WeakOnly);
   const confetti = new ThrillConfetti();
+  // Bubble express: one see-through bubble around the hero while it floats back to the start.
+  const liftBubbleGeo = new THREE.SphereGeometry(1.25, 20, 14);
+  const liftBubbleMat = new THREE.MeshStandardMaterial({ color: 0xeaf8ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.45, depthWrite: false });
+  const liftBubble = new THREE.Mesh(liftBubbleGeo, liftBubbleMat);
+  liftBubble.name = 'foam-lava-lift-bubble';
+  liftBubble.userData.cameraIgnore = true;
+  liftBubble.visible = false;
+  ctx.scene.add(liftBubble);
   let confettiT = 0;
 
   // ───────────── Colliders (so the course is solid when walking around outside a run) ─────────────
@@ -149,7 +161,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     bot.running = true;
     const pilot = new Autopilot(MAIN_PLAN);
     const track: { x: number; y: number; z: number }[] = [];
-    for (let i = 0; i < 60 * 40 && bot.mode !== 'done'; i++) {
+    for (let i = 0; i < 60 * 90 && bot.mode !== 'done'; i++) {
       bot.step(FIXED, pilot.input(bot));
       if (i % 3 === 0) track.push({ x: bot.p.x, y: bot.p.y + 1.1, z: bot.p.z });
     }
@@ -268,6 +280,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     ui.price(null);
     ui.showHud(true, friend.color);
     ui.practice(practice);
+    ui.lap(1);
     ui.hud(0, 0, 0);
     if (ctx.player.mode !== 'external') ctx.player.setExternalController(controller);
     // Countdown: look at the hero and the friend from the front, then swing behind at GO.
@@ -286,6 +299,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     phase = 'idle';
     sim.running = false;
     ui.showHud(false);
+    liftBubble.visible = false;
     ui.practice(false);
     ui.jumpHint(null, false);
     ui.countdown(null);
@@ -412,6 +426,19 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         sfx('star', 0.8);
         vis.setCheckpoint(ev.cp, true);
         break;
+      case 'lap':
+        // Bubble express: a big bubble scoops you off the finish deck and floats you to the start.
+        sfx('bigBoing', 0.9, 1.4);
+        sfx('whoosh', 0.7, 1.3);
+        vis.setCheckpoint(0, true);
+        vis.spray(sim.p.x, sim.p.y + 0.5, sim.p.z, 10);
+        ui.lap(sim.lap + 1);
+        break;
+      case 'liftEnd':
+        sfx('boing', 0.9, 1.6);
+        stretch = 0.4;
+        vis.spray(sim.p.x, sim.p.y + 0.3, sim.p.z, 8);
+        break;
       case 'finish':
         finishRun(ev.time);
         break;
@@ -442,6 +469,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       case 'splash':
         return 'flop';
       case 'swing':
+      case 'lift':
         return 'jump';
       case 'slide':
         return 'fall';
@@ -517,6 +545,12 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         }
       }
       heroWorld();
+      liftBubble.visible = sim.mode === 'lift';
+      if (liftBubble.visible) {
+        liftBubble.position.copy(ctx.player.position).setY(ctx.player.position.y + 0.85);
+        const w = 1 + 0.06 * Math.sin(sim.liftT * 11);
+        liftBubble.scale.set(w, 2 - w, w);
+      }
       // Poses: belly slide, rope swing lean, squash and stretch.
       flipT = Math.max(0, flipT - dt);
       if (flipT > 0) ctx.player.setTilt(-(1 - flipT / 0.65) * Math.PI * 2, 0.3 * Math.sin(flipT * 20));
@@ -573,6 +607,13 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       setWeakVisible: (on) => {
         vis.weakRoot.visible = on;
       },
+      props: () =>
+        [...PROPS, ...RIM_WALLS].map((p) => {
+          const w = toWorld(p.x, 0, p.z);
+          const r = p.shape === 'cyl' ? (p.r ?? 0) : Math.hypot(p.hx ?? 0, p.hz ?? 0);
+          return { id: p.id, x: w.x, z: w.z, r, bottom: oy + Math.max(-1.2, p.bottom), top: oy + p.top };
+        }),
+      pad: () => ({ at: padAt.toArray() as [number, number, number], fill: pad.progress }),
     };
   }
 
@@ -653,6 +694,9 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       tally.stop();
       confetti.group.removeFromParent();
       confetti.dispose();
+      liftBubble.removeFromParent();
+      liftBubbleGeo.dispose();
+      liftBubbleMat.dispose();
       beardGeo.dispose();
       beardMat.dispose();
       if (ctx.testMode && typeof window !== 'undefined') delete window.__rgFoam;

@@ -7,7 +7,7 @@
  * read the dynamic state back. Everything is in the course frame (see layout.ts).
  */
 import { PLAYER } from '../../config';
-import { CANNON, CANNONS, CHECKPOINTS, CHUTE, FINISH_ID, FOAM_Y, LANE_B, PIT, PROPS, ROPE, ROUTE, RUN_BOUNDS, SOLIDS } from './layout';
+import { CANNON, CANNONS, CHECKPOINTS, CHUTE, FINISH_ID, FOAM_Y, LANE_B, LAPS, LIFT, PIT, PROPS, ROPE, ROUTE, RUN_BOUNDS, SOLIDS, START } from './layout';
 import type { PropDef, SolidDef } from './layout';
 
 export const RUN = {
@@ -66,9 +66,13 @@ export type SimEvent =
   | { type: 'splash'; x: number; z: number }
   | { type: 'respawn'; cp: number }
   | { type: 'checkpoint'; cp: number }
-  | { type: 'finish'; time: number };
+  | { type: 'finish'; time: number }
+  /** A lap is done: the bubble express floats you back to the start line. `lap` = laps done. */
+  | { type: 'lap'; lap: number }
+  /** The bubble set you down on the start deck. */
+  | { type: 'liftEnd' };
 
-export type SimMode = 'run' | 'swing' | 'slide' | 'splash' | 'done';
+export type SimMode = 'run' | 'swing' | 'slide' | 'splash' | 'lift' | 'done';
 
 export interface Vec3 {
   x: number;
@@ -187,6 +191,11 @@ export class CourseSim {
   /** Highest checkpoint reached. */
   cp = 0;
   falls = 0;
+  /** Laps finished (a round is `LAPS` laps). */
+  lap = 0;
+  /** Bubble express: seconds into the float back to the start, and where it started. */
+  liftT = 0;
+  private readonly liftFrom: Vec3 = { x: 0, y: 0, z: 0 };
   /** Seconds left of the bubble beard (set on a splash). */
   beard = 0;
   readonly solids: SolidState[] = SOLIDS.map(() => ({ dip: 0, dipV: 0, tx: 0, tz: 0, tvx: 0, tvz: 0, bob: 0, touched: 99, spin: 0, angle: 0 }));
@@ -223,6 +232,8 @@ export class CourseSim {
     this.lastGroundY = s.top;
     this.time = 0;
     this.cp = 0;
+    this.lap = 0;
+    this.liftT = 0;
     this.falls = 0;
     this.beard = 0;
     this.coyote = 0;
@@ -282,6 +293,7 @@ export class CourseSim {
   /** Main-route progress 0..1 (for the HUD bar), gated by the checkpoint reached. */
   progress(): number {
     if (this.mode === 'done') return 1;
+    if (this.mode === 'lift') return (this.lap + Math.min(1, this.liftT / LIFT.seconds) * 0.02) / LAPS;
     let total = 0;
     const lens: number[] = [];
     for (let i = 1; i < ROUTE.length; i++) {
@@ -310,7 +322,7 @@ export class CourseSim {
       }
       acc += l;
     }
-    return clamp(best / total, 0, 0.99);
+    return clamp((this.lap + clamp(best / total, 0, 0.99)) / LAPS, 0, 0.99);
   }
 
   /** Advance the moving parts (always, while the player is near). */
@@ -412,6 +424,9 @@ export class CourseSim {
         break;
       case 'splash':
         this.stepSplash(dt, events);
+        break;
+      case 'lift':
+        this.stepLift(dt, events);
         break;
       case 'done':
         this.v.x = this.v.z = 0;
@@ -682,8 +697,23 @@ export class CourseSim {
       events.push({ type: 'checkpoint', cp: s.cp });
     }
     if (s.id === FINISH_ID && this.cp >= 3) {
-      this.mode = 'done';
       v.x = v.z = 0;
+      if (this.lap + 1 < LAPS) {
+        // Lap done: a big bubble scoops you up and floats you back to the start line.
+        this.lap++;
+        this.cp = 0;
+        this.mode = 'lift';
+        this.liftT = 0;
+        this.liftFrom.x = p.x;
+        this.liftFrom.y = p.y;
+        this.liftFrom.z = p.z;
+        this.grounded = false;
+        this.ground = -1;
+        events.push({ type: 'lap', lap: this.lap });
+        return;
+      }
+      this.lap = LAPS;
+      this.mode = 'done';
       events.push({ type: 'finish', time: this.time });
     }
   }
@@ -731,6 +761,24 @@ export class CourseSim {
     this.grounded = false;
     this.ground = -1;
     events.push({ type: 'splash', x: this.p.x, z: this.p.z });
+  }
+
+  private stepLift(dt: number, events: SimEvent[]): void {
+    this.liftT += dt;
+    const k = Math.min(1, this.liftT / LIFT.seconds);
+    const e = k * k * (3 - 2 * k);
+    const to = { x: START.hero.x, y: SOLIDS[0].top, z: START.hero.z };
+    this.p.x = this.liftFrom.x + (to.x - this.liftFrom.x) * e;
+    this.p.z = this.liftFrom.z + (to.z - this.liftFrom.z) * e;
+    this.p.y = this.liftFrom.y + (to.y - this.liftFrom.y) * e + LIFT.height * Math.sin(Math.PI * k) + 0.25 * Math.sin(this.liftT * 9) * Math.sin(Math.PI * k);
+    this.v.x = this.v.y = this.v.z = 0;
+    this.yaw = 0;
+    if (k < 1) return;
+    this.mode = 'run';
+    this.grounded = true;
+    this.ground = 0;
+    this.lastGroundY = this.p.y;
+    events.push({ type: 'liftEnd' });
   }
 
   private stepSplash(dt: number, events: SimEvent[]): void {
