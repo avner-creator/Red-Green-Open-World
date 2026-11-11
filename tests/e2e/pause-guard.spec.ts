@@ -153,6 +153,26 @@ test('Esc with an overlay open (workshop, shop, radio…) closes that overlay fi
   expect(await log()).toEqual([]);
 });
 
+test('Esc inside the workshop closes it and does not pause', async () => {
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    const c = window.__rgWorkshop!.console;
+    rg.teleport(c[0] + 1.2, c[1] + 0.2, c[2] - 1.2);
+    rg.step(1 / 60, 20, false);
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+  });
+  expect(await page.evaluate(() => window.__rgWorkshop!.isOpen)).toBe(true);
+  await page.keyboard.press('Escape');
+  await step(10);
+  expect(await page.evaluate(() => window.__rgWorkshop!.isOpen)).toBe(false);
+  expect(await phase()).toBe('playing');
+  // Closed for good: a second bare Esc is no longer swallowed by a stale handler.
+  expect(await log()).toEqual([]);
+});
+
 test('explicit pauses are logged with their reason', async () => {
   await loseLock(false); // Esc swallowed by the browser, no card open: pause
   await settle();

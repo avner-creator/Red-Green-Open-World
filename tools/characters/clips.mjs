@@ -338,7 +338,7 @@ function rexClips() {
         Tail3: (t, u) => [-0.2, 0.15 * sin(TAU * u - 1), 0],
         'FrontUpLeg.L': (t, u) => [-1.0 + 0.3 * sin(2 * TAU * u), 0, 0],
         'FrontUpLeg.R': (t, u) => [-1.0 - 0.3 * sin(2 * TAU * u), 0, 0],
-        Head: (t, u) => [-0.25, 0, 0],
+        Head: () => [-0.25, 0, 0],
       },
     },
     {
@@ -413,7 +413,7 @@ function quadClips(src) {
       from: 'Idle',
       duration: 1.0,
       rot: {
-        [neck]: (t, u) => [-0.15, 0, 0],
+        [neck]: () => [-0.15, 0, 0],
         Head: (t, u) => [-0.1, 0.15, 0.3 * sin(2 * TAU * u)],
         ...wag(0.7, 3, 0.4),
         ...earFlop(0.3, 2),
@@ -434,7 +434,7 @@ function quadClips(src) {
       from: 'Idle',
       duration: 0.8,
       rot: {
-        [neck]: (t, u) => [-0.25, 0, 0],
+        [neck]: () => [-0.25, 0, 0],
         Head: (t, u) => [-0.2, 0, 0.1 * sin(TAU * u)],
         ...wag(0.35, 1),
         ...Object.fromEntries(ears.map((b) => [b, () => [-0.6, 0, 0]])),
