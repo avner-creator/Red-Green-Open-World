@@ -51,6 +51,8 @@ export const BOOST = {
   hitsToRise: 2,
   /** Weak-eye flash after a turbo pad, seconds. */
   flashSeconds: 0.75,
+  /** Emote face (the button to tap) inside the ring: face radius, metres. */
+  faceRadius: 1.3,
 } as const;
 
 /** Signed lap distance from `from` to `to` on a loop of length `L`, in [−L/2, L/2). */
@@ -182,6 +184,14 @@ export function bestBlindRate(tier: GlassesTier): number {
 }
 
 /** Per-session staircase: up after `hitsToRise` hits in a row, down after a miss. */
+/**
+ * The once-per-session button hint (an Emote toast): only as the first race of the session counts
+ * down, never tied to a pad or the ring, so its timing says nothing about where pads are.
+ */
+export function hintNow(racePhase: string, hinted: boolean): boolean {
+  return racePhase === 'countdown' && !hinted;
+}
+
 export function stepTier(tier: GlassesTier, streak: number, hit: boolean): { tier: GlassesTier; streak: number } {
   if (!hit) return { tier: tier <= 1 ? 1 : ((tier - 1) as GlassesTier), streak: 0 };
   const s = streak + 1;
