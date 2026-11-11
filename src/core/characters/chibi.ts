@@ -252,3 +252,69 @@ export function tagRegions(model: THREE.Object3D, handBone: RegExp, headBone: st
     mesh.geometry.setAttribute('aRegion', new THREE.BufferAttribute(out, 1));
   });
 }
+
+/**
+ * Tuck away parts of a model (e.g. a dinosaur's teeth): vertices of meshes with material `material`
+ * that are mostly skinned to `bone` (or its children) move onto a tiny helper bone, so they shrink
+ * to a point inside the head.
+ */
+export function hideParts(model: THREE.Object3D, parts: ChibiDef['hide']): void {
+  if (!parts?.length) return;
+  model.updateMatrixWorld(true);
+  const meshes: THREE.SkinnedMesh[] = [];
+  model.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh && m.geometry.attributes.skinIndex) meshes.push(m);
+  });
+  for (const part of parts) {
+    for (const mesh of meshes) {
+      if ((mesh.material as THREE.Material).name !== part.material) continue;
+      const bones = mesh.skeleton.bones;
+      const root = bones.find((b) => b.name === THREE.PropertyBinding.sanitizeNodeName(part.bone));
+      if (!root) continue;
+      const under = bones.map((b) => {
+        for (let p: THREE.Object3D | null = b; p; p = p.parent) if (p === root) return true;
+        return false;
+      });
+      const helper = new THREE.Bone();
+      helper.name = 'chibi-tuck';
+      root.add(helper);
+      helper.updateMatrixWorld(true);
+      const inv = helper.matrixWorld.clone().invert();
+      const n = bones.length;
+      mesh.bind(new THREE.Skeleton([...bones, helper], [...mesh.skeleton.boneInverses, inv]), mesh.bindMatrix);
+      helper.scale.setScalar(0.001);
+      const si = mesh.geometry.attributes.skinIndex;
+      const sw = mesh.geometry.attributes.skinWeight;
+      const idx = new Uint16Array(si.count * 4);
+      const wgt = new Float32Array(si.count * 4);
+      for (let v = 0; v < si.count; v++) {
+        let w = 0;
+        for (let k = 0; k < 4; k++) if (under[si.getComponent(v, k)]) w += sw.getComponent(v, k);
+        for (let k = 0; k < 4; k++) {
+          idx[v * 4 + k] = w > 0.5 ? (k === 0 ? n : 0) : si.getComponent(v, k);
+          wgt[v * 4 + k] = w > 0.5 ? (k === 0 ? 1 : 0) : sw.getComponent(v, k);
+        }
+      }
+      mesh.geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+      mesh.geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wgt, 4));
+    }
+  }
+}
+
+const ray = new THREE.Raycaster();
+/**
+ * Where a ray from in front of the hero (+Z, character space) at height `y` and offset `x` first
+ * hits the body: used to sit the smile and brows right on the face surface. Returns null on a miss.
+ * `object` must be at the origin facing +Z with its current pose in the world matrices.
+ */
+export function surfaceZ(object: THREE.Object3D, x: number, y: number): number | null {
+  const meshes: THREE.Object3D[] = [];
+  object.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && o.name !== 'face-part') meshes.push(o);
+  });
+  ray.set(new THREE.Vector3(x, y, 10), new THREE.Vector3(0, 0, -1));
+  ray.far = 20;
+  const hit = ray.intersectObjects(meshes, false)[0];
+  return hit ? hit.point.z : null;
+}

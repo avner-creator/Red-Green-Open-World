@@ -9,8 +9,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { PlayerAnim } from '../../types';
-import type { AttachPart, CharacterDef, ClipRef } from './catalog';
-import { applyChibi, recolourMaterials, tagRegions } from './chibi';
+import type { AttachPart, CharacterDef, ClipRef, FaceDef } from './catalog';
+import { applyChibi, hideParts, recolourMaterials, surfaceZ, tagRegions } from './chibi';
 import { buildFace, type FaceRig, type FaceState } from './face';
 import { createLife, type Life } from './life';
 import { mergeCharacterMeshes } from './merge';
@@ -53,6 +53,7 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
   mergeCharacterMeshes(model, gltf.animations);
   if (def.smooth) smoothNormals(model);
   recolourMaterials(model, def.chibi?.materials);
+  hideParts(model, def.chibi?.hide);
   if (def.chibi?.suit) tagRegions(model, /^(Pinky|Middle|Index|Thumb|Ring|Palm)/, def.face?.bone ?? 'Head', def.chibi.suit.collar);
   warmCharacter(model, { ...def.warm, suit: def.chibi?.suit });
   model.traverse((o) => {
@@ -76,7 +77,7 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       poser.setTime(0);
     }
     object.updateMatrixWorld(true);
-    face = buildFace(def.face, object, faceBone);
+    face = buildFace(snapFace(def.face, object), object, faceBone);
     if (poser) {
       poser.stopAllAction();
       poser.uncacheRoot(model);
@@ -242,4 +243,22 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
       seatApplied = true;
     },
   };
+}
+
+/** Sit the smile and brows on the face surface (the catalog gives their height; depth comes from a ray). */
+function snapFace(f: FaceDef, object: THREE.Object3D): FaceDef {
+  object.updateMatrixWorld(true);
+  let mouthAt = f.mouthAt;
+  if (mouthAt) {
+    const m = f.mouthW ?? f.eyeR * 0.8;
+    const z = surfaceZ(object, 0, mouthAt[1] - m * (f.mouthCurve ?? 0.7) * 0.8);
+    if (z !== null) mouthAt = [mouthAt[0], mouthAt[1], z + 0.004];
+  }
+  let browAt = f.browAt;
+  if (f.brow && !browAt) {
+    const y = f.eyeAt[1] + f.eyeR * f.brow;
+    const z = surfaceZ(object, f.eyeAt[0], y);
+    browAt = [f.eyeAt[0], y, z !== null ? Math.min(z + 0.006, f.eyeAt[2] + f.eyeR) : f.eyeAt[2]];
+  }
+  return { ...f, mouthAt, browAt };
 }

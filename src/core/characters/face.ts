@@ -51,7 +51,8 @@ const TEX_W = 512;
 const TEX_H = 256;
 /** UV spots (right half of the atlas) for flat-coloured pieces. */
 const UV_LID: [number, number] = [0.75, 0.78];
-const UV_BLUSH: [number, number] = [0.75, 0.22];
+const UV_BLUSH: [number, number] = [0.625, 0.22];
+const UV_MOUTH: [number, number] = [0.875, 0.22];
 
 function faceTexture(def: FaceDef): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null;
@@ -97,7 +98,9 @@ function faceTexture(def: FaceDef): THREE.CanvasTexture | null {
   g.fillStyle = def.lid;
   g.fillRect(TEX_W / 2, 0, TEX_W / 2, TEX_H / 2);
   g.fillStyle = def.blushColor ?? '#ff9aa8';
-  g.fillRect(TEX_W / 2, TEX_H / 2, TEX_W / 2, TEX_H / 2);
+  g.fillRect(TEX_W / 2, TEX_H / 2, TEX_W / 4, TEX_H / 2);
+  g.fillStyle = def.mouthColor ?? '#4a1f14';
+  g.fillRect((TEX_W * 3) / 4, TEX_H / 2, TEX_W / 4, TEX_H / 2);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 2;
@@ -138,6 +141,12 @@ export function buildFace(def: FaceDef, object: THREE.Object3D, bone: THREE.Obje
   const upGeo = flatUv(new THREE.SphereGeometry(r * 1.07, 22, 8, 0, Math.PI * 2, 0, Math.PI * 0.56), UV_LID);
   const loGeo = flatUv(new THREE.SphereGeometry(r * 1.05, 22, 6, 0, Math.PI * 2, Math.PI * 0.6, Math.PI * 0.4), UV_LID);
   const blushGeo = flatUv(new THREE.CircleGeometry(1, 16), UV_BLUSH);
+  // Smile: a thick arc, open side up (the torus arc starts on +X and runs through -Y).
+  const smileGeo = flatUv(new THREE.TorusGeometry(1, 0.2, 6, 16, Math.PI * 0.8), UV_MOUTH);
+  smileGeo.rotateZ(Math.PI + Math.PI * 0.1);
+  // Brows: a short soft bar, gently arched.
+  const browGeo = flatUv(new THREE.TorusGeometry(1, 0.22, 5, 10, Math.PI * 0.45), UV_MOUTH);
+  browGeo.rotateZ(Math.PI / 2 - Math.PI * 0.225);
 
   object.updateMatrixWorld(true);
   const eyes: Piece[] = [];
@@ -171,6 +180,18 @@ export function buildFace(def: FaceDef, object: THREE.Object3D, bone: THREE.Obje
       const b = def.blushAt;
       const s = def.blushR ?? r * 0.75;
       add(blushGeo, b, side, new THREE.Euler(0, (def.blushYaw ?? 0.6) * side, 0, 'YXZ'), new THREE.Vector3(s, s * 0.6, 1));
+    }
+  }
+
+  if (def.mouthAt) {
+    const m = def.mouthW ?? r * 0.8;
+    add(smileGeo, def.mouthAt, 1, new THREE.Euler(-(def.mouthPitch ?? 0), 0, 0, 'YXZ'), new THREE.Vector3(m, m * (def.mouthCurve ?? 0.7), m));
+  }
+  if (def.brow) {
+    const bw = r * 0.75;
+    for (const side of [1, -1] as const) {
+      const at = def.browAt ?? ([def.eyeAt[0], def.eyeAt[1] + r * def.brow, def.eyeAt[2]] as const);
+      add(browGeo, at, side, new THREE.Euler(-pitch, yaw * side, -0.12 * side, 'YXZ'), new THREE.Vector3(bw, bw * 0.45, bw));
     }
   }
 
