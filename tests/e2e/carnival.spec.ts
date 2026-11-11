@@ -96,13 +96,18 @@ test('E at a booth starts a round (first play free); R leaves safely', async () 
 
 test('every playable booth plays a full round to a result', async () => {
   test.setTimeout(240_000);
+  const glassesSeen: string[] = [];
   for (const id of playable) {
     const before = await info();
     const r = await page.evaluate((id) => {
       const c = window.__rgCarnival!;
       const rg = window.__rg!;
-      const seen = { stunts: 0, toasts: 0 };
-      const offs = [rg.ctx.events.on('stunt', () => seen.stunts++), rg.ctx.events.on('ui:toast', () => seen.toasts++)];
+      const seen = { stunts: 0, toasts: 0, glasses: [] as string[] };
+      const offs = [
+        rg.ctx.events.on('stunt', () => seen.stunts++),
+        rg.ctx.events.on('ui:toast', () => seen.toasts++),
+        rg.ctx.events.on('glasses:result', (e) => seen.glasses.push(`${e.mechanic}:${e.hit}`)),
+      ];
       (window as unknown as { __cvSeen: typeof seen; __cvOffs: (() => void)[] }).__cvSeen = seen;
       (window as unknown as { __cvOffs: (() => void)[] }).__cvOffs = offs;
       c.autopilot(true);
@@ -114,7 +119,7 @@ test('every playable booth plays a full round to a result', async () => {
     expect(r.phase, id).toBe('play');
     await playToResult();
     const res = await page.evaluate(() => {
-      const w = window as unknown as { __cvSeen: { stunts: number; toasts: number }; __cvOffs: (() => void)[] };
+      const w = window as unknown as { __cvSeen: { stunts: number; toasts: number; glasses: string[] }; __cvOffs: (() => void)[] };
       for (const off of w.__cvOffs) off();
       return { info: window.__rgCarnival!.info(), seen: w.__cvSeen, hud: !!document.querySelector('[data-testid="carnival-replay"]') };
     });
@@ -126,6 +131,7 @@ test('every playable booth plays a full round to a result', async () => {
     expect(res.seen.stunts, id).toBeGreaterThanOrEqual(1);
     expect(res.seen.toasts, id).toBeGreaterThanOrEqual(1);
     expect(res.hud, id).toBe(true);
+    glassesSeen.push(...res.seen.glasses);
     // Replay goes straight back to the countdown; exit hands the player back on foot.
     const after = await page.evaluate(() => {
       const c = window.__rgCarnival!;
@@ -140,6 +146,10 @@ test('every playable booth plays a full round to a result', async () => {
     expect(after.mode, id).toBe('walk');
   }
   await page.evaluate(() => window.__rgCarnival!.autopilot(false));
+  // The booths' weak-eye bonuses report to the glasses tally (only known booth ids; at least one hit).
+  const booth = ['balloonPrize', 'ringStar', 'bellSweet', 'luckyDuck', 'glowDodge'];
+  for (const g of glassesSeen) expect(booth).toContain(g.split(':')[0]);
+  expect(glassesSeen.some((g) => g.endsWith(':true'))).toBe(true);
 });
 
 test('weak-eye-only booth objects touch only the weak channel, all 4 combos', async () => {

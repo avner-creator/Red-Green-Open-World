@@ -195,16 +195,19 @@ test('a pedestal pays out once: confetti, stars and fanfare', async () => {
   await page.evaluate(() => {
     const log: string[] = [];
     window.__rg!.ctx.events.on('stunt', (e) => log.push(`${e.kind}:${e.stars}`));
+    window.__rg!.ctx.events.on('glasses:result', (e) => {
+      if (e.mechanic === 'secretPath') log.push(`glasses:${e.mechanic}:${e.tier}:${e.hit}`);
+    });
     (window as unknown as { __stunts: string[] }).__stunts = log;
   });
   const stunts = (): Promise<string[]> => page.evaluate(() => (window as unknown as { __stunts: string[] }).__stunts.slice());
   const lake = s.paths.find((p) => p.id === 'lake')!;
   const [x, y, z] = lake.pedestal;
   await put([x, y + 0.05, z], 0, 20);
-  expect(await stunts()).toEqual(['bigAir:3']);
+  expect(await stunts()).toEqual(['bigAir:3', 'glasses:secretPath:2:true']);
   expect((await info()).paths.find((p) => p.id === 'lake')!.claimed).toBe(true);
   await put([x + 0.3, y + 0.05, z], 0, 20);
-  expect(await stunts()).toHaveLength(1);
+  expect(await stunts()).toHaveLength(2);
   // Screenshot while the confetti flies.
   await cam([x + 7, y + 3.5, z + 6], [x, y + 1.2, z], 55);
   await save('lake-pedestal');
@@ -216,6 +219,7 @@ test('vault: wrong order wobbles and starts over, the weak eye order opens it, t
     const ev = window.__rg!.ctx.events;
     ev.on('stunt', (e) => log.push(`${e.kind}:${e.stars}`));
     ev.on('ui:toast', (e) => log.push(`toast:${e.icon}`));
+    ev.on('glasses:result', (e) => log.push(`glasses:${e.mechanic}:${e.tier}:${e.hit}`));
     (window as unknown as { __vlog: string[] }).__vlog = log;
   });
   const vlog = (): Promise<string[]> => page.evaluate(() => (window as unknown as { __vlog: string[] }).__vlog.slice());
@@ -276,6 +280,7 @@ test('vault: wrong order wobbles and starts over, the weak eye order opens it, t
   const log = await vlog();
   expect(log).toContain('bullseye:3');
   expect(log).toContain('toast:chest');
+  expect(log.filter((l) => l.startsWith('glasses:vaultDoor'))).toEqual(['glasses:vaultDoor:1:true', 'glasses:vaultDoor:1:false', 'glasses:vaultDoor:1:true', 'glasses:vaultDoor:1:true', 'glasses:vaultDoor:3:true']);
   // Treasure screenshot from the doorway.
   const [fx, fz] = await page.evaluate(() => window.__rgSecrets!.standPoint(0, 1, 6));
   await put([fx, d.y + 0.1, fz], 0, 3);
