@@ -79,7 +79,7 @@ export const WARDROBE_CSS = `
 }
 
 /* ---------- HUD wardrobe button ---------- */
-.rg .hud .wbtn{position:absolute;z-index:6;right:calc(var(--u)*1.6);top:calc(var(--u)*21.5);padding:0;border-radius:50%;
+.rg .hud .wbtn{position:absolute;z-index:6;right:calc(var(--u)*1.6);top:calc(var(--u)*23.5);padding:0;border-radius:50%;
   width:max(56px,calc(var(--u)*9.5));height:max(56px,calc(var(--u)*9.5));min-width:0;min-height:0}
 .rg .hud .wbtn .wb-ic .ic,.rg .hud .wbtn .wb-ic{font-size:max(36px,calc(var(--u)*6));color:#15110a;--out:#fff;display:inline-flex}
 .rg .hud .wbtn .wb-key{position:absolute;left:calc(var(--u)*-1.6);bottom:calc(var(--u)*-1.2);font-size:calc(var(--u)*2.4)}
