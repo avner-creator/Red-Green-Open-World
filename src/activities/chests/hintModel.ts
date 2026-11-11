@@ -15,10 +15,17 @@ import type { KeyArea } from './logic';
 
 const DOT_R = 0.27;
 
+/** One dot: open sides + top caps only (they lie on the ground: no bottoms), 60 triangles. */
 function dotGeometry(): THREE.BufferGeometry {
-  const rim = paint(new THREE.CylinderGeometry(DOT_R, DOT_R * 1.05, 0.05, 14).translate(0, 0.025, 0), new THREE.Color(0x0a0d1a));
-  const core = paint(new THREE.CylinderGeometry(DOT_R * 0.68, DOT_R * 0.68, 0.06, 14).translate(0, 0.035, 0), new THREE.Color(1, 1, 1));
-  return merge([rim, core]);
+  const SEG = 10;
+  const dark = new THREE.Color(0x0a0d1a);
+  const white = new THREE.Color(1, 1, 1);
+  const cap = (r: number, y: number): THREE.BufferGeometry => new THREE.CircleGeometry(r, SEG).rotateX(-Math.PI / 2).translate(0, y, 0);
+  const rim = paint(new THREE.CylinderGeometry(DOT_R, DOT_R * 1.05, 0.05, SEG, 1, true).translate(0, 0.025, 0), dark);
+  const rimTop = paint(cap(DOT_R, 0.05), dark);
+  const core = paint(new THREE.CylinderGeometry(DOT_R * 0.68, DOT_R * 0.68, 0.06, SEG, 1, true).translate(0, 0.035, 0), white);
+  const coreTop = paint(cap(DOT_R * 0.68, 0.065), white);
+  return merge([rim, rimTop, core, coreTop]);
 }
 
 interface DotRun {
@@ -69,7 +76,7 @@ export class HintDots {
       this.used++;
       run.count++;
     }
-    this.mesh.count = this.used;
+    this.mesh.count = this.runs.reduce((n, r) => (r.shown ? Math.max(n, r.first + r.count) : n), 0);
     this.runs.push(run);
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
@@ -82,8 +89,9 @@ export class HintDots {
     if (!run) return;
     if (!shown && !run.shown) return;
     run.shown = shown;
-    // No draw call at all while no chest shows its dots.
+    // No draw call at all while no chest shows its dots, and only up to the last shown run's dots.
     this.mesh.visible = this.runs.some((r) => r.shown);
+    this.mesh.count = this.runs.reduce((n, r) => (r.shown ? Math.max(n, r.first + r.count) : n), 0);
     for (let k = 0; k < run.count; k++) {
       const idx = run.first + k;
       if (!shown) {

@@ -162,7 +162,11 @@ function install(groups) {
   // ── Placing the hero / camera. ──
   const A = ctx.world.anchors;
   const ground = (x, z) => ctx.world.heightAt(x, z);
-  const at = (x, z, tx, tz, y) => rg.teleport(x, y ?? ground(x, z) + 0.2, z, Math.atan2(tx - x, tz - z));
+  const at = (x, z, tx, tz, y) => {
+    const p = [x, y ?? ground(x, z) + 0.2, z, Math.atan2(tx - x, tz - z)];
+    if (!p.every(Number.isFinite)) throw new Error(`bad view position ${p.join(',')}`);
+    rg.teleport(...p);
+  };
   const standBack = (a, dist) => {
     const x = a.position.x + Math.sin(a.yaw) * dist;
     const z = a.position.z + Math.cos(a.yaw) * dist;
@@ -247,8 +251,8 @@ function install(groups) {
       const c = W.__rgChests;
       if (!c) return 'missing';
       const [x, z] = c.sidePoint(0, 0, 6);
-      const i = c.info()[0];
-      at(x, z, i.x, i.z);
+      const [cx, , cz] = c.info()[0].position;
+      at(x, z, cx, cz);
     },
     'zone-funfair': () => zone('funfair'),
     'zone-farm': () => zone('farm'),
@@ -429,14 +433,22 @@ function install(groups) {
     async go(name) {
       const f = views[name];
       if (!f) return 'unknown';
-      const res = await f();
+      let res;
+      try {
+        res = await f();
+      } catch (e) {
+        res = `error: ${e?.message ?? e}`;
+      }
       rg.step(1 / 60, 90, false); // camera and Pip settle
       return res ?? 'ok';
     },
-    /** 10 more fixed steps, compile anything new, then count one frame. */
+    /** Compile anything new (one untallied frame). */
+    warm() {
+      rg.render();
+    },
+    /** 10 more fixed steps, then count one frame. */
     sample() {
       rg.step(1 / 60, 10, false);
-      rg.render();
       return summarise(measure());
     },
     detail() {
@@ -467,7 +479,9 @@ const log = jsonOut === '-' ? (...a) => console.error(...a) : (...a) => console.
 try {
   browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--mute-audio'] });
   for (const quality of qualities) {
-    const context = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+    // Counts depend on the aspect ratio only (16:9, as the 960×540 reference); a small canvas keeps
+    // the software renderer quick.
+    const context = await browser.newContext({ viewport: { width: 480, height: 270 }, deviceScaleFactor: 1 });
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
@@ -497,7 +511,9 @@ try {
       throw new Error(`[${quality}] not the reference setup (want frog, no items, quality ${quality})`);
     }
     for (const [view, round] of wanted) {
+      const t0 = Date.now();
       const status = await page.evaluate((v) => window.__perf.go(v), view);
+      await page.evaluate(() => window.__perf.warm());
       if (status !== 'ok') log(`[${quality}] ${view}: ${status}`);
       const samples = [];
       let stable = false;
@@ -517,7 +533,7 @@ try {
       if (round) await page.evaluate(() => window.__perf.reset());
       const b = BUDGET[quality];
       const over = b && (pick.frame.draws > b.draws || pick.frame.tris > b.tris);
-      log(`${quality.padEnd(6)} ${view.padEnd(24)} ${String(pick.frame.draws).padStart(4)} / ${fmt(pick.frame.tris).padStart(5)}${over ? ' OVER' : '     '}${stable ? ' ' : '~'}  main ${pick.main.draws}/${fmt(pick.main.tris)}  layer ${pick.layer.draws}/${fmt(pick.layer.tris)} (w${pick.layer.weak} s${pick.layer.strong})  post ${pick.post.draws}  shadow ${pick.shadow.draws}/${fmt(pick.shadow.tris)}  [hero ${pick.parts.player.draws}/${fmt(pick.parts.player.tris)} pip ${pick.parts.pip.draws}/${fmt(pick.parts.pip.tris)}]${pick.mainRenders !== 1 ? ` mainRenders=${pick.mainRenders}` : ''}`);
+      log(`${quality.padEnd(6)} ${view.padEnd(24)} ${String(pick.frame.draws).padStart(4)} / ${fmt(pick.frame.tris).padStart(5)}${over ? ' OVER' : '     '}${stable ? ' ' : '~'}  main ${pick.main.draws}/${fmt(pick.main.tris)}  layer ${pick.layer.draws}/${fmt(pick.layer.tris)} (w${pick.layer.weak} s${pick.layer.strong})  post ${pick.post.draws}  shadow ${pick.shadow.draws}/${fmt(pick.shadow.tris)}  [hero ${pick.parts.player.draws}/${fmt(pick.parts.player.tris)} pip ${pick.parts.pip.draws}/${fmt(pick.parts.pip.tris)}]${pick.mainRenders !== 1 ? ` mainRenders=${pick.mainRenders}` : ''} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
       if (detail) printDetail(row);
     }
     if (errors.length) log(`[${quality}] page errors:`, errors.slice(0, 3));
