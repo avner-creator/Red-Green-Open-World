@@ -1,14 +1,17 @@
 /**
  * Line-up: the pure game state (no scene; the mechanic and the unit-test simulations share it).
  *
- * Bubbles live in slots (one at tiers 1–2, two at tier 3). The child presses Use while standing on
- * the pad: if a live bubble is inside the ring it pops (gems), otherwise the oldest live bubble
- * floats away (a miss) and the ring recharges for `missCooldown` seconds, during which presses do
- * nothing. After EVERY press that counts, and every time-out, the ring's offset is redrawn.
+ * The booth kit's round drives it: each try of a round (`open()`) brings the bubbles up to the
+ * number the round's tier wants (one at tiers 1–2, two at tier 3). The child taps Use while
+ * standing on the pad: if a live bubble is inside the ring it pops (a hit), otherwise the oldest
+ * live bubble floats away (a miss). A bubble left alone for `lifetime` seconds floats away too
+ * (a miss). Every outcome is reported once through `hooks.result`, and after EVERY tap that counts
+ * and every time-out the ring's offset is redrawn. Taps and time-outs only count while a try is
+ * open (`playing`); pops and drifts keep animating meanwhile.
  */
 import type { GlassesTier } from '../../../types';
-import { drawOffset, glide, nextTier } from './aim';
-import type { Offset, TierState } from './aim';
+import { drawOffset, glide } from './aim';
+import type { Offset } from './aim';
 import { LINEUP } from './constants';
 
 export type BubbleState = 'empty' | 'wait' | 'in' | 'live' | 'pop' | 'drift';
@@ -17,18 +20,18 @@ export interface GameBubble {
   state: BubbleState;
   /** Seconds in the current state (negative while waiting to appear). */
   t: number;
-  /** Seconds alive (in + live). */
+  /** Seconds alive (in + live, while a try is open). */
   age: number;
   tier: GlassesTier;
 }
 
 export interface LineupHooks {
-  result?(tier: GlassesTier, hit: boolean): void;
-  pay?(gems: number): void;
+  /** One per tap that counts and per time-out (the round's tier). */
+  result?(tier: GlassesTier, hit: boolean, slot: number): void;
   /** Slot `i` got a new bubble (pick its spot now). */
   spawned?(i: number): void;
   popped?(i: number): void;
-  /** Slot `i` floats away: a missed press or a time-out. */
+  /** Slot `i` floats away: a missed tap or a time-out. */
   missed?(i: number, why: 'press' | 'timeout'): void;
 }
 
@@ -36,13 +39,10 @@ export type PressOutcome = 'ignored' | 'hit' | 'miss';
 
 export class LineupGame {
   readonly bubbles: GameBubble[];
-  ladder: TierState = { tier: 1, streak: 0 };
-  /** Fixed tier (tests / simulations); null = the ladder. */
-  lockTier: GlassesTier | null = null;
-  cooldown = 0;
+  /** The round's tier (set by the booth's round on every try). */
+  tier: GlassesTier = 1;
   pops = 0;
   misses = 0;
-  gems = 0;
   presses = 0;
   private from: Offset;
   private to: Offset;
@@ -54,10 +54,6 @@ export class LineupGame {
   ) {
     this.bubbles = Array.from({ length: LINEUP.bubble.slots }, () => ({ state: 'empty' as BubbleState, t: 0, age: 0, tier: 1 as GlassesTier }));
     this.from = this.to = drawOffset(rng);
-  }
-
-  get tier(): GlassesTier {
-    return this.lockTier ?? this.ladder.tier;
   }
 
   /** How many bubbles show at the current tier. */
@@ -83,19 +79,17 @@ export class LineupGame {
     this.glideT = 99;
   }
 
-  /** Cooldown progress 0..1 (1 = ready). */
-  charge(): number {
-    return this.cooldown <= 0 ? 1 : 1 - this.cooldown / LINEUP.missCooldown;
-  }
-
   canPress(): boolean {
-    return this.cooldown <= 0 && this.bubbles.some((b) => b.state === 'live');
+    return this.bubbles.some((b) => b.state === 'live');
   }
 
-  step(dt: number): void {
+  /**
+   * Advance time. `playing`: a try is open (live bubbles age and may time out); otherwise only
+   * the animations run (spawn-in, pop, drift).
+   */
+  step(dt: number, playing = true): void {
     const B = LINEUP.bubble;
     this.glideT += dt;
-    this.cooldown = Math.max(0, this.cooldown - dt);
     for (let i = 0; i < this.bubbles.length; i++) {
       const b = this.bubbles[i];
       b.t += dt;
@@ -107,17 +101,20 @@ export class LineupGame {
           }
           break;
         case 'in':
-          b.age += dt;
+          if (playing) b.age += dt;
           if (b.t >= B.spawnIn) {
             b.state = 'live';
             b.t = 0;
           }
           break;
         case 'live':
+          if (!playing) break;
           b.age += dt;
           if (b.age >= B.lifetime) {
             this.drift(i, 'timeout');
             this.redraw();
+            // One result per try: the round's beat starts now.
+            return;
           }
           break;
         case 'pop':
@@ -130,49 +127,50 @@ export class LineupGame {
           break;
       }
     }
-    this.fill();
   }
 
-  /** Bring bubbles up to the number wanted (each after the respawn delay; the first at once). */
-  fill(atOnce = false): void {
-    const busy = this.bubbles.filter((b) => b.state !== 'empty').length;
+  /** A try opens: bring the bubbles up to the number wanted at `tier` (new ones appear at once). */
+  open(tier: GlassesTier): void {
+    this.tier = tier;
+    const busy = this.bubbles.filter((b) => b.state === 'wait' || b.state === 'in' || b.state === 'live').length;
     let need = this.wanted() - busy;
-    for (let i = 0; i < this.bubbles.length && need > 0; i++) {
+    // Empty slots first, so a pop or a drift can finish its animation.
+    const order = [...this.bubbles.keys()].sort((a, c) => Number(this.bubbles[a].state !== 'empty') - Number(this.bubbles[c].state !== 'empty'));
+    for (const i of order) {
+      if (need <= 0) break;
       const b = this.bubbles[i];
-      if (b.state !== 'empty') continue;
+      if (b.state !== 'empty' && b.state !== 'pop' && b.state !== 'drift') continue;
       b.state = 'wait';
-      b.t = atOnce ? 0 : -LINEUP.bubble.respawnDelay;
+      b.t = 0;
       b.age = 0;
-      b.tier = this.tier;
+      b.tier = tier;
       need--;
       this.hooks.spawned?.(i);
     }
   }
 
-  /** The child pressed Use; `inside` = a slot whose live bubble is inside the ring, or −1. */
+  /** The child tapped Use; `inside` = a slot whose live bubble is inside the ring, or −1. */
   press(inside: number): PressOutcome {
     if (!this.canPress()) return 'ignored';
     this.presses++;
     const b = inside >= 0 ? this.bubbles[inside] : undefined;
+    let out: PressOutcome;
     if (b && b.state === 'live') {
       b.state = 'pop';
       b.t = 0;
       this.pops++;
-      const n = LINEUP.gems[b.tier];
-      this.gems += n;
-      this.hooks.result?.(b.tier, true);
-      this.hooks.pay?.(n);
+      out = 'hit';
       this.hooks.popped?.(inside);
-      this.ladder = nextTier(this.ladder, true);
+      this.hooks.result?.(b.tier, true, inside);
     } else {
       let oldest = -1;
       for (let i = 0; i < this.bubbles.length; i++)
         if (this.bubbles[i].state === 'live' && (oldest < 0 || this.bubbles[i].age > this.bubbles[oldest].age)) oldest = i;
       this.drift(oldest, 'press');
-      this.cooldown = LINEUP.missCooldown;
+      out = 'miss';
     }
     this.redraw();
-    return b && b.state === 'pop' ? 'hit' : 'miss';
+    return out;
   }
 
   private drift(i: number, why: 'press' | 'timeout'): void {
@@ -180,25 +178,33 @@ export class LineupGame {
     b.state = 'drift';
     b.t = 0;
     this.misses++;
-    this.hooks.result?.(b.tier, false);
     this.hooks.missed?.(i, why);
-    this.ladder = nextTier(this.ladder, false);
+    this.hooks.result?.(b.tier, false, i);
   }
 
-  /** Everything gone (leaving the far-idle range, a new session keeps the ladder via `reset`). */
+  /** The round is over or cancelled: every bubble still up floats away quietly (no result). */
+  close(): void {
+    for (const b of this.bubbles) {
+      if (b.state === 'live' || b.state === 'in') {
+        b.state = 'drift';
+        b.t = 0;
+      } else if (b.state === 'wait') b.state = 'empty';
+    }
+  }
+
+  /** Everything gone at once (far-idle). */
   clear(): void {
     for (const b of this.bubbles) {
       b.state = 'empty';
       b.t = 0;
       b.age = 0;
     }
-    this.cooldown = 0;
   }
 
   reset(): void {
     this.clear();
-    this.ladder = { tier: 1, streak: 0 };
-    this.pops = this.misses = this.gems = this.presses = 0;
+    this.tier = 1;
+    this.pops = this.misses = this.presses = 0;
     this.setOffset(drawOffset(this.rng));
   }
 }

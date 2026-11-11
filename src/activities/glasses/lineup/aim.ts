@@ -125,16 +125,3 @@ export function aimForReticle(target: V3, o: Offset): V3 {
 export function onTarget(reticle: V3, toBubble: V3, tier: GlassesTier): boolean {
   return angleBetween(reticle, toBubble) <= tolerance(tier);
 }
-
-/** Line-up tier ladder: two pops in a row climb one tier, a miss drops one. */
-export interface TierState {
-  tier: GlassesTier;
-  streak: number;
-}
-
-export function nextTier(s: TierState, hit: boolean): TierState {
-  if (!hit) return { tier: Math.max(1, s.tier - 1) as GlassesTier, streak: 0 };
-  const streak = s.streak + 1;
-  if (streak >= 2 && s.tier < 3) return { tier: (s.tier + 1) as GlassesTier, streak: 0 };
-  return { tier: s.tier, streak };
-}

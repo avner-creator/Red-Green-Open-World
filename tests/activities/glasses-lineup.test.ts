@@ -7,7 +7,6 @@ import {
   fromXY,
   glide,
   inRegion,
-  nextTier,
   normalize,
   onTarget,
   regionArea,
@@ -16,8 +15,13 @@ import {
   toXY,
 } from '../../src/activities/glasses/lineup/aim';
 import type { V3 } from '../../src/activities/glasses/lineup/aim';
-import { LINEUP } from '../../src/activities/glasses/lineup/constants';
+import { RoundMachine } from '../../src/activities/glasses/booth/round';
+import { simulate } from '../../src/activities/glasses/booth/sim';
+import { GLASSES } from '../../src/activities/glasses/constants';
+import { LINEUP, LINEUP_PRIZE, LINEUP_RULES, lineupBooth } from '../../src/activities/glasses/lineup/constants';
+import { LINEUP_DEMO } from '../../src/activities/glasses/lineup/demo';
 import { LineupGame } from '../../src/activities/glasses/lineup/game';
+import { boothFootprint } from '../../src/activities/glasses/lineup/layout';
 import { mulberry32 } from '../../src/vision/toolkit/rng';
 import type { GlassesTier } from '../../src/types';
 
@@ -34,28 +38,46 @@ interface XY {
 type Strategy = (t: number, game: LineupGame, rnd: () => number, delta: readonly XY[]) => { p: XY; press: boolean };
 
 /**
- * Play `minutes` of line-up in screen-angle space. The player steers the camera so that the first
+ * Play `minutes` of line-up rounds against the REAL round machine and rules (wired as the mechanic
+ * wires them): a round starts `restart` s after the booth is idle again; each try opens the
+ * bubbles; a tap or a time-out reports the try. The player steers the camera so that the first
  * live bubble sits at screen offset `p`; a second bubble (tier 3) sits at a fixed other offset
  * (another spot in the world, ≥ 14° away). A press counts the bubble inside the ring, if any.
  */
-function play(seed: number, strategy: Strategy, minutes: number, lock: GlassesTier | null): { presses: number; hits: number; gems: number } {
+function play(seed: number, strategy: Strategy, minutes: number, lock: GlassesTier | null, restart = 1.5): { presses: number; hits: number; gems: number; rounds: number } {
   const rnd = mulberry32(seed ^ 0x5bd1e995);
   const delta: XY[] = [
     { x: 0, y: 0 },
     { x: 0, y: 0 },
   ];
+  const m = new RoundMachine(LINEUP_RULES);
   const game = new LineupGame(mulberry32(seed), {
     spawned: (i) => {
-      const other = game.bubbles.some((b, j) => j !== i && b.state !== 'empty');
+      const other = game.bubbles.some((b, j) => j !== i && (b.state === 'live' || b.state === 'in' || b.state === 'wait'));
       const a = rnd() * Math.PI * 2;
-      const m = (14 + rnd() * 16) * DEG;
-      delta[i] = other ? { x: Math.cos(a) * m, y: Math.sin(a) * m } : { x: 0, y: 0 };
+      const r = (14 + rnd() * 16) * DEG;
+      delta[i] = other ? { x: Math.cos(a) * r, y: Math.sin(a) * r } : { x: 0, y: 0 };
     },
+    result: (_t, hit) => m.report(hit),
   });
-  game.lockTier = lock;
-  game.fill(true);
+  let gems = 0;
+  let idle = 0;
   for (let t = 0; t < minutes * 60; t += DT) {
-    game.step(DT);
+    if (lock) m.tier = lock;
+    if (m.phase === 'idle') {
+      idle += DT;
+      if (idle >= restart) {
+        m.start();
+        idle = 0;
+      }
+    }
+    for (const e of m.step(DT)) {
+      if (e.type === 'try') game.open(e.tier);
+      else if (e.type === 'end' || e.type === 'cancel') game.close();
+      else if (e.type === 'pay') gems += e.gems;
+    }
+    game.step(DT, m.phase === 'play');
+    if (m.phase !== 'play') continue;
     const { p, press } = strategy(t, game, rnd, delta);
     if (!press) continue;
     const ring = toXY(game.offset());
@@ -65,7 +87,7 @@ function play(seed: number, strategy: Strategy, minutes: number, lock: GlassesTi
     });
     game.press(inside);
   }
-  return { presses: game.presses, hits: game.pops, gems: game.gems };
+  return { presses: game.presses, hits: game.pops, gems, rounds: m.rounds };
 }
 
 const mash = (p: XY): Strategy => () => ({ p, press: true });
@@ -109,52 +131,151 @@ describe('line-up ring offsets', () => {
     for (const t of TIERS) expect((Math.PI * tolerance(t) ** 2 * (t >= 3 ? 2 : 1)) / regionArea()).toBeLessThan(0.08);
   });
 
-  it('tier ladder: two pops climb, a miss drops, within 1..3', () => {
-    let s = { tier: 1 as GlassesTier, streak: 0 };
-    s = nextTier(nextTier(s, true), true);
-    expect(s.tier).toBe(2);
-    s = nextTier(nextTier(nextTier(nextTier(s, true), true), true), true);
-    expect(s.tier).toBe(3);
-    expect(nextTier(s, false)).toEqual({ tier: 2, streak: 0 });
-    expect(nextTier({ tier: 1, streak: 1 }, false)).toEqual({ tier: 1, streak: 0 });
-  });
 });
 
-describe('line-up game: press to pop, one guess per bubble', () => {
-  it('a miss floats the oldest bubble away, reports it, recharges the ring and redraws it', () => {
+describe('line-up game: one tap per bubble', () => {
+  const open = (g: LineupGame, tier: GlassesTier = 1): void => {
+    g.open(tier);
+    for (let i = 0; i < 40; i++) g.step(DT);
+  };
+
+  it('a tap off the bubble floats it away and reports one miss; the ring is redrawn; no recharge', () => {
     const results: [number, boolean][] = [];
     const g = new LineupGame(mulberry32(1), { result: (t, h) => results.push([t, h]) });
-    g.fill(true);
-    for (let i = 0; i < 40; i++) g.step(DT);
+    open(g);
     const before = g.offset();
     expect(g.press(-1)).toBe('miss');
     expect(results).toEqual([[1, false]]);
     expect(g.bubbles[0].state).toBe('drift');
-    expect(g.cooldown).toBe(LINEUP.missCooldown);
     for (let i = 0; i < 20; i++) g.step(DT);
     expect(g.offset()).not.toEqual(before);
-    expect(g.press(0)).toBe('ignored'); // recharging
+    // The next try's bubble can be tapped at once.
+    open(g);
+    const live = g.bubbles.findIndex((b) => b.state === 'live');
+    expect(g.press(live)).toBe('hit');
+    expect(results).toEqual([
+      [1, false],
+      [1, true],
+    ]);
   });
 
-  it('a hit pops, pays the tier and redraws; a time-out is a miss', () => {
-    const paid: number[] = [];
-    const g = new LineupGame(mulberry32(2), { pay: (n) => paid.push(n) });
-    g.fill(true);
-    for (let i = 0; i < 40; i++) g.step(DT);
+  it('a hit pops and redraws; a bubble left alone times out as a miss (only while the try is open)', () => {
+    const results: boolean[] = [];
+    const g = new LineupGame(mulberry32(2), { result: (_t, h) => results.push(h) });
+    open(g);
+    const before = g.offset();
     expect(g.press(0)).toBe('hit');
-    expect(paid).toEqual([LINEUP.gems[1]]);
-    for (let t = 0; t < 20; t += DT) g.step(DT);
-    expect(g.misses).toBe(1); // the next bubble timed out after 15 s
+    expect(g.bubbles[0].state).toBe('pop');
+    for (let i = 0; i < 20; i++) g.step(DT);
+    expect(g.offset()).not.toEqual(before);
+    open(g, 2);
+    // Not playing (off the pad / between tries): no time-out however long.
+    for (let t = 0; t < 30; t += DT) g.step(DT, false);
+    expect(results).toEqual([true]);
+    const o = g.offset();
+    for (let t = 0; t < LINEUP.bubble.lifetime + 1; t += DT) g.step(DT);
+    expect(results).toEqual([true, false]);
+    expect(g.misses).toBe(1);
+    expect(g.offset(), 'a time-out redraws the ring').not.toEqual(o);
   });
 
-  it('tier 3 shows two bubbles, tiers 1–2 one', () => {
+  it('tier 3 shows two bubbles, tiers 1–2 one; close() floats them away with no result', () => {
     for (const t of TIERS) {
-      const g = new LineupGame(mulberry32(3));
-      g.lockTier = t;
-      g.fill(true);
-      for (let i = 0; i < 90; i++) g.step(DT);
+      const results: boolean[] = [];
+      const g = new LineupGame(mulberry32(3), { result: (_t, h) => results.push(h) });
+      open(g, t);
       expect(g.bubbles.filter((b) => b.state === 'live').length).toBe(t >= 3 ? 2 : 1);
+      g.close();
+      expect(g.bubbles.filter((b) => b.state === 'live').length).toBe(0);
+      expect(results).toEqual([]);
     }
+  });
+});
+
+describe('line-up rounds (booth kit)', () => {
+  it('5 bubbles a round, a prize from 3 pops, tier up after 4+ and down after 2 or fewer', () => {
+    expect(LINEUP_RULES.tries).toBe(5);
+    expect(LINEUP_RULES.minHits).toBe(3);
+    for (const tier of TIERS) {
+      expect(LINEUP_PRIZE[tier].length).toBe(6);
+      expect(LINEUP_PRIZE[tier].slice(0, 3)).toEqual([0, 0, 0]);
+      for (let h = 4; h <= 5; h++) expect(LINEUP_PRIZE[tier][h]).toBeGreaterThan(LINEUP_PRIZE[tier][h - 1]);
+    }
+    const m = new RoundMachine(LINEUP_RULES);
+    const round = (hits: number): void => {
+      m.start();
+      for (let i = 0; i < 400 && m.phase !== 'play'; i++) m.step(DT);
+      for (let k = 0; k < 5; k++) {
+        m.report(k < hits);
+        for (let i = 0; i < 400 && m.phase === 'beat'; i++) m.step(DT);
+      }
+      for (let i = 0; i < 600 && m.phase !== 'idle'; i++) m.step(DT);
+    };
+    round(4);
+    expect(m.tier).toBe(2);
+    round(3);
+    expect(m.tier).toBe(2);
+    round(2);
+    expect(m.tier).toBe(1);
+  });
+
+  it('the booth stays inside the site circle and the demo has 4–6 frames', () => {
+    for (const side of [-1, 1] as const) {
+      const b = lineupBooth(side);
+      for (const p of [...boothFootprint(side), { x: b.pad.x, z: b.pad.z + (b.pad.r ?? 1) }, ...(b.decals ?? [])]) {
+        expect(Math.hypot(p.x, p.z), `side ${side}`).toBeLessThanOrEqual(GLASSES.siteRadius + 0.4);
+      }
+      expect(b.lamps).toBe(LINEUP_RULES.tries);
+      expect(b.pad.walkIn).toBe(true);
+    }
+    expect(LINEUP_DEMO.frames).toBeGreaterThanOrEqual(4);
+    expect(LINEUP_DEMO.frames).toBeLessThanOrEqual(6);
+  });
+
+  it('gems per minute: a blind tapper ≤ 6 at every tier, a child who sees the ring ≥ 25 at tier 1', () => {
+    // Blind: taps at a random spot of the region after 0.5 s (the round's real per-tap odds ≤ 8 %).
+    for (const lock of [null, 1, 2, 3] as const) {
+      let gems = 0;
+      let minutes = 0;
+      for (const s of [1, 2, 3]) {
+        const blind: Strategy = (_t, g, rnd) => {
+          const o = toXY(drawOffset(rnd));
+          return { p: { x: -o.x, y: -o.y }, press: g.canPress() && rnd() < 0.07 };
+        };
+        gems += play(s, blind, 20, lock, 0.5).gems;
+        minutes += 20;
+      }
+      console.info(`line-up blind tapper, tier ${lock ?? 'staircase'}: ${(gems / minutes).toFixed(2)} gems/min`);
+      expect(gems / minutes).toBeLessThanOrEqual(6);
+    }
+    // The kit's generic simulation with the worst blind odds (8 % a tap, a tap every 0.4 s).
+    for (const fixedTier of [undefined, 1, 2, 3] as const) expect(simulate(LINEUP_RULES, { hitP: 0.08, tryTime: 0.4, restart: 0.5, minutes: 300, fixedTier, seed: 5 }).gemsPerMinute).toBeLessThanOrEqual(6);
+    // Seeing: steers the ring onto the bubble in ~2.5 s, then taps; steps off and on the pad in 1.5 s.
+    const seeing = (aim: number): Strategy => {
+      let since = 0;
+      return (_t, g, _rnd, delta) => {
+        // The oldest live bubble first (at tier 3 the other one waits).
+        let k = -1;
+        g.bubbles.forEach((b, i) => {
+          if (b.state === 'live' && (k < 0 || b.age > g.bubbles[k].age)) k = i;
+        });
+        if (k < 0) {
+          since = 0;
+          return { p: { x: 0, y: 0 }, press: false };
+        }
+        since += DT;
+        const r0 = toXY(g.offset());
+        const p = { x: r0.x - delta[k].x, y: r0.y - delta[k].y };
+        if (since < aim) return { p, press: false };
+        since = 0;
+        return { p, press: true };
+      };
+    };
+    const t1 = play(1, seeing(2.5), 20, 1);
+    const st = play(1, seeing(2.5), 20, null);
+    console.info(`line-up seeing child: tier 1 ${(t1.gems / 20).toFixed(1)}, staircase ${(st.gems / 20).toFixed(1)} gems/min`);
+    expect(t1.gems / 20).toBeGreaterThanOrEqual(25);
+    expect(st.gems / 20).toBeGreaterThanOrEqual(t1.gems / 20);
   });
 });
 
