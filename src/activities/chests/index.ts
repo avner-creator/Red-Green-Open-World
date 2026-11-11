@@ -60,6 +60,8 @@ export interface ChestInfo {
   /** Centre and radius of the dotted "look here" circle (the key is inside, never at the centre). */
   area: [number, number, number];
   carriedKeyVisible: boolean;
+  /** With the key near the chest: the tile E would press (it stands up brighter), else -1. */
+  eTile: number;
 }
 
 /** Test hook (`window.__rgChests`, only with `?test=1`). */
@@ -142,6 +144,8 @@ interface Entry {
   placed: boolean;
   offs: (() => void)[];
   collider: { handle: number } | null;
+  /** The highlighted tile E presses (-1 none). */
+  eTile: number;
 }
 
 const easeOutBack = (t: number): number => {
@@ -150,6 +154,8 @@ const easeOutBack = (t: number): number => {
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 };
 
+/** Distance from a chest at which its E prompt shows (and, with the key, its tiles invite a step). */
+const CHEST_PROMPT_R = 4.5;
 const UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 
@@ -258,17 +264,19 @@ export function createChests(ctx: GameContext): Chests {
       placed: false,
       offs: [],
       collider: { handle: collider.handle },
+      eTile: -1,
     };
     entry.keyPos.copy(entry.keyHome);
 
     const where = (out: THREE.Vector3): THREE.Vector3 => out.set(spot.position.x, spot.position.y + 0.8, spot.position.z);
     const useChest = (): void => pressNearest(entry);
     // Two prompts at the same spot: a key icon until the key is found (the "?" badge and toast say
-    // "find the key"), then a lock icon: step on, or press E at, the right shape.
+    // "find the key"), then a foot-on-a-tile icon: step on the right shape, or press E to step on the
+    // highlighted (nearest) tile.
     const needKey: Interactable = {
       id: `${entry.id}-key`,
       position: () => where(tmp2.clone()),
-      radius: 4.5,
+      radius: CHEST_PROMPT_R,
       icon: 'key',
       enabled: () => !entry.lock.opened && !entry.lock.hasKey,
       onUse: useChest,
@@ -276,8 +284,8 @@ export function createChests(ctx: GameContext): Chests {
     const haveKey: Interactable = {
       id: `${entry.id}-lock`,
       position: () => where(tmp2.clone()),
-      radius: 4.5,
-      icon: 'lock',
+      radius: CHEST_PROMPT_R,
+      icon: 'step',
       enabled: () => !entry.lock.opened && entry.lock.hasKey,
       onUse: useChest,
     };
@@ -528,7 +536,7 @@ export function createChests(ctx: GameContext): Chests {
       const dist = Math.hypot(ctx.player.position.x - e.spot.position.x, ctx.player.position.z - e.spot.position.z);
       const hint = playing ? e.hints.update(dist, e.lock.hasKey, e.lock.opened) : null;
       if (hint === 'find-key') ctx.events.emit('ui:toast', { icon: 'key', text: 'Find the key!' });
-      else if (hint === 'step-shape') ctx.events.emit('ui:toast', { icon: 'lock', text: 'Step on the right shape!' });
+      else if (hint === 'step-shape') ctx.events.emit('ui:toast', { icon: 'step', text: 'Step on the right shape!' });
       // Pictogram badge over the chest (both eyes, from 40 m): key + "?" until found, then key → chest.
       const badge: BadgeState | null = !playing || e.lock.opened || dist > 40 ? null : e.lock.hasKey ? 'use' : e.lock.key === 'ground' ? 'find' : null;
       if (badge !== e.badgeState) {
@@ -559,6 +567,12 @@ export function createChests(ctx: GameContext): Chests {
 
       // Floor buttons: idle bob, press, boing, wrong-shape sink.
       const stepNow = playing && !e.lock.opened;
+      // With the key, near the chest: every tile pulses ("step on one") and the tile E would press
+      // (the nearest in reach) stands up brighter. All tiles alike: the lock's shape stays strong-eye only.
+      const invite = stepNow && e.lock.hasKey && dist <= CHEST_PROMPT_R;
+      const eTile = invite ? nearestButton(e.buttons, ctx.player.position.x, ctx.player.position.z, RING.useReach) : -1;
+      const pulse = invite ? 0.5 + 0.5 * Math.sin(time * 5.5) : 0;
+      e.eTile = eTile;
       for (let k = 0; k < e.buttons.length; k++) {
         const b = e.buttons[k];
         const on = stepNow && Math.hypot(ctx.player.position.x - b.x, ctx.player.position.z - b.z) <= RING.stepRadius && Math.abs(ctx.player.position.y - b.y) < 1.1;
@@ -569,7 +583,8 @@ export function createChests(ctx: GameContext): Chests {
         if (b.shake > 0) b.shake = Math.max(0, b.shake - dt * 1.8);
         const goal = e.lock.opened ? 0.85 : b.sunk > 0 ? 1 : on ? 0.8 : 0;
         b.press += (goal - b.press) * (1 - Math.exp(-14 * dt));
-        const bob = e.lock.opened || b.press > 0.3 ? 0 : Math.sin(time * 1.7 + e.index * 1.3 + k * 1.05) * 0.028 + 0.03;
+        const lift = k === eTile && b.sunk <= 0 ? 0.06 + 0.03 * pulse : 0;
+        const bob = e.lock.opened || b.press > 0.3 ? 0 : Math.sin(time * 1.7 + e.index * 1.3 + k * 1.05) * 0.028 + 0.03 + lift;
         const spring = Math.sin((1 - b.boing) * Math.PI * 3) * b.boing * 0.3;
         buttonSet.set(e.index * RING.count + k, b.symbol, {
           x: b.x,
@@ -577,7 +592,7 @@ export function createChests(ctx: GameContext): Chests {
           z: b.z,
           yaw: e.spot.yaw + Math.sin(time * 34) * 0.09 * b.shake * b.shake,
           squash: 1 - 0.38 * b.press + spring,
-          tint: e.lock.opened ? 0.8 : b.sunk > 0 ? 0.62 : on ? 1.2 : 1,
+          tint: e.lock.opened ? 0.8 : b.sunk > 0 ? 0.62 : on ? 1.2 : k === eTile ? 1.25 + 0.15 * pulse : 1 + 0.18 * pulse,
         });
       }
 
@@ -639,6 +654,7 @@ export function createChests(ctx: GameContext): Chests {
           dots: dots.runInfo(e.dotRun),
           area: [e.area.x, e.area.z, e.area.r] as [number, number, number],
           carriedKeyVisible: e.carried.group.visible,
+          eTile: e.eTile,
         })),
       hud: () => ({ keyChip: (ctx.uiRoot.querySelector('.ch-key.on') ?? null) !== null, picto: hud.showing }),
       sidePoint(i, side, dist = 5) {

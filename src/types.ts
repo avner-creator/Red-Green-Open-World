@@ -508,7 +508,9 @@ export type IconName =
   | 'bungee' | 'trampoline' | 'rocket' | 'hat' | 'cape' | 'glasses' | 'paint' | 'exit'
   | 'hand' | 'clock' | 'flop' | 'eye' | 'check'
   | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet'
-  | 'tent' | 'plane' | 'dragon' | 'cone' | 'flag' | 'bubble';
+  | 'tent' | 'plane' | 'dragon' | 'cone' | 'flag' | 'bubble'
+  /** A foot stepping onto a floor tile ("step on a tile"). */
+  | 'step';
 
 export interface Interactable {
   id: string;
