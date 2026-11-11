@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { seededRng } from '../../src/activities/glasses/idle';
-import { BOOST, TapJudge, assignPad, bestBlindRate, classifyPress, inWindow, inZone, lapDelta, passKey, ringPad, ringT, showFade, stepTier, zoneHalfT } from '../../src/activities/glasses/weave/boost/logic';
+import { BOOST, TapJudge, assignPad, bestBlindRate, classifyPress, hintNow, inWindow, inZone, lapDelta, passKey, ringPad, ringT, showFade, stepTier, zoneHalfT } from '../../src/activities/glasses/weave/boost/logic';
 import { boostPadDistances, buildTrack } from '../../src/activities/race/track';
 import { RACE } from '../../src/activities/race/config';
 import type { GlassesTier } from '../../src/types';
@@ -77,6 +77,12 @@ describe('turbo tap rules', () => {
     expect(showFade(BOOST.showFrom + 1)).toBe(0);
     expect(showFade(BOOST.showFrom - BOOST.fadeIn)).toBe(1);
     expect(lapDelta(390, 30, 400)).toBe(40);
+  });
+
+  it('the button hint: only as a race counts down, once per session', () => {
+    expect(hintNow('countdown', false)).toBe(true);
+    expect(hintNow('countdown', true)).toBe(false);
+    for (const p of ['idle', 'racing', 'finishing', 'podium', 'result']) expect(hintNow(p, false)).toBe(false);
   });
 
   it('tier: up after two hits in a row, down after a miss; pays 1 / 2 / 3', () => {

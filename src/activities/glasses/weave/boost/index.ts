@@ -12,10 +12,12 @@
  *
  * The race itself never changes: pads, boost, surge, rivals and prizes are the race's own; this
  * part only reads `getRaceView` and the input. Nothing goes into the both-eye scene or the HUD;
- * the only both-eye feedback is the `env.pay` toast and chime after a hit.
+ * the only both-eye feedback is the `env.pay` toast and chime after a hit, plus one Emote toast as
+ * the first race of a session counts down (which button; never tied to a pad).
  *
  * Active only while `phase === 'racing'`; otherwise nothing is attached and `update` returns at
- * once. At most 2 draws (the ring and the flash).
+ * once. At most 2 draws: the ring and the Emote face inside it (`./face.ts`), or the ring and a hit
+ * flash (the face is left out while a flash plays).
  */
 import type * as THREE from 'three';
 import { VisionLayer } from '../../../../types';
@@ -26,7 +28,9 @@ import { getRaceView } from '../../../race';
 import type { RaceView } from '../../../race';
 import { leftOf } from '../../../race/track';
 import type { WeaveEnv, WeavePart } from '../types';
-import { BOOST, TapJudge, bestBlindRate, inZone, ringPad, ringT, showFade, stepTier, zoneHalfT } from './logic';
+import { createEmoteFace } from './face';
+import type { EmoteFace } from './face';
+import { BOOST, TapJudge, bestBlindRate, hintNow, inZone, ringPad, ringT, showFade, stepTier, zoneHalfT } from './logic';
 import type { Outcome } from './logic';
 
 type Pad = RaceView['pads'][number];
@@ -56,6 +60,17 @@ export function create(env: WeaveEnv): WeavePart {
   let ring: TimingRingBlock | null = null;
   let ringTier: GlassesTier | 0 = 0;
   let flash: RingBlock | null = null;
+  let face: EmoteFace | null = null;
+  /** Test only: false hides the Emote face (to prove it is weak-eye only). */
+  let faceOn = true;
+  /** The once-per-session Emote toast has been shown. */
+  let hinted = false;
+  let hintToasts = 0;
+
+  function ensureFace(): EmoteFace {
+    if (!face) face = createEmoteFace(BOOST.faceRadius);
+    return face;
+  }
 
   const isAttached = (o: THREE.Object3D | null | undefined): boolean => !!o && env.tracked().includes(o);
   const attach = (o: THREE.Object3D): void => {
@@ -149,6 +164,19 @@ export function create(env: WeaveEnv): WeavePart {
       r.setFade(fade);
     } else detach(ring?.object);
 
+    // The Emote face inside the ring (which button to tap). Left out while a hit flash plays,
+    // so the part never draws more than 2 meshes.
+    const flashing = flashPad !== null && flashT >= 0 && flashT < BOOST.flashSeconds;
+    if (pad && fade > 0 && faceOn && !flashing) {
+      const f = ensureFace();
+      attach(f.mesh);
+      const s = scale();
+      f.mesh.scale.setScalar(s);
+      f.mesh.position.set(pad.x, pad.y + BOOST.ringHeight, pad.z);
+      f.mesh.rotation.set(0, Math.atan2(pad.dx, pad.dz), 0);
+      f.setOpacity(fade * withChallenge(tier, env.challenge()).opacity);
+    } else detach(face?.mesh);
+
     if (flashPad && flashT >= 0 && flashT < BOOST.flashSeconds) {
       const f = ensureFlash();
       attach(f.object);
@@ -198,10 +226,18 @@ export function create(env: WeaveEnv): WeavePart {
       hits = 0;
       misses = 0;
       presses = 0;
+      hinted = false;
+      faceOn = true;
       last = null;
     },
     update(dt) {
       const view = getRaceView(ctx);
+      // Once per session, as the first race counts down: which button is the turbo tap.
+      if (view && hintNow(view.phase, hinted)) {
+        hinted = true;
+        hintToasts++;
+        ctx.events.emit('ui:toast', { icon: 'emote' });
+      }
       if (!view || view.phase !== 'racing' || view.pads.length === 0) {
         if (active) deactivate();
         return;
@@ -228,7 +264,9 @@ export function create(env: WeaveEnv): WeavePart {
       deactivate();
       ring?.dispose();
       flash?.dispose();
+      face?.dispose();
       ring = flash = null;
+      face = null;
     },
     debug() {
       const view = getRaceView(ctx);
@@ -252,6 +290,9 @@ export function create(env: WeaveEnv): WeavePart {
         bestBlind: bestBlindRate(tier),
         ringAttached: isAttached(ring?.object),
         flashAttached: isAttached(flash?.object),
+        faceAttached: isAttached(face?.mesh),
+        hinted,
+        hintToasts,
         last,
         presses,
         hits,
@@ -265,6 +306,7 @@ export function create(env: WeaveEnv): WeavePart {
       }
       // Show this closing-ring position now (until the next update).
       if (typeof params.t === 'number') tOverride = Math.min(1, Math.max(0, params.t));
+      if (typeof params.face === 'boolean') faceOn = params.face;
       const view = getRaceView(ctx);
       if (active && view && view.phase === 'racing') place(view);
     },

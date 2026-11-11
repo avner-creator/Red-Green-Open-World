@@ -36,6 +36,7 @@ interface BoostDebug {
   tier: number;
   ringAttached: boolean;
   flashAttached: boolean;
+  faceAttached: boolean;
   last: { pad: number; along: number; across: number; outcome: 'hit' | 'miss' | null } | null;
   presses: number;
   hits: number;
@@ -56,6 +57,9 @@ const toasts = (): Promise<string[]> =>
     const w = window as unknown as { __toasts: string[] };
     return w.__toasts.splice(0);
   });
+
+/** Emote (button hint) toasts so far this page. */
+const hints = (): Promise<number> => page.evaluate(() => (window as unknown as { __hints: number }).__hints);
 
 async function results(): Promise<Result[]> {
   return page.evaluate(() => {
@@ -161,6 +165,10 @@ test.beforeAll(async ({ browser }) => {
     w.__boost = [];
     w.__boostCalls = [];
     w.__toasts = [];
+    (window as unknown as { __hints: number }).__hints = 0;
+    rg.ctx.events.on('ui:toast', (e) => {
+      if (e.icon === 'emote') (window as unknown as { __hints: number }).__hints++;
+    });
     rg.ctx.events.on('glasses:result', (e) => w.__boost.push(e));
     rg.ctx.events.on('ui:toast', (e) => {
       if (e.icon === 'gem' && /^\+\d+$/.test(e.text ?? '')) w.__toasts.push(e.text!);
@@ -191,9 +199,13 @@ test('boost: a full autopilot race with no presses: ring shown, weak channel onl
   await results();
   await toasts();
   await startRace(1);
+  // The button hint: one Emote toast as the first race of the session counted down.
+  expect(await hints()).toBe(1);
   // ~50 m and ~25 m out, then on the pad (the frame is frozen while we look).
   await driveToRing(47, 53);
-  expect(await draws()).toBe(1);
+  // The ring and the Emote face inside it.
+  expect(await draws()).toBe(2);
+  expect((await debug()).faceAttached).toBe(true);
   await shots('boost-50m');
   await driveToRing(22, 28);
   await shots('boost-25m');
@@ -204,6 +216,13 @@ test('boost: a full autopilot race with no presses: ring shown, weak channel onl
     setB: () => force({ t: 0.8 }),
     label: 'boost ring state',
   });
+  // The Emote face is weak-eye only: hidden layer, frames with and without it are identical.
+  await expectAnswerBlindWithoutWeakEye(page, {
+    setA: () => force({ face: true }),
+    setB: () => force({ face: false }),
+    label: 'boost emote face',
+  });
+  await force({ face: true });
   await driveToRing(-1, 1);
   await shots('boost-pad');
   // On to the finish, never pressing: nothing is reported, nothing is paid.
@@ -226,6 +245,7 @@ test('boost: a full autopilot race with no presses: ring shown, weak channel onl
   expect(await toasts()).toEqual([]);
   expect(d.attached).toBe(0);
   expect(await draws()).toBe(0);
+  expect(await hints()).toBe(1);
 });
 
 test('boost: a turbo tap on the pad (hit, gems, flash) and a mistimed one (miss); the race boost is unchanged', async () => {
@@ -239,6 +259,8 @@ test('boost: a turbo tap on the pad (hit, gems, flash) and a mistimed one (miss)
   });
   expect(await page.evaluate(() => window.__rgRace!.phase)).toBe('idle');
   await startRace(3);
+  // No second hint in the same session, and none at any pad of the first race.
+  expect(await hints()).toBe(1);
   await results();
   await toasts();
   const PAD = [5, 1.1, 3];
