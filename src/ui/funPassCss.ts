@@ -9,8 +9,10 @@ const CSS = `
 .rg .passchip .pi{display:flex;align-items:center;justify-content:center;width:calc(var(--u)*6);height:calc(var(--u)*6);border-radius:calc(var(--u)*1.4);background:linear-gradient(180deg,#ffe97a,var(--y));border:calc(var(--u)*.4) solid #000}
 .rg .passchip .pi .ic{font-size:calc(var(--u)*4.6);color:#fff;--out:#000}
 .rg .passchip .n{font-size:1.15em;min-width:1.2ch;text-align:center;font-variant-numeric:tabular-nums}
+.rg .passchip .of{font-size:.7em;opacity:.85;margin-left:-.35em;font-variant-numeric:tabular-nums}
+.rg .passchip .nslot{display:flex;align-items:center;justify-content:center;width:1.9em;height:1.9em;border-radius:50%;border:calc(var(--u)*.45) dashed #fff;background:#ffffff1f}
 .rg .passchip .nx{display:flex;align-items:center;gap:calc(var(--u)*.5);padding-left:calc(var(--u)*.9);border-left:calc(var(--u)*.4) solid #ffffff55;font-size:.8em;font-variant-numeric:tabular-nums}
-.rg .passchip .nx .ic{font-size:1.45em;color:var(--y)}
+.rg .passchip .nx .ic{font-size:1.25em;color:var(--y)}
 .rg .passchip.stamp{animation:rg-pstamp .7s cubic-bezier(.2,1.6,.4,1)}
 @keyframes rg-pstamp{0%{transform:scale(1)}30%{transform:scale(1.25) rotate(-4deg);filter:brightness(1.6)}100%{transform:scale(1)}}
 .rg .passpops{position:absolute;right:0;top:100%;width:0;height:0}
@@ -60,12 +62,13 @@ const CSS = `
 .rg .ptrack .pm.grand>.ic{font-size:calc(var(--u)*7)}
 .rg .ptrack .pm .g{position:absolute;top:100%;display:flex;align-items:center;gap:.1em;font-size:calc(var(--u)*2.6);white-space:nowrap}
 .rg .ptrack .pm .g .ic{color:var(--y)}
-.rg .pass-grid{display:grid;grid-template-columns:repeat(12,calc(var(--u)*8.4));gap:calc(var(--u)*1.3);justify-content:center}
+.rg .pass-grid{display:grid;grid-template-columns:repeat(12,calc(var(--u)*10.2));gap:calc(var(--u)*1.2);justify-content:center}
 .rg .pslot .wpic,.rg .passpop .wpic{display:inline-block;width:1em;height:1em}
 .rg .pslot .wpic canvas,.rg .passpop .wpic canvas{width:100%;height:100%;display:block;border-radius:50%}
-.rg .pslot{position:relative;width:calc(var(--u)*8.4);height:calc(var(--u)*8.4);border-radius:50%;display:flex;align-items:center;justify-content:center;
+.rg .pslot{position:relative;width:calc(var(--u)*10.2);height:calc(var(--u)*10.2);border-radius:50%;display:flex;align-items:center;justify-content:center;
   border:calc(var(--u)*.45) dashed #ffffffa0;background:#0b0f22;transform:rotate(var(--r))}
-.rg .pslot>.ic,.rg .pslot>.wpic{font-size:calc(var(--u)*5.4);opacity:.38;filter:grayscale(1)}
+/* Slot pictures ≥ 44 px at 1280×720. Empty: grey but bright enough to tell apart; stamped: full colour on white + check. */
+.rg .pslot>.ic,.rg .pslot>.wpic{font-size:calc(var(--u)*7.2);opacity:.7;filter:grayscale(1)}
 .rg .pslot .ok{display:none}
 .rg .pslot.on{border:calc(var(--u)*.6) solid #000;background:#fff;box-shadow:0 0 0 calc(var(--u)*.4) #fff,0 0 calc(var(--u)*2) rgba(255,255,255,.6);animation:rg-pslot .5s cubic-bezier(.2,1.8,.4,1) both}
 .rg .pslot.on>.ic,.rg .pslot.on>.wpic{opacity:1;filter:none;color:#15110a;--out:#fff}

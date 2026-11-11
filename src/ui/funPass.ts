@@ -14,11 +14,11 @@ import { icon } from './icons';
 import { injectFunPassCss } from './funPassCss';
 import { gameplayKeyAllowed } from './gameKeys';
 
-/** Pass pictogram: a ticket card with a round stamp on it. */
+/** Pass pictogram: a stamp card, two slots stamped (dark disc + check), two still empty (dotted rings). */
 const PASS_SVG =
-  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 5.5h20v4a2.5 2.5 0 0 0 0 5v4H2v-4a2.5 2.5 0 0 0 0-5z"/>' +
-  '<circle class="k" cx="15" cy="12" r="4.3"/><path d="M15 9.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" style="stroke:none"/>' +
-  '<path class="l" d="M5 9h5M5 12h4M5 15h5"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="1.5" y="3" width="21" height="18" rx="2.5"/>' +
+  '<circle class="k" cx="7.5" cy="8.5" r="3.1"/><path d="M6.0 8.6l1.1 1.1 2.1-2.3" style="fill:none;stroke:currentColor;stroke-width:1.5"/><circle class="k" cx="16.5" cy="8.5" r="3.1"/><path d="M15.0 8.6l1.1 1.1 2.1-2.3" style="fill:none;stroke:currentColor;stroke-width:1.5"/>' +
+  '<circle class="l" cx="7.5" cy="15.5" r="2.8" style="stroke-dasharray:1.4 1.2"/><circle class="l" cx="16.5" cy="15.5" r="2.8" style="stroke-dasharray:1.4 1.2"/></svg>';
 
 export function passIcon(cls = ''): HTMLElement {
   const el = h('span', `ic ${cls}`.trim());
@@ -67,12 +67,15 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
   // ── HUD chip ──
   const countText = h('span', 't n', {}, '0');
   const nextBox = h('span', 'nx');
+  // Reads as a stamp card: card pictogram, "stamps / slots", then the next stamp to earn as an
+  // empty dotted stamp ring holding the next goal's picture.
   const chip = h(
     'button',
     'passchip',
     { type: 'button', 'aria-label': 'Fun Pass', 'data-testid': 'missions' },
     h('span', 'pi', {}, passIcon()),
     countText,
+    h('span', 't of', {}, `/${total}`),
     nextBox,
   );
   chip.addEventListener('click', () => {
@@ -141,12 +144,13 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
     // "Next stamp": the first unfinished goal (icon + progress), else the next prize.
     nextBox.replaceChildren();
     const m = ctx.economy.missions.find((x) => !x.done);
+    const ring = (el: HTMLElement): HTMLElement => h('span', 'nslot', { 'data-testid': 'next-stamp' }, el);
     if (m) {
-      nextBox.append(icon(m.icon), h('span', 't', {}, `${Math.min(m.progress, m.target)}/${m.target}`));
+      nextBox.append(ring(icon(m.icon)), h('span', 't', {}, `${Math.min(m.progress, m.target)}/${m.target}`));
     } else {
       const nm = nextMilestone(got.size, total);
-      if (nm !== null) nextBox.append(icon('chest'), h('span', 't', {}, String(nm)));
-      else nextBox.append(icon('jackpot'));
+      if (nm !== null) nextBox.append(ring(icon('chest')), h('span', 't', {}, String(nm)));
+      else nextBox.append(ring(icon('jackpot')));
     }
   };
 
