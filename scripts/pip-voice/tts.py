@@ -5,6 +5,7 @@ Called by scripts/gen-pip-voice.mjs:
 jobs.json is a list of {"id": "...", "spoken": "..."}; writes <out_dir>/<id>.wav (24 kHz mono).
 """
 import json
+import os
 import sys
 
 import numpy as np
@@ -15,7 +16,8 @@ from kokoro_onnx import Kokoro
 def main() -> None:
     model, voice_bin, jobs_path, out_dir = sys.argv[1:5]
     style = np.fromfile(voice_bin, dtype=np.float32).reshape(-1, 1, 256)
-    voices_npz = out_dir + "/_voice.npz"
+    # One per shard (parallel shards share out_dir): next to the shard's jobs file.
+    voices_npz = os.path.join(os.path.dirname(jobs_path), "_voice.npz")
     np.savez(voices_npz, pip=style)
     tts = Kokoro(model, voices_npz)
     with open(jobs_path, encoding="utf-8") as f:

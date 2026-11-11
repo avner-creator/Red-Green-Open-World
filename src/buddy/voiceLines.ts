@@ -7,12 +7,12 @@
 import { MISSION_POOL } from '../activities/economy/missions';
 import type { MissionState } from '../types';
 import { EARN_GOAL, missionGoal } from './goals';
-import { ATTRACTIONS, CHEST, CHUTE, COUNT, EXPLAIN, IDLE, INTRO, REACT, RESCUE, RETURNING, TIPS, follow, needGems, skillTip, suggest } from './script';
+import { ATTRACTIONS, CHEST, CHUTE, COUNT, ECON, EXPLAIN, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, SUNSET, TIPS, follow, needGems, skillTip, suggest } from './script';
 import type { ScriptLine } from './script';
 import type { Attraction } from './types';
 
 /** Largest "Need N more gems!" with its own clip (bigger numbers use on-device speech). */
-export const NEED_GEMS_MAX = 30;
+export const NEED_GEMS_MAX = 12;
 
 export interface VoiceLine {
   /** Clip id (file name stem), from `clipId(text)`. */
@@ -54,20 +54,25 @@ function missionLines(): ScriptLine[] {
 export function allVoiceLines(): VoiceLine[] {
   const names = Object.keys(ATTRACTIONS) as Attraction[];
   const lines: string[] = [
+    // The welcome story first: `voice.ts` prefetches clips in this order.
+    ...STORY.map((l) => l.text),
     ...Object.values(INTRO).map((l) => l.text),
+    ...HOWTO.trampoline.map((l) => l.text),
+    ...FOLLOW_AGAIN,
     RETURNING.text,
     RESCUE.text,
+    ...Object.values(ECON).map((l) => l.text),
+    ...Object.values(HOWTO).flatMap((ls) => ls.map((l) => l.text)),
     ...Object.values(TIPS).map((l) => l.text),
     ...Object.values(EXPLAIN).map((l) => l?.text ?? ''),
-    ...names.map((a) => ATTRACTIONS[a].howTo(KEYS).text),
     ...names.map((a) => suggest(a).text),
     ...names.map((a) => follow(a).text),
     ...Object.values(CHEST).map((l) => l.text),
     CHUTE(KEYS).text,
     skillTip('Q').text,
-    ...IDLE.map((l) => l.text),
-    ...Object.values(REACT).map((l) => l.text),
+    ...Object.values(POOLS).flatMap((ls) => ls.map((l) => l.text)),
     ...COUNT,
+    SUNSET.text,
     ...Array.from({ length: NEED_GEMS_MAX }, (_, i) => needGems(i + 1).text),
     ...missionLines().map((l) => l.text),
     'Open a treasure chest!',

@@ -26,6 +26,24 @@ export interface Line {
   id?: string;
   /** Seconds the line may wait in the queue before it is dropped (default by priority). */
   ttl?: number;
+  /** Pure praise / reaction: spoken with no bubble when Pip's voice is audible. */
+  praise?: boolean;
+  /** May cut a story line short (the child asked, or skipped). Other story lines wait their turn. */
+  interrupt?: boolean;
+}
+
+/** A line whose clip is still playing is held at most this many seconds past its planned end. */
+export const VOICE_HOLD_MAX = 6;
+
+export type BubbleMode = 'none' | 'compact' | 'full';
+
+/**
+ * How a line shows: with Pip's voice audible (voice on, audio unlocked, a clip exists) only a
+ * compact pictogram bubble, or nothing for pure praise; with no voice the full text bubble.
+ */
+export function bubbleMode(line: Pick<Line, 'praise'>, audible: boolean): BubbleMode {
+  if (!audible) return 'full';
+  return line.praise ? 'none' : 'compact';
 }
 
 export interface ActiveLine {
@@ -76,6 +94,8 @@ export class DialogueQueue {
   onDone: (line: Line, interrupted: boolean) => void = () => {};
   /** Seconds of the line's voice clip, when known (keeps the bubble up while Pip talks). */
   clipSeconds: (line: Line) => number | null = () => null;
+  /** True while the voice is still saying the current line (it is never cut mid-word). */
+  talking: () => boolean = () => false;
 
   get queued(): readonly Line[] {
     return this.waiting.map((w) => w.line);
@@ -98,9 +118,9 @@ export class DialogueQueue {
       return 'now';
     }
     if (cur.line.text === line.text) return 'dropped';
-    // Story lines replace each other (the newest story beat wins); otherwise only a strictly
-    // higher priority interrupts.
-    const storyBeat = line.priority === PRIORITY.story && cur.line.priority === PRIORITY.story;
+    // A story line waits for the one being told (unless it may interrupt: the child asked or
+    // skipped); otherwise only a strictly higher priority interrupts.
+    const storyBeat = line.priority === PRIORITY.story && cur.line.priority === PRIORITY.story && !!line.interrupt;
     if (line.priority > cur.line.priority || storyBeat) {
       // A tip line that got interrupted goes back to the front of the queue.
       if (!storyBeat && cur.line.priority >= PRIORITY.tip && cur.t < cur.reveal) this.enqueue(cur.line, true);
@@ -132,7 +152,7 @@ export class DialogueQueue {
     const cur = this.current;
     if (cur) {
       cur.t += dt;
-      if (cur.t >= cur.duration) {
+      if (cur.t >= cur.duration && !(this.talking() && cur.t < cur.duration + VOICE_HOLD_MAX)) {
         this.finish(false);
         this.next();
       }

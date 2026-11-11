@@ -1,9 +1,15 @@
 /**
- * Pip's UI: the speech bubble (one at a time, typewriter, anchored above Pip and kept off the
- * hero), HUD callouts (ring + wobbling arrow around an element) and the round "Pip" button.
- * Created by `src/buddy/index.ts`; everything lives inside `ctx.uiRoot`.
+ * Pip's UI: the speech bubble, HUD callouts (ring + wobbling arrow around an element) and the round
+ * "Pip" button. Created by `src/buddy/index.ts`; everything lives inside `ctx.uiRoot`.
+ *
+ * The bubble is ONE element docked above the Pip button (which wags while he talks): its place is
+ * worked out once when a line starts (off the hero and the HUD, inside the safe area) and kept for
+ * the whole line, so it never jumps, flickers or follows the 3D puppy around. It moves only if a
+ * HUD piece appears under it (checked twice a second) or the window is resized.
+ * Modes (`bubbleMode`): 'compact' = pictograms + button only (Pip's voice says the words),
+ * 'full' = pictograms + text (voice off or unavailable), 'none' = no bubble (praise while voiced).
  */
-import type { ActiveLine } from '../../buddy/dialogue';
+import type { ActiveLine, BubbleMode } from '../../buddy/dialogue';
 import { PRIORITY } from '../../buddy/dialogue';
 import { HUD } from '../../buddy/script';
 import type { HudKey } from '../../buddy/script';
@@ -18,13 +24,13 @@ import type { Rect } from './place';
 export interface BuddyUi {
   readonly button: HTMLButtonElement;
   readonly bubble: HTMLElement;
-  /** Show a line (null hides the bubble). */
-  show(active: ActiveLine | null): void;
+  /** Show a line (null hides the bubble) in a mode ('full' by default). */
+  show(active: ActiveLine | null, mode?: BubbleMode): void;
   /**
-   * Per frame: typewriter fraction, Pip's head on screen (px in uiRoot space, null = off screen:
-   * the bubble docks next to the Pip button) and the hero's screen box to keep clear.
+   * Per frame (game seconds): typewriter fraction (full mode), Pip's head on screen (px in uiRoot
+   * space; `on` false = the screen-edge point towards him) and the hero's screen box to keep clear.
    */
-  update(reveal: number, pip: { x: number; y: number; on?: boolean } | null, hero: Rect | null): void;
+  update(dt: number, reveal: number, pip: { x: number; y: number; on?: boolean } | null, hero: Rect | null): void;
   setDevice(device: 'keyboard' | 'gamepad' | 'touch'): void;
   /** HUD element under the last mouse position, if Pip can explain it. */
   hovered(): HudKey | null;
@@ -35,6 +41,11 @@ export interface BuddyUi {
 
 const ARROW =
   '<svg viewBox="0 0 60 40" aria-hidden="true"><path d="M2 20 L26 2 L26 12 L58 12 L58 28 L26 28 L26 38 Z" fill="#ffd93b" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/><path d="M8 20 L24 8" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8"/></svg>';
+
+/** Seconds between "is the bubble covered?" checks. */
+const CHECK_EVERY = 0.25;
+/** The bubble moves only after its spot has been covered this long (then it eases). */
+export const OCCLUDED_MOVE = 0.5;
 
 export function createBuddyUi(root: HTMLElement): BuddyUi {
   injectBuddyCss();
@@ -53,7 +64,19 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   root.append(ring, arrow, button, bubble);
 
   let active: ActiveLine | null = null;
+  let mode: BubbleMode = 'full';
   let revealed = -1;
+  let heroBox: Rect | null = null;
+  let pipAt: { x: number; y: number; on?: boolean } | null = null;
+  /** Seconds until the next "is the bubble covered now?" check. */
+  let recheck = 0;
+  /** Seconds the bubble has been badly placed in a row (moves only after OCCLUDED_MOVE). */
+  let occludedT = 0;
+  /** The bubble moves at most once per line (then it stays, even if covered again). */
+  let movedThisLine = false;
+  /** Bubble's left edge and the tail x (eased towards Pip each frame). */
+  let boxX = 0;
+  let tailX = 0;
   let callout: string | null = null;
   let device: 'keyboard' | 'gamepad' | 'touch' | null = null;
   /** Draw the action glyph (key cap / pad button / touch gesture) for the current device. */
@@ -88,14 +111,54 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
     const m = Math.max(8, Math.min(w, hh) * 0.02);
     // Keep clear of the top HUD row (wallet, timer, compass).
     const top = Math.max(m, hh * 0.13);
-    return { x: m, y: top, w: w - 2 * m, h: hh - top - m };
+    // The Pip button sits inside the safe area (notch): never dock further left than it.
+    const host = root.getBoundingClientRect();
+    const left = Math.max(m, button.getBoundingClientRect().left - host.left);
+    return { x: left, y: top, w: w - left - m, h: hh - top - m };
   };
 
+  /**
+   * Choose the bubble's spot: above Pip's head when he is on screen, else docked above the Pip
+   * button; off the hero and the HUD. Called when a line starts, on resize, and when the spot has
+   * been covered for OCCLUDED_MOVE seconds (then it eases over ~200 ms) — never per frame.
+   */
+  const place = (ease = false): void => {
+    if (!active || mode === 'none') return;
+    const host = root.getBoundingClientRect();
+    const b = button.getBoundingClientRect();
+    const u = Math.max(5, Math.min(22, Math.min(host.width, host.height) * 0.01));
+    const anchor = pipAt && pipAt.on !== false ? pipAt : { x: b.left - host.left + b.width / 2, y: b.top - host.top };
+    const p = placeBubble(anchor, bubble.offsetWidth, bubble.offsetHeight, bounds(), heroBox, u * 3.4, hudRects(host));
+    bubble.classList.toggle('ease', ease);
+    bubble.style.left = `${Math.round(p.x)}px`;
+    bubble.style.top = `${Math.round(p.y)}px`;
+    bubble.classList.toggle('below', p.below);
+    boxX = p.x;
+    tailX = p.tail;
+    bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
+  };
+
+  /** Is the bubble now badly placed: over the hero or over a HUD piece that appeared later? */
+  const covered = (): boolean => {
+    const host = root.getBoundingClientRect();
+    const r = bubble.getBoundingClientRect();
+    const me = { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
+    const hit = (a: Rect): boolean => me.x < a.x + a.w && me.x + me.w > a.x && me.y < a.y + a.h && me.y + me.h > a.y;
+    return (!!heroBox && hit(heroBox)) || hudRects(host).some(hit);
+  };
+  const onResize = (): void => {
+    place(false);
+  };
+  window.addEventListener('resize', onResize);
+
   /** Screen boxes of the HUD pieces the bubble must not cover (relative to the UI root). */
+  // Only visible controls: never the full-screen touch wrappers (touch-hud, the stick and look
+  // zones), which made every spot look blocked on phones (QA round 4-C, P3).
   const AVOID =
     '[data-testid="wallet"],[data-testid="combo"],[data-testid="missions"],[data-testid="compass"],[data-testid="skill-chip"],' +
     '[data-testid="prompt"],[data-testid="mode-strip"],[data-testid="stars"],[data-testid="timer"],[data-testid="help"],' +
-    '[data-testid^="touch-"],[data-testid="pip-button"]';
+    '[data-testid^="touch-"]:not([data-testid="touch-hud"]):not([data-testid$="-zone"]):not([data-testid="touch-rotate"]),' +
+    '[data-testid="pip-button"]';
   const hudRects = (host: DOMRect): Rect[] => {
     const out: Rect[] = [];
     for (const el of root.querySelectorAll<HTMLElement>(AVOID)) {
@@ -150,8 +213,9 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   return {
     button,
     bubble,
-    show(a) {
+    show(a, m = 'full') {
       active = a;
+      mode = a ? m : 'full';
       revealed = -1;
       callout = a?.line.callout ?? null;
       if (!callout) {
@@ -160,7 +224,17 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       }
       if (!a) {
         bubble.classList.remove('on');
+        bubble.dataset.mode = '';
         button.classList.remove('talk');
+        return;
+      }
+      button.classList.add('talk');
+      bubble.dataset.text = a.line.text;
+      bubble.dataset.icon = a.line.icon;
+      bubble.dataset.id = a.line.id ?? '';
+      bubble.dataset.mode = mode;
+      if (mode === 'none') {
+        bubble.classList.remove('on');
         return;
       }
       clear(pic);
@@ -170,41 +244,50 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       if (a.line.extra) extra.append(buddyPicto(a.line.extra));
       bubble.dataset.extra = a.line.extra ?? '';
       drawAction();
+      // Full text is laid out at once (the unrevealed part is transparent), so the size never changes.
       shown.textContent = '';
-      hidden.textContent = a.line.text;
-      bubble.dataset.text = a.line.text;
-      bubble.dataset.icon = a.line.icon;
-      bubble.dataset.id = a.line.id ?? '';
+      hidden.textContent = mode === 'full' ? a.line.text : '';
+      bubble.classList.toggle('compact', mode === 'compact');
       bubble.classList.toggle('story', a.line.priority >= PRIORITY.story);
+      place(false);
+      recheck = CHECK_EVERY;
+      occludedT = 0;
+      movedThisLine = false;
       bubble.classList.add('on');
       retrigger(bubble, 'pop');
-      button.classList.add('talk');
     },
-    update(reveal, pip, hero) {
+    update(dt, reveal, pip, hero) {
+      heroBox = hero;
+      pipAt = pip;
       if (!active) return;
-      const text = active.line.text;
-      const k = Math.round(reveal * text.length);
-      if (k !== revealed) {
-        revealed = k;
-        shown.textContent = text.slice(0, k);
-        hidden.textContent = text.slice(k);
+      if (mode === 'full') {
+        const text = active.line.text;
+        const k = Math.round(reveal * text.length);
+        if (k !== revealed) {
+          revealed = k;
+          shown.textContent = text.slice(0, k);
+          hidden.textContent = text.slice(k);
+        }
       }
-      const host = root.getBoundingClientRect();
-      const w = bubble.offsetWidth;
-      const hh = bubble.offsetHeight;
-      const u = Math.max(5, Math.min(22, Math.min(host.width, host.height) * 0.01));
-      let anchor: { x: number; y: number } | null = pip;
-      bubble.classList.toggle('edge', !!pip && pip.on === false);
-      if (!anchor) {
-        // Pip is off screen: dock beside the Pip button, tail towards it.
-        const b = button.getBoundingClientRect();
-        anchor = { x: b.left - host.left + b.width / 2, y: b.top - host.top };
+      if (mode !== 'none') {
+        // The tail swings (eased) towards Pip; the bubble itself stays put.
+        if (pip) {
+          const w = bubble.offsetWidth;
+          const r = Math.min(bubble.offsetHeight / 2, 28);
+          const want = Math.max(r, Math.min(w - r, pip.x - boxX));
+          tailX += (want - tailX) * Math.min(1, dt * 10);
+          bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
+        }
+        if (!movedThisLine && (recheck -= dt) <= 0) {
+          recheck = CHECK_EVERY;
+          occludedT = covered() ? occludedT + CHECK_EVERY : 0;
+          if (occludedT > OCCLUDED_MOVE) {
+            occludedT = 0;
+            movedThisLine = true;
+            place(true);
+          }
+        }
       }
-      const p = placeBubble(anchor, w, hh, bounds(), hero, u * 3.4, hudRects(host));
-      bubble.style.left = `${p.x}px`;
-      bubble.style.top = `${p.y}px`;
-      bubble.style.setProperty('--tx', `${p.tail}px`);
-      bubble.classList.toggle('below', p.below);
       placeCallout();
     },
     setDevice(d) {
@@ -234,6 +317,7 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
     },
     dispose() {
       window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('resize', onResize);
       bubble.remove();
       ring.remove();
       arrow.remove();
