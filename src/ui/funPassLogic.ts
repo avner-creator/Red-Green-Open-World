@@ -76,7 +76,7 @@ export function ticketStamp(kind: TicketKind): StampId {
  */
 export class StuntDeferral {
   private seq = 0;
-  constructor(private readonly schedule: (fn: () => void) => void = queueMicrotask) {}
+  constructor(private readonly schedule: (fn: () => void) => void = (fn) => queueMicrotask(fn)) {}
   /** Call on every `stamp:earned`. */
   noteStamp(): void {
     this.seq++;
