@@ -1,124 +1,102 @@
 import { describe, expect, it } from 'vitest';
 import { GLASSES } from '../../src/activities/glasses/constants';
-import { checkSite, findSites, roadClearance, SITE_PLANS, siteToWorld, spiralPoint } from '../../src/activities/glasses/sites';
-import type { SiteAnchor, SiteWorld } from '../../src/activities/glasses/sites';
 import { MECHANICS } from '../../src/activities/glasses/mechanics';
-import { ROADS } from '../../src/world/layout';
+import { isReserved, RESERVED, RESERVED_POINT_CLEAR, reservedDistance } from '../../src/activities/glasses/reserved';
+import { boardOf, BOARD_SLOTS, FIXED_SITES, roadEdgeDistance, roadMargin, siteToWorld, spiralPoint, staticProblems } from '../../src/activities/glasses/sites';
+import type { SiteAnchor, StaticWorld } from '../../src/activities/glasses/sites';
+import { ANCHORS, LAUNCH_NET, ROADS, SIZE } from '../../src/world/layout';
 
-const anchor = (x: number, z: number, radius: number, extra: Partial<SiteAnchor> = {}): SiteAnchor => ({ position: { x, y: 5, z }, radius, ...extra });
-
-function fakeWorld(patch: Partial<SiteWorld> = {}): SiteWorld {
-  return {
-    // Gentle rolling island, sea beyond r = 170.
-    heightAt: (x, z) => 6 + Math.sin(x * 0.05) * 0.6 + Math.cos(z * 0.04) * 0.6,
-    isLand: (x, z) => Math.hypot(x, z) < 170,
-    waterLevel: 0,
-    anchors: {
-      spawn: anchor(0, 9, 4),
-      garage: anchor(34, 20, 8),
-      trampoline: anchor(58, -24, 12),
-      bouncePads: anchor(84, -12, 10),
-      balloon: anchor(84, 64, 12),
-      launchPads: anchor(80, 24, 12, { target: { x: 83, y: 5, z: -34 }, targetRadius: 5 }),
+/** Every anchor of the island plan, as the rules read them (the rocket pads' landing net is their target). */
+const anchors: Record<string, SiteAnchor> = Object.fromEntries(
+  Object.entries(ANCHORS).map(([name, a]) => [
+    name,
+    {
+      position: { x: a.x, y: 0, z: a.z },
+      radius: a.radius,
+      ...(name === 'launchPads' ? { target: { x: LAUNCH_NET.x, y: 0, z: LAUNCH_NET.z }, targetRadius: LAUNCH_NET.radius } : {}),
     },
-    gemSpots: [{ position: { x: 20, z: 0 } }, { position: { x: -10, z: 30 } }],
-    chestSpots: [{ position: { x: 40, z: 40 } }],
-    roads: ROADS,
-    ...patch,
-  };
-}
+  ]),
+);
+const world: StaticWorld = { anchors, roads: ROADS, half: SIZE / 2 };
+const R = GLASSES.siteRadius;
 
-function expectAllRules(world: SiteWorld, sites: ReturnType<typeof findSites>): void {
-  for (const s of sites) {
-    const band = { cx: s.x, cz: s.z, min: 0, max: 1 }; // band is checked separately below
-    const others = sites.filter((o) => o !== s);
-    expect(checkSite(world, s.x, s.z, { radius: s.radius, others, band }), s.id).toBeNull();
+describe('fixed glasses sites (FIXED_SITES)', () => {
+  it('one fixed site per registered mechanic, in registry order, with a valid board slot', () => {
+    expect(FIXED_SITES.map((s) => s.id)).toEqual(MECHANICS.map((m) => m.id));
+    for (const s of FIXED_SITES) expect(s.slot >= 0 && s.slot < BOARD_SLOTS.length, s.id).toBe(true);
+  });
+
+  for (const s of FIXED_SITES) {
+    describe(`site ${s.id} at (${s.x}, ${s.z})`, () => {
+      const P = Math.max(R, s.playRadius ?? R);
+
+      it('is outside every anchor radius and anchor target (all anchors, including future ones)', () => {
+        for (const [name, a] of Object.entries(anchors)) {
+          const d = Math.hypot(s.x - a.position.x, s.z - a.position.z);
+          expect(d, `${s.id} is inside anchor ${name} (needs ${a.radius + R + GLASSES.anchorMargin} m)`).toBeGreaterThanOrEqual(a.radius + R + GLASSES.anchorMargin);
+          if (a.target) {
+            const dt = Math.hypot(s.x - a.target.x, s.z - a.target.z);
+            expect(dt, `${s.id} is on anchor ${name}'s target`).toBeGreaterThanOrEqual((a.targetRadius ?? 0) + R + GLASSES.anchorMargin);
+          }
+        }
+      });
+
+      it('is off every road (race-lap roads with the wider margin)', () => {
+        for (const r of ROADS) {
+          const need = roadMargin(r.id) + P;
+          expect(roadEdgeDistance(r, s.x, s.z), `${s.id} is too close to road ${r.id} (edge needs ≥ ${need} m)`).toBeGreaterThanOrEqual(need);
+        }
+      });
+
+      it('keeps clear of every reserved place', () => {
+        for (const r of RESERVED) {
+          expect(Math.hypot(s.x - r.x, s.z - r.z), `${s.id} centre is too close to reserved ${r.name}`).toBeGreaterThanOrEqual(RESERVED_POINT_CLEAR);
+          expect(reservedDistance(r, s.x, s.z), `${s.id} circle overlaps reserved ${r.name}'s footprint`).toBeGreaterThanOrEqual(P + GLASSES.reservedMargin);
+        }
+      });
+
+      it('is inside the island and spaced from the other sites', () => {
+        expect(Math.abs(s.x), `${s.id} x near the island edge`).toBeLessThanOrEqual(SIZE / 2 - R - 20);
+        expect(Math.abs(s.z), `${s.id} z near the island edge`).toBeLessThanOrEqual(SIZE / 2 - R - 20);
+        for (const o of FIXED_SITES) {
+          if (o === s) continue;
+          expect(Math.hypot(s.x - o.x, s.z - o.z), `${s.id} is too close to site ${o.id}`).toBeGreaterThanOrEqual(GLASSES.siteSpacing);
+        }
+      });
+
+      it('passes the combined rule check, and its board stands on its approach edge', () => {
+        expect(staticProblems(world, s.x, s.z, { playRadius: s.playRadius, others: FIXED_SITES.filter((o) => o !== s) })).toEqual([]);
+        const b = boardOf(s);
+        expect(Math.hypot(b.x - s.x, b.z - s.z)).toBeLessThan(R + 1);
+        expect(isReserved(b.x, b.z, 1)).toBe(false);
+      });
+    });
   }
-}
+});
 
-describe('glasses site finder', () => {
-  it('registry and site plans line up one to one', () => {
-    expect(MECHANICS.map((m) => m.id)).toEqual(SITE_PLANS.map((p) => p.id));
-    for (const m of MECHANICS) {
-      expect(m.pictos.length).toBeGreaterThanOrEqual(2);
-      expect(m.pictos.length).toBeLessThanOrEqual(3);
-    }
+describe('site rules', () => {
+  it('reports what a site collides with', () => {
+    const msgs = staticProblems(world, ANCHORS.garage.x, ANCHORS.garage.z);
+    expect(msgs.some((m) => m.startsWith('anchor garage'))).toBe(true);
+    expect(staticProblems(world, 21, -42).some((m) => m.startsWith('reserved carnivalRow'))).toBe(true);
+    expect(staticProblems(world, 2, 40).some((m) => m.startsWith('road south'))).toBe(true);
+    // A new anchor on a site is caught.
+    const s = FIXED_SITES[0];
+    const w2: StaticWorld = { ...world, anchors: { ...anchors, newRide: { position: { x: s.x + 3, y: 0, z: s.z }, radius: 5 } } };
+    expect(staticProblems(w2, s.x, s.z).some((m) => m.startsWith('anchor newRide'))).toBe(true);
   });
 
-  it('finds six valid, deterministic, well-spaced sites on a fake island', () => {
-    const world = fakeWorld();
-    const a = findSites(world);
-    const b = findSites(world);
-    expect(a).toEqual(b);
-    expect(a).toHaveLength(6);
-    for (const s of a) expect(s.valid, s.id).toBe(true);
-    expectAllRules(world, a);
-    for (let i = 0; i < a.length; i++)
-      for (let j = i + 1; j < a.length; j++) expect(Math.hypot(a[i].x - a[j].x, a[i].z - a[j].z)).toBeGreaterThanOrEqual(GLASSES.siteSpacing);
-    const spawn = world.anchors.spawn.position;
-    for (const s of a.slice(0, 3)) {
-      const d = Math.hypot(s.x - spawn.x, s.z - spawn.z);
-      expect(d).toBeGreaterThanOrEqual(GLASSES.plazaMin);
-      expect(d).toBeLessThanOrEqual(GLASSES.plazaMax);
-    }
-    for (const s of a.slice(3)) {
-      const an = world.anchors[s.near];
-      const d = Math.hypot(s.x - an.position.x, s.z - an.position.z);
-      expect(d).toBeLessThanOrEqual(GLASSES.nearMax);
-      expect(d).toBeGreaterThanOrEqual(an.radius + s.radius);
-    }
-    // Sites face the spawn; the board stands inside the probed circle.
-    for (const s of a) {
-      const toSpawn = Math.atan2(spawn.x - s.x, spawn.z - s.z);
-      expect(Math.abs(Math.atan2(Math.sin(s.yaw - toSpawn), Math.cos(s.yaw - toSpawn)))).toBeLessThan(1e-9);
-      expect(Math.hypot(s.board.x - s.x, s.board.z - s.z)).toBeLessThan(s.radius + 1);
-    }
-  });
-
-  it('respects a newly added anchor (iterates every anchor dynamically)', () => {
-    const before = findSites(fakeWorld());
-    const s0 = before[0];
-    const world = fakeWorld();
-    const anchors = { ...world.anchors, newRide: anchor(s0.x, s0.z, 9) };
-    const w2 = { ...world, anchors };
-    const after = findSites(w2);
-    expect(after[0].valid).toBe(true);
-    expect(Math.hypot(after[0].x - s0.x, after[0].z - s0.z)).toBeGreaterThanOrEqual(9 + GLASSES.siteRadius + GLASSES.anchorMargin - 1e-9);
-    expectAllRules(w2, after);
-  });
-
-  it('respects anchor targets and blocked cells', () => {
-    const before = findSites(fakeWorld());
-    const s1 = before[1];
-    const blockedCell = (x: number, z: number, r: number): boolean => Math.abs(x - s1.x) < 6 + r && Math.abs(z - s1.z) < 6 + r;
-    const w = fakeWorld({ blocked: blockedCell });
-    const after = findSites(w);
-    expect(after[1].valid).toBe(true);
-    expect(blockedCell(after[1].x, after[1].z, after[1].radius + 1)).toBe(false);
-
-    const t = fakeWorld();
-    const anchors = { ...t.anchors, ride: anchor(-100, -100, 3, { target: { x: before[2].x, y: 5, z: before[2].z }, targetRadius: 6 }) };
-    const moved = findSites({ ...t, anchors });
-    expect(Math.hypot(moved[2].x - before[2].x, moved[2].z - before[2].z)).toBeGreaterThanOrEqual(6 + GLASSES.siteRadius);
-  });
-
-  it('keeps off roads, water and gem spots; falls back without throwing', () => {
-    const w = fakeWorld();
-    for (const s of findSites(w)) {
-      expect(roadClearance(w.roads, s.x, s.z)).toBeGreaterThanOrEqual(s.radius + GLASSES.roadMargin);
-      for (const g of w.gemSpots) expect(Math.hypot(s.x - g.position.x, s.z - g.position.z)).toBeGreaterThanOrEqual(s.radius + GLASSES.spotClear);
-    }
-    const sea = fakeWorld({ isLand: () => false });
-    const none = findSites(sea);
-    expect(none).toHaveLength(6);
-    for (const s of none) expect(s.valid).toBe(false);
+  it('reserved footprints: circles and rectangles', () => {
+    expect(isReserved(-12, 80)).toBe(true); // airstrip climb-out band
+    expect(isReserved(35, 57.5)).toBe(true); // bubble arena
+    expect(isReserved(-25, -40)).toBe(true); // foam course
+    expect(isReserved(-60, -60)).toBe(false);
   });
 
   it('spiral and site frame helpers', () => {
     expect(spiralPoint(3, 4, 0)).toEqual({ x: 3, z: 4 });
     const p = spiralPoint(0, 0, 100);
     expect(Math.hypot(p.x, p.z)).toBeCloseTo(GLASSES.searchStep * 10);
-    // yaw 0: local +Z = world +Z; yaw π/2: local +Z = world +X, local +X = world −Z.
     expect(siteToWorld({ x: 1, z: 2, yaw: 0 }, 0, 3)).toEqual({ x: 1, z: 5 });
     const q = siteToWorld({ x: 0, z: 0, yaw: Math.PI / 2 }, 1, 2);
     expect(q.x).toBeCloseTo(2);

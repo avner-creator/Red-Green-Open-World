@@ -6,6 +6,7 @@
 import type { GlassesTier } from '../../../types';
 import type { RoadDef } from '../../../world/layout';
 import { hashString, seededRng } from '../idle';
+import { isReserved } from '../reserved';
 import { roadClearance } from '../sites';
 import type { SiteAnchor } from '../sites';
 import { TOYS, TRAIL } from './constants';
@@ -59,6 +60,7 @@ export function pointReject(w: TrailWorld, x: number, z: number): string | null 
   const h = w.heightAt(x, z);
   if (h < w.waterLevel + TRAIL.minAboveWater) return 'water';
   if (roadClearance(w.roads, x, z) < TRAIL.roadClear) return 'road';
+  if (isReserved(x, z, 1)) return 'reserved';
   for (const a of Object.values(w.anchors)) {
     if (Math.hypot(x - a.position.x, z - a.position.z) < a.radius + TRAIL.anchorMargin) return 'anchor';
     if (a.target && Math.hypot(x - a.target.x, z - a.target.z) < (a.targetRadius ?? 0) + TRAIL.anchorMargin) return 'anchor';
