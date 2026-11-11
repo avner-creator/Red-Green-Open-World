@@ -77,21 +77,31 @@ export function createFriends(parent: THREE.Object3D, playerId: string): Friends
   let disposed = false;
   let time = 0;
 
+  /** Models that finished loading, waiting for the next update() to be attached. */
+  const arrived: Array<[Friend, LoadedCharacter]> = [];
+  const attachArrived = (): void => {
+    for (const [f, c] of arrived) {
+      f.char = c;
+      // The detailed model skips the shadow pass; a capsule stand-in casts the shadow.
+      c.object.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) o.castShadow = false;
+      });
+      f.root.add(c.object, asShadowProxy(new THREE.Mesh(proxyGeo)).translateY(0.75));
+      c.play(f.anim);
+    }
+    arrived.length = 0;
+    loaded = friends.every((x) => x.char);
+  };
+
   const load = (): void => {
     if (loading) return;
     loading = true;
     for (const f of friends) {
       loadCharacter(getCharacter(f.id))
         .then((c) => {
-          if (disposed) return;
-          f.char = c;
-          // The detailed model skips the shadow pass; a capsule stand-in casts the shadow.
-          c.object.traverse((o) => {
-            if ((o as THREE.Mesh).isMesh) o.castShadow = false;
-          });
-          f.root.add(c.object, asShadowProxy(new THREE.Mesh(proxyGeo)).translateY(0.75));
-          c.play('idle');
-          loaded = friends.every((x) => x.char);
+          // Attached on the next update(), not here: a model landing from a promise between two
+          // renders would change a frozen (test) frame that no simulation step advanced.
+          if (!disposed) arrived.push([f, c]);
         })
         .catch((err: unknown) => console.warn('scoops: friend failed to load', err));
     }
@@ -150,6 +160,7 @@ export function createFriends(parent: THREE.Object3D, playerId: string): Friends
       f.cone.root.position.set(0.28 - 0.22 * Math.min(1, k * 3), 1.05 + 0.2 * Math.min(1, k * 3), 0.32);
     },
     update(dt, local, near) {
+      if (arrived.length) attachArrived();
       if (!near) {
         for (const f of friends) f.root.visible = local.lengthSq() < 90 * 90;
         return;

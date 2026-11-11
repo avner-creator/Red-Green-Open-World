@@ -63,6 +63,18 @@ test.afterAll(async () => {
   await page.close();
 });
 
+// Regression: a model streamed in by a promise (Scoops' friends) used to attach between two
+// renders of the same frozen frame, so "with" and "without" a layer differed in the strong channel.
+// Async arrivals must wait for the next simulation step.
+test('a frozen frame stays identical while assets stream in', async () => {
+  const before = await frame({ weak: true, strong: true });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  const after = await frame({ weak: true, strong: true });
+  const d = channelDiff(before, after);
+  expect([d.maxR, d.maxG, d.maxB]).toEqual([0, 0, 0]);
+});
+
 for (const combo of COMBOS) {
   test(`lens ${combo.eye.leftLens}-left, weak eye ${combo.eye.weakEye}: each layer touches only its own channel`, async () => {
     await page.evaluate((eye) => window.__rg!.setEye(eye), combo.eye);
