@@ -23,7 +23,7 @@ import { createRaceSite } from './site';
 import { Progress, boostPadDistances, buildTrack, checkpointDistances, leftOf, racingLine } from './track';
 import { flashPractice } from '../../ui/practiceMark';
 import { driveTriggers } from '../../core/input';
-import { StuckWatch, UNSTICK, rPressAction, type StuckReason } from './unstick';
+import { StuckWatch, UNSTICK, rPressAction, stuckThrottle, type StuckReason } from './unstick';
 
 export type RacePhase = 'idle' | 'countdown' | 'racing' | 'finishing' | 'podium' | 'result';
 
@@ -447,8 +447,9 @@ export function createRace(ctx: GameContext): Race {
     // Stuck? (wedged, on its side, or lost off the track): pop back at the last checkpoint.
     upTmp.set(0, 1, 0).applyQuaternion(car.object.quaternion);
     const inp = ctx.input.state;
-    const throttle = Math.max(0, inp.moveY + driveTriggers(ctx.input).accelerate);
-    const why = stuck.update({ dt, speed: car.speed, throttle, upY: upTmp.y, offTrack: pr.dist, progress: playerProg });
+    const trig = driveTriggers(ctx.input);
+    const throttle = stuckThrottle(inp.moveY, trig.accelerate, trig.brake);
+    const why = stuck.update({ dt, speed: Math.abs(car.speed), throttle, upY: upTmp.y, offTrack: pr.dist, progress: playerProg });
     if (why) {
       resetToTrack(why);
       return;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { StuckWatch, UNSTICK, rPressAction, type StuckSample } from '../../src/activities/race/unstick';
+import { StuckWatch, UNSTICK, rPressAction, stuckThrottle, type StuckSample } from '../../src/activities/race/unstick';
 
 const DT = 1 / 60;
 const run = (w: StuckWatch, s: Omit<StuckSample, 'dt'>, seconds: number, grow = 0): { reason: string | null; at: number } => {
@@ -58,5 +58,17 @@ describe('race stuck watch (QA5 M3)', () => {
     expect(rPressAction(10, null)).toBe('reset');
     expect(rPressAction(11.5, 10)).toBe('leave');
     expect(rPressAction(13, 10)).toBe('reset');
+  });
+
+  it('reversing (S or the left trigger) into scenery counts as throttle: wedged resets it (QA6 m1)', () => {
+    expect(stuckThrottle(-1, 0, 0)).toBe(1);
+    expect(stuckThrottle(0, 0, 1)).toBe(1);
+    expect(stuckThrottle(1, 0, 0)).toBe(1);
+    expect(stuckThrottle(0, 0, 0)).toBe(0);
+    const w = new StuckWatch();
+    w.reset(-21);
+    const r = run(w, { speed: 0, throttle: stuckThrottle(-1, 0, 0), upY: 1, offTrack: 3, progress: -21 }, 25);
+    expect(r.reason).toBe('wedged');
+    expect(r.at).toBeLessThan(UNSTICK.wedgedSeconds + 0.1);
   });
 });

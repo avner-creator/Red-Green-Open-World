@@ -2,7 +2,7 @@
  * Race "stuck" watch (pure, unit-tested): decides when the player's buggy should be popped back
  * onto the track at the last checkpoint (QA5 M3: a car wedged off the track for 135 s).
  *
- * - wedged: throttle held but barely moving for `wedgedSeconds`;
+ * - wedged: throttle held (forward or reverse) but barely moving for `wedgedSeconds`;
  * - flipped: upside-down or on its side for `flippedSeconds`;
  * - lost: further than `offTrackMetres` from the track for `lostSeconds`, or no forward progress
  *   along the lap for `noProgressSeconds` (whatever the reason).
@@ -31,7 +31,7 @@ export interface StuckSample {
   dt: number;
   /** |speed| m/s. */
   speed: number;
-  /** Forward throttle the player holds (0..1). */
+  /** Throttle the player holds, forward or reverse (0..1, see `stuckThrottle`). */
   throttle: number;
   /** Chassis up-vector y. */
   upY: number;
@@ -68,6 +68,14 @@ export class StuckWatch {
     if (this.lost >= UNSTICK.lostSeconds || this.sinceProgress >= UNSTICK.noProgressSeconds) return 'lost';
     return null;
   }
+}
+
+/**
+ * Throttle as the stuck watch sees it: how hard the player pushes, forward (W, right trigger) or
+ * reverse (S, left trigger). QA6 m1: only forward counted, so reversing into scenery never reset.
+ */
+export function stuckThrottle(moveY: number, accelerate: number, brake: number): number {
+  return Math.min(1, Math.abs(moveY + accelerate - brake));
 }
 
 /**
