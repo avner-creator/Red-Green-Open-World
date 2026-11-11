@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import type { BuggyHooks, VehiclePublic, VehiclesPublic } from '../../core/vehicles/types';
 import { finish, finishMaterial, mergeFinished, placed, rodBetween, type Finish } from '../../core/vertex-finish';
 import type { ExternalController, GameContext } from '../../types';
+import { pushEscHandler } from '../../core/input';
 import { ThrillConfetti } from '../thrillConfetti';
 import { Bubbles } from './bubbles';
 import { CANNON_MUZZLE, EXHAUST_TIPS, createPartKit, type Part, type PartState } from './parts';
@@ -319,6 +320,7 @@ export function createWorkshop(ctx: GameContext): Workshop {
   // ── Menu ──
   let open = false;
   let closing: 'drive' | 'exit' | null = null;
+  let offEsc: (() => void) | null = null;
   let pendingDrive = false;
   let sel = 0;
   let sinceOpen = 0;
@@ -417,6 +419,8 @@ export function createWorkshop(ctx: GameContext): Workshop {
       return closing === null;
     },
     onRelease() {
+      offEsc?.();
+      offEsc = null;
       const how = closing;
       open = false;
       closing = null;
@@ -452,6 +456,11 @@ export function createWorkshop(ctx: GameContext): Workshop {
     if ((ctx.player.mode as string) !== 'external') return false;
     open = true;
     closing = null;
+    offEsc?.();
+    offEsc = pushEscHandler(() => {
+      closing = 'exit';
+      return true;
+    });
     sinceOpen = 0;
     sel = 0;
     ui.select(sel);
