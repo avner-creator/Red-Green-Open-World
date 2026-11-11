@@ -342,7 +342,9 @@ export function createSkydive(ctx: GameContext): Skydive {
           if (phaseT > 2.5) player.setAnimation('idle');
           // Slow reveal orbit round the island; it eases in with the climb and out near the top.
           const orbit = SKY.ascentOrbitRate * Math.sin(Math.PI * Math.min(1, balloonT / BALLOON.ascentSeconds));
-          ctx.cameraRig.setOverride({ distance: 9 + 17 * ascentFrac, height: 4 + 9 * ascentFrac, fov: CAMERA.fov + 6 * ascentFrac, orbitRate: orbit });
+          // Wide reveal mid-climb, then back in so the hero stays big on screen at the top.
+          const reveal = Math.sin(Math.PI * Math.min(1, ascentFrac / 0.85));
+          ctx.cameraRig.setOverride({ distance: 9 + 15 * reveal - 2 * ascentFrac, height: 4 + 8 * reveal - 0.6 * ascentFrac, fov: CAMERA.fov + 6 * ascentFrac, orbitRate: orbit });
           ctx.audio.setLoop('wind', 0.12 + 0.2 * ascentFrac, 0.7);
           if (balloonT >= BALLOON.ascentSeconds) {
             enterPhase('top');
@@ -356,7 +358,7 @@ export function createSkydive(ctx: GameContext): Skydive {
           player.position.copy(balloonPos);
           ctx.audio.setLoop('wind', 0.3, 0.7);
           // Swing round behind the rider (facing the rings) so the jump and steering line up.
-          ctx.cameraRig.setOverride({ distance: 26, height: 13, fov: CAMERA.fov + 6, yawOffset: 0 });
+          ctx.cameraRig.setOverride({ distance: 7, height: 3.4, fov: CAMERA.fov + 6, yawOffset: 0 });
           prompt.show('jump', input.device === 'gamepad', phaseT / SKY.autoJumpSeconds);
           if ((input.jumpPressed && phaseT > 0.3) || phaseT >= SKY.autoJumpSeconds) {
             prompt.hide();

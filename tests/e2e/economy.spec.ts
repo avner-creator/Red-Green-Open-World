@@ -271,15 +271,19 @@ test('balloon: first ride free, then a ticket (denied with 0 gems, paid with 5)'
   expect(r.log).toEqual(['paid:0:true', 'denied:5', 'paid:5:false']);
 });
 
-test('rocket pad: denied once with 0 gems (no launch), 3 gems pay and launch', async () => {
+test('rocket pad: 0 gems still flies a practice launch (no stunt prize), 3 gems pay and launch', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
     const th = window.__rgThrills!;
     const log: string[] = [];
     const spent: number[] = [];
+    const launches: number[] = [];
     ctx.events.on('ticket:denied', (e) => log.push(`denied:${e.price}`));
     ctx.events.on('ticket:paid', (e) => log.push(`paid:${e.price}`));
+    ctx.events.on('stunt', (e) => {
+      if (e.kind === 'launch') launches.push(e.value);
+    });
     ctx.events.on('wallet:changed', (e) => {
       if (e.reason === 'ticket') spent.push(e.delta);
     });
@@ -288,13 +292,16 @@ test('rocket pad: denied once with 0 gems (no launch), 3 gems pay and launch', a
     const info = th.rocket()!;
     const pad = info.pads[0];
     ctx.profile.spend(ctx.profile.wallet, 'test');
-    // Walk onto the pad with an empty wallet: a friendly wobble, no launch, one denial.
+    // Walk onto the pad with an empty wallet: it launches anyway (practice), one denial.
     rg.teleport(pad.x, pad.y + 0.1, pad.z);
-    rg.step(1 / 60, 60, false);
+    rg.step(1 / 60, 10, false);
     const out: Record<string, unknown> = {};
-    out.modeDenied = ctx.player.mode;
+    out.modePractice = ctx.player.mode;
     out.denials = log.filter((l) => l.startsWith('denied')).length;
-    // With 3 gems the same pad launches.
+    // Fly it out and settle on the net: a practice landing gives no launch stunt.
+    for (let i = 0; i < 60 * 15 && ctx.player.mode !== 'walk'; i++) rg.step(1 / 60, 1, false);
+    out.practiceLaunches = launches.length;
+    // With 3 gems the same pad launches and pays.
     rg.step(1 / 60, 150, false); // cooldown
     ctx.profile.earn(3, 'test');
     th.launchRocket(0);
@@ -304,8 +311,9 @@ test('rocket pad: denied once with 0 gems (no launch), 3 gems pay and launch', a
     out.log = log;
     return out;
   });
-  expect(r.modeDenied).toBe('walk');
+  expect(r.modePractice).not.toBe('walk');
   expect(r.denials).toBe(1);
+  expect(r.practiceLaunches).toBe(0);
   expect(r.modeLaunched).not.toBe('walk');
   expect(r.spent).toEqual([-3]);
   expect(r.log).toEqual(['denied:3', 'paid:3']);

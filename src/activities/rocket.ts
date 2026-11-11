@@ -6,7 +6,7 @@
  * does a friendly locked wobble.
  */
 import * as THREE from 'three';
-import type { GameContext } from '../types';
+import type { GameContext, TicketOutcome } from '../types';
 import { PLAYER } from '../config';
 import { arcPoint, solveLaunch } from './ballistics';
 import { launchStars } from './bounceLogic';
@@ -20,10 +20,14 @@ import type { NetSite, SiteWorld } from './rocketSite';
 import { getStuntGate } from './stuntGate';
 import { thrillSpots } from './thrillSpots';
 
-let gate: () => boolean = () => true;
+/** true/'free'/'paid' = launch; 'practice' = launch without the prize (no stunt); false = wobble. */
+export type LaunchGate = () => boolean | TicketOutcome;
+let gate: LaunchGate = () => true;
+/** This launch is a practice ride (could not pay): no landing stunt. */
+let practice = false;
 
 /** Ticket hook: when set and it returns false, rocket pads wobble instead of launching. */
-export function setLaunchGate(fn: (() => boolean) | null): void {
+export function setLaunchGate(fn: LaunchGate | null): void {
   gate = fn ?? (() => true);
 }
 
@@ -191,7 +195,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
       const apexUp = ROCKET.netBounces[bounceNo];
       if (bounceNo === 0) {
         const dist = Math.hypot(info.pos.x - launchFrom0.x, info.pos.z - launchFrom0.z);
-        ctx.events.emit('stunt', { kind: 'launch', value: dist, stars: launchStars(info.rotations, info.upright) });
+        if (!practice) ctx.events.emit('stunt', { kind: 'launch', value: dist, stars: launchStars(info.rotations, info.upright) });
         ctx.audio.play('bigBoing', { pitch: 0.95 });
         ctx.cameraRig.shake(0.45);
         confetti.burst(tmp.set(info.pos.x, info.pos.y + 0.8, info.pos.z), 170);
@@ -217,7 +221,8 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
     const p = pads[i];
     if (!p || flight.active || ctx.player.mode !== 'walk' || cooldown > 0) return;
     cooldown = ROCKET.cooldown;
-    if (!gate()) {
+    const ticket = gate();
+    if (ticket === false) {
       // Locked: friendly wobble and a little hop back off the pad.
       p.wobble = ROCKET.wobble;
       ctx.audio.play('boing', { pitch: 0.7 });
@@ -226,6 +231,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
       ctx.player.launch(tmp.set(Math.sin(away) * 3, 5.5, Math.cos(away) * 3));
       return;
     }
+    practice = ticket === 'practice';
     active = i;
     launched = false;
     bounceNo = 0;

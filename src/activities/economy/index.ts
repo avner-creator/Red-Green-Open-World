@@ -22,9 +22,9 @@ export function createEconomy(ctx: GameContext): Economy {
     play: (name) => ctx.audio.play(name),
   });
   const kiosk = createKiosk(ctx);
-  // Rocket pads charge a ticket once per real launch (the pad calls the gate only when a launch
-  // would start, then the player hops off, so a denial is reported once per approach).
-  setLaunchGate(() => rules.payTicket('rocketPad'));
+  // Rocket pads charge a ticket once per launch, like every attraction: a child who cannot pay
+  // still flies a practice launch (no stunt prize; `ticket:denied` still tells the HUD why).
+  setLaunchGate(() => rules.rideTicket('rocketPad'));
   const unwireCharacters = wireCharacters(ctx, rules);
   const disposeRules = rules.dispose;
   rules.dispose = () => {
