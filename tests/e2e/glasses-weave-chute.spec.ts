@@ -115,6 +115,25 @@ async function inView(dist: number, side = 0, up = 0): Promise<P3> {
   );
 }
 
+/**
+ * A point `dist` metres ahead of the hero down a trail-like fall line (22° off vertical, towards
+ * where the camera looks), `side` metres to the right: where the game hangs the hoop.
+ */
+async function aheadOnTrail(dist: number, side = 4): Promise<P3> {
+  return page.evaluate(
+    ({ dist, side }) => {
+      const ctx = window.__rg!.ctx;
+      const e = ctx.camera.matrixWorld.elements;
+      const fl = Math.hypot(e[8], e[10]) || 1;
+      const f = { x: -e[8] / fl, z: -e[10] / fl };
+      const p = ctx.player.position;
+      const a = (22 * Math.PI) / 180;
+      return { x: p.x + f.x * dist * Math.sin(a) - f.z * side, y: p.y + 0.85 - dist * Math.cos(a), z: p.z + f.z * dist * Math.sin(a) + f.x * side };
+    },
+    { dist, side },
+  );
+}
+
 /** Full / R-only / G-only screenshots of the frozen frame, at 640×360 and 1280×720. */
 async function shots(name: string): Promise<void> {
   mkdirSync(OUT, { recursive: true });
@@ -181,6 +200,12 @@ test('chute: in freefall both cues show; each layer touches only its own channel
   await shots('chute-ring-before');
   await force({ target: d0.agl! });
   await shots('chute-ring-moment');
+  // The hoop (gem inside) ahead of the hero, far and near, at the angle the game gives it.
+  await force({ target: d0.agl! - 30, hoop: await aheadOnTrail(40, 9), gemInside: true });
+  await shots('chute-hoop-40m');
+  await force({ hoop: await aheadOnTrail(15), gemInside: true });
+  await shots('chute-hoop-15m');
+  await force({ hoop: await inView(24, 5, -4), gemInside: true });
   const d = await debug();
   expect(d.ring.attached && d.hoop.attached && d.hoop.gemAttached).toBe(true);
   expect(await draws()).toBeLessThanOrEqual(4);
@@ -281,7 +306,7 @@ test('chute: a near-miss open is a miss; a hands-off fall reports nothing', asyn
   await endRide();
 
   // Hands-off: auto-jump, assisted fall along the trail, auto-open. The random hoop hangs beside
-  // the trail, so nothing is reported.
+  // the trail, so the hands-off fall passes beside it and nothing is reported.
   await page.evaluate(() => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
