@@ -354,6 +354,46 @@ and misses raced the Auto challenge. Measured: +17 KB gzip of JavaScript over
   frame, by design the hardest step.
 - Three sites moved after the integration merge (see "Sites: fixed coordinates").
 
+## Follow-up after integration (2026-11-12)
+
+Phase 2 went to `main` at `8d371ca`. Changes the main session made to this stream's work while
+integrating: the world's two stepping-stone trails are computed from `FIXED_SITES` (they lead to
+odd one out and dot signs); the Gear Shack gift board got a collider (the camera sat inside
+it); `glasses-challenge.spec.ts` finds its own test object by the mask pixels it adds.
+
+One follow-up on this branch (`agent/glasses-followup`, merged):
+
+- **Low render budget at the Gear Shack** (was 135 draws, budget 130). Layer objects that did
+  nothing for the player there were removed from the view:
+
+  | View | Before | After |
+  |---|---|---|
+  | Low, Gear Shack | 135 | 125 |
+  | Low, spawn | 130 | 122 |
+  | Medium, Gear Shack | 187 | 177 |
+  | Medium, spawn | 197 | 189 |
+
+  - The skydive's weak-eye landing-hoop gems (6 draws, about 130 m away) are now drawn only
+    during a ride or within 80 m of the landing rings: `src/activities/skydive/rings.ts`, +5
+    lines (`HOOPS.gemShowRadius` and one `weak.visible = …` line in `update()`). This is the
+    only change outside this stream's folders.
+  - Fake gems: one instanced draw instead of two, and none while the cluster is off screen.
+  - The six mini-games attach their layer objects within 40 m and detach beyond 48 m (was
+    60 / 70): past about 45 m their weak-eye content is a few pixels.
+  - `scripts/layer-draws.mjs` lists the vision-layer draws in the spawn and Gear Shack views.
+- **Camera convention**: every object the mini-games and weave parts attach carries
+  `userData.cameraIgnore` (`src/activities/glasses/camera.ts`); the solid props keep the camera
+  out through their physics colliders, so none is an occluder.
+  `tests/activities/glasses-camera.test.ts` checks that no layer object of this stream is ever
+  a camera occluder.
+- **Pip's lost toys**: `tests/e2e/glasses-toys-trails.spec.ts` builds the paw trail for
+  200 seeds × 3 toys at the real site with the game's own world checks: 600 of 600 valid,
+  25–39 m long. (The open item "toys has no trail" is the world's stepping-stone path to that
+  site, which is not this stream's.)
+
+From owner playtest 4: the gates mini-game ("arches near the beach") was unclear to the owner.
+It is listed by the main session as still to assign after QA 4; nothing was changed here.
+
 ## Test results
 
 **Phase 2 (final branch, code at `c4368c0`, which includes `origin/main` `b296977` and
