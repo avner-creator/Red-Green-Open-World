@@ -118,7 +118,7 @@ function groundDisc(ctx: GameContext, cx: number, cz: number, radius: number): T
 
 /** Torus with bright/dark candy stripes around the ring (vertex colours). */
 function hoopGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.TorusGeometry(HOOPS.radius, HOOPS.tube, 14, 96);
+  const geo = new THREE.TorusGeometry(HOOPS.radius, HOOPS.tube, 12, 72);
   const pos = geo.getAttribute('position');
   const colors = new Float32Array(pos.count * 3);
   const light = new THREE.Color(0xfff3cf);

@@ -82,10 +82,12 @@ export function buildButtons(symbols: readonly number[]): ButtonSet {
     m.name = 'chest-buttons';
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
-  const symIndex = new Map<number, number>(); // slot -> instance index within its symbol mesh
-  const counters = [0, 0, 0];
-  symbols.forEach((s, slot) => symIndex.set(slot, counters[s]++));
-  for (const m of syms) m.count = Math.max(0, perSymbol[syms.indexOf(m)]);
+  // Compacted every frame: `set` appends, `flush` draws what was set (far chests are skipped by
+  // the caller, so they cost no triangles).
+  let nBase = 0;
+  const nSym = [0, 0, 0];
+  base.count = 0;
+  for (const m of syms) m.count = 0;
 
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -95,18 +97,25 @@ export function buildButtons(symbols: readonly number[]): ButtonSet {
   const UPV = new THREE.Vector3(0, 1, 0);
   return {
     meshes,
-    set(slot, symbol, p) {
+    set(_slot, symbol, p) {
+      const sm = syms[symbol];
+      if (nBase >= symbols.length || nSym[symbol] >= perSymbol[symbol]) return;
       q.setFromAxisAngle(UPV, p.yaw);
       pos.set(p.x, p.y + CUSHION_H / 2, p.z);
       sc.set(1, p.squash, 1);
       m4.compose(pos, q, sc);
-      base.setMatrixAt(slot, m4);
-      syms[symbol].setMatrixAt(symIndex.get(slot) ?? 0, m4);
       col.setRGB(p.tint, p.tint, p.tint);
-      base.setColorAt(slot, col);
-      syms[symbol].setColorAt(symIndex.get(slot) ?? 0, col);
+      base.setMatrixAt(nBase, m4);
+      base.setColorAt(nBase++, col);
+      sm.setMatrixAt(nSym[symbol], m4);
+      sm.setColorAt(nSym[symbol]++, col);
     },
     flush() {
+      base.count = nBase;
+      syms.forEach((m, k) => (m.count = nSym[k]));
+      for (const m of meshes) m.visible = m.count > 0;
+      nBase = 0;
+      nSym.fill(0);
       for (const m of meshes) {
         m.instanceMatrix.needsUpdate = true;
         if (m.instanceColor) m.instanceColor.needsUpdate = true;

@@ -352,7 +352,12 @@ test('the six buttons are the same for both eyes and give nothing away', async (
   });
   expect(r.n).toBe(4); // 1 cushion mesh + 3 symbol meshes, for all chests
   expect(r.shadows).toBe(false);
-  expect(r.counts).toEqual([36, 12, 12, 12]);
+  // Buttons draw only for chests near the camera (compacted each frame): whole rings of six, every
+  // cushion with exactly one symbol, never more than the six chests' 36.
+  const [cushions, ...symbols] = r.counts;
+  expect(cushions % 6).toBe(0);
+  expect(cushions).toBeLessThanOrEqual(36);
+  expect(symbols.reduce((a, b) => a + b, 0)).toBe(cushions);
   expect(await page.evaluate(() => window.__rg!.ctx.scene.getObjectByName('chest-symbol') !== undefined)).toBe(false);
   expect(await page.evaluate(() => window.__rg!.ctx.scene.getObjectByName('chest-trail') !== undefined)).toBe(false);
 });

@@ -136,6 +136,8 @@ export function createScoops(ctx: GameContext): Scoops {
   // ── State ──
   let phase: Phase = 'idle';
   let phaseT = 0;
+  /** Seconds the idle hero has stood behind the counter (see update). */
+  let trappedT = 0;
   let builder: ConeBuilder | null = null;
   let wobble = new StackWobble();
   let recipe: Recipe | null = null;
@@ -593,8 +595,27 @@ export function createScoops(ctx: GameContext): Scoops {
       ui.setEffects(effects.active());
       // The friends' character models load only once the game is on (not behind the title screen),
       // in test mode too, so the boot request budget (npm run boot:requests) holds there.
-      friends.update(dt, local, near && ctx.session.state.phase !== 'title');
+      // Low: while the hero is busy elsewhere (driving, riding, in another round), the idle friends
+      // are not drawn (a capped frame during rounds; they pop back when the hero walks again).
+      const busyElsewhere = phase === 'idle' && ctx.player.mode !== 'walk' && ctx.settings.get().quality === 'low';
+      friends.update(dt, local, near && ctx.session.state.phase !== 'title', busyElsewhere);
       if (!near) return;
+
+      // Behind the counter is a closed room (counter, walls, 0.45 m slits): a hero who got in there
+      // without building (pushed or jumped over, QA round 5 M1) hops back out to the customer side.
+      if (phase === 'idle' && ctx.player.mode === 'walk' && Math.abs(local.x) < 3.85 && local.z > -2.95 && local.z < 1.3 && local.y > -0.5 && local.y < FLOOR + 1.6) {
+        trappedT += dt;
+        if (trappedT > 0.5) {
+          trappedT = 0;
+          ate = null;
+          hopFrom.copy(ctx.player.position);
+          hopTo.copy(toWorld(LAYOUT.customer));
+          phase = 'exit';
+          phaseT = 0;
+          ctx.player.setExternalController(controller);
+          ctx.player.setAnimation('jump');
+        }
+      } else trappedT = 0;
 
       for (let i = timers.length - 1; i >= 0; i--) {
         timers[i].t -= dt;

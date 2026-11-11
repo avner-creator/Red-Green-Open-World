@@ -40,7 +40,7 @@ const SHEEP_P: WaddlerParams = { radius: 0.55, walk: 0.45, flee: 1.6, hopLen: 3,
 const CHICK_P: WaddlerParams = { radius: 0.3, walk: 0.6, flee: 2.2, hopLen: 2.6, hopTime: 0.42, hopHeight: 0.8, roam: 2.5 };
 
 /** Draw distances (m from the camera). */
-const FAR = { gull: 280, bird: 90, butterfly: 55, farm: 140, water: 160, blob: 60 } as const;
+const FAR = { gull: 280, bird: 90, butterfly: 55, farm: 140, water: 160, blob: 60, animal: 110, animalLow: 60 } as const;
 
 interface Gull {
   cx: number;
@@ -377,7 +377,8 @@ export function createCritters(deps: CritterDeps): Critters {
             const freq = moving ? 8 + w.speed * 4 : 1.4;
             // Wings flap (chickens) while hopping; heads nod/peck while still.
             const flap = w.hop > 0 ? 1 : 0;
-            h.pool.push(put(w.x, y, w.z, w.yaw, pitch, roll, h.scale), h.cols[i], ph, w.hop > 0 ? 1.2 : moving ? walkAmp : 0.6, w.hop > 0 ? 18 : freq, flap ? 0 : 1);
+            // Simulated across the farm range, drawn only within the animals' own draw distance.
+            if (dist2(cam, w.x, w.z) < (quality === 'low' ? FAR.animalLow : FAR.animal) ** 2) h.pool.push(put(w.x, y, w.z, w.yaw, pitch, roll, h.scale), h.cols[i], ph, w.hop > 0 ? 1.2 : moving ? walkAmp : 0.6, w.hop > 0 ? 18 : freq, flap ? 0 : 1);
             if (dist2(cam, w.x, w.z) < FAR.blob ** 2) blob(w.x, w.z, deps.heightAt(w.x, w.z), h.kind === 'sheep' ? 1.5 : 0.75, 1 - Math.min(0.7, w.lift));
           }
         }

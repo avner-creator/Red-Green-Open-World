@@ -12,7 +12,7 @@ import * as THREE from 'three';
  */
 export function clusterSimplify(geo: THREE.BufferGeometry, cell: number): THREE.BufferGeometry | null {
   const pos = geo.attributes.position as THREE.BufferAttribute | undefined;
-  if (!pos || geo.groups.length > 1 || geo.morphAttributes.position) return null;
+  if (!pos || geo.morphAttributes.position) return null;
   const index = geo.index;
   const triCount = index ? index.count / 3 : pos.count / 3;
   if (triCount < 3) return null;
@@ -31,20 +31,32 @@ export function clusterSimplify(geo: THREE.BufferGeometry, cell: number): THREE.
   let nv = 0;
   const tris: number[] = [];
   const seen = new Set<string>();
-  for (let t = 0; t < triCount; t++) {
-    const a = rep[index ? index.getX(t * 3) : t * 3];
-    const b = rep[index ? index.getX(t * 3 + 1) : t * 3 + 1];
-    const c = rep[index ? index.getX(t * 3 + 2) : t * 3 + 2];
-    if (a === b || b === c || a === c) continue;
-    // Drop exact duplicates (same three corners, same winding).
-    const m = Math.min(a, b, c);
-    const k = m === a ? `${a},${b},${c}` : m === b ? `${b},${c},${a}` : `${c},${a},${b}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    for (const v of [a, b, c]) {
-      if (remap[v] < 0) remap[v] = nv++;
-      tris.push(remap[v]);
+  // Material groups keep their own (re-counted) index ranges.
+  const groups = geo.groups.length ? geo.groups : [{ start: 0, count: triCount * 3, materialIndex: 0 }];
+  const outGroups: { start: number; count: number; materialIndex: number }[] = [];
+  for (const grp of groups) {
+    const gStart = tris.length;
+    const t1 = Math.min(triCount, Math.floor((grp.start + grp.count) / 3));
+    for (let t = Math.floor(grp.start / 3); t < t1; t++) {
+      const a = rep[index ? index.getX(t * 3) : t * 3];
+      const b = rep[index ? index.getX(t * 3 + 1) : t * 3 + 1];
+      const c = rep[index ? index.getX(t * 3 + 2) : t * 3 + 2];
+      if (a === b || b === c || a === c) continue;
+      // Drop exact duplicates (same three corners, same winding).
+      const m = Math.min(a, b, c);
+      const k = m === a ? `${a},${b},${c}` : m === b ? `${b},${c},${a}` : `${c},${a},${b}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      for (const v of [a, b, c]) {
+        if (remap[v] < 0) remap[v] = nv++;
+        tris.push(remap[v]);
+      }
     }
+    outGroups.push({
+      start: gStart,
+      count: tris.length - gStart,
+      materialIndex: grp.materialIndex ?? 0,
+    });
   }
   if (tris.length / 3 > triCount * 0.67) return null;
   const out = new THREE.BufferGeometry();
@@ -58,6 +70,7 @@ export function clusterSimplify(geo: THREE.BufferGeometry, cell: number): THREE.
     out.setAttribute(name, new THREE.BufferAttribute(arr, size, attr.normalized));
   }
   out.setIndex(tris);
+  if (geo.groups.length) for (const g of outGroups) out.addGroup(g.start, g.count, g.materialIndex);
   out.boundingSphere = geo.boundingSphere?.clone() ?? null;
   out.boundingBox = geo.boundingBox?.clone() ?? null;
   return out;

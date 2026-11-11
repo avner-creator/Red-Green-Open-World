@@ -573,6 +573,9 @@ export function createChests(ctx: GameContext): Chests {
       const eTile = invite ? nearestButton(e.buttons, ctx.player.position.x, ctx.player.position.z, RING.useReach) : -1;
       const pulse = invite ? 0.5 + 0.5 * Math.sin(time * 5.5) : 0;
       e.eTile = eTile;
+      // Buttons draw only within their draw distance (Low: 40 m, else 75 m, like small props).
+      const btnFar = ctx.settings.get().quality === 'low' ? 40 : 75;
+      const drawButtons = Math.hypot(ctx.camera.position.x - e.spot.position.x, ctx.camera.position.z - e.spot.position.z) < btnFar;
       for (let k = 0; k < e.buttons.length; k++) {
         const b = e.buttons[k];
         const on = stepNow && Math.hypot(ctx.player.position.x - b.x, ctx.player.position.z - b.z) <= RING.stepRadius && Math.abs(ctx.player.position.y - b.y) < 1.1;
@@ -586,7 +589,7 @@ export function createChests(ctx: GameContext): Chests {
         const lift = k === eTile && b.sunk <= 0 ? 0.06 + 0.03 * pulse : 0;
         const bob = e.lock.opened || b.press > 0.3 ? 0 : Math.sin(time * 1.7 + e.index * 1.3 + k * 1.05) * 0.028 + 0.03 + lift;
         const spring = Math.sin((1 - b.boing) * Math.PI * 3) * b.boing * 0.3;
-        buttonSet.set(e.index * RING.count + k, b.symbol, {
+        if (drawButtons) buttonSet.set(e.index * RING.count + k, b.symbol, {
           x: b.x,
           y: b.y + bob - b.press * 0.07 + Math.max(0, spring) * 0.12,
           z: b.z,

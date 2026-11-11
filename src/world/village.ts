@@ -109,8 +109,9 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   LOTS.forEach((lot, i) => house(k, lot, opts, 100 + i * 17));
 
   // ── Plaza furniture ──
-  // (−2° gave way: it blocked the straight walk from the plaza to Scoops, QA round 4.)
-  const benchAngles = [-132, -50, 70, 114, -168];
+  // (−2° gave way: it blocked the straight walk from the plaza to Scoops, QA round 4; −50° moved to
+  // −65°: it stood right in front of the island map board.)
+  const benchAngles = [-132, -65, 70, 114, -168];
   for (const a of benchAngles) {
     // (angles avoid the five road entrances: −90, −23, 40, 90, 150 degrees)
     const r = THREE.MathUtils.degToRad(a);
