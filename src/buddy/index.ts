@@ -118,6 +118,8 @@ export interface BuddyTestApi {
   history(): { text: string; id: string }[];
   /** Leading state: where Pip leads (attraction id) and the hop state. */
   lead(): { to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
+  /** Same as pressing T / tapping Pip: Pip says what to do next (a bubble, deterministically). */
+  ask(): void;
 }
 
 declare global {
@@ -795,6 +797,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       line: () => queue.current?.line.text ?? null,
       ride: () => ride,
       history: () => history.slice(),
+      ask: () => ask(),
       lead: () => ({ to: director.leadTo, dest: leader.dest ? [leader.dest.x, leader.dest.z] : null, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
     };
   }

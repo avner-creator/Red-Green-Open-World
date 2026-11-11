@@ -222,13 +222,15 @@ test.describe('economy ui', () => {
     expect(emoteRuns).toEqual({ first: { sig: 1, shop: null }, second: { sig: 1, shop: 'wave' }, after: null });
 
     // Combo back to x1: the badge goes away. A denied ticket: a friendly toast with the price.
-    await page.evaluate(() => {
+    // The toast lives ~3 s of real time, so it is read in the same task that raised it (deterministic
+    // on a busy machine) rather than polled afterwards.
+    const denyToast = await page.evaluate(() => {
       window.__rg!.ctx.events.emit('combo:changed', { multiplier: 1, streak: 0 });
       window.__rg!.ctx.events.emit('ticket:denied', { kind: 'balloon', price: 50, wallet: 3 });
       window.__rg!.step(1 / 60, 2, false);
+      return [...document.querySelectorAll('.toast.deny')].map((t) => t.textContent ?? '');
     });
-    // The toast lives ~3 s of real time: check it first (a busy machine can be slow to hide the badge).
-    await expect(page.locator('.toast.deny')).toContainText('50');
+    expect(denyToast.some((t) => t.includes('50')), JSON.stringify(denyToast)).toBe(true);
     await expect(page.getByTestId('combo')).toBeHidden();
 
     // Walk up to the Gear Shack kiosk and press use: session paused, shop on top.
@@ -338,13 +340,17 @@ test.describe('economy ui', () => {
     expect(await phase(page)).toBe('playing');
 
     // Chest unlock: compact moment on the HUD; then missions done and the jackpot.
-    await page.evaluate((chest) => {
+    // Moments live ~2.6 s of real time: read them in the same task that raised them.
+    const unlockMoment = await page.evaluate((chest) => {
       const rg = window.__rg!;
       rg.ctx.profile.unlock(chest, 'chest');
       rg.step(1 / 60, 2, false);
+      return {
+        n: document.querySelectorAll('[data-testid="moment-unlock"]').length,
+        pics: document.querySelectorAll('[data-testid="moment-unlock"] img.pic').length,
+      };
     }, 'fx-specs');
-    await expect(page.getByTestId('moment-unlock')).toHaveCount(1);
-    await expect(page.locator('[data-testid="moment-unlock"] img.pic')).toHaveCount(1);
+    expect(unlockMoment).toEqual({ n: 1, pics: 1 });
     await save(page, 'hud-chest-unlock', 700);
     await page.evaluate((ms) => {
       const rg = window.__rg!;
@@ -354,8 +360,8 @@ test.describe('economy ui', () => {
       rg.ctx.profile.earn(15, 'jackpot');
       e.emit('mission:jackpot', { reward: 15 });
       rg.step(1 / 60, 3, false);
-    }, missions);
-    await expect(page.getByTestId('moment-jackpot')).toHaveCount(1);
+      return document.querySelectorAll('[data-testid="moment-jackpot"]').length;
+    }, missions).then((n) => expect(n).toBe(1));
     await save(page, 'hud-jackpot', 700);
 
     // End screen: earned gems, wallet, missions + jackpot, best combo, unlocked items.
