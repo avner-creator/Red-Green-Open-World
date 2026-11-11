@@ -6,7 +6,12 @@ export type BuddyExtraIcon = 'paw' | 'wave' | 'question' | 'pip' | 'nose' | 'par
 
 export type BuddyPicto = PictoName | BuddyExtraIcon;
 
+/** The six magic-glasses mini-games (world ids from COMPASS_ATTRACTIONS / `world.anchors`). */
+export const GLASSES_ATTRACTIONS = ['glowflies', 'oddone', 'lineup', 'toys', 'gates', 'dotsigns'] as const;
+export type GlassesAttraction = (typeof GLASSES_ATTRACTIONS)[number];
+
 /** Attractions Pip knows by name (they all have a world anchor). */
 export type Attraction =
   | 'trampoline' | 'balloon' | 'launchPads' | 'garage' | 'gearShack' | 'bungee' | 'ranch' | 'sillyZone' | 'bouncePads'
-  | 'carnivalRow' | 'iceCream' | 'bubbleArena' | 'dinoRing' | 'raceStart' | 'foamCourse' | 'airstrip' | 'dragonRoost';
+  | 'carnivalRow' | 'iceCream' | 'bubbleArena' | 'dinoRing' | 'raceStart' | 'foamCourse' | 'airstrip' | 'dragonRoost'
+  | GlassesAttraction;

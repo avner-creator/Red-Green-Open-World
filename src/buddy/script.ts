@@ -94,6 +94,13 @@ export const ATTRACTIONS: Record<Attraction, { icon: BuddyPicto; name: string; h
   foamCourse: { icon: 'bubble', name: 'foam course', howTo: () => ({ text: "Don't fall in the foam!", icon: 'bubble', mood: 'silly' }) },
   airstrip: { icon: 'plane', name: 'stunt planes', howTo: (k) => ({ text: `Press ${k.use} to fly!`, icon: 'plane', mood: 'excited' }) },
   dragonRoost: { icon: 'dragon', name: 'dragon ride', howTo: (k) => ({ text: `Press ${k.use} to fly the dragon!`, icon: 'dragon', mood: 'excited' }) },
+  // Magic-glasses games: one family icon (the glasses), short wordless-friendly how-tos.
+  glowflies: { icon: 'glasses', name: 'magic glow-flies', howTo: () => ({ text: 'Catch the glow-flies!', icon: 'glasses', mood: 'excited' }) },
+  oddone: { icon: 'glasses', name: 'magic odd-one-out', howTo: () => ({ text: 'Which one is different?', icon: 'glasses', mood: 'curious' }) },
+  lineup: { icon: 'glasses', name: 'magic bubbles', howTo: () => ({ text: 'Line up the sparkly ring!', icon: 'glasses', mood: 'curious' }) },
+  toys: { icon: 'glasses', name: 'magic toy hunt', howTo: () => ({ text: 'Follow my paw prints!', icon: 'paw', mood: 'excited' }) },
+  gates: { icon: 'glasses', name: 'magic gates', howTo: () => ({ text: 'Put the halves together!', icon: 'glasses', mood: 'curious' }) },
+  dotsigns: { icon: 'glasses', name: 'magic dot signs', howTo: () => ({ text: 'Find the hidden shape!', icon: 'glasses', mood: 'curious' }) },
 };
 
 export interface KeyNames {
@@ -141,6 +148,7 @@ export const REACT = {
   sunset: { text: 'Hurry! Sunset is coming!', icon: 'sun', mood: 'worried' },
   heights: { text: 'So high! Eek!', icon: 'eye', mood: 'worried' },
   landed: { text: 'You did it! Yay!', icon: 'star', mood: 'proud' },
+  magic: { text: 'Magic glasses! Great job!', icon: 'glasses', mood: 'proud' },
   freefall: { text: 'Wheeeee!', icon: 'parachute', mood: 'excited' },
 } satisfies Record<string, ScriptLine>;
 
