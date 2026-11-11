@@ -25,7 +25,8 @@ try {
   const i0 = await info();
   console.log('site', JSON.stringify(i0.site), 'customer', i0.customer, 'recipe', JSON.stringify(i0.recipe));
   const cu = i0.customer;
-  await tp(cu[0] - 10 * Math.sin(i0.site.yaw), cu[2] - 10 * Math.cos(i0.site.yaw), i0.site.yaw);
+  const fx = cu[0] - i0.site.x, fz = cu[2] - i0.site.z, fl = Math.hypot(fx, fz);
+  await tp(cu[0] + (10 * fx) / fl, cu[2] + (10 * fz) / fl, Math.atan2(-fx, -fz));
   await shot('approach');
   let r = await walkTo(cu[0], cu[2], { tol: 0.6 });
   console.log('to counter', JSON.stringify(r), await st());
