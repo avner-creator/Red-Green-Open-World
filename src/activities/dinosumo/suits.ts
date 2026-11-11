@@ -8,6 +8,7 @@
  */
 import * as THREE from 'three';
 import { asShadowProxy } from '../../core/shadow-proxy';
+import { UNOCCLUDE_FIX, unoccludable } from '../bubbleball/merge';
 
 export const SUIT_COLOURS = [0x45a83c, 0x6a4fc8, 0x2f7fd8, 0x1f8f86] as const;
 const BELLY = 0xfff0c8;
@@ -74,8 +75,8 @@ export interface SuitSet {
 export function createSuits(count: number): SuitSet {
   const group = new THREE.Group();
   group.name = 'dino-suits';
-  const sphereGeo = new THREE.SphereGeometry(1, 20, 14);
-  const coneGeo = new THREE.ConeGeometry(1, 1.6, 8);
+  const sphereGeo = unoccludable(new THREE.SphereGeometry(1, 20, 14));
+  const coneGeo = unoccludable(new THREE.ConeGeometry(1, 1.6, 8));
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0 });
   const spheres = new THREE.InstancedMesh(sphereGeo, mat, count * SUIT_SPHERES);
   const cones = new THREE.InstancedMesh(coneGeo, mat, count * SUIT_CONES);
@@ -157,7 +158,7 @@ export function createSuits(count: number): SuitSet {
         // Head and neck bob a little behind the body (delayed secondary motion).
         if (k >= 2 && k <= 8) local.elements[13] += Math.sin(time * 7 + i) * 0.025 - sq * 0.15;
         m.multiplyMatrices(root, local);
-        spheres.setMatrixAt(i * SUIT_SPHERES + k, m);
+        spheres.setMatrixAt(i * SUIT_SPHERES + k, m.multiply(UNOCCLUDE_FIX));
       });
       // Tail segments along the chain.
       segPos.set(TAIL_BASE[0], TAIL_BASE[1], TAIL_BASE[2]);
@@ -169,19 +170,19 @@ export function createSuits(count: number): SuitSet {
         const r = TAIL_R[k];
         local.compose(segPos, q2.identity(), sc.set(r, r * 0.9, r * 1.25));
         m.multiplyMatrices(root, local);
-        spheres.setMatrixAt(i * SUIT_SPHERES + BODY.length + k, m);
+        spheres.setMatrixAt(i * SUIT_SPHERES + BODY.length + k, m.multiply(UNOCCLUDE_FIX));
         if (k === TAIL_R.length - 1) t.tip.copy(segPos).applyMatrix4(root);
         // A spike on the first three tail pieces.
         if (k < 3) {
           local.compose(v.set(segPos.x, segPos.y + r * 0.85, segPos.z), q2.identity(), sc.set(r * 0.42, r * 0.42, r * 0.42));
           m.multiplyMatrices(root, local);
-          cones.setMatrixAt(i * SUIT_CONES + SPIKES.length + k, m);
+          cones.setMatrixAt(i * SUIT_CONES + SPIKES.length + k, m.multiply(UNOCCLUDE_FIX));
         }
       }
       SPIKES.forEach((s, k) => {
         local.compose(v.set(s[0], s[1], s[2]), q2.identity(), sc.set(s[3], s[3], s[3]));
         m.multiplyMatrices(root, local);
-        cones.setMatrixAt(i * SUIT_CONES + k, m);
+        cones.setMatrixAt(i * SUIT_CONES + k, m.multiply(UNOCCLUDE_FIX));
       });
       local.compose(v.set(0, 0.8, -0.1), q2.identity(), sc.set(0.7, 0.6, 0.85));
       m.multiplyMatrices(root, local);

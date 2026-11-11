@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { asShadowProxy } from '../../core/shadow-proxy';
 import { createGlowMaterial, createLayerMaterial } from '../../vision';
+import { UNOCCLUDE_FIX, unoccludable } from './merge';
 
 const TEAM_COLOURS = { home: new THREE.Color(0xffd83d), away: new THREE.Color(0x141c4a) };
 
@@ -44,12 +45,12 @@ export interface BubbleSet {
 export function createBubbles(count: number): BubbleSet {
   const group = new THREE.Group();
   group.name = 'bubbles';
-  const shellGeo = new THREE.SphereGeometry(1, 28, 18);
+  const shellGeo = unoccludable(new THREE.SphereGeometry(1, 28, 18));
   const shellMat = shellMaterial();
   const shells = new THREE.InstancedMesh(shellGeo, shellMat, count);
   shells.name = 'bubble-shells';
   shells.renderOrder = 2;
-  const beltGeo = new THREE.TorusGeometry(1.0, 0.075, 8, 40).rotateX(Math.PI / 2);
+  const beltGeo = unoccludable(new THREE.TorusGeometry(1.0, 0.075, 8, 40).rotateX(Math.PI / 2));
   const beltMat = new THREE.MeshStandardMaterial({ roughness: 0.5 });
   const belts = new THREE.InstancedMesh(beltGeo, beltMat, count * 2);
   belts.name = 'bubble-belts';
@@ -73,8 +74,8 @@ export function createBubbles(count: number): BubbleSet {
       const sq = Math.max(-0.35, Math.min(0.35, squash));
       s.set(r * (1 - sq * 0.5), r * (1 + sq), r * (1 - sq * 0.5));
       mat.compose(centre, q, s);
-      shells.setMatrixAt(i, mat);
       proxies.setMatrixAt(i, mat);
+      shells.setMatrixAt(i, mat.multiply(UNOCCLUDE_FIX));
       // Two belts: one round the middle and one a little lower (a harness look).
       for (let k = 0; k < 2; k++) {
         beltQ.copy(q).multiply(tilt);
@@ -82,7 +83,7 @@ export function createBubbles(count: number): BubbleSet {
         const ring = k === 0 ? 1.0 : 0.91;
         pos.copy(centre).add(off);
         mat.compose(pos, beltQ, new THREE.Vector3(s.x * ring, s.y, s.z * ring));
-        belts.setMatrixAt(i * 2 + k, mat);
+        belts.setMatrixAt(i * 2 + k, mat.multiply(UNOCCLUDE_FIX));
         belts.setColorAt(i * 2 + k, TEAM_COLOURS[team]);
       }
       shells.instanceMatrix.needsUpdate = true;

@@ -84,3 +84,15 @@ export function pictoTexture(draw: (g: CanvasRenderingContext2D, s: number) => v
   t.anisotropy = 4;
   return t;
 }
+
+/**
+ * Core's camera scan treats every visible instanced mesh whose geometry is about a metre or more
+ * as a "tree crown" occluder, so the arm snapped into the friends' bubbles and dino suits right
+ * behind the hero. The bumper games' moving pieces are built from half-size geometry and drawn
+ * with `UNOCCLUDE_FIX` (×2) appended to every instance matrix: same picture, not an occluder.
+ */
+export const UNOCCLUDE_FIX = new THREE.Matrix4().makeScale(2, 2, 2);
+export function unoccludable<T extends THREE.BufferGeometry>(geo: T): T {
+  geo.scale(0.5, 0.5, 0.5);
+  return geo;
+}

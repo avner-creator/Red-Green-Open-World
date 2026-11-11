@@ -462,8 +462,10 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       player.setAnimation(a.cheer > 0 ? 'cheer' : b.y > 0.2 ? 'jump' : speed > 1 ? 'run' : 'idle');
     }
     if (phase === 'result') {
-      // Celebration: the camera swings round in front of the hero.
-      let off = attackYaw + Math.PI - player.yaw;
+      // Celebration: the camera swings round to the pitch-centre side of the hero, looking out at
+      // them (never from behind a goal net or a wall).
+      const away = Math.hypot(b.x, b.z) > 1 ? site.yaw + Math.atan2(b.x, b.z) : attackYaw;
+      let off = away - player.yaw;
       off = Math.atan2(Math.sin(off), Math.cos(off));
       ctx.cameraRig.setOverride({ distance: 6.2, height: 2.6, fov: CAMERA.fov, lookAhead: 0, yawOffset: off });
       return;
