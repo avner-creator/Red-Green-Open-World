@@ -39,3 +39,8 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - Added since the previous push: wayfinding for the six weaker-eye mini-games (beacons, pictograms, third plaza post, compass, two stone trails); Medium and Low render budgets met in every perf-report view; e2e starts frozen and runs 3 workers; Pip knows the mini-games; frog hat position fix; closer balloon-top framing; trampoline step rings all round; rocket pads allow a practice launch at 0 gems; new start screen, Fun Pass stamp card (replaces mission cards), HUD explain bubbles, help on H/F1.
 - Lesson: full verify under agent load (load average 20–30) gives false failures (timeouts, renderer crashes). Run the promoting verify only when no worker is running e2e.
 - Open: rocket first launch is still paid; `stamp:earned` event wanted on the EventBus (stamps are derived from other events); Pip's bubble unverified by eye at desktop sizes; Low spawn sits exactly at 130 draws; weak-eye layer objects have no distance cut-off; QA round 3 not yet run; nobody has checked the new sites/screens by eye beyond the workers' own screenshots.
+
+## QA round 3 on 7cda79b (2026-11-12 ~05:45 UTC)
+- No blockers. Red-green rule exact in all four lens/eye combinations at three mini-games and a chest. Report: `docs/qa/round3.md` on `agent/qa3`.
+- Majors, assigned: camera inside trees/props (`agent/camera-clear`); Pip does not guide a non-reader and walked toward a gem (`agent/pip-guide`); plaza chest against a fingerpost plus ten minor world/economy/UI items (`agent/qa3-fixes`).
+- QA did not check: a full round of each attraction and mini-game, rocket pads at 0 gems, HUD explain bubbles (none appeared on click), frame time, audio, real glasses, gamepad, touch.

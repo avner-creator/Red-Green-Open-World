@@ -78,3 +78,4 @@
 - R releases every ride, including the horse and rocket/trampoline flight (overrides "stay mounted on R"). Reason: one rule kids can rely on.
 - Play on the title starts at once with the saved (or default frog) hero; hero select is behind "change hero". Reason: one obvious button for 8-year-olds.
 - The orchestrator may `git apply` a diff a worker wrote and tested for files outside that worker's folders. Reason: it is the worker's code; avoids a second agent for a mechanical step.
+- Pip must never move toward, look at or point at a weak-eye-only or strong-eye-only object (QA round 3 found his intro walking toward the nearest gem). Removed, not logged as an exception. Reason: it tells the other eye where the object is, which breaks the core rule.
