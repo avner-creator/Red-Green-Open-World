@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { chestHintState } from '../activities/chests';
 import { GEMS } from '../config';
+import { GIFT_ITEM } from '../activities/gear/goofy';
 import type { Anchor, GameContext, GameSystem } from '../types';
 import { CONTROL_MAP } from '../ui/controlMap';
 import { createBuddyUi } from '../ui/buddy';
@@ -203,6 +204,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let popT = 1;
   let placeSoon = true;
   let attached = false;
+  /** In a sky ride's back seat (`player.object.userData.pipSeat`). */
+  let seated = false;
   let extKind: ExternalKind = 'other';
   let prevMode = ctx.player.mode;
   let prevHeroVy = 0;
@@ -471,6 +474,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     on('shop:open', () => director.onShopOpen()),
     on('shop:purchased', () => director.onPurchased()),
     on('item:unlocked', (e) => {
+      if (e.itemId === GIFT_ITEM) director.onGift();
       if (e.source !== 'starter') director.onUnlocked();
     }),
     on('ticket:paid', (e) => director.onTicketPaid(e.free)),
@@ -529,6 +533,27 @@ export function createBuddy(ctx: GameContext): GameSystem {
     const p = ctx.player;
     if (p.mode === 'external' && prevMode !== 'external') extKind = externalKind(ctx, p.position);
     if (!canopy) canopy = ctx.scene.getObjectByName('canopy') ?? null;
+    // Sky rides (plane, dragon): Pip sits in the back seat they publish on the player, facing
+    // forward; his bubble docks at the screen edge (pipScreen) until the ride lands.
+    const seat = p.mode === 'external' ? (p.object.userData.pipSeat as THREE.Object3D | undefined) : undefined;
+    seated = !!seat;
+    if (seat) {
+      seat.updateWorldMatrix(true, false);
+      pos.setFromMatrixPosition(seat.matrixWorld);
+      const e = seat.matrixWorld.elements;
+      yaw = Math.atan2(e[8]!, e[10]!);
+      inp.pose = 'sit';
+      inp.wind = 0.6;
+      inp.speed = 0;
+      inp.hop = 0;
+      inp.goggles = true;
+      inp.look = null;
+      vel = { x: 0, z: 0 };
+      attached = true;
+      ride = 'vehicle';
+      void dt;
+      return true;
+    }
     ride = classifyRide(ctx, extKind, canopy);
     let pose: Pose | null = null;
     switch (ride) {
@@ -790,7 +815,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     const s = project(head);
     const w = ctx.uiRoot.clientWidth || window.innerWidth;
     const hh = ctx.uiRoot.clientHeight || window.innerHeight;
-    if (s.z <= 1 && s.x >= 0 && s.x <= w && s.y >= 0 && s.y <= hh) return { x: s.x, y: s.y, on: true };
+    if (!seated && s.z <= 1 && s.x >= 0 && s.x <= w && s.y >= 0 && s.y <= hh) return { x: s.x, y: s.y, on: true };
     // Direction from the screen centre (behind the camera, the projection is mirrored).
     let dx = s.x - w / 2;
     let dy = s.y - hh / 2;

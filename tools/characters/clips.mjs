@@ -384,7 +384,87 @@ function robotClips() {
   ];
 }
 
+/**
+ * Four-legged friends (animal pack and the triceratops). Their feet hang on root-level IK joints,
+ * so these clips move only the body a little, the neck, head, ears and tail: wiggly, happy motion.
+ */
+function quadClips(src) {
+  const animal = src.rig === 'animal';
+  const neck = animal ? 'Neck1' : 'Neck';
+  const tails = animal ? (src.id === 'fox' ? ['Tail1', 'Tail2', 'Tail3', 'Tail4', 'Tail5'] : ['Tail1', 'Tail2', 'Tail3']) : ['Tail1', 'Tail2', 'Tail3', 'Tail4', 'Tail5'];
+  const ears = animal ? ['Ear1.L', 'Ear1.R'] : [];
+  const wag = (amp, speed, lag = 0.6) => Object.fromEntries(tails.map((b, i) => [b, (t, u) => [0, amp * sin(speed * TAU * u - i * lag), 0]]));
+  const earFlop = (amp, speed) => Object.fromEntries(ears.map((b, i) => [b, (t, u) => [amp * sin(speed * TAU * u + i * Math.PI), 0, 0]]));
+  return [
+    {
+      name: 'Dance',
+      from: 'Idle',
+      duration: 1.2,
+      rot: {
+        Body: (t, u) => [0, 0.1 * sin(TAU * u), 0.09 * sin(TAU * u)],
+        [neck]: (t, u) => [0.18 * sin(2 * TAU * u), 0, 0],
+        Head: (t, u) => [0.12 * sin(2 * TAU * u), 0.3 * sin(TAU * u), 0.2 * sin(TAU * u)],
+        ...wag(0.5, 2),
+        ...earFlop(0.35, 2),
+      },
+    },
+    {
+      name: 'Wave',
+      from: 'Idle',
+      duration: 1.0,
+      rot: {
+        [neck]: (t, u) => [-0.15, 0, 0],
+        Head: (t, u) => [-0.1, 0.15, 0.3 * sin(2 * TAU * u)],
+        ...wag(0.7, 3, 0.4),
+        ...earFlop(0.3, 2),
+      },
+    },
+    {
+      name: 'Cheer',
+      from: 'Idle',
+      duration: 0.8,
+      rot: {
+        [neck]: (t, u) => [-0.35 * ease(u), 0, 0],
+        Head: (t, u) => [-0.25 * ease(u), 0, 0],
+        ...wag(0.6, 4, 0.3),
+      },
+    },
+    {
+      name: 'Fall',
+      from: 'Idle',
+      duration: 0.8,
+      rot: {
+        [neck]: (t, u) => [-0.25, 0, 0],
+        Head: (t, u) => [-0.2, 0, 0.1 * sin(TAU * u)],
+        ...wag(0.35, 1),
+        ...Object.fromEntries(ears.map((b) => [b, () => [-0.6, 0, 0]])),
+      },
+    },
+    {
+      name: 'Flop',
+      from: 'Idle',
+      duration: 0.6,
+      loop: false,
+      rot: {
+        Body: (t, u) => [0, 0, 0.25 * ramp(u)],
+        Head: (t, u) => [0.3 * ramp(u), 0, 0.35 * ramp(u)],
+        ...Object.fromEntries(tails.map((b) => [b, (t, u) => [0, 0.25 * ramp(u), 0]])),
+      },
+    },
+    {
+      name: 'Sit',
+      from: 'Idle',
+      duration: 0.5,
+      loop: false,
+      rot: {
+        [neck]: (t, u) => [-0.2 * ramp(u), 0, 0],
+        ...Object.fromEntries(tails.map((b, i) => [b, (t, u) => [(i === 0 ? 0.3 : 0.1) * ramp(u), 0, 0]])),
+      },
+    },
+  ];
+}
+
 export function addProceduralClips(doc, src) {
-  const specs = src.id === 'robot' ? robotClips() : src.id === 'rex' ? rexClips() : astroClips(src);
+  const specs = src.id === 'robot' ? robotClips() : src.id === 'rex' ? rexClips() : src.rig ? quadClips(src) : astroClips(src);
   for (const spec of specs) buildClip(doc, spec);
 }

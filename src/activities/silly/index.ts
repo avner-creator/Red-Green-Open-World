@@ -56,6 +56,7 @@ import {
 } from './models';
 import { createBoard } from './board';
 import { createBoopHud } from './hud';
+import { flashPractice } from '../../ui/practiceMark';
 
 export interface SillySpot {
   position: THREE.Vector3;
@@ -65,11 +66,8 @@ export interface SillySpot {
 /** Live array: cleared and refilled when the Silly Zone is built. */
 export const sillySpots: SillySpot[] = [];
 
-/**
- * Ticket kind for "Boop them all!". `TicketKind` has no 'silly' yet (wanted diff in src/types.ts);
- * the economy rules treat any kind generically (first play free, then the attraction price).
- */
-const SILLY_TICKET = ('silly' as string) as TicketKind;
+/** Ticket kind for "Boop them all!" (first play free, then the attraction price). */
+const SILLY_TICKET: TicketKind = 'silly';
 
 /** Test hook (`window.__rgSilly`, only with `?test=1`). */
 export interface SillyTestApi {
@@ -336,6 +334,7 @@ export function createSilly(ctx: GameContext): Silly {
     if (round.phase === 'countdown' || round.phase === 'play') return;
     const economy = (ctx as Partial<GameContext>).economy;
     const practice = economy ? economy.rideTicket(SILLY_TICKET) === 'practice' : false;
+    if (practice) flashPractice(ctx);
     roundNo++;
     const seed = ctx.testMode ? TEST_SEED + roundNo : Math.floor(Math.random() * 2 ** 31);
     handle(round.start(seed, practice));
@@ -397,7 +396,7 @@ export function createSilly(ctx: GameContext): Silly {
           hud.result(res);
           const prof = (ctx as Partial<GameContext>).profile;
           if (res.prize > 0 && prof) prof.earn(res.prize, 'mission');
-          if (res.stars > 0) ctx.events.emit('stunt', { kind: 'bigAir', value: res.booped, stars: res.stars });
+          if (res.stars > 0) ctx.events.emit('stunt', { kind: 'bigAir', value: res.booped, stars: res.stars, stamped: true });
           ctx.events.emit('stamp:earned', { id: 'sillyZone' });
           if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rg:attraction-done', { detail: { id: 'sillyZone', win: res.win, stars: res.stars, booped: res.booped } }));
           if (res.win) {

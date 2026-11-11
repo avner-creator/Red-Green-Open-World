@@ -83,7 +83,7 @@ const CSS = `
 .rg .pass-endcard .ptrack .pm{width:calc(var(--u)*4.4)}
 .rg .pass-endcard .ptrack .pm>.ic{font-size:calc(var(--u)*3.8)}
 .rg .pass-endcard .ptrack .pm .g{font-size:calc(var(--u)*1.9)}
-.rg .pass-grid.mini{grid-template-columns:repeat(12,calc(var(--u)*5));gap:calc(var(--u)*.8)}
+.rg .pass-grid.mini{grid-template-columns:repeat(13,calc(var(--u)*5));gap:calc(var(--u)*.8)}
 .rg .pass-grid.mini .pslot{width:calc(var(--u)*5);height:calc(var(--u)*5);border-width:calc(var(--u)*.35)}
 .rg .pass-grid.mini .pslot>.ic,.rg .pass-grid.mini .pslot>.wpic{font-size:calc(var(--u)*3.2)}
 `;

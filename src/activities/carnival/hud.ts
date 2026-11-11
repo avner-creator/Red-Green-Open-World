@@ -10,6 +10,7 @@ import type { UiIconName } from '../../ui/icons';
 import { pictoDataUrl } from './picto';
 import type { PictoId } from './picto';
 import type { RoundResult } from './round';
+import { NO_GEM_SVG } from '../../ui/practiceMark';
 
 const CSS = `
 .rg .cv{position:absolute;inset:0;pointer-events:none;display:none;z-index:6}
@@ -80,11 +81,6 @@ const CSS = `
 @keyframes cv-spin{to{transform:rotate(360deg)}}
 `;
 
-/** Practice round (no prize): a gem with a fat line through it. */
-const NO_GEM_SVG =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12l4 5-10 12L2 9z" fill="#2a3060" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>' +
-  '<path d="M2 9h20M9 4l3 17 3-17" fill="none" stroke="#fff" stroke-width="1.1"/><path d="M3 21L21 3" stroke="#000" stroke-width="4.4" stroke-linecap="round"/>' +
-  '<path d="M3 21L21 3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
 /** Dizzy (after mashing or a fumble): three little stars in a swirl. */
 const DIZZY_SVG =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12m-7 0a7 4 0 1 0 14 0a7 4 0 1 0-14 0" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 2"/>' +

@@ -407,6 +407,11 @@ export class Director {
 
   onUnlocked(): void {}
 
+  /** The first-minute wardrobe gift arrived (once per profile). */
+  onGift(): void {
+    this.econ('gift');
+  }
+
   onTicketPaid(free = false): void {
     this.progress();
     this.didSomething();

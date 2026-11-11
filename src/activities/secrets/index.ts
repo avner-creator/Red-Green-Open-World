@@ -350,7 +350,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     const ped = p.def.pedestal;
     const ground = Math.max(world.waterLevel, h(ped.x, ped.z));
     confetti.burst(tmpP.set(ped.x, ped.y + 1.3, ped.z), 140);
-    ctx.events.emit('stunt', { kind: 'bigAir', value: Math.round(ped.y - ground), stars: 3 });
+    ctx.events.emit('stunt', { kind: 'bigAir', value: Math.round(ped.y - ground), stars: 3, stamped: true });
     ctx.audio.play('fanfare');
     ctx.audio.play('star', { pitch: 1.2 });
     ctx.cameraRig.shake(0.15);
@@ -610,7 +610,7 @@ export function createSecrets(ctx: GameContext): Secrets {
   function claimTreasure(d: DoorRt): void {
     d.treasure = true;
     d.treasureT = 0.001;
-    ctx.events.emit('stunt', { kind: 'bullseye', value: 1, stars: 3 });
+    ctx.events.emit('stunt', { kind: 'bullseye', value: 1, stars: 3, stamped: true });
     ctx.events.emit('ui:toast', { icon: 'chest' });
     ctx.events.emit('stamp:earned', { id: 'secrets' });
     ctx.audio.play('fanfare');

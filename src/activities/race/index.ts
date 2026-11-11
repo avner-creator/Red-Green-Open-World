@@ -21,6 +21,7 @@ import { createRaceHud } from './hud';
 import { createRivalCar, pickFriends, placeRival, type RivalCar } from './rivals';
 import { createRaceSite } from './site';
 import { Progress, boostPadDistances, buildTrack, checkpointDistances, leftOf, racingLine } from './track';
+import { flashPractice } from '../../ui/practiceMark';
 
 export type RacePhase = 'idle' | 'countdown' | 'racing' | 'finishing' | 'podium' | 'result';
 
@@ -269,6 +270,7 @@ export function createRace(ctx: GameContext): Race {
     if (economy) {
       const price = economy.ticketPrice('race');
       prize = economy.rideTicket('race') !== 'practice';
+      if (!prize) flashPractice(ctx);
       if (!prize) ctx.events.emit('ui:toast', { icon: 'gem', text: `+${Math.max(1, price - wallet.gems)}` });
     } else {
       const price = racePrice(racesThisSession);

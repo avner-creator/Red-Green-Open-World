@@ -237,9 +237,14 @@ test('the sweeper bar and a wrecking pillow boop a player on the ground (soft ho
     }
     rg.step(1 / 60, 120, false);
     const modeAfterSweep = ctx.player.mode;
-    // Pillow: stand right under pillow 0's pivot (the bottom of its swing) and wait for it.
+    // Pillow: stand right under pillow 0's pivot (the bottom of its swing) and wait for it. Arrive
+    // while the pillow is out near a swing extreme (wait well clear of its reach and the sweeper first), so the hero
+    // is never dropped into it: the pillow's phase depends on how long the zone has been running.
     const px = s.pillows()[0][0];
     const pz = s.solids().find((x) => x.name === 'gantry-1')!.at[2];
+    rg.teleport(px, ctx.world.heightAt(px, pz + 5) + 0.05, pz + 5, 0);
+    for (let i = 0; i < 240 && Math.abs(s.pillows()[0][2] - pz) < 1.5; i++) rg.step(1 / 60, 1, false);
+    const pillowOut = Math.abs(s.pillows()[0][2] - pz);
     rg.teleport(px, ctx.world.heightAt(px, pz) + 0.05, pz, 0);
     rg.step(1 / 60, 1, false);
     let pillowV = 0;
@@ -253,9 +258,10 @@ test('the sweeper bar and a wrecking pillow boop a player on the ground (soft ho
       if (v.y > 4) pillowV = Math.hypot(v.x, v.z);
     }
     rg.step(1 / 60, 150, false);
-    return { sweepUp, sweepSide, modeAfterSweep, pillowV, minD, mode: ctx.player.mode, errors: rg.errors };
+    return { sweepUp, sweepSide, modeAfterSweep, pillowOut, pillowV, minD, mode: ctx.player.mode, errors: rg.errors };
   });
   console.log(JSON.stringify(r));
+  expect(r.pillowOut).toBeGreaterThanOrEqual(1.5);
   expect(r.sweepUp).toBeGreaterThan(4);
   expect(r.sweepSide).toBeGreaterThan(3);
   expect(r.sweepSide).toBeLessThan(12);

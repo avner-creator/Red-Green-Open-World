@@ -2,7 +2,7 @@
  * The whole loop in one go, on a brand-new profile (integration check across streams): select
  * the frog -> gems (wallet, combo) -> Gear Shack: buy a hat -> trampoline mega gems -> a mission
  * -> balloon (free) -> second balloon ride costs 5 -> bungee -> Silly Zone flop button -> a
- * secret path reward -> a vault door -> buy the panda in the select -> end screen -> reload keeps
+ * secret path reward -> a vault door -> buy the flamingo (Panda is free now) in the select -> end screen -> reload keeps
  * wallet, items and hero -> grown-up reset clears the profile. Simulation steps are not rendered.
  */
 import { expect, test } from '@playwright/test';
@@ -164,7 +164,7 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
   });
   expect(vault).toEqual({ open: true, treasure: true });
 
-  // Buy the panda in the hero select (pause -> Hero), with the real wallet.
+  // Buy the flamingo in the hero select (pause -> Hero), with the real wallet.
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.ctx.profile.earn(Math.max(0, 30 - rg.ctx.profile.wallet), 'test');
@@ -172,14 +172,14 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
     rg.step(1 / 60, 2, false);
   });
   await page.getByTestId('pause-hero').click();
-  await page.getByTestId('csel-panda').click();
+  await page.getByTestId('csel-flamingo').click();
   await page.getByTestId('csel-buy').click();
   await page.getByTestId('csel-go').click();
   const bought = await page.evaluate(() => {
     const p = window.__rg!.ctx.profile;
-    return { phase: window.__rg!.state().phase, owns: p.owns('panda'), hero: p.equipped('character'), wallet: p.wallet };
+    return { phase: window.__rg!.state().phase, owns: p.owns('flamingo'), hero: p.equipped('character'), wallet: p.wallet };
   });
-  expect(bought).toMatchObject({ phase: 'playing', owns: true, hero: 'panda' });
+  expect(bought).toMatchObject({ phase: 'playing', owns: true, hero: 'flamingo' });
 
   // End screen: wallet, missions and outfits; Hero and Wardrobe one click away.
   await page.evaluate(() => {
@@ -199,11 +199,11 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
     const rg = window.__rg!;
     const p = rg.ctx.profile;
     const glbs = performance.getEntriesByType('resource').map((r) => r.name).filter((n) => /characters\/.*\.glb/.test(n));
-    return { wallet: p.wallet, hat: p.owns('hat-propeller'), panda: p.owns('panda'), hero: rg.ctx.player.characterId, glbs: glbs.map((g) => g.replace(/^.*\//, '')) };
+    return { wallet: p.wallet, hat: p.owns('hat-propeller'), panda: p.owns('flamingo'), hero: rg.ctx.player.characterId, glbs: glbs.map((g) => g.replace(/^.*\//, '')) };
   });
   // The saved hero loads first and the old default (robot) never does. (Scoops' terrace friends load
   // two more heroes at boot: see the integration report.)
-  expect({ ...back, glbs: back.glbs[0] }).toEqual({ wallet: saved, hat: true, panda: true, hero: 'panda', glbs: 'panda.glb' });
+  expect({ ...back, glbs: back.glbs[0] }).toEqual({ wallet: saved, hat: true, panda: true, hero: 'flamingo', glbs: 'flamingo.glb' });
   expect(back.glbs).not.toContain('robot.glb');
 
   // Grown-up reset clears it all: back to a fresh profile and the frog.
@@ -214,7 +214,7 @@ test('new profile: the whole loop, then reload and reset', async ({ page }) => {
     rg.step(1 / 60, 3, false);
     for (let i = 0; i < 50 && rg.ctx.player.characterId !== 'frog'; i++) await new Promise((r) => setTimeout(r, 50));
     const p = rg.ctx.profile;
-    return { wallet: p.wallet, hat: p.owns('hat-propeller'), panda: p.owns('panda'), hero: rg.ctx.player.characterId };
+    return { wallet: p.wallet, hat: p.owns('hat-propeller'), panda: p.owns('flamingo'), hero: rg.ctx.player.characterId };
   });
   expect(reset).toEqual({ wallet: 0, hat: false, panda: false, hero: 'frog' });
   expect(consoleErrors).toEqual([]);

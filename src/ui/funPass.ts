@@ -28,11 +28,15 @@ export function passIcon(cls = ''): HTMLElement {
 
 interface Slot {
   id: StampId;
-  icon: Parameters<typeof markerIcon>[0] | 'chest';
+  icon: Parameters<typeof markerIcon>[0] | 'chest' | 'eye';
 }
+
+/** The slot picture: a UI icon for the chest and the secrets, else the compass pictogram. */
+const slotIcon = (s: Slot | undefined): HTMLElement => (!s || s.icon === 'chest' ? icon('chest') : s.icon === 'eye' ? icon('eye') : markerIcon(s.icon));
 
 export const PASS_SLOTS: readonly Slot[] = [
   ...COMPASS_TARGETS.filter((t) => t.anchor !== 'gearShack').map((t) => ({ id: t.anchor as string, icon: t.icon })),
+  { id: 'secrets', icon: 'eye' },
   { id: CHEST_STAMP, icon: 'chest' },
 ];
 
@@ -110,7 +114,7 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
       'div',
       `pslot ${on ? 'on' : ''}`.trim(),
       { 'data-stamp': s.id, 'data-on': String(on), style: `--r:${((i * 37) % 17) - 8}deg` },
-      s.icon === 'chest' ? icon('chest') : markerIcon(s.icon),
+      slotIcon(s),
       h('span', 'ok', {}, icon('check')),
     );
 
@@ -171,7 +175,7 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
     if (open) renderCard();
     retrigger(chip, 'stamp');
     const slot = PASS_SLOTS.find((s) => s.id === id);
-    const pop = h('div', 'passpop', { 'data-testid': 'stamp-pop' }, slot?.icon === 'chest' || !slot ? icon('chest') : markerIcon(slot.icon), h('span', 'ok', {}, icon('check')));
+    const pop = h('div', 'passpop', { 'data-testid': 'stamp-pop' }, slotIcon(slot), h('span', 'ok', {}, icon('check')));
     pops.replaceChildren(pop);
     window.setTimeout(() => pop.remove(), 1800);
     const gems = prizeFor(before, got.size, total);
@@ -199,6 +203,8 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
   // Fallback derivation for the rest (skips the ids above: those stamp on completion only).
   ctx.events.on('ticket:paid', (e) => stamp(derived(ticketStamp(e.kind))));
   ctx.events.on('stunt', (e) => {
+    // A stunt that comes with its own stamp (secrets, Silly Zone, rocket) never stamps a neighbour.
+    if (e.stamped) return;
     const p = ctx.player.position;
     stamp(derived(stuntStamp(e.kind, { x: p.x, z: p.z }, where, (id) => onCard.has(id) && !EXPLICIT_STAMPS.has(id))));
   });

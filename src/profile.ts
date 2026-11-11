@@ -18,8 +18,11 @@ export interface ProfileOptions {
 }
 
 export const EQUIP_SLOTS: readonly EquipSlot[] = [
-  'head', 'back', 'face', 'carColor', 'horseColor', 'trail', 'emote', 'character',
+  'head', 'back', 'face', 'carColor', 'horseColor', 'hand', 'trail', 'emote', 'character', 'power',
 ];
+
+/** The 'power' slot is not an owned item: per-hero picks as `hero:power` pairs joined by ','. */
+const POWER_VALUE = /^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+:[A-Za-z0-9_-]+)*$/;
 
 /** Ceiling for wallet, lifetime gems and sessions (so the HUD never shows "1e+21"). */
 export const PROFILE_MAX_COUNT = 999_999;
@@ -53,7 +56,8 @@ export function sanitizeProfile(input: unknown): ProfileData {
     const e = o.equipped as Record<string, unknown>;
     for (const slot of EQUIP_SLOTS) {
       const id = e[slot];
-      if (typeof id === 'string' && owned.includes(id)) equipped[slot] = id;
+      if (typeof id !== 'string') continue;
+      if (slot === 'power' ? id.length <= 600 && POWER_VALUE.test(id) : owned.includes(id)) equipped[slot] = id;
     }
   }
   const wallet = count(o.wallet);

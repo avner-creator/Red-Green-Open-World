@@ -28,8 +28,22 @@ function bandColor(f: number): THREE.Color {
   return white ? new THREE.Color(0xf4f4f4) : new THREE.Color(0x24407f);
 }
 
-/** Plate for the height gauge: big dark number on white, one yellow star per tier. */
-function heightPlate(h: number, stars: number): THREE.CanvasTexture | null {
+/** Five-point star path centred on (x, y). */
+function starPath(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  g.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = -Math.PI / 2 + (k * Math.PI) / 5;
+    const rr = k % 2 ? r * 0.45 : r;
+    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  g.closePath();
+}
+
+/**
+ * Plate for the height gauge (no text: non-readers): stacked up-chevrons on the left and yellow
+ * stars on the right, one of each per tier. Dark on white, so it reads in R-only and G-only.
+ */
+function heightPlate(stars: number): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null;
   const c = document.createElement('canvas');
   c.width = 256;
@@ -41,17 +55,27 @@ function heightPlate(h: number, stars: number): THREE.CanvasTexture | null {
   g.strokeStyle = '#0e1226';
   g.lineWidth = 10;
   g.strokeRect(5, 5, 246, 118);
-  g.fillStyle = '#0e1226';
-  g.font = 'bold 64px sans-serif';
-  g.textAlign = 'left';
-  g.textBaseline = 'middle';
-  g.fillText(`${h} m`, 18, 50);
-  g.font = 'bold 44px sans-serif';
-  g.lineWidth = 5;
+  // Up chevrons, stacked bottom to top.
+  g.lineWidth = 13;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  const step = 26;
+  const top = 64 - ((stars - 1) * step) / 2 - 12;
   for (let i = 0; i < stars; i++) {
+    const y = top + i * step;
+    g.beginPath();
+    g.moveTo(26, y + 20);
+    g.lineTo(54, y);
+    g.lineTo(82, y + 20);
+    g.stroke();
+  }
+  // Stars, one per tier.
+  g.lineWidth = 6;
+  for (let i = 0; i < stars; i++) {
+    starPath(g, 128 + i * 44, 64, 22);
     g.fillStyle = '#ffd21f';
-    g.strokeText('\u2605', 18 + i * 50, 100);
-    g.fillText('\u2605', 18 + i * 50, 100);
+    g.fill();
+    g.stroke();
   }
   return new THREE.CanvasTexture(c);
 }
@@ -201,7 +225,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     root.add(o);
   }
 
-  // Height gauge beside the mat: a striped mast with numbered star plates at 15 / 30 / 45 m.
+  // Height gauge beside the mat: a striped mast with chevron + star plates at 15 / 30 / 45 m.
   const gaugeX = -(R + 4.5);
   // Mast segments and arms are one unlit vertex-coloured mesh (1 draw).
   const stripeA = new THREE.Color(0xf4f4f4);
@@ -220,12 +244,14 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   root.add(mast);
   disposables.push(mast.geometry);
   [15, 30, 45].forEach((h, i) => {
-    const tex = heightPlate(h, i + 1);
+    const tex = heightPlate(i + 1);
     if (!tex) return;
     disposables.push(tex);
     const sprite = new THREE.Sprite(mat(new THREE.SpriteMaterial({ map: tex, fog: false })));
-    sprite.scale.set(5, 2.5, 1);
-    sprite.position.set(gaugeX + 3, MAT.top + h, 0);
+    // Small and on the far side of the mast: at the apex the camera is level with a plate, and a
+    // big one beside the mat filled the top-left of the screen.
+    sprite.scale.set(2.6, 1.3, 1);
+    sprite.position.set(gaugeX - 1.2, MAT.top + h, 0);
     root.add(sprite);
   });
   // Bonus star (both-eye: bright gold with a near-black rim, reads in R and G alone): hangs

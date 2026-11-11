@@ -49,6 +49,8 @@ export const SLOT_ICON: Record<EquipSlot, IconName> = {
   horseColor: 'horse',
   trail: 'trail',
   emote: 'emote',
+  hand: 'hand',
+  power: 'star',
 };
 
 /** Categories that have at least one item, in tab order (empty categories are hidden). */

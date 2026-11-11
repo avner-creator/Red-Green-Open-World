@@ -1,4 +1,5 @@
 import type { AudioApi, GameContext, SfxName } from '../types';
+import { mountRadio } from '../ui/radio';
 import { GemCombo, isBigGem } from './combo';
 import { playExtra, type ExtraSfx } from './fx';
 import { landVolume, volumeToGain } from './gain';
@@ -6,6 +7,8 @@ import { RateLimiter, VoiceCounter } from './limiter';
 import { Loops, type LoopName } from './loops';
 import { Music } from './music';
 import { MusicDirector, type MusicCue } from './music-state';
+import { getRadio, RADIO_FADE, type GenStationId } from './radio';
+import { StationBank } from './stations';
 import { TrackPlayer, type TrackId } from './tracks';
 import { createNoiseBuffer, playSfx, Synth } from './synth';
 
@@ -19,6 +22,9 @@ const CROSSFADE = 1.5;
 /** Seconds left when the urgent loop is fetched ahead of time. */
 const URGENT_PRELOAD_AT = 75;
 const WHOOP_HEIGHT = 30;
+/** Car-radio low-pass (Hz): wide open on foot, a little boxy in the buggy. */
+const CAR_OPEN = 20000;
+const CAR_CLOSED = 3200;
 
 /** Music ducking under big moments: [level, hold seconds]. */
 const DUCK: Partial<Record<SfxName | ExtraSfx, readonly [number, number]>> = {
@@ -49,6 +55,9 @@ interface Engine {
   loops: Loops;
   music: Music;
   tracks: TrackPlayer;
+  stations: StationBank;
+  /** Low-pass on all music: the car-radio sound while driving. */
+  carFilter: BiquadFilterNode;
 }
 
 type AudioCtor = new () => AudioContext;
@@ -75,6 +84,9 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
   /** setMusic(false) from outside mutes music regardless of the director. */
   let musicEnabled = true;
   let appliedCue: MusicCue = 'none';
+  /** Station the music was last synced to (re-sync when the radio changes). */
+  let appliedStation = getRadio().current;
+  let inCar = false;
   /** Seconds since creation (driven by update), used for combos and the music director. */
   let clock = 0;
   let urgentRequested = false;
@@ -148,7 +160,12 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
       const pauseGain = ac.createGain();
       const duckGain = ac.createGain();
       sfxBus.connect(master);
-      musicBus.connect(pauseGain);
+      const carFilter = ac.createBiquadFilter();
+      carFilter.type = 'lowpass';
+      carFilter.frequency.value = CAR_OPEN;
+      carFilter.Q.value = 0.7;
+      musicBus.connect(carFilter);
+      carFilter.connect(pauseGain);
       pauseGain.connect(duckGain);
       duckGain.connect(master);
       const genGain = ac.createGain();
@@ -169,8 +186,11 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
         loops: new Loops(ac, sfxBus, noise),
         music: new Music(ac, genGain, (Date.now() & 0xffff) + 1),
         tracks: new TrackPlayer(ac, trackGain, baseUrl()),
+        stations: new StationBank(ac, genGain, noise),
+        carFilter,
       };
       director.unlock();
+      applyCar();
       applyVolumes();
       applyPause();
     } catch {
@@ -214,19 +234,63 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
     }
   }
 
-  /** Make the music match the director's cue (idempotent, called every frame). */
+  /** Make the music match the director's cue and the radio (idempotent, called every frame). */
   function syncMusic(): void {
     if (!engine) return;
     const cue = musicEnabled ? director.update(clock) : 'none';
-    const track = CUE_TRACK[cue];
-    const { tracks, music } = engine;
-    if (cue !== appliedCue) {
-      const fade = cue === 'none' ? 0.6 : cue === 'urgent' ? 1 : CROSSFADE;
+    const station = getRadio().station;
+    // A chosen station replaces the in-game music, but not the quiet before the first gesture,
+    // the title theme or the moment after the end jingle.
+    const override = station.kind !== 'auto' && cue !== 'none' && cue !== 'title';
+    const { tracks, music, stations } = engine;
+    const track: TrackId | undefined = override ? (station.kind === 'track' ? station.track : undefined) : CUE_TRACK[cue];
+    if (cue !== appliedCue || station.id !== appliedStation) {
+      const gen: GenStationId | null = override && station.kind === 'gen' ? (station.id as GenStationId) : null;
+      const fade = station.id !== appliedStation ? RADIO_FADE : cue === 'none' ? 0.6 : cue === 'urgent' ? 1 : CROSSFADE;
       tracks.play(track ?? null, fade);
+      stations.play(gen, fade);
       appliedCue = cue;
+      appliedStation = station.id;
     }
     // The soft generative theme plays on the title, and stands in if a loop cannot load.
-    music.setOn(cue === 'title' || (track !== undefined && tracks.hasFailed(track)));
+    const failed = track !== undefined && tracks.hasFailed(track);
+    music.setOn(override ? failed : cue === 'title' || failed);
+  }
+
+  /** Short tuning blip when the station changes. */
+  function tuningBlip(): void {
+    if (!engine || !running()) return;
+    try {
+      const ac = engine.ctx;
+      const now = ac.currentTime + 0.01;
+      const chirps: [number, number][] = [[700, 1500], [1100, 520]];
+      chirps.forEach(([f0, f1], i) => {
+        const at = now + i * 0.07;
+        const osc = ac.createOscillator();
+        const g = ac.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(f0, at);
+        osc.frequency.exponentialRampToValueAtTime(f1, at + 0.06);
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.linearRampToValueAtTime(0.05, at + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
+        osc.connect(g);
+        g.connect(engine!.sfxBus);
+        osc.onended = () => {
+          osc.disconnect();
+          g.disconnect();
+        };
+        osc.start(at);
+        osc.stop(at + 0.09);
+      });
+    } catch {
+      /* never throw */
+    }
+  }
+
+  function applyCar(): void {
+    if (!engine) return;
+    engine.carFilter.frequency.setTargetAtTime(inCar ? CAR_CLOSED : CAR_OPEN, engine.ctx.currentTime, 0.2);
   }
 
   function preloadSession(): void {
@@ -254,7 +318,21 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
     if (v > 0) play('land', { volume: v });
   });
   ev.on('player:flop', () => play('flop'));
-  ev.on('player:mode', (e) => director.setMode(e.mode));
+  ev.on('player:mode', (e) => {
+    director.setMode(e.mode);
+    if (e.mode !== 'flop') {
+      inCar = e.mode === 'driving';
+      applyCar();
+    }
+  });
+  getRadio().subscribe(() => {
+    try {
+      syncMusic();
+      tuningBlip();
+    } catch {
+      /* never throw */
+    }
+  });
   ev.on('chest:key', () => play('key'));
   ev.on('chest:opened', () => {
     play('chest');
@@ -286,6 +364,7 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
       engine?.loops.stopAll();
       // Cut the loop quickly so the win jingle owns the moment.
       engine?.tracks.stopAll(0.35);
+      engine?.stations.play(null, 0.35);
       appliedCue = 'none';
       if (!engine?.tracks.oneShot('jingle')) play('fanfare');
       else duck('fanfare');
@@ -338,6 +417,7 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
         engine.loops.update(dt);
         syncMusic();
         engine.music.update();
+        engine.stations.update();
       } catch {
         /* never throw */
       }
@@ -352,6 +432,14 @@ export function createAudio(ctx: Pick<GameContext, 'settings' | 'events' | 'test
       api.unlock();
     };
     for (const k of kinds) window.addEventListener(k, first, true);
+  }
+
+  if (typeof document !== 'undefined') {
+    try {
+      mountRadio(ctx.testMode);
+    } catch {
+      /* the radio button is optional */
+    }
   }
 
   return api;

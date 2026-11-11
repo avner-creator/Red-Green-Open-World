@@ -306,7 +306,7 @@ test('screenshots: gear fit on every character (RG_SHOTS=1)', async () => {
   test.skip(!process.env.RG_SHOTS, 'opt-in screenshots');
   test.setTimeout(240_000);
   mkdirSync(`${OUT}/characters`, { recursive: true });
-  const heroes = ['robot', 'frog', 'panda', 'bee', 'flamingo', 'rex'];
+  const heroes = ['robot', 'frog', 'panda', 'bee', 'pup', 'flamingo', 'rex', 'fox', 'alpaca', 'trike'];
   const looks: Record<string, string[]> = {
     a: ['hat-crown', 'glasses-shades', 'cape-star'],
     b: ['hat-wizard', 'glasses-goggles', 'pack-rocket'],
@@ -341,7 +341,7 @@ test('screenshots: gear fit on every character (RG_SHOTS=1)', async () => {
         { hero, items },
       );
       const { p, fx, fz, hp } = pose;
-      const len = hero === 'rex' ? 1.6 : 1;
+      const len = hero === 'rex' ? 1.6 : hero === 'trike' || hero === 'alpaca' ? 1.3 : 1;
       const views: Array<[[number, number, number], [number, number, number]]> = [
         // front-ish three-quarter, and from the side-back (shows the back item and glasses depth)
         [[p[0] + (fx * 3.6 + fz * 1.3) * len, p[1] + 1.9, p[2] + (fz * 3.6 - fx * 1.3) * len], [p[0], p[1] + 1.05, p[2]]],
