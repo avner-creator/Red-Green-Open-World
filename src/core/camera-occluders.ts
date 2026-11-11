@@ -143,8 +143,18 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
     return id;
   }
 
+  /** Ridden things (buggies, horses) are never scenery, parked or not. */
+  function onVehicle(o: THREE.Object3D): boolean {
+    for (let p: THREE.Object3D | null = o; p; p = p.parent) if (/^(buggy|horse)/.test(p.name)) return true;
+    return false;
+  }
+
   function onProxy(mesh: THREE.Mesh): void {
     let e = proxies.get(mesh);
+    if (!e && onVehicle(mesh)) {
+      proxies.set(mesh, { stable: 0, matrix: new THREE.Matrix4(), bake: -1, dynamic: true });
+      return;
+    }
     if (!e) {
       const geo = mesh.geometry;
       if (!geo.boundingSphere) geo.computeBoundingSphere();
@@ -242,7 +252,9 @@ export function createCameraOccluders(scene: THREE.Scene): CameraOccluders {
     side.normalize();
     up.crossVectors(side, dir).normalize();
     let best: number | null = null;
-    for (const [sx, sy] of offs) {
+    const rays = radius > 0 ? offs.length : 1;
+    for (let r = 0; r < rays; r++) {
+      const [sx, sy] = offs[r];
       o2.copy(origin).addScaledVector(side, sx * radius).addScaledVector(up, sy * radius);
       if (++query >= 0xffffffff) {
         stamp.fill(0);

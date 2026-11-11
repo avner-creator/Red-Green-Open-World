@@ -135,7 +135,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   function clearAlong(origin: THREE.Vector3, d: THREE.Vector3, max: number, radius: number, ball: InstanceType<typeof R.Ball>): number | null {
     const hit = ctx.physics.world.castShape(origin, IDQ, d, ball, 0, max, false, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS);
     let best = hit ? hit.time_of_impact : null;
-    const o = occluders.cast(origin, d, best ?? max, radius);
+    // Chase cams (buggy at speed) keep to physics colliders: roadside crowns flicking past would
+    // snap the arm in and out and break the drive's smoothness.
+    const o = chase ? null : occluders.cast(origin, d, best ?? max, radius);
     if (ball === ballHard) lastHit = { phys: best, occ: o, collider: hit ? hit.collider.handle : -1 };
     if (o !== null && (best === null || o < best)) best = o;
     return best;
@@ -272,7 +274,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     occluders.update(pivot, dt);
     const reach = wantDistance + 0.2;
     let liftTarget = 0;
-    if (phase !== 'title') {
+    // Chase framing is the vehicle's own; the swing over/under is for the hero on foot or riding.
+    if (phase !== 'title' && !chase) {
       const base = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard);
       const baseD = base === null ? wantDistance : base;
       if (baseD < Math.min(ARM.liftWhenShorter, wantDistance * 0.5)) {
