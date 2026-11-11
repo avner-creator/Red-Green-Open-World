@@ -16,7 +16,7 @@
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../../../types';
-import type { GameEvents } from '../../../../types';
+import type { GameContext, GameEvents } from '../../../../types';
 import { PLAYER } from '../../../../config';
 import { createGlyphSprite, createRing, withChallenge } from '../../../../vision/toolkit';
 import type { GlyphSpriteBlock, RingBlock } from '../../../../vision/toolkit';
@@ -77,7 +77,11 @@ export function create(env: WeaveEnv): WeavePart {
   let misses = 0;
   let lastResult: string | null = null;
 
-  const eligible = (): boolean => ctx.player.mode === 'walk' && ctx.player.object.visible;
+  const eligible = (): boolean => {
+    // `player` is always there in the game; the weave registry unit test runs without one.
+    const pl = ctx.player as GameContext['player'] | undefined;
+    return pl !== undefined && pl.mode === 'walk' && pl.object.visible;
+  };
   const comboNow = (): number => forcedCombo ?? ctx.economy?.combo.multiplier ?? 1;
   const ringShowing = (): boolean => active && groundOk;
   const numberShowing = (): boolean => active && comboNow() >= 2;
