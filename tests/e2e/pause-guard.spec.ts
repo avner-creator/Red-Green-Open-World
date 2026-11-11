@@ -112,7 +112,7 @@ test('lock loss from focus change shows the click hint and keeps playing', async
   await step(50); // hint waits 0.6 s
   expect(await phase()).toBe('playing');
   expect(await page.evaluate(() => (window as unknown as { __rgLookHint?: boolean }).__rgLookHint)).toBe(true);
-  expect(await log()).toEqual([]);
+  expect(await log()).toEqual([]);  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 });
 
 test('Esc that the browser swallows while the Fun Pass is open closes the card, not the game', async () => {

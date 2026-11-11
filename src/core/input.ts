@@ -201,6 +201,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
+  // Focus back: that earlier blur no longer explains a later lock loss.
+  window.addEventListener('focus', () => (lastBlurAt = -Infinity));
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('pointerlockchange', onLockChange);
   ctx.canvas.addEventListener('click', onCanvasClick);
