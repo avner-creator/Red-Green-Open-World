@@ -73,6 +73,8 @@ try {
   await step(1);
   await shot('06-settings-game', { channels: true });
   console.log('SETTINGS-GAME', await text('[data-testid="settings"]'));
+  await page.getByTestId('tab-glasses').click();
+  await step(1);
   const ac = page.getByTestId('auto-challenge');
   if (await ac.count()) {
     const before = await page.evaluate(() => JSON.stringify(window.__rg.ctx.settings.get()).match(/"auto\w*":\w+/g));
