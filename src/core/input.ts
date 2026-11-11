@@ -92,6 +92,16 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
   let padSprintLatch = false;
 
   const locked = (): boolean => document.pointerLockElement === ctx.canvas;
+  /**
+   * Automated browsers (Playwright, `navigator.webdriver`) never get a real pointer lock: in
+   * headless Chromium a granted lock balloons the renderer to 2+ GB within seconds and it is
+   * killed (measured: every viewport size; a blank WebGL page with a lock also stalls). Tests that
+   * need the real lock pass `&reallock=1`. Real players are unaffected.
+   */
+  const automationNoLock =
+    typeof navigator !== 'undefined' && navigator.webdriver === true &&
+    !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('reallock') === '1');
+  let lockRequests = 0;
 
   /** True while we re-dispatch the Esc the browser swallowed (so in-game cards can close on it). */
   let replayingEsc = false;
@@ -338,6 +348,8 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
       if (touch.controls.active) return;
       wantLock = true;
       if (locked()) return;
+      lockRequests++;
+      if (automationNoLock) return;
       try {
         const r = ctx.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
         if (r && typeof r.catch === 'function') r.catch(() => undefined);
@@ -366,6 +378,7 @@ export function createInput(ctx: Pick<GameContext, 'canvas' | 'testMode'> & Part
   };
   triggersByApi.set(api, triggers);
   pauseSourceByApi.set(api, pauseInfo);
+  if (ctx.testMode) (window as unknown as { __rgLockRequests?: () => number }).__rgLockRequests = () => lockRequests;
   lookHintByApi.set(api, () => gameplay && wantLock && !locked() && !touch.controls.active && device === 'keyboard');
   registerTouchControls(api, touch.controls);
   return api;
