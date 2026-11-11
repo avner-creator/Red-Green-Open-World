@@ -33,6 +33,9 @@ export const FAKES = {
   armNear: 15,
   armFar: 28,
   disarm: 32,
+  /** Open view: the cluster must be clear from ≥ `viewMin` of 4 compass approaches at `viewDist` m. */
+  viewDist: 10,
+  viewMin: 3,
   /** Triangle side (m): ≥ realRadius + fakeRadius + 0.4 so the spheres never overlap. */
   side: 3.3,
   /** Pickup radius of the real gem (= GEMS.pickupRadius) and touch radius of a fake (m). */
@@ -48,15 +51,21 @@ export const FAKES = {
   /** Clearances: glasses sites (beyond their radius + play radius), reserved footprints, anchors. */
   siteMargin: 4,
   reservedPad: 3,
-  anchorMargin: 3,
+  anchorMargin: 5,
 } as const;
 
 /** Spot tags that are ordinary ground gems (no rooftop, trampoline column, skydive, bridge, road, secret). */
 export const FAKE_TAGS: readonly string[] = ['plaza', 'beach', 'ranch', 'lighthouse', 'silly'];
 
-/** What gives a fake away, per tier (each fake differs from the real gem in this one way only). */
-export type Tell = 'spin' | 'facets' | 'sparkle';
-export const TELLS: Readonly<Record<GlassesTier, Tell>> = { 1: 'spin', 2: 'facets', 3: 'sparkle' };
+/**
+ * What gives a fake away, per tier, easiest first (same size, brightness and halo every time):
+ *  1 'flip': the fakes stand on their heads (point up), obvious at a glance in a still frame;
+ *  2 'facets': 5 facets instead of 8 (a blockier outline);
+ *  3 'sparkle': no sparkle (no bright top table, no light/dark facet stripes) and they spin the
+ *    other way.
+ */
+export type Tell = 'flip' | 'facets' | 'sparkle';
+export const TELLS: Readonly<Record<GlassesTier, Tell>> = { 1: 'flip', 2: 'facets', 3: 'sparkle' };
 /** Facets of the real gem (gems.ts `buildGemGeometry`) and of a tier-2 fake. */
 export const REAL_FACETS = 8;
 export const FAKE_FACETS = 5;

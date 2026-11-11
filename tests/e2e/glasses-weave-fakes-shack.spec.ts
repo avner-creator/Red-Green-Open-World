@@ -37,6 +37,8 @@ interface ShackDebug {
   view: P3;
   viewYaw: number;
   board: P3;
+  boardCorners: P3[];
+  approaches: (P3 & { yaw: number })[];
 }
 interface FakesDebug {
   active: boolean;
@@ -141,24 +143,64 @@ test('shack: board and gift boxes at the kiosk, clear of the shop prompt; channe
   for (const b of d.boxes) expect(Math.hypot(b.x - kiosk[0], b.z - kiosk[2])).toBeGreaterThan(3.5);
   await standAt(kiosk[0] + (kiosk[0] - 14) * 0.6, kiosk[2] + (kiosk[2] - 2) * 0.6, 0, 10);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id)).toBe('gearShack');
-  // Free space: nothing solid between the hero's spot and each box (raycast), the board in view.
-  const blocked = await page.evaluate((dd) => {
+  // Sight lines (the fingerpost and every other collider): from each standing spot, the play spot's
+  // camera and both approaches across the plaza, nothing solid hides any corner of the picture.
+  // The play spot: the first spot in front of the boxes whose default camera has a clear view.
+  const sight = await page.evaluate((dd) => {
     const ctx = window.__rg!.ctx;
     const V = ctx.player.position.constructor as new (x: number, y: number, z: number) => typeof ctx.player.position;
-    return dd.stand.map((s, i) => {
-      const b = dd.boxes[i];
-      const o = new V(s.x, s.y + 1.4, s.z);
-      const dir = new V(dd.board.x - s.x, dd.board.y - (s.y + 1.4), dd.board.z - s.z);
-      const len = dir.length();
-      const hit = ctx.physics.raycast(o, dir.normalize(), len - 0.3);
-      return hit ? `stand ${i} → board blocked at ${hit.distance.toFixed(2)} (box ${b.x.toFixed(1)},${b.z.toFixed(1)})` : null;
-    }).filter(Boolean);
+    const targets = [...dd.boardCorners, dd.board];
+    const blockedFrom = (x: number, z: number, h: number): string[] => {
+      const o = new V(x, ctx.world.heightAt(x, z) + h, z);
+      const out: string[] = [];
+      for (const c of targets) {
+        const dir = new V(c.x - o.x, c.y - o.y, c.z - o.z);
+        const len = dir.length();
+        const hit = ctx.physics.raycast(o, dir.normalize(), len - 0.3);
+        if (hit) out.push(`(${c.x.toFixed(1)}, ${c.y.toFixed(1)}) at ${hit.distance.toFixed(2)}`);
+      }
+      return out;
+    };
+    // Candidates around the middle box's standing spot (world), facing the board.
+    const mid = dd.stand[1];
+    const out = dd.boxes[1];
+    const nx = mid.x - out.x;
+    const nz = mid.z - out.z;
+    const nl = Math.hypot(nx, nz);
+    const [ux, uz] = [nx / nl, nz / nl];
+    let view: { x: number; z: number; yaw: number } | null = null;
+    for (const back of [1.1, 1.6, 0.7]) {
+      for (const side of [0, -0.6, 0.6, -1.2, 1.2]) {
+        const x = mid.x + ux * back - uz * side;
+        const z = mid.z + uz * back + ux * side;
+        const yaw = Math.atan2(dd.board.x - x, dd.board.z - z);
+        const cx = x - Math.sin(yaw) * 5.1;
+        const cz = z - Math.cos(yaw) * 5.1;
+        const head = new V(x, ctx.world.heightAt(x, z) + 1.6, z);
+        const toCam = new V(cx - x, ctx.world.heightAt(cx, cz) + 3.3 - head.y, cz - z);
+        const camLen = toCam.length();
+        if (ctx.physics.raycast(head, toCam.normalize(), camLen)) continue;
+        if (blockedFrom(cx, cz, 3.3).length) continue;
+        view = { x, z, yaw };
+        break;
+      }
+      if (view) break;
+    }
+    const blocked = [
+      ...dd.stand.flatMap((s, i) => blockedFrom(s.x, s.z, 1.5).map((b) => `stand${i} → ${b}`)),
+      ...dd.approaches.flatMap((a, i) => blockedFrom(a.x, a.z, 1.6).map((b) => `approach${i} → ${b}`)),
+    ];
+    return { view, blocked };
   }, d);
-  expect(blocked).toEqual([]);
-
   await wforce('shack', { shapes: SHAPES, answer: 0, seed: 1234, tier: 1 });
-  await standAt(d.view.x, d.view.z, d.viewYaw);
+  for (const [i, a] of d.approaches.entries()) {
+    await standAt(a.x, a.z, a.yaw, 20);
+    await shots(`shack-approach${i}`, true);
+  }
+  expect(sight.view, 'a play spot with a clear camera').not.toBeNull();
+  await standAt(sight.view!.x, sight.view!.z, sight.view!.yaw);
   await shots('shack', true);
+  expect(sight.blocked).toEqual([]);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'shack' });
   const n = await draws('shack');
   expect(n).toBeGreaterThanOrEqual(3);
@@ -281,6 +323,8 @@ function outward(d: NonNullable<FakesDebug['armed']>, p: { x: number; z: number 
 test('fakes: four ground spots; a cluster arms on approach; only the weak channel; draws', async () => {
   let d = await wdebug<FakesDebug>('fakes');
   expect(d.spots.length).toBe(4);
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(`${OUT}/fakes-spots.json`, JSON.stringify(d.spots, null, 1));
   for (const s of d.spots) {
     expect(['plaza', 'beach', 'ranch', 'lighthouse', 'silly']).toContain(s.tag);
     expect(s.y - s.ground).toBeLessThan(1.6);
@@ -320,23 +364,22 @@ test('fakes: four ground spots; a cluster arms on approach; only the weak channe
     for (const a of angles) {
       const fx = Math.cos(a);
       const fz = Math.sin(a);
-      // Hero: 5 m out and 2.2 m to the side; camera ~5 m further back.
-      const x = cx + fx * 5 + fz * 2.2;
-      const z = cz + fz * 5 - fx * 2.2;
-      if (clear(x, z, 1.6) && clear(cx + fx * 10.5 + fz * 2.2, cz + fz * 10.5 - fx * 2.2, 3.5)) return { x, z, yaw: Math.atan2(-fx, -fz) };
+      // Hero: 3 m out and 2 m to the side; the camera ~8.5 m from the cluster.
+      const x = cx + fx * 3 + fz * 2;
+      const z = cz + fz * 3 - fx * 2;
+      if (clear(x, z, 1.6) && clear(cx + fx * 8.5 + fz * 2, cz + fz * 8.5 - fx * 2, 3.5)) return { x, z, yaw: Math.atan2(-fx, -fz) };
     }
     return { x: cx + 5, z: cz, yaw: -Math.PI / 2 };
   }, { cx, cz, corners: d.armed!.corners });
   await standAt(from.x, from.z, from.yaw);
-  await shots('fakes', true);
-  // The still tells, a step closer: tier 2 (5 facets) and tier 3 (no sparkle: no bright table, no stripes).
+  // The tells in still frames, camera ~8.5 m away: tier 1 (point up), 2 (5 facets), 3 (no sparkle).
+  await shots('fakes-tier1', true);
   await wforce('fakes', { spot, answer: 1, angle: 0.4, tier: 2 });
-  await standAt(cx + (from.x - cx) * 0.7, cz + (from.z - cz) * 0.7, from.yaw, 4);
-  await shots('fakes-tier2');
+  await shots('fakes-tier2', true);
   await wforce('fakes', { spot, answer: 1, angle: 0.4, tier: 3 });
   await shots('fakes-tier3', true);
   await wforce('fakes', { spot, answer: 1, angle: 0.4, tier: 1 });
-  await standAt(from.x, from.z, from.yaw, 2);
+  await page.evaluate(() => window.__rg!.render());
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: 'fakes' });
 });
 

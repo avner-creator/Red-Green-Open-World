@@ -1,6 +1,6 @@
 /**
- * A dot-picture prize code at the Gear Shack (popOut). A dark board hangs on the kiosk's free right
- * side wall and carries a red-green dot picture (toolkit pair: the weak eye gets one dot pattern,
+ * A dot-picture prize code at the Gear Shack (popOut). A dark board stands against the kiosk's left
+ * side wall (it faces the south-east of the plaza, clear of the fingerpost) and carries a red-green dot picture (toolkit pair: the weak eye gets one dot pattern,
  * the strong eye another, exactly registered): each eye alone sees noise, the hidden shape exists
  * only between the two eyes. Three identical gift boxes stand in front, each tagged with a shape
  * (the Phase 1 dot-sign button pictures). Use the box whose shape is hidden in the dots:
@@ -94,7 +94,7 @@ export function create(env: WeaveEnv): WeavePart {
     const world = ctx.world as typeof ctx.world | undefined;
     const anchor = world?.anchors?.gearShack;
     if (!anchor || !ctx.player || !ctx.interactions || !ctx.physics) return false;
-    yaw = anchor.yaw;
+    yaw = anchor.yaw + D.turn;
     frame = siteFrame({ x: anchor.position.x, z: anchor.position.z, yaw });
     baseY = world.heightAt(anchor.position.x, anchor.position.z);
     build();
@@ -108,45 +108,46 @@ export function create(env: WeaveEnv): WeavePart {
     material = createSiteMaterial(atlas);
     const U = (n: keyof typeof SWATCHES) => atlas!.swatchUv(n);
     const parts: Record<string, THREE.BufferGeometry[]> = {};
-    // Board on the wall (local +X face): wood frame, dark panel, gold corner studs, a gift bow on top,
-    // two dark brackets under it.
+    // Board standing against the side wall (faces +X): wood frame, dark panel, gold corner studs,
+    // a big gift bow on top, two dark legs down to the paving.
     const x0 = D.wallX;
     const zc = D.boardZ;
     const yc = D.boardY;
+    const bottom = yc - D.frame / 2;
     parts.board = [
       boxGeo(0.1, D.frame, D.frame, x0 + 0.05, yc, zc, U('wood')),
       boxGeo(0.03, D.panel, D.panel, x0 + 0.115, yc, zc, U('panel')),
-      ...[-1, 1].flatMap((sy) => [-1, 1].map((sz) => boxGeo(0.04, 0.12, 0.12, x0 + 0.12, yc + sy * (D.frame / 2 - 0.08), zc + sz * (D.frame / 2 - 0.08), U('gold')))),
-      // Bow: a knot and two tilted loops over the frame.
-      boxGeo(0.12, 0.16, 0.16, x0 + 0.08, yc + D.frame / 2 + 0.06, zc, U('gold')),
-      ...[-1, 1].map((s) => boxGeo(0.08, 0.14, 0.34, x0 + 0.08, 0, 0, U('gold')).rotateX(s * 0.5).translate(0, yc + D.frame / 2 + 0.12, zc + s * 0.2)),
-      ...[-1, 1].map((s) => boxGeo(0.16, 0.08, 0.1, x0 + 0.08, yc - D.frame / 2 - 0.04, zc + s * 0.6, U('woodDark'))),
+      ...[-1, 1].flatMap((sy) => [-1, 1].map((sz) => boxGeo(0.04, 0.13, 0.13, x0 + 0.12, yc + sy * (D.frame / 2 - 0.09), zc + sz * (D.frame / 2 - 0.09), U('gold')))),
+      boxGeo(0.14, 0.2, 0.2, x0 + 0.08, yc + D.frame / 2 + 0.08, zc, U('gold')),
+      ...[-1, 1].map((s) => boxGeo(0.1, 0.18, 0.46, x0 + 0.08, 0, 0, U('gold')).rotateX(s * 0.5).translate(0, yc + D.frame / 2 + 0.16, zc + s * 0.27)),
+      ...[-1, 1].map((s) => boxGeo(0.12, bottom + 0.05, 0.12, x0 + 0.08, (bottom + 0.05) / 2, zc + s * 0.9, U('woodDark'))),
     ];
-    // Gift boxes: cream body with a navy ribbon cross, cream lid, gold bow, a shape tag on a stick
-    // facing out from the wall (+X). Body and lid are separate parts (the lid pops open).
+    // Gift boxes: cream body with a navy ribbon cross and a shape tag on the front (+X), cream lid
+    // with a big gold bow (reads as "a present" from across the plaza). Body and lid are separate
+    // parts (the lid pops open).
     D.boxZ.forEach((z, i) => {
       const b = D.box;
       const x = D.boxX;
+      const rim = new THREE.CylinderGeometry(0.29, 0.29, 0.04, 32).rotateZ(Math.PI / 2);
+      flatUv(rim, U('ink'));
+      const face = new THREE.CircleGeometry(0.265, 32).rotateY(Math.PI / 2).translate(0.021, 0, 0);
+      remapUv(face, atlas!.cellUv(i));
+      for (const g of [rim, face]) g.translate(x + b / 2 + 0.03, b * 0.5, z);
       parts[`box${i}`] = [
         boxGeo(b, b, b, x, b / 2, z, U('cream')),
         boxGeo(b + 0.02, b + 0.005, 0.12, x, b / 2, z, U('navy')),
         boxGeo(0.12, b + 0.005, b + 0.02, x, b / 2, z, U('navy')),
+        rim,
+        face,
       ];
       const lidY = b + 0.07;
-      const rim = new THREE.CylinderGeometry(0.27, 0.27, 0.05, 32).rotateZ(Math.PI / 2);
-      flatUv(rim, U('ink'));
-      const face = new THREE.CircleGeometry(0.25, 32).rotateY(Math.PI / 2).translate(0.026, 0, 0);
-      remapUv(face, atlas!.cellUv(i));
-      const tagY = lidY + 0.47;
-      for (const g of [rim, face]) g.translate(x + 0.02, tagY, z);
       parts[`lid${i}`] = [
         boxGeo(b + 0.08, 0.14, b + 0.08, x, lidY, z, U('cream')),
         boxGeo(b + 0.1, 0.145, 0.13, x, lidY, z, U('navy')),
         boxGeo(0.13, 0.145, b + 0.1, x, lidY, z, U('navy')),
-        boxGeo(0.14, 0.12, 0.3, x, lidY + 0.12, z, U('gold')).rotateY(0),
-        boxGeo(0.04, 0.24, 0.04, x - 0.02, lidY + 0.19, z, U('woodDark')),
-        rim,
-        face,
+        // Bow: a knot and two big loops standing up, side by side as seen from the front.
+        boxGeo(0.16, 0.14, 0.16, x, lidY + 0.13, z, U('gold')),
+        ...[-1, 1].map((s) => boxGeo(0.12, 0.34, 0.18, 0, 0, 0, U('gold')).rotateX(s * 0.75).translate(x, lidY + 0.22, z + s * 0.15)),
       ];
     });
     body = createPartMesh(parts, material, 'glasses:weave:shack');
@@ -154,7 +155,7 @@ export function create(env: WeaveEnv): WeavePart {
     body.mesh.rotation.y = yaw;
     body.mesh.updateMatrixWorld(true);
 
-    // Dot quads: 2.5 cm in front of the panel, facing local +X.
+    // Dot quads: 2.5 cm in front of the panel, facing +X (the frame's +X is the shack's left side).
     const pw = f.toWorld(x0 + 0.13 + 0.025, zc);
     for (const r of [weakRoot, strongRoot]) {
       r.position.set(pw.x, baseY + yc, pw.z);
@@ -417,10 +418,18 @@ export function create(env: WeaveEnv): WeavePart {
         yaw,
         boxes: boxWorld.map((b) => ({ x: b.x, y: b.y, z: b.z })),
         stand: D.boxZ.map((z) => pt(D.standX, z)),
-        // The default camera view: the hero beside the right-hand box, facing the wall (board and boxes left of the hero).
-        view: pt(D.standX + 1.2, D.boxZ[2] + 0.9),
+        // The play spot: in front of the middle box, facing the board.
+        view: pt(D.viewX, D.boardZ),
         viewYaw: yaw - Math.PI / 2,
         board: { ...pt(D.wallX + 0.16, D.boardZ), y: baseY + D.boardY },
+        /** Board corners (world), for sight-line checks. */
+        boardCorners: [-1, 1].flatMap((sz) => [-1, 1].map((sy) => ({ ...pt(D.wallX + 0.16, D.boardZ + (sz * D.picture) / 2), y: baseY + D.boardY + (sy * D.picture) / 2 }))),
+        /** Two approaches across the plaza (from the plaza side, and straight out from the board), facing it. */
+        approaches: [-0.95, -0.45].map((t) => {
+          const p = pt(D.wallX + Math.cos(t) * D.approach, D.boardZ + Math.sin(t) * D.approach);
+          const b = pt(D.wallX, D.boardZ);
+          return { ...p, yaw: Math.atan2(b.x - p.x, b.z - p.z) };
+        }),
       };
     },
     force(params) {
