@@ -112,6 +112,14 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
     anchors[part] = anchor;
   }
 
+  // Rest pose of every bone: each frame, before the mixer, bones go back to it, so a bone the
+  // current clip does not key (e.g. the head after a flop clip that turned it) can never stay
+  // posed by an earlier clip or keep an additive layer's offset (look-around, wobble, seat).
+  const restBones: { bone: THREE.Object3D; q: THREE.Quaternion }[] = [];
+  model.traverse((o) => {
+    if ((o as THREE.Bone).isBone) restBones.push({ bone: o, q: o.quaternion.clone() });
+  });
+
   const mixer = new THREE.AnimationMixer(model);
   const actions = new Map<string, THREE.AnimationAction>();
   for (const clip of gltf.animations) actions.set(clip.name, mixer.clipAction(clip));
@@ -205,6 +213,7 @@ export async function loadCharacter(def: CharacterDef, loader = characterLoader(
         fidgetAction.crossFadeTo(current, 0.35, false);
         fidgetAction = null;
       }
+      for (const r of restBones) r.bone.quaternion.copy(r.q);
       mixer.update(dt);
       const act = fidgetAction ?? current;
       const dur = act ? act.getClip().duration : 1;
