@@ -24,7 +24,7 @@ import { createGlowInstances } from '../glowflies/fx';
 import type { Mechanic, MechanicEnv } from '../types';
 import { MARQUEE } from '../booth/geometry';
 import { siteFrame } from '../gates/kit';
-import { CAM_BACK, CAM_UP, chooseLayout } from '../gates/layout';
+import { CAM_BACK, CAM_UP, CANOPY_R, chooseLayout } from '../gates/layout';
 import type { LayoutSpec } from '../gates/layout';
 import { BASKET, LAND_AT, livePrize, SPOT, TOY_BOOTH, TOYS, toyRules, TRAIL } from './constants';
 import { TOYS_DEMO } from './demo';
@@ -155,6 +155,22 @@ export function create(env: MechanicEnv): Mechanic {
   const sky = new THREE.Vector3();
   const east = new THREE.Vector3(1, 0, 0);
   /** No trunk, wall, post or bumpable toy inside the disc (parallel scanlines 0.4 m apart, at 0.5 and 1.4 m). */
+  const side = new THREE.Vector3();
+  const along = new THREE.Vector3();
+  /** No trunk or wall within `half` m of the ground line a → b (parallel rays 0.4 m apart, at 1.2 m). */
+  const corridorClear = (ax: number, az: number, bx: number, bz: number, half: number): boolean => {
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 1e-3) return true;
+    along.set((bx - ax) / len, 0, (bz - az) / len);
+    side.set(-along.z, 0, along.x);
+    for (let o = -half; o <= half; o += 0.4) {
+      const sx = ax + side.x * o;
+      const sz = az + side.z * o;
+      const hit = ctx.physics.raycast(tmp.set(sx, ctx.world.heightAt(sx, sz) + 1.2, sz), along, len);
+      if (hit && Math.abs(hit.normal.y) < 0.7) return false;
+    }
+    return true;
+  };
   const discClear = (x: number, z: number, r: number): boolean => {
     const gy = ctx.world.heightAt(x, z);
     for (const h of [0.5, 1.4]) {
@@ -203,9 +219,24 @@ export function create(env: MechanicEnv): Mechanic {
       const cz = last.z - Math.cos(yaw) * CAM_BACK;
       if (!ctx.world.isLand(cx, cz)) return false;
       if (!discClear(end.x, end.z, TRAIL.endClear) || !discClear(cx, cz, TRAIL.camClear)) return false;
+      // A canopy reaches ~3.5 m from its trunk: no trunk that close to the camera → spot line.
+      if (!corridorClear(cx, cz, end.x, end.z, CANOPY_R + 0.5)) return false;
       const camY = Math.max(ctx.world.heightAt(cx, cz), last.y) + CAM_UP;
       const hero = { x: last.x, y: last.y + 1.5, z: last.z };
       const ey = ctx.world.heightAt(end.x, end.z);
+      // On screen: the spot and the top of the pop stay well inside the default camera's view
+      // (it looks at the hero's pivot): ≤ 24° above/below and ≤ 30° beside that line.
+      const elev = (dx: number, dy: number, dz: number): number => Math.atan2(dy, Math.hypot(dx, dz));
+      const pv = { x: last.x - cx, y: last.y + 1.45 - camY, z: last.z - cz };
+      const fwdYaw = Math.atan2(pv.x, pv.z);
+      const fwdElev = elev(pv.x, pv.y, pv.z);
+      for (const h of [0.6, 0.6 + TOYS.launchHeight + 0.6]) {
+        const tx = end.x - cx;
+        const ty = ey + h - camY;
+        const tz = end.z - cz;
+        const dYaw = Math.atan2(Math.sin(Math.atan2(tx, tz) - fwdYaw), Math.cos(Math.atan2(tx, tz) - fwdYaw));
+        if (Math.abs(dYaw) > 0.52 || Math.abs(elev(tx, ty, tz) - fwdElev) > 0.42) return false;
+      }
       for (const t of [hero, { x: end.x, y: ey + 0.6, z: end.z }, { x: end.x, y: ey + 0.6 + TOYS.launchHeight, z: end.z }]) {
         sky.set(t.x - cx, t.y - camY, t.z - cz);
         const len = sky.length();

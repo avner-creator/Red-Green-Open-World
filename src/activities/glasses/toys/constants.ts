@@ -68,7 +68,7 @@ export const TRAIL = {
   /** Max rise per metre between samples (walkable). */
   maxGrade: 0.5,
   /** The hidden spot is this far beside the last print (left or right of the path). */
-  endBeside: 1.8,
+  endBeside: 2.4,
   /** Prints that glow ahead of the player: nearest bright, farther fainter. */
   glow: [1, 0.75, 0.5, 0.3] as readonly number[],
   /** Reaching a print (XZ distance); the last print needs `reachLast`. */
@@ -107,10 +107,10 @@ export const TOYS = {
   /** Squash on landing in the basket. */
   settleSeconds: 0.35,
   /** Launch height above the ground and the toy's size multiplier during the show. */
-  launchHeight: 2.8,
+  launchHeight: 2.2,
   showScale: 2,
   /** The ✓ pops this high above the hidden spot (over the launching toy). */
-  checkHeight: 4.6,
+  checkHeight: 4.0,
   /** Celebration (basket hop) after the third toy lands. */
   celebrateSeconds: 2.4,
   /** Toy size (metres, roughly its diameter). */

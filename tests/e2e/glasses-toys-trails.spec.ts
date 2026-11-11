@@ -120,18 +120,18 @@ test('the default camera on the start pad shows the first prints', async () => {
 });
 
 /**
- * The toy's big moment is in view: for 30 trails, the hero arrives at the last print walking along
+ * The toy's big moment is in view: for 60 trails, the hero arrives at the last print walking along
  * the trail; the DEFAULT camera behind them settles (camera collision included) and has a clear
  * line (colliders AND scene meshes: trunks, canopies, the world fill) to the spot and to the top
  * of the pop, and is not pulled in towards the hero by anything.
  */
-test('the default camera behind a child arriving at the end sees the pop (30 trails)', async () => {
+test('the default camera behind a child arriving at the end sees the pop (60 trails)', async () => {
   test.setTimeout(120_000);
   const rows = await page.evaluate(() => {
     const g = window.__rgGlasses!;
     const rg = window.__rg!;
     const out: { seed: number; tier: number; camDist: number; blocked: string[] }[] = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       const seed = Math.imul(i + 7, 0x85ebca6b) >>> 0;
       g.force('toys', { found: i % 3, seed });
       const d = g.debug('toys') as { tier: number; prints: { x: number; y: number; z: number }[]; end: { x: number; y: number; z: number } };
@@ -142,9 +142,14 @@ test('the default camera behind a child arriving at the end sees the pop (30 tra
       const p = rg.ctx.player.position;
       const camDist = Math.hypot(cam.x - p.x, cam.z - p.z);
       const blocked: string[] = [];
+      const c = rg.ctx.camera;
+      c.updateMatrixWorld();
       for (const h of [0.6, 3.4]) {
         const hit = g.sight({ x: cam.x, y: cam.y, z: cam.z }, { x: d.end.x, y: d.end.y + h, z: d.end.z });
         if (hit) blocked.push(`${h} m: ${hit}`);
+        // On screen (the 16:9 frame), with a margin for the toy's size.
+        const sp = rg.ctx.player.position.clone().set(d.end.x, d.end.y + h, d.end.z).project(c);
+        if (!(Math.abs(sp.x) < 0.9 && Math.abs(sp.y) < 0.9 && sp.z < 1)) blocked.push(`${h} m: off screen (${sp.x.toFixed(2)}, ${sp.y.toFixed(2)})`);
       }
       out.push({ seed, tier: d.tier, camDist, blocked });
     }
@@ -152,7 +157,7 @@ test('the default camera behind a child arriving at the end sees the pop (30 tra
     return out;
   });
   const dists = rows.map((r) => r.camDist).sort((x, y) => x - y);
-  console.log(`toys pop view: ${rows.filter((r) => !r.blocked.length).length}/30 clear; camera ${dists[0].toFixed(2)}–${dists[dists.length - 1].toFixed(2)} m behind the hero`);
+  console.log(`toys pop view: ${rows.filter((r) => !r.blocked.length).length}/60 clear; camera ${dists[0].toFixed(2)}–${dists[dists.length - 1].toFixed(2)} m behind the hero`);
   for (const r of rows) {
     expect(r.blocked, `seed ${r.seed} tier ${r.tier}: line to the pop`).toEqual([]);
     expect(r.camDist, `seed ${r.seed} tier ${r.tier}: camera not pulled in`).toBeGreaterThan(dists[dists.length - 1] * 0.85);
