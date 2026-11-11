@@ -395,8 +395,8 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
     const post = spots.find((q) => guard.free(q.x, q.z, 0.5, { solid: false, inKeepouts: true }));
     if (post && place('post', t.id, post.x, post.z, 0.5, { solid: false, inKeepouts: true })) trailPost(k, d, post.x, post.z, post.yaw, t.color, t.icon);
     else fill.refused.push({ name: `post ${t.id}`, why: guard.why(spots[0].x, spots[0].z, 0.5, { solid: false, inKeepouts: true }) ?? '?' });
-    // Festoon lights along the zone trails.
-    if (t.arch !== undefined) festoon(k, pts.map(([x, z]) => ({ x, z })), 2.7, 12, (x, z) => place('light', t.id, x, z, 0.3), LIGHTS);
+    // Lantern posts along the zone trails.
+    if (t.arch !== undefined) festoon(k, pts.map(([x, z]) => ({ x, z })), 2.6, 11, (x, z) => place('light', t.id, x, z, 0.3), LIGHTS);
     if (t.arch !== undefined) {
       const [ax, az] = t.pts[t.arch];
       const last = t.arch >= t.pts.length - 1;
@@ -447,8 +447,8 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   FESTOON_ROADS.forEach((id, i) => {
     const road = roads.find((q) => q.def.id === id);
     if (!road) return;
-    const off = (i % 2 ? 1 : -1) * (road.def.width / 2 + (road.def.kind === 'path' ? 1.3 : 1.9));
-    festoon(k, road.pts, off, 13, (x, z) => Math.hypot(x - PLAZA.x, z - PLAZA.z) > PLAZA.r + 4 && place('light', id, x, z, 0.35, { inKeepouts: true }), i % 2 ? LIGHTS : [...LIGHTS].reverse());
+    const off = road.def.width / 2 + (road.def.kind === 'path' ? 1.3 : 1.9);
+    festoon(k, road.pts, off, 12, (x, z) => Math.hypot(x - PLAZA.x, z - PLAZA.z) > PLAZA.r + 4 && place('light', id, x, z, 0.35, { inKeepouts: true }), i % 2 ? LIGHTS : [...LIGHTS].reverse());
   });
 
   // ── Toys along the main roads (2 m beyond the edge, every ~30 m, alternating sides) ──

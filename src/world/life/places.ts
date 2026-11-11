@@ -64,6 +64,10 @@ export const FLOCKS: readonly FlockDef[] = [
   { spots: [[66, -6], [72, -38], [44, -12]], birds: 6, color: 0x8b6a4a },
   { spots: [[-66, 26], [-60, 62], [-48, 40]], birds: 6, color: 0x7d6650 },
   { spots: [[40, 34], [26, 38], [52, 30]], birds: 5, color: 0xa08e7a },
+  // Island-fill zones.
+  { spots: [[-74, 96], [-90, 112], [-70, 108]], birds: 6, color: 0x8b6a4a },
+  { spots: [[110, -58], [124, -76], [104, -48]], birds: 5, color: 0x9a8a78 },
+  { spots: [[2, 132], [18, 128], [-6, 126]], birds: 5, color: 0xa08e7a },
 ];
 
 /** Seagulls: circles (centre, radius range, height above ground range). */
@@ -74,11 +78,22 @@ export const GULLS: readonly { x: number; z: number; r0: number; r1: number; h0:
 ];
 
 /** The ranch: sheep graze in the paddock; chickens peck by the barn. */
-export const SHEEP: readonly (readonly [number, number])[] = [[-60, 34], [-62.5, 36], [-59, 37.5], [-60, 54], [-62.5, 52], [-88, 34]];
-export const CHICKENS: readonly (readonly [number, number])[] = [[-97, 61], [-95.5, 60], [-98.5, 62.5], [-96, 63], [-99, 60]];
+export const SHEEP: readonly (readonly [number, number])[] = [
+  [-60, 34], [-62.5, 36], [-59, 37.5], [-60, 54], [-62.5, 52], [-88, 34],
+  // Windmill Farm meadow.
+  [-80, 121], [-77, 123], [-83, 120], [-75, 119.5],
+];
+export const CHICKENS: readonly (readonly [number, number])[] = [
+  [-97, 61], [-95.5, 60], [-98.5, 62.5], [-96, 63], [-99, 60],
+  // By the Windmill Farm barn.
+  [-61, 104], [-59.5, 103], [-62.5, 105.5], [-60, 106],
+];
 /** Paddock inside the ranch fence (sheep stay in it unless dodging). */
 export const PEN = { x: -74, z: 44, hx: 17, hz: 13 } as const;
 export const COOP = { x: -97, z: 61.5, r: 4 } as const;
+/** Every paddock and coop (the ranch's first, then Windmill Farm's). */
+export const PENS: readonly { x: number; z: number; hx: number; hz: number }[] = [PEN, { x: -79, z: 121, hx: 8, hz: 5 }];
+export const COOPS: readonly { x: number; z: number; r: number }[] = [COOP, { x: -60.5, z: 104.5, r: 4 }];
 
 /** Ducks paddle an oval in the bay (clear of the lake platform); fish jump inside a circle. */
 export const DUCKS = { x: -110, z: -66, rx: 8, rz: 5.5, n: 5, speed: 0.55 } as const;
@@ -91,6 +106,9 @@ export const BUTTERFLY_AREAS: readonly (readonly [number, number, number])[] = [
   [-74, 66, 30],
   [84, 66, 26],
   [-40, 20, 30],
+  [-86, 100, 18],
+  [10, 132, 14],
+  [92, 108, 14],
 ];
 export const FIREFLY_ZONES: readonly (readonly [number, number, number])[] = [
   [0, -2, 9],

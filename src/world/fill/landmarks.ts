@@ -58,7 +58,7 @@ function at(x: number, z: number, yaw: number, lx: number, lz: number): [number,
 /** Big wheel: A-frame legs, a spinning double rim with spokes and round pods, a boarding deck. */
 export function bigWheel(k: Kit, d: Decals, x: number, z: number, yaw: number): void {
   const y = k.h(x, z);
-  const R = 11;
+  const R = 13;
   const hub = y + R + 2.6;
   const ax: [number, number, number] = [Math.sin(yaw), 0, Math.cos(yaw)];
   const [rx, rz] = right(yaw);
@@ -88,20 +88,20 @@ export function bigWheel(k: Kit, d: Decals, x: number, z: number, yaw: number): 
   k.col.box(T(dx, k.h(dx, dz), dz, yaw), 0, 0.2, 0, 2.5, 0.25, 1.5);
   // The wheel: two rims, spokes, a hub star and pods (spheres: they look right at any angle).
   for (const s of [-0.7, 0.7]) {
-    toyPart(k, torusG(0.16, 56, Math.PI * 2, R), 0xf4efe6, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
-    toyPart(k, torusG(0.1, 40, Math.PI * 2, R * 0.55), 0xe2483c, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
+    toyPart(k, torusG(0.3, 56, Math.PI * 2, R), 0xf4efe6, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
+    toyPart(k, torusG(0.2, 40, Math.PI * 2, R * 0.55), 0xe2483c, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
   }
   const pods = [0xe2483c, 0xf2c14e, 0x3a72d8, 0xf08a24, 0xd8409a, 0x4caf50];
   for (let i = 0; i < 12; i++) {
     const th = (i / 12) * Math.PI * 2;
     for (const s of [-0.7, 0.7]) {
-      toyPart(k, boxG(), 0xe8e2d4, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 0.12, R, 0.12, 0, th - Math.PI / 2), pivot, S, ax, w);
+      toyPart(k, boxG(), i % 2 ? 0xe2483c : 0xe8e2d4, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 0.22, R, 0.22, 0, th - Math.PI / 2), pivot, S, ax, w);
     }
     const px = x + rx * Math.cos(th) * R;
     const pz = z + rz * Math.cos(th) * R;
     const py = hub + Math.sin(th) * R;
-    toyPart(k, sphereG(1), pods[i % pods.length], T(px, py - 1.1, pz, 0, 0.95, 0.85, 0.95), pivot, S, ax, w);
-    toyPart(k, cylG(10), CREAM, T(px, py - 0.55, pz, 0, 0.98, 0.12, 0.98), pivot, S, ax, w);
+    toyPart(k, sphereG(1), pods[i % pods.length], T(px, py - 1.2, pz, 0, 1.25, 1.1, 1.25), pivot, S, ax, w);
+    toyPart(k, cylG(10), CREAM, T(px, py - 0.5, pz, 0, 1.28, 0.14, 1.28), pivot, S, ax, w);
     toyPart(k, sphereG(1), 0xfff2b0, T(px, py, pz, 0, 0.22, 0.22, 0.22), pivot, S, ax, w);
   }
   for (const s of [-1, 1]) toyPart(k, cylG(16), 0xf2c14e, T(x + ax[0] * s * 0.9, hub, z + ax[2] * s * 0.9, yaw, 1.2, 0.2, 1.2, Math.PI / 2), pivot, S, ax, w);
@@ -464,8 +464,9 @@ export function zoneArch(k: Kit, d: Decals, x: number, z: number, yaw: number, s
 const pt = ([x, z]: [number, number], y: number): [number, number, number] => [x, y, z];
 
 /**
- * Festoon lights beside a road: posts every `step` m on one side, bulbs strung between them. Each
- * post is checked with `ok(x, z)`; a span is strung only between two placed neighbours.
+ * Carnival lantern posts beside a road or trail: a striped post every `step` m with a crown of
+ * coloured bulbs and a pennant. No strings between posts: lines across the view squeeze the camera
+ * (QA round 4). Each post is checked with `ok(x, z)`.
  */
 export function festoon(
   k: Kit,
@@ -477,7 +478,6 @@ export function festoon(
 ): number {
   let acc = 0;
   let next = step / 2;
-  let prev: THREE.Vector3 | null = null;
   let placed = 0;
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i];
@@ -488,28 +488,22 @@ export function festoon(
       next += step;
       const ux = (b.x - a.x) / seg;
       const uz = (b.z - a.z) / seg;
-      const x = a.x + (b.x - a.x) * t - uz * offset;
-      const z = a.z + (b.z - a.z) * t + ux * offset;
-      if (!ok(x, z)) {
-        prev = null;
-        continue;
-      }
+      const side = placed % 2 ? 1 : -1;
+      const x = a.x + (b.x - a.x) * t - uz * offset * side;
+      const z = a.z + (b.z - a.z) * t + ux * offset * side;
+      if (!ok(x, z)) continue;
       const y = k.h(x, z);
-      k.b.add('metal', cylG(6), INK, T(x, y, z, 0, 0.06, 3.4, 0.06));
-      k.b.add('metal', cylG(8), INK, T(x, y, z, 0, 0.14, 0.2, 0.14));
-      k.col.cyl(x, y, z, 1.7, 0.1);
-      const top = new THREE.Vector3(x, y + 3.3, z);
-      if (prev && prev.distanceTo(top) < step * 1.6) {
-        const n = Math.max(3, Math.round(prev.distanceTo(top) / 1.1));
-        for (let j = 1; j < n; j++) {
-          const f = j / n;
-          const p = prev.clone().lerp(top, f);
-          p.y -= 0.5 * 4 * f * (1 - f);
-          k.b.add('glow', sphereG(0), colors[j % colors.length], T(p.x, p.y - 0.08, p.z, 0, 0.09, 0.12, 0.09));
-        }
-        bunting(k.b, prev, top, colors, 0.5);
+      const c = colors[placed % colors.length];
+      for (let j = 0; j < 6; j++) k.b.add('paint', cylG(8), j % 2 ? CREAM : 0x2a3a6a, T(x, y + j * 0.55, z, 0, 0.07, 0.55, 0.07));
+      k.b.add('metal', cylG(8), INK, T(x, y, z, 0, 0.15, 0.2, 0.15));
+      for (let j = 0; j < 4; j++) {
+        const ang = (j / 4) * Math.PI * 2 + placed;
+        k.b.add('metal', boxG(), INK, T(x + Math.cos(ang) * 0.18, y + 3.25, z + Math.sin(ang) * 0.18, -ang, 0.36, 0.03, 0.03));
+        k.b.add('glow', sphereG(1), colors[(placed + j) % colors.length], T(x + Math.cos(ang) * 0.36, y + 3.15, z + Math.sin(ang) * 0.36, 0, 0.12, 0.15, 0.12));
       }
-      prev = top;
+      k.b.add('gloss', sphereG(1), 0xf2c14e, T(x, y + 3.42, z, 0, 0.1, 0.1, 0.1));
+      k.b.add('cloth', flagG(), c === 0xffe2b0 ? 0xc8433a : 0x2f5d7c, T(x + 0.04, y + 3.0, z, Math.atan2(ux, uz), 0.6, 0.38, 1));
+      k.col.cyl(x, y, z, 1.7, 0.1);
       placed++;
     }
     acc += seg;
