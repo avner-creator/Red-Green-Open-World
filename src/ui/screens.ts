@@ -9,6 +9,7 @@ import { counterText } from './format';
 import { outfitIcon, stuntIcon } from './glyphs';
 import { icon } from './icons';
 import type { UiIconName } from './icons';
+import { hudLegend } from './hudExplain';
 
 export interface Screen {
   el: HTMLElement;
@@ -58,14 +59,32 @@ export function createPause(a: Actions): Screen {
   quit.addEventListener('click', a.toTitle);
   const wardrobe = tile('d wardrobe', 'Wardrobe', 'pause-wardrobe', 'backpack', 'hat');
   wardrobe.addEventListener('click', a.openWardrobe);
+  // "What do the HUD pictures mean?": swaps the tiles for a picture legend of the HUD chips (the
+  // pointer is locked while playing on desktop, so the HUD bubbles can be looked up here).
+  const legend = hudLegend();
+  const what = btn('b pause-what', 'What do the pictures mean', 'pause-hudhelp', icon('sparkle'), h('span', 't', {}, '?'));
   const panel = h(
     'div',
     'panel pausep',
     {},
     h('div', 'head t', {}, icon('pause'), 'PAUSED'),
+    what,
     h('div', 'grid3', {}, resume, wardrobe, restart, quit, grown),
+    legend,
   );
-  return { el: h('div', 'screen dim', { 'data-screen': 'pause' }, panel), onShow: () => resume };
+  const showLegend = (on: boolean): void => {
+    panel.classList.toggle('legend', on);
+    what.setAttribute('aria-pressed', String(on));
+    what.replaceChildren(on ? icon('back') : icon('sparkle'), h('span', 't', {}, on ? '' : '?'));
+  };
+  what.addEventListener('click', () => showLegend(!panel.classList.contains('legend')));
+  return {
+    el: h('div', 'screen dim', { 'data-screen': 'pause' }, panel),
+    onShow: () => {
+      showLegend(false);
+      return resume;
+    },
+  };
 }
 
 const STUNT_ORDER: StuntKind[] = ['bigBounce', 'longGlide', 'bullseye', 'bigAir', 'bungee', 'launch'];

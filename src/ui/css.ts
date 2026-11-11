@@ -119,6 +119,18 @@ export const UI_CSS = `
 .rg .tile .pair{display:flex;gap:calc(var(--u)*.6);align-items:center}
 .rg .pausep{min-width:calc(var(--u)*52)}
 .rg .pausep .tile.main{grid-column:1/3;min-height:calc(var(--u)*17)}
+.rg .pausep{position:relative}
+.rg .pause-what{position:absolute;right:calc(var(--u)*1.6);top:calc(var(--u)*1.6);min-width:max(44px,calc(var(--u)*8));min-height:max(44px,calc(var(--u)*8));padding:0 calc(var(--u)*1);gap:calc(var(--u)*.4);border-radius:calc(var(--u)*4)}
+.rg .pause-what .ic{font-size:calc(var(--u)*4)}
+.rg .pausep .hudlegend{display:none}
+.rg .pausep.legend .grid3{display:none}
+.rg .pausep.legend .hudlegend{display:grid;grid-template-columns:repeat(2,auto);gap:calc(var(--u)*1.2) calc(var(--u)*2.4);justify-content:center}
+.rg .hudlegend .xline{display:flex;align-items:center;gap:calc(var(--u)*1.2)}
+.rg .hudlegend .xchip{display:flex;align-items:center;justify-content:center;width:calc(var(--u)*7);height:calc(var(--u)*7);border-radius:50%;background:#1d2346;border:calc(var(--u)*.45) solid #fff;box-shadow:0 0 0 calc(var(--u)*.35) #000;font-size:calc(var(--u)*4.4)}
+.rg .hudlegend .xchip .ic{color:var(--y);--out:#000}
+.rg .hudlegend .xcard{display:flex;flex-direction:column;gap:calc(var(--u)*.5);padding:calc(var(--u)*.8) calc(var(--u)*1.4);border-radius:calc(var(--u)*2);background:#fff;color:#15110a;border:calc(var(--u)*.45) solid #000}
+.rg .hudlegend .xrow{font-size:calc(var(--u)*3.6)}
+.rg .hudlegend .xrow .xt{color:#15110a}
 
 /* ---------- HUD ---------- */
 .rg .hud{--u:clamp(6.4px,1.05vmin,24px);position:absolute;inset:0;display:none;pointer-events:none}

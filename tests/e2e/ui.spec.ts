@@ -304,6 +304,37 @@ test.describe('ui', () => {
     await page.getByTestId('settings-done').click();
   });
 
+  test('HUD picture bubbles: tap a HUD chip while playing, and the legend on the pause screen', async () => {
+    await freshTitle();
+    await startGame(page);
+    // Touch (or a free mouse pointer): tapping a top-bar chip pops its picture bubble.
+    const box = (await page.getByTestId('wallet').boundingBox())!;
+    await page.evaluate(([x, y]) => {
+      window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', clientX: x, clientY: y, bubbles: true }));
+    }, [box.x + box.width / 2, box.y + box.height / 2]);
+    await step(page, 2);
+    const bubble = page.getByTestId('hud-explain');
+    await expect(bubble).toHaveClass(/\bon\b/);
+    await expect(bubble).toHaveAttribute('data-chip', 'wallet');
+    await expect(bubble.locator('.xrow')).toHaveCount(3);
+    await save(page, 'hud-explain-wallet');
+    // Desktop (pointer locked while playing): the pause screen's "?" shows every chip's pictures.
+    await page.evaluate(() => window.__rg!.ctx.session.pause());
+    await step(page, 2);
+    const what = page.getByTestId('pause-hudhelp');
+    await expect(what).toBeVisible();
+    await expect(page.getByTestId('hud-legend')).toBeHidden();
+    await what.click();
+    await expect(page.getByTestId('hud-legend')).toBeVisible();
+    await expect(page.locator('[data-testid="hud-legend"] .xline')).toHaveCount(5);
+    await expect(page.getByTestId('resume')).toBeHidden();
+    await save(page, 'pause-hud-legend');
+    await what.click();
+    await expect(page.getByTestId('resume')).toBeVisible();
+    await page.getByTestId('resume').click();
+    expect(consoleErrors).toEqual([]);
+  });
+
   test('the hold button opens the gate', async () => {
     await freshTitle();
     await page.getByTestId('grownups').click();
