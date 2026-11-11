@@ -296,16 +296,18 @@ test('rocket pad: first launch free, then 0 gems flies a practice launch (no stu
       for (let i = 0; i < 60 * 15 && ctx.player.mode !== 'walk'; i++) rg.step(1 / 60, 1, false);
       rg.step(1 / 60, 150, false); // cooldown
     };
-    // Walk onto the pad with an empty wallet: the first launch is free.
-    rg.teleport(pad.x, pad.y + 0.1, pad.z);
-    rg.step(1 / 60, 10, false);
+    // Empty wallet: the first launch is free.
+    th.launchRocket(0);
+    rg.step(1 / 60, 3, false);
     const out: Record<string, unknown> = {};
     out.modeFree = ctx.player.mode;
     fly();
-    // Second launch with 0 gems: it flies anyway (practice), one denial, and no launch stunt.
+    // Second launch with 0 gems (walk onto the pad): it flies anyway (practice), one denial, and no
+    // launch stunt.
     const before = launches.length;
-    th.launchRocket(0);
-    rg.step(1 / 60, 3, false);
+    ctx.profile.spend(ctx.profile.wallet, 'test'); // the free launch's stunt paid a prize
+    rg.teleport(pad.x, pad.y + 0.1, pad.z);
+    rg.step(1 / 60, 10, false);
     out.modePractice = ctx.player.mode;
     fly();
     out.practiceLaunches = launches.length - before;
@@ -320,7 +322,7 @@ test('rocket pad: first launch free, then 0 gems flies a practice launch (no stu
   });
   expect(r.modeFree).not.toBe('walk');
   expect(r.modePractice).not.toBe('walk');
-  expect(r.practiceLaunches).toBe(0);
+  expect(r.practiceLaunches, JSON.stringify(r)).toBe(0);
   expect(r.modeLaunched).not.toBe('walk');
   expect(r.spent).toEqual([-3]);
   expect(r.log).toEqual(['paid:0', 'denied:3', 'paid:3']);
