@@ -46,6 +46,68 @@ function toward(from: V2, to: V2, d: number): V2 {
   return { x: from.x + (to.x - from.x) * k, z: from.z + (to.z - from.z) * k };
 }
 
+/**
+ * A walkable way from `from` to `dest` round fences and walls (A* on a `step`-metre grid; an edge
+ * counts when `clear(a, b)`; then shortcuts wherever a straight run is clear). Returns the corner
+ * points ending at `dest`, or null when nothing was found within `maxExpand` cells (the caller then
+ * goes straight). Pure: `clear` does the physics. QA round 5: Pip led over rail fences that the
+ * hero could not cross, because every straight hop was blocked and he went through anyway.
+ */
+export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, step = 2.5, maxExpand = 900): V2[] | null {
+  if (clear(from, dest)) return [{ x: dest.x, z: dest.z }];
+  const key = (i: number, j: number): string => `${i},${j}`;
+  const at = (i: number, j: number): V2 => ({ x: from.x + i * step, z: from.z + j * step });
+  const h = (p: V2): number => dist(p, dest);
+  interface Node { i: number; j: number; g: number; f: number; parent: Node | null }
+  const open: Node[] = [{ i: 0, j: 0, g: 0, f: h(from), parent: null }];
+  const best = new Map<string, number>([[key(0, 0), 0]]);
+  const closed = new Set<string>();
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
+  let expanded = 0;
+  let end: Node | null = null;
+  while (open.length && expanded < maxExpand) {
+    let bi = 0;
+    for (let k = 1; k < open.length; k++) if (open[k].f < open[bi].f) bi = k;
+    const n = open.splice(bi, 1)[0];
+    const nk = key(n.i, n.j);
+    if (closed.has(nk)) continue;
+    closed.add(nk);
+    expanded++;
+    const p = at(n.i, n.j);
+    if (dist(p, dest) < step * 4 && clear(p, dest)) {
+      end = n;
+      break;
+    }
+    for (const [di, dj] of dirs) {
+      const i = n.i + di;
+      const j = n.j + dj;
+      const k = key(i, j);
+      if (closed.has(k)) continue;
+      const q = at(i, j);
+      const g = n.g + step * Math.hypot(di, dj);
+      if (g >= (best.get(k) ?? Infinity)) continue;
+      if (!clear(p, q)) continue;
+      best.set(k, g);
+      open.push({ i, j, g, f: g + h(q), parent: n });
+    }
+  }
+  if (!end) return null;
+  const pts: V2[] = [{ x: dest.x, z: dest.z }];
+  for (let n: Node | null = end; n && n.parent; n = n.parent) pts.unshift(at(n.i, n.j));
+  // Shortcuts: from each point, jump to the farthest later point that is in clear sight.
+  const out: V2[] = [];
+  let cur = from;
+  let i = 0;
+  while (i < pts.length) {
+    let j = pts.length - 1;
+    while (j > i && !clear(cur, pts[j])) j--;
+    out.push(pts[j]);
+    cur = pts[j];
+    i = j + 1;
+  }
+  return out;
+}
+
 export class Leader {
   dest: V2 | null = null;
   /** Hero within this radius of `dest` = arrived. */
@@ -67,8 +129,39 @@ export class Leader {
   /** Why the last re-plan / give-up happened (debug, `__rgBuddy.lead().why`). */
   why: string | null = null;
 
-  /** `walkable(from, to)`: the straight run from `from` to `to` is on land and not blocked. */
-  constructor(private readonly walkable: (from: V2, to: V2) => boolean = () => true) {}
+  /** The planned way (corner points) and the next corner Pip heads for. */
+  private path: V2[] | null = null;
+  private pathIdx = 0;
+
+  /**
+   * `walkable(from, to)`: a hop from `from` to `to` ends on land and nothing blocks it (a wall right
+   * at the end is fine). `clear(from, to)` (optional): strictly nothing in between, used to plan a
+   * way round fences (`planPath`); without it Pip goes straight with small detours.
+   */
+  constructor(
+    private readonly walkable: (from: V2, to: V2) => boolean = () => true,
+    private readonly clear: ((from: V2, to: V2) => boolean) | null = null,
+  ) {}
+
+  /** The planned way, if any (debug / tests). */
+  get route(): readonly V2[] | null {
+    return this.path;
+  }
+
+  /** Plan the way from `from` (the hero, or Pip after a stall). */
+  private plan(from: V2, dest: V2): void {
+    this.path = this.clear ? planPath(from, dest, this.clear) : null;
+    this.pathIdx = 0;
+  }
+
+  /** Metres left to go from `p`: along the planned way, else straight. */
+  private left(p: V2, dest: V2): number {
+    const path = this.path;
+    if (!path) return dist(p, dest);
+    let d = dist(p, path[this.pathIdx]);
+    for (let i = this.pathIdx; i < path.length - 1; i++) d += dist(path[i], path[i + 1]);
+    return d;
+  }
 
   /** Lead to `dest` (null = stop leading). `fetchFirst`: run to the hero before leading. */
   set(dest: V2 | null, arriveRadius = 6, fetchFirst = false): void {
@@ -85,14 +178,26 @@ export class Leader {
     this.replans = 0;
     this.gaveUp = false;
     this.why = null;
+    this.path = null;
+    this.pathIdx = 0;
   }
 
   get active(): boolean {
     return this.dest !== null;
   }
 
-  /** A walkable hop spot from `from` towards the destination (tries small detours first). */
+  /** The next hop spot: along the planned way when there is one, else straight with detours. */
   private hopFrom(from: V2, dest: V2, avoid: V2 | null = null): V2 {
+    const path = this.path;
+    if (path) {
+      while (this.pathIdx < path.length - 1 && dist(from, path[this.pathIdx]) < LEAD.atSpot + 0.5) this.pathIdx++;
+      return toward(from, path[this.pathIdx], LEAD.hop);
+    }
+    return this.straightHop(from, dest, avoid);
+  }
+
+  /** A walkable hop spot from `from` towards the destination (tries small detours first). */
+  private straightHop(from: V2, dest: V2, avoid: V2 | null = null): V2 {
     const base = Math.atan2(dest.x - from.x, dest.z - from.z);
     const d = Math.min(LEAD.hop, dist(from, dest));
     const offs = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2, -2];
@@ -117,7 +222,7 @@ export class Leader {
       this.stallFrom = { x: pip.x, z: pip.z };
       this.stallT = 0;
     } else this.stallT += dt;
-    const d = dist(pip, dest);
+    const d = this.left(pip, dest);
     if (d < this.bestD - 1) {
       this.bestD = d;
       this.noProgT = 0;
@@ -129,7 +234,9 @@ export class Leader {
     if (this.stallT > LEAD.stallSeconds) {
       this.replans++;
       this.why = `stalled: no movement for ${LEAD.stallSeconds} s at (${pip.x.toFixed(1)}, ${pip.z.toFixed(1)})`;
-      this.spot = this.hopFrom(pip, dest, this.spot);
+      const old = this.spot;
+      this.plan(pip, dest);
+      this.spot = this.path ? this.hopFrom(pip, dest) : this.straightHop(pip, dest, old);
       this.stallT = 0;
       this.stallFrom = { x: pip.x, z: pip.z };
     }
@@ -152,7 +259,8 @@ export class Leader {
       } else return { target: toward(hero, pip, 1.4), state: 'fetch', startedWaiting: false };
     }
     if (!this.spot) {
-      // First hop: ahead of the hero (Pip may be anywhere near them).
+      // First hop: ahead of the hero (Pip may be anywhere near them), along a way the hero can walk.
+      this.plan(hero, dest);
       this.spot = this.hopFrom(hero, dest);
       this.waiting = false;
     }

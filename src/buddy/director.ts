@@ -63,8 +63,8 @@ export const IDLE_SECONDS = 20;
 export const CHEST_HINT_COOLDOWN = 45;
 /** Generic tips stay quiet this long after a chest hint. */
 const CHEST_QUIET = 8;
-/** Pip leads a new player to this many attractions, then lets them choose. */
-export const LEAD_ATTRACTIONS = 2;
+/** Pip leads a new player to this many attractions, then lets them choose (QA round 5: three). */
+export const LEAD_ATTRACTIONS = 3;
 /** Seconds at an attraction that count as "done it" even without an event. */
 export const DONE_AT_SECONDS = 10;
 /** Leaving the trampoline this long during the "jump" step = lead back to it. */
@@ -198,6 +198,8 @@ export class Director {
   /** An attraction game is running (see DirectorView.inGame). */
   quiet = false;
   private rescueTimes: number[] = [];
+  private lastHero: V2 | null = null;
+  private realSpeed = 0;
   private pendingLead = false;
   private invites = 0;
   private inviteT = 0;
@@ -278,6 +280,8 @@ export class Director {
     this.unreachable.clear();
     this.quiet = false;
     this.rescueTimes = [];
+    this.lastHero = null;
+    this.realSpeed = 0;
     this.pendingLead = false;
     this.invites = 0;
     this.inviteT = 0;
@@ -519,8 +523,16 @@ export class Director {
       this.pendingLead = false;
       this.nextLead();
     }
+    // How fast the hero really moves (position change): a hero walking into a fence can report
+    // a walking velocity while going nowhere (QA round 5: pushing at a rail fence for 100 s).
+    if (this.lastHero && dt > 0) {
+      const moved = Math.hypot(v.hero.x - this.lastHero.x, v.hero.z - this.lastHero.z) / dt;
+      this.realSpeed += (Math.min(moved, 20) - this.realSpeed) * Math.min(1, dt * 3);
+    } else this.realSpeed = v.heroSpeed;
+    this.lastHero = { x: v.hero.x, z: v.hero.z };
+    const speed = Math.min(v.heroSpeed, this.realSpeed);
     this.stillT = v.onFoot && v.heroSpeed < 0.3 ? this.stillT + dt : 0;
-    this.pushT = v.onFoot && v.pushing && v.heroSpeed < 2.5 && v.ride === 'none' ? this.pushT + dt : 0;
+    this.pushT = v.onFoot && v.pushing && speed < 2.5 && v.ride === 'none' ? this.pushT + dt : 0;
 
     // Where the hero is: first visits, "done" after a while or any action there.
     const at = v.nearAttraction;

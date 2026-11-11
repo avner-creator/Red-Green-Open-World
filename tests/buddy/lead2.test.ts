@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { Line } from '../../src/buddy/dialogue';
 import { Director, RESCUE_CAP, RESCUE_WINDOW } from '../../src/buddy/director';
 import type { DirectorSink, DirectorView } from '../../src/buddy/director';
-import { LEAD, Leader } from '../../src/buddy/guide';
+import { LEAD, Leader, planPath } from '../../src/buddy/guide';
 import { CHEST, HOWTO, POOLS } from '../../src/buddy/script';
 import type { ScriptLine } from '../../src/buddy/script';
 import type { V2 } from '../../src/buddy/steer';
@@ -209,5 +209,52 @@ describe('Chest hints match the step-on-the-symbol mechanic', () => {
       expect(l.extra ?? null).not.toBe('lock');
     }
     expect(CHEST.shape.text).toMatch(/step/i);
+  });
+});
+
+describe('Director: stuck means "not getting anywhere", whatever the velocity says', () => {
+  it('pushing into a rail fence (walking velocity, position unchanged) brings a rescue', () => {
+    const r = setup();
+    r.pastTrampoline();
+    const n = r.d.rescues;
+    r.play(5, { hero: { x: 41.5, z: -40.3 }, heroSpeed: 4.5, pushing: true });
+    expect(r.d.rescues).toBeGreaterThan(n);
+  });
+});
+
+describe('Leader plans round fences (a straight hop over a rail fence strands the hero)', () => {
+  // A fence along x = 10 from z = -30 to z = 12; the way round is north of it.
+  const crosses = (a: V2, b: V2): boolean => {
+    if ((a.x - 10) * (b.x - 10) > 0) return false;
+    const t = (10 - a.x) / (b.x - a.x || 1e-9);
+    const z = a.z + (b.z - a.z) * t;
+    return z > -30 && z < 12;
+  };
+  const clear = (a: V2, b: V2): boolean => !crosses(a, b);
+
+  it('planPath goes round the end of the fence', () => {
+    const path = planPath({ x: 0, z: 0 }, { x: 20, z: 0 }, clear);
+    expect(path).not.toBeNull();
+    let prev = { x: 0, z: 0 };
+    for (const p of path!) {
+      expect(crosses(prev, p)).toBe(false);
+      prev = p;
+    }
+    expect(path!.at(-1)).toEqual({ x: 20, z: 0 });
+  });
+
+  it('every hop spot Pip runs to keeps the hero on the walkable side', () => {
+    const L = new Leader(() => true, clear);
+    L.set({ x: 20, z: 0 }, 2.5);
+    let pip = { x: 0, z: 1 };
+    let hero = { x: 0, z: 0 };
+    for (let t = 0; t < 60; t += 0.1) {
+      const o = L.update(0.1, pip, hero);
+      if (!o || o.state === 'arrived') break;
+      expect(crosses(pip, o.target)).toBe(false);
+      pip = { ...o.target };
+      hero = { x: pip.x - 0.5, z: pip.z };
+    }
+    expect(Math.hypot(hero.x - 20, hero.z)).toBeLessThan(4);
   });
 });

@@ -127,7 +127,7 @@ describe('Director: the spoken welcome story', () => {
     expect(said.some((l) => l.id === 'guide:follow')).toBe(true);
   });
 
-  it('stops leading after two attractions and lets the child choose', () => {
+  it('stops leading after three attractions and lets the child choose', () => {
     const { d, said, leads, play } = talking();
     d.begin(true);
     play(40);
@@ -136,6 +136,10 @@ describe('Director: the spoken welcome story', () => {
     expect(d.leadTo).toBe('bouncePads');
     play(0.5, { hero: { x: 84, z: -12 }, nearAttraction: 'bouncePads' });
     expect(d.leadTo).toBeNull();
+    d.onStunt({ kind: 'bounce', stars: 0 });
+    expect(d.isGuiding).toBe(true);
+    expect(d.leadTo).toBe('balloon');
+    play(0.5, { hero: { x: 84, z: 64 }, nearAttraction: 'balloon' });
     d.onStunt({ kind: 'bounce', stars: 0 });
     expect(d.isGuiding).toBe(false);
     expect(leads.at(-1)).toBeNull();

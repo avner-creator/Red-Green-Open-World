@@ -159,3 +159,76 @@ test('screenshots: bubbles, stuck rescue, chest hint', async ({ page }) => {
   });
   await save(page, 'chest-hint');
 });
+
+/**
+ * QA round 5, B1: after the trampoline Pip said "lead = bouncePads, run" but sat at the hero's
+ * feet for four minutes (his trampoline-rim spot won over the lead, and the child on the rim
+ * followed him there). A child who follows Pip (and jumps when he shows the jump button) reaches
+ * three attractions within 150 s.
+ */
+test('following Pip: the trampoline, then a second and a third attraction within 150 s', async ({ page }) => {
+  test.setTimeout(600_000);
+  const { consoleErrors } = await boot(page, '&buddyIntro=1');
+  await startFrozen(page);
+  const reached: { a: string; t: number }[] = [];
+  let last: { lead: unknown; pos: number[] } | null = null;
+  for (let i = 0; i < 300 && reached.length < 3; i++) {
+    const r = await page.evaluate(() => {
+      const rg = window.__rg!;
+      const p = rg.ctx.player.position;
+      const el = document.querySelector<HTMLElement>('[data-testid="pip-bubble"]');
+      for (let n = 0; n < 15; n++) {
+        const b = window.__rgBuddy!.pos();
+        const dx = b[0] - p.x;
+        const dz = b[2] - p.z;
+        const d = Math.hypot(dx, dz);
+        const y = rg.ctx.cameraRig.yaw;
+        let mx = 0;
+        let my = 0;
+        if (d > 2.5) {
+          mx = (-dx * Math.cos(y) + dz * Math.sin(y)) / d;
+          my = (dx * Math.sin(y) + dz * Math.cos(y)) / d;
+        }
+        const jump = el?.classList.contains('on') && el.dataset.action === 'jump';
+        rg.inject({ moveX: mx, moveY: my, jump: !!jump, jumpPressed: !!jump && n % 10 === 0 });
+        rg.step(1 / 30, 1, false);
+      }
+      rg.inject(null);
+      return { lead: window.__rgBuddy!.lead(), pos: [p.x, p.y, p.z] };
+    });
+    last = r;
+    const at = r.lead.at;
+    if (at && !reached.some((x) => x.a === at)) reached.push({ a: at, t: i * 0.5 });
+  }
+  const info = JSON.stringify({ reached, last });
+  expect(reached.length, info).toBeGreaterThanOrEqual(3);
+  expect(reached[0].a, info).toBe('trampoline');
+  expect(reached[2].t, info).toBeLessThanOrEqual(150);
+  expect(consoleErrors).toEqual([]);
+});
+
+/** A child who does nothing: Pip still comes over and invites again, but does not nag. */
+test('a child who stands still for 150 s is approached and re-invited, not nagged', async ({ page }) => {
+  test.setTimeout(400_000);
+  const { consoleErrors } = await boot(page, '&buddyIntro=1');
+  await startFrozen(page);
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const p = rg.ctx.player.position;
+    let closest = Infinity;
+    for (let i = 0; i < 300; i++) {
+      rg.step(1 / 30, 15, false);
+      const b = window.__rgBuddy!.pos();
+      if (i * 0.5 > 25) closest = Math.min(closest, Math.hypot(b[0] - p.x, b[2] - p.z));
+    }
+    const h = window.__rgBuddy!.history();
+    return { closest, history: h.map((x) => x.id), lead: window.__rgBuddy!.lead() };
+  });
+  const nudges = r.history.filter((id) => /follow|invite|rescue|stuck|idle/.test(id));
+  // Approached after the story and invited again…
+  expect(r.closest, JSON.stringify(r)).toBeLessThan(4);
+  expect(nudges.length, JSON.stringify(r)).toBeGreaterThanOrEqual(1);
+  // …but at most one nudge per ~20 s on average.
+  expect(nudges.length, JSON.stringify(r)).toBeLessThanOrEqual(7);
+  expect(consoleErrors).toEqual([]);
+});

@@ -131,6 +131,8 @@ export interface BuddyTestApi {
     to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[];
     /** Why the lead last re-planned or changed target (watchdog), re-plans of this lead, hop-frees, unreachable places. */
     why: string | null; replans: number; frees: number; freedAt: [number, number] | null; unreachable: string[];
+    /** The attraction the hero stands at now. */
+    at: string | null;
   };
   /** Same as pressing T / tapping Pip: Pip says what to do next (a bubble, deterministically). */
   ask(): void;
@@ -170,27 +172,39 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let t = 0;
   const rayO = new THREE.Vector3();
   const rayD = new THREE.Vector3();
-  /** A hop is fine when it ends on land and nothing (a wall, a fence, a shop) is in the way. */
-  const walkable = (from: V2, to: V2): boolean => {
+  /**
+   * A hop is fine when it ends on land and nothing (a wall, a fence, a shop) is in the way: rays
+   * at knee and chest height (a low rail fence stops the hero but not a chest-high ray; QA round 5).
+   */
+  const walkable = (from: V2, to: V2, endSlack = 2.5): boolean => {
     if (!ctx.world.isLand(to.x, to.z)) return false;
     const d = Math.hypot(to.x - from.x, to.z - from.z);
     if (d < 1) return true;
     const ux = (to.x - from.x) / d;
     const uz = (to.z - from.z) / d;
-    const y0 = ctx.world.heightAt(from.x, from.z) + 1;
-    const y1 = ctx.world.heightAt(to.x, to.z) + 1;
-    rayO.set(from.x + ux * 0.7, y0 + ((y1 - y0) * 0.7) / d, from.z + uz * 0.7);
-    rayD.set(to.x - rayO.x, y1 - rayO.y, to.z - rayO.z);
-    const len = rayD.length();
-    rayD.divideScalar(len || 1);
-    try {
-      const hit = ctx.physics.raycast(rayO, rayD, len);
-      return !hit || hit.distance > len - 2.5;
-    } catch {
-      return true;
+    const g0 = ctx.world.heightAt(from.x, from.z);
+    const g1 = ctx.world.heightAt(to.x, to.z);
+    for (const up of [0.45, 1]) {
+      const y0 = g0 + up;
+      const y1 = g1 + up;
+      // Start right at `from` (the hero may stand against the fence; rays skip the player).
+      rayO.set(from.x + ux * 0.15, y0 + ((y1 - y0) * 0.15) / d, from.z + uz * 0.15);
+      rayD.set(to.x - rayO.x, y1 - rayO.y, to.z - rayO.z);
+      const len = rayD.length();
+      rayD.divideScalar(len || 1);
+      try {
+        const hit = ctx.physics.raycast(rayO, rayD, len);
+        if (hit && hit.distance <= len - endSlack) return false;
+      } catch {
+        return true;
+      }
     }
+    return true;
   };
-  const leader = new Leader(walkable);
+  // Planning round fences: strictly nothing in between, and not up or down a steep step.
+  const clearRun = (from: V2, to: V2): boolean =>
+    Math.abs(ctx.world.heightAt(to.x, to.z) - ctx.world.heightAt(from.x, from.z)) < 1.2 && walkable(from, to, 0.05);
+  const leader = new Leader(walkable, clearRun);
 
   /**
    * Nearest free spot to stand (QA round 5, M1: stuck on the Scoops counter): on land above the
@@ -962,6 +976,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         frees: director.frees,
         freedAt: freedAt ? [freedAt.x, freedAt.z] : null,
         unreachable: [...director.unreachable],
+        at: nearAttraction(),
       }),
     };
   }
