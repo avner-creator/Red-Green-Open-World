@@ -198,15 +198,12 @@ function install(groups) {
     }
   };
   const zone = (id) => {
-    // Seven island-fill zones: stand 12 m out from the landmark (away from the island centre),
-    // looking back across it at the island; inland at 18 m when that spot is in the sea.
+    // Seven island-fill zones: stand 30 m inland from the landmark (toward the island centre),
+    // looking at it (the zone in front, the coast and sea behind it).
     const z = W.__rgPerfZones?.find((q) => q.id === id);
-    if (!z) return;
+    if (!z) return 'missing';
     const l = Math.hypot(z.x, z.z) || 1;
-    const ox = z.x + (z.x / l) * 12;
-    const oz = z.z + (z.z / l) * 12;
-    if (ground(ox, oz) > 0.4) at(ox, oz, 0, 0);
-    else at(z.x - (z.x / l) * 18, z.z - (z.z / l) * 18, z.x, z.z);
+    at(z.x - (z.x / l) * 30, z.z - (z.z / l) * 30, z.x, z.z);
   };
   const glasses = (id, round) => async () => {
     const g = W.__rgGlasses;
