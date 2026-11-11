@@ -26,6 +26,14 @@ import { installLife } from './life';
 import { createOuterLive } from './outer/live';
 import { updateFarLod } from './far-lod';
 import { GLASSES_WAY } from './attractions';
+import { createToysLive, type ToysDeps, type ToysLive } from './fill/toys-live';
+
+declare global {
+  interface Window {
+    /** Test mode only: the island toys (bump/bounce counters) and the fill's placements. */
+    __rgToys?: { live: ToysLive; toys: readonly { kind: string; x: number; y: number; z: number; top: number }[] };
+  }
+}
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -125,13 +133,22 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
     },
   };
   installLife(api, ctx, root);
+  // Island toys: bumped by the hero (the player and audio exist once boot finishes).
+  const toys = createToysLive(content.fill.toys, ctx as ToysDeps);
+  const lifeUpdate = api.update;
+  api.update = (dt) => {
+    lifeUpdate(dt);
+    toys.update(dt);
+  };
+  if (ctx.testMode) window.__rgToys = { live: toys, toys: content.fill.toys };
   api.setQuality(ctx.settings.get().quality);
   api.setTimeOfDay(0);
   if (ctx.testMode) {
     const tris = staticMeshes.reduce((a, m) => a + (m.geometry.attributes.position.count / 3), 0);
     console.info(
       `[world] built in ${Math.round(performance.now() - t0)} ms: ${staticMeshes.length} static meshes (${Math.round(tris)} tris), ` +
-        `${scatter.stats().instances} instances, ${col.count} colliders, ${gemSpots.length} gem spots`,
+        `${scatter.stats().instances} instances, ${col.count} colliders, ${gemSpots.length} gem spots, ` +
+        `fill: ${content.fill.placed.length} placed, ${content.fill.toys.length} toys, ${content.fill.refused.length} refused`,
     );
   }
   return api;

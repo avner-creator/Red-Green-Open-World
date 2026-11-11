@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { MatKey, Materials } from './materials';
+import { SURFACE, type MatKey, type Materials } from './materials';
 import type { Quality } from '../types';
 import { asShadowProxy, shadowProxyMaterial } from '../core/shadow-proxy';
 
@@ -23,7 +23,9 @@ export interface AddOpts {
 /** Cell size (m) for culling and distance LOD inside each merged mesh. */
 const CELL = 16;
 /** Flat or tiny things: decals, road paint, paving, bunting and flags cast no shadow. */
-const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road', 'cloth']);
+// Toys move in the vertex shader: no static shadow proxy (it would not move), so they are never a
+// camera occluder either.
+const NO_SHADOW: ReadonlySet<MatKey> = new Set<MatKey>(['glow', 'window', 'paving', 'road', 'cloth', 'toy']);
 const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 /**
  * Size classes by bounding radius (m) and how far away each is still drawn, per quality (index 0 =
@@ -32,7 +34,7 @@ const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 const CLASS_R = [0.3, 0.6, 1.5, 4] as const;
 const CLASSES = CLASS_R.length + 1;
 export const STATIC_MAX_DIST: Record<Quality, readonly number[]> = {
-  low: [Infinity, 55, 36, 22, 15],
+  low: [Infinity, 46, 30, 19, 13],
   medium: [Infinity, 220, 125, 75, 50],
   high: [Infinity, 320, 180, 110, 75],
 };
@@ -70,12 +72,16 @@ interface CellRange {
   start: number;
   /** End (in vertices) of the parts of each size class and all bigger ones. */
   ends: number[];
+  /** Bounding sphere (x, y, z, r) of the parts of each size class (r < 0: none), for the distance cut. */
+  cls: Float32Array;
 }
 
 interface Layer {
   mesh: THREE.Mesh;
   cells: CellRange[];
   index: THREE.BufferAttribute;
+  /** Vertices selected for the current view (0 = hidden). */
+  count: number;
 }
 
 const cellOf = (x: number, z: number): number => (Math.floor(x / CELL) + 512) * 1024 + Math.floor(z / CELL) + 512;
@@ -97,15 +103,28 @@ function buildLayer(parts: Part[], material: THREE.Material, positionsOnly: bool
   let v = 0;
   let cur: CellRange | null = null;
   let curKey = -1;
+  const clsBox = Array.from({ length: CLASSES }, () => new THREE.Box3());
+  const closeClasses = (c: CellRange): void => {
+    for (let k = 0; k < CLASSES; k++) {
+      if (clsBox[k].isEmpty()) continue;
+      clsBox[k].getCenter(tmpV);
+      c.cls.set([tmpV.x, tmpV.y, tmpV.z, clsBox[k].getSize(tmpS).length() / 2], k * 4);
+    }
+  };
   for (const p of parts) {
     if (p.cell !== curKey || !cur) {
-      if (cur) cells.push(cur);
+      if (cur) {
+        closeClasses(cur);
+        cells.push(cur);
+      }
       curKey = p.cell;
       box.makeEmpty();
-      cur = { x: 0, y: 0, z: 0, r: 0, start: v, ends: new Array<number>(CLASSES).fill(v) };
+      for (const b of clsBox) b.makeEmpty();
+      cur = { x: 0, y: 0, z: 0, r: 0, start: v, ends: new Array<number>(CLASSES).fill(v), cls: new Float32Array(CLASSES * 4).fill(-1) };
     }
     tmpBox.setFromBufferAttribute(p.geo.attributes.position as THREE.BufferAttribute);
     box.union(tmpBox);
+    clsBox[p.cls].union(tmpBox);
     box.getCenter(tmpV);
     cur.x = tmpV.x;
     cur.y = tmpV.y;
@@ -114,7 +133,10 @@ function buildLayer(parts: Part[], material: THREE.Material, positionsOnly: bool
     v += p.geo.attributes.position.count;
     for (let k = p.cls; k < CLASSES; k++) cur.ends[k] = v;
   }
-  if (cur) cells.push(cur);
+  if (cur) {
+    closeClasses(cur);
+    cells.push(cur);
+  }
   // Identity index rewritten per view. It starts with everything, so a mesh nobody updates draws whole.
   const idx = new Uint32Array(total);
   for (let i = 0; i < total; i++) idx[i] = i;
@@ -126,7 +148,7 @@ function buildLayer(parts: Part[], material: THREE.Material, positionsOnly: bool
   mesh.matrixAutoUpdate = false;
   // Culled per cell in `Batcher.update`.
   mesh.frustumCulled = false;
-  return { mesh, cells, index };
+  return { mesh, cells, index, count: total };
 }
 
 const _frustum = new THREE.Frustum();
@@ -143,16 +165,27 @@ function selectLayer(L: Layer, frustum: THREE.Frustum, cam: THREE.Vector3, maxD:
     _sphere.center.set(c.x, c.y, c.z);
     _sphere.radius = c.r + pad;
     if (!frustum.intersectsSphere(_sphere)) continue;
-    const d = Math.hypot(c.x - cam.x, c.y - cam.y, c.z - cam.z) - c.r;
-    let cls = -1;
-    while (cls + 1 < CLASSES && d <= maxD[cls + 1]) cls++;
-    const end = cls < 0 ? c.start : c.ends[cls];
-    for (let i = c.start; i < end; i++) arr[k++] = i;
+    // Each size class is cut at its own distance, measured to that class's own bounding sphere (a
+    // cell's small props are not kept alive by a big building in the same cell).
+    let from = c.start;
+    for (let q = 0; q < CLASSES; q++) {
+      const to = c.ends[q];
+      const r = c.cls[q * 4 + 3];
+      if (to > from && r >= 0) {
+        const d = Math.hypot(c.cls[q * 4] - cam.x, c.cls[q * 4 + 1] - cam.y, c.cls[q * 4 + 2] - cam.z) - r;
+        if (d <= maxD[q]) for (let i = from; i < to; i++) arr[k++] = i;
+      }
+      from = to;
+    }
   }
+  // Nothing of this material in view: skip the draw call altogether.
+  L.count = k;
+  L.mesh.visible = k > 0;
+  L.mesh.geometry.setDrawRange(0, k);
+  if (k === 0) return;
   L.index.clearUpdateRanges();
   L.index.addUpdateRange(0, k);
   L.index.needsUpdate = true;
-  L.mesh.geometry.setDrawRange(0, k);
 }
 
 export class Batcher {
@@ -166,12 +199,24 @@ export class Batcher {
   private lastShadow = new THREE.Vector3(1e9, 0, 0);
   private dirty = true;
   triangles = 0;
+  /**
+   * Added to the size class of every part added while set (1 = treat each part as one class smaller):
+   * decor that should drop out sooner with distance (the island fill).
+   */
+  lodShift = 0;
 
   add(key: MatKey, geo: THREE.BufferGeometry, color: THREE.ColorRepresentation, matrix?: THREE.Matrix4, opts?: AddOpts): void {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (matrix) g.applyMatrix4(matrix);
     for (const name of Object.keys(g.attributes)) {
-      if (name !== 'position' && name !== 'normal' && name !== 'color' && name !== 'aWave') g.deleteAttribute(name);
+      if (name !== 'position' && name !== 'normal' && name !== 'color' && name !== 'aWave' && name !== 'aPivot' && name !== 'aAxis') g.deleteAttribute(name);
+    }
+    const surf = SURFACE[key];
+    if (surf) {
+      // Plain PBR keys share one mesh: the surface rides on the vertices.
+      const a = new Float32Array(g.attributes.position.count * 3);
+      for (let i = 0; i < a.length; i += 3) a.set(surf, i);
+      g.setAttribute('aSurf', new THREE.BufferAttribute(a, 3));
     }
     if (!g.attributes.normal) g.computeVertexNormals();
     const pos = g.attributes.position;
@@ -198,14 +243,24 @@ export class Batcher {
     }
     if (key === 'cloth' && !g.attributes.aWave) g.setAttribute('aWave', new THREE.BufferAttribute(new Float32Array(n), 1));
     if (key !== 'cloth' && g.attributes.aWave) g.deleteAttribute('aWave');
+    if (key === 'toy') {
+      // Toy parts carry their motion (pivot + kind, axis + speed); plain parts stand still.
+      if (!g.attributes.aPivot) g.setAttribute('aPivot', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+      if (!g.attributes.aAxis) g.setAttribute('aAxis', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+    } else {
+      if (g.attributes.aPivot) g.deleteAttribute('aPivot');
+      if (g.attributes.aAxis) g.deleteAttribute('aAxis');
+    }
     tmpBox.setFromBufferAttribute(pos as THREE.BufferAttribute).getCenter(tmpV);
     tmpBox.getSize(tmpS);
     const r = tmpS.length() / 2;
     let small = 0;
     while (small < CLASS_R.length && r < CLASS_R[CLASS_R.length - 1 - small]) small++;
+    small = Math.min(CLASSES - 1, small + this.lodShift);
     const part: Part = { geo: g, cell: cellOf(tmpV.x, tmpV.z), cls: small };
-    let b = this.buckets.get(key);
-    if (!b) this.buckets.set(key, (b = []));
+    const bucket: MatKey = surf ? 'surface' : key;
+    let b = this.buckets.get(bucket);
+    if (!b) this.buckets.set(bucket, (b = []));
     b.push(part);
     // Shadow proxy: big enough, not flat, on a material that casts.
     // Small detailed parts (posts, knobs, finials) cast through their oriented box: same footprint
@@ -274,8 +329,9 @@ export class Batcher {
     const P = this.proxy;
     this.dirty = false;
     if (!P) return;
-    P.mesh.visible = sun?.castShadow === true;
-    if (!sun || !P.mesh.visible) return;
+    const casting = sun?.castShadow === true;
+    P.mesh.visible = casting && P.count > 0;
+    if (!sun || !casting) return;
     // The shadow box follows the camera in texel steps: re-select when it or the camera moved.
     sun.shadow.updateMatrices(sun);
     const sc = sun.shadow.camera;

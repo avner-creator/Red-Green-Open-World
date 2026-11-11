@@ -250,7 +250,7 @@ export function buildGearShack(k: Kit): Keepout[] {
       const r0 = 0.15 * (1 - i / 3);
       b.add('paint', cylG(10, (1 - (i + 1) / 3) / (1 - i / 3) || 0.001), i % 2 ? CREAM : 0xd9487e, M(hm, T(0, i * 0.12, 0, 0, r0, 0.12, r0)));
     }
-    b.add('paint', sphereG(1), 0xffffff, M(hm, T(0, 0.37, 0, 0, 0.06, 0.06, 0.06)));
+    b.add('paint', sphereG(0), 0xffffff, M(hm, T(0, 0.37, 0, 0, 0.06, 0.06, 0.06)));
   }
   // Crown (gold with jewels).
   {
@@ -266,7 +266,7 @@ export function buildGearShack(k: Kit): Keepout[] {
   // Cap (berry dome with a cream brim, turned sideways for style).
   {
     const hm = M(m, T(0, 1.5, -0.76, 0.6, 1, 1, 1, -0.25));
-    b.add('paint', sphereG(1), BERRY, M(hm, T(0, 0, 0, 0, 0.14, 0.11, 0.14)));
+    b.add('paint', sphereG(0), BERRY, M(hm, T(0, 0, 0, 0, 0.14, 0.11, 0.14)));
     b.add('paint', boxG(), BERRY, M(hm, T(0, -0.012, 0, 0, 0.29, 0.02, 0.29)));
     b.add('paint', boxG(), CREAM, M(hm, T(0, -0.012, 0.19, 0, 0.2, 0.02, 0.16)));
     b.add('paint', sphereG(0), CREAM, M(hm, T(0, 0.11, 0, 0, 0.025, 0.02, 0.025)));
@@ -284,7 +284,7 @@ export function buildGearShack(k: Kit): Keepout[] {
     // Outer: deep berry; lining: bright gold (bright/dark in both channels).
     b.add('cloth', outer, BERRY, M(cm, T(0, -0.12, 0, Math.PI)));
     b.add('cloth', inner, GOLD, M(cm, T(0, -0.12, 0, Math.PI)));
-    b.add('gloss', sphereG(1), GOLD, M(cm, T(0, -0.15, -0.13, 0, 0.04, 0.04, 0.02)));
+    b.add('gloss', sphereG(0), GOLD, M(cm, T(0, -0.15, -0.13, 0, 0.04, 0.04, 0.02)));
   }
 
   // ── Goods on the counter ──
