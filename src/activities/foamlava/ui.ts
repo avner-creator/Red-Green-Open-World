@@ -92,6 +92,12 @@ const CSS = `
 .rg .rg-fl-jump .ic{width:calc(var(--u,8px)*4.4);height:calc(var(--u,8px)*4.4);color:#ffd93b}
 .rg-fl-jump .keys{display:flex;align-items:center;gap:calc(var(--u,8px)*.4)}
 @keyframes rg-fl-pulse{to{transform:translateX(-50%) scale(1.18)}}
+.rg-fl-leave{position:absolute;left:calc(var(--u,8px)*2);top:50%;transform:translateY(-50%);display:none;pointer-events:auto;cursor:pointer;z-index:6;
+  width:max(48px,calc(var(--u,8px)*9));height:max(48px,calc(var(--u,8px)*9));border-radius:calc(var(--u,8px)*2.4);background:#10142a;border:calc(var(--u,8px)*.5) solid #fff;
+  box-shadow:0 calc(var(--u,8px)*.6) 0 #000;padding:0;place-items:center}
+.rg-fl-leave.on{display:grid}
+.rg .rg-fl-leave .ic{width:62%;height:62%;color:#fff}
+.rg-fl-leave .keys{position:absolute;right:calc(var(--u,8px)*-1.4);top:calc(var(--u,8px)*-1.4)}
 `;
 
 const ARROW = '<svg viewBox="0 0 24 24"><path d="M3 9h10V4l9 8-9 8v-5H3z"/></svg>';
@@ -119,6 +125,11 @@ export interface FoamUi {
   setPrize(gems: number): void;
   /** The one button of the run (jump) for the active device; pulse = now! null hides it. */
   jumpHint(device: InputState['device'] | null, pulse: boolean): void;
+  /**
+   * The always-on "leave" button during a countdown or a run (a big exit pictogram with the R / Y
+   * key cap; a plain ≥ 48 px button on touch). null hides it. A click reads as 'exit'.
+   */
+  leave(device: InputState['device'] | null): void;
   /** Lap counter (1-based) next to the stopwatch. */
   lap(n: number): void;
   /** A crossed-out gem chip by the countdown: this run is practice (no gems). */
@@ -195,7 +206,17 @@ export function createFoamUi(root: HTMLElement): FoamUi {
   practiceChip.append(ng);
   hud.appendChild(practiceChip);
 
-  root.append(hud, count, priceEl, res, jump);
+  const leaveBtn = document.createElement('button');
+  leaveBtn.type = 'button';
+  leaveBtn.className = 'rg-fl-leave';
+  leaveBtn.setAttribute('data-testid', 'foamlava-leave');
+  leaveBtn.setAttribute('aria-label', 'leave');
+  leaveBtn.addEventListener('click', () => {
+    click = 'exit';
+  });
+  let leaveKey = '';
+
+  root.append(hud, count, priceEl, res, jump, leaveBtn);
   let prizeText: Text | null = null;
   let jumpKey = '';
 
@@ -331,6 +352,16 @@ export function createFoamUi(root: HTMLElement): FoamUi {
       jump.classList.toggle('on', !!device);
       jump.classList.toggle('pulse', !!device && pulse);
     },
+    leave(device) {
+      leaveBtn.classList.toggle('on', !!device);
+      const key = device ?? '';
+      if (key === leaveKey) return;
+      leaveKey = key;
+      leaveBtn.replaceChildren();
+      if (!device) return;
+      leaveBtn.appendChild(icon('exit'));
+      if (device !== 'touch') leaveBtn.appendChild(controlKeys('respawn', device));
+    },
     lap(n) {
       lapText.textContent = `${n}/${LAPS}`;
       lapEl.classList.remove('pop');
@@ -352,6 +383,7 @@ export function createFoamUi(root: HTMLElement): FoamUi {
       priceEl.remove();
       res.remove();
       jump.remove();
+      leaveBtn.remove();
     },
   };
 }

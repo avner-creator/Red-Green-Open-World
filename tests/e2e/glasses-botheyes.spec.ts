@@ -420,6 +420,52 @@ test('gates: a round of 3 runs: a hit and a miss through real movement, lamps, c
   expect((await kitOf()).phase).toBe('idle');
 });
 
+test('gates: a child who stays past the arch: arrows lead back, then a boing pops them onto the pad; the hit is kept (QA6 m3)', async () => {
+  await events();
+  let d = await debug<GatesDebug>('gates');
+  const facing = d.yaw + Math.PI;
+  await standAt(d.padBack, facing, 4);
+  await standAt(d.pad, facing, 4);
+  await step(200);
+  d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('play');
+  await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left' });
+  d = await debug<GatesDebug>('gates');
+  await runThrough(d, d.answer);
+  // Stand ~3 m beyond the arch and do nothing.
+  const b = d.arches[d.answer].back;
+  const f = d.arches[d.answer].front;
+  const beyond = { x: b.x + (b.x - f.x) * 2, y: b.y, z: b.z + (b.z - f.z) * 2 };
+  beyond.y = await page.evaluate((p) => window.__rg!.ctx.world.heightAt(p.x, p.z), beyond);
+  // Facing away, as a child who just ran through.
+  await standAt(beyond, facing, 90);
+  d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('wait');
+  const trail = (d.kit as unknown as { trail: number }).trail;
+  expect(trail, 'ground arrows lead back to the pad').toBeGreaterThan(2);
+  // The nudge (4 s): the camera swings round to show the arrows running back to the pad.
+  await step(4 * 60);
+  expect(await page.evaluate(() => window.__rg!.cameraOverridden()), 'camera shows the way back').toBe(true);
+  await shots(BOOTH_OUT, 'gates-wait-trail', true);
+  // No input at all: called back, then popped onto the pad and the next run starts.
+  let t = 0;
+  while ((await kitOf()).phase === 'wait' && t < 20) {
+    await step(30);
+    t += 0.5;
+  }
+  d = await debug<GatesDebug>('gates');
+  expect(t, 'the wait is short (QA6: 34 s, then the round was lost)').toBeLessThan(12);
+  expect(d.phase).toBe('play');
+  expect(d.kit.results).toEqual([true]);
+  expect((d.kit as unknown as { onPad: boolean }).onPad).toBe(true);
+  expect((d.kit as unknown as { trail: number }).trail).toBe(0);
+  expect((await events()).results).toEqual([{ mechanic: 'gates', kind: 'lineUp', tier: 1, hit: true }]);
+  // Leave: the round is cancelled and the booth idles for the next test.
+  await teleport(d.far, d.far.yaw);
+  await step(3);
+  expect((await kitOf()).phase).toBe('idle');
+});
+
 test('gates: leaving mid-round cancels it with no misses for the runs never played', async () => {
   await events();
   const d = await debug<GatesDebug>('gates');

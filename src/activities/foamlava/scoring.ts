@@ -13,6 +13,12 @@ export const MEDALS = { gold: 42, silver: 58, bronze: 80 } as const;
 
 export type Medal = 'gold' | 'silver' | 'bronze' | 'ribbon';
 
+/**
+ * Round cap (s): a child who keeps falling never loops the course for ever (QA6 M1). At the cap the
+ * round ends kindly: a ribbon, a gem for trying, no fail screen.
+ */
+export const ROUND_CAP = 85;
+
 export function medalFor(time: number): Medal {
   if (time <= MEDALS.gold) return 'gold';
   if (time <= MEDALS.silver) return 'silver';

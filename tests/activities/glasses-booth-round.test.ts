@@ -61,7 +61,8 @@ describe('round machine', () => {
     m.report(true);
     expect(types(run(m, 2, false))).toEqual(['wait']);
     expect(m.phase).toBe('wait');
-    expect(run(m, 5, false)).toEqual([]);
+    // Still waiting: the child is called back once (QA6 m3), nothing is lost.
+    expect(types(run(m, 5, false))).toEqual(['nudge']);
     expect(types(run(m, 0.05, true))).toEqual(['try']);
     // Already on the pad when the beat ends: straight on.
     m.report(false);

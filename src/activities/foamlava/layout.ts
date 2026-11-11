@@ -231,7 +231,9 @@ export const RIM_WALLS: readonly PropDef[] = [
 ];
 
 /**
- * Where a run may take the hero (course frame): between the rim lines (x), from the entrance strip
- * in front of the booth (z0) to the far rim. Nobody wanders off onto the hill mid-run.
+ * Where a run may take the hero (course frame): between the rim lines (x), from the back edge of
+ * the start / middle / finish decks (z0) to the far rim. Nobody wanders off onto the hill mid-run,
+ * and nobody walks off the back of the start deck onto the grass (QA6 B1: a child holding W
+ * through the countdown walked backwards off it and was stuck on the strip behind).
  */
-export const RUN_BOUNDS = { z0: -5.4 } as const;
+export const RUN_BOUNDS = { z0: -2.75 } as const;

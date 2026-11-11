@@ -110,6 +110,52 @@ test('Bubble Ball kickabout: walking or sprinting into the ball from 8 direction
   await page.evaluate(() => window.__rgBubbleBall!.placeBall(0, 0));
 });
 
+test('Bubble Ball: a plain walk from the booth onto the pitch gets on (no lip to jump; QA6 m9)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const bb = window.__rgBubbleBall!;
+    const [bx, , bz] = bb.booth();
+    const rows: { from: string; reached: boolean; t: number; local: number[] }[] = [];
+    // From in front of the booth and a few spots around it, straight at points on the pitch.
+    const starts: [string, number, number][] = [['booth', bx, bz - 1.2], ['booth-l', bx - 1.5, bz - 1.4], ['booth-r', bx + 1.5, bz - 1.4]];
+    // The centre spot (the ball) and points either side (straight through the booth itself is not a walk anyone takes).
+    const targets = [bb.world(0, 0, 0), bb.world(-3, 0, -2), bb.world(3, 0, -1)];
+    for (const [name, sx, sz] of starts) {
+      for (const tg of targets) {
+        rg.teleport(sx, ctx.world.heightAt(sx, sz) + 0.1, sz, Math.atan2(tg[0] - sx, tg[2] - sz));
+        rg.step(1 / 60, 10, false);
+        let t = 0;
+        let reached = false;
+        while (t < 8) {
+          const p = ctx.player.position;
+          const dx = tg[0] - p.x;
+          const dz = tg[2] - p.z;
+          if (Math.hypot(dx, dz) < 1.2) {
+            reached = true;
+            break;
+          }
+          // Stick input toward the target, relative to the camera (as a child steers).
+          // (cameraRelative: forward = (sin, cos) of the camera yaw, right = (−cos, sin).)
+          const yaw = ctx.cameraRig.yaw;
+          const l = Math.hypot(dx, dz);
+          const f = (dx * Math.sin(yaw) + dz * Math.cos(yaw)) / l;
+          const rt = (dx * -Math.cos(yaw) + dz * Math.sin(yaw)) / l;
+          rg.inject({ moveX: rt, moveY: f });
+          rg.step(1 / 60, 6, false);
+          t += 0.1;
+        }
+        rg.inject(null);
+        const l = bb.local(ctx.player.position.x, ctx.player.position.y, ctx.player.position.z).map((v: number) => +v.toFixed(2));
+        rows.push({ from: name, reached, t: +t.toFixed(1), local: l });
+      }
+    }
+    return rows;
+  });
+  console.log('walk onto pitch', JSON.stringify(r));
+  for (const row of r) expect(row.reached, JSON.stringify(row)).toBe(true);
+});
+
 test('Bubble Ball: E at the booth, friends join, a full match (first to 3 or 75 s) to the result card, R leaves', async () => {
   const r1 = await page.evaluate(async () => {
     const rg = window.__rg!;

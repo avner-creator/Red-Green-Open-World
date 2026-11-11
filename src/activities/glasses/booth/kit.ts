@@ -14,6 +14,7 @@ import type { BoothController } from './booth';
 import { BoothFx } from './fx';
 import { PAD_TOP } from './geometry';
 import { RoundMachine } from './round';
+import { PadTrail } from './trail';
 import type { RoundEvent, RoundPhase } from './round';
 import type { BoothSetup, V3 } from './types';
 import { VisionLayer } from '../../../types';
@@ -106,6 +107,10 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
   });
 
   const fx = new BoothFx(d.material);
+  // "Back to the pad": arrows on the ground from the child to the pad while a round waits.
+  const trail = new PadTrail();
+  let trailIn = false;
+  let nudged = false;
   const round = new RoundMachine(setup.rules);
   const spec = setup.spec;
   const padR = spec.pad.r ?? 0.95;
@@ -173,7 +178,38 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     // Pulled back, a flatter look: the booth stands tall and beyond the play from where the child ends.
     ctx.cameraRig.setOverride({ yawOffset: off, distance: 7, height: 1.7 });
   }
-  const offPhase = ctx.events.on('session:phase', () => camRelease());
+  /**
+   * While a round waits for the child and they stand still, the nudge swings the camera round
+   * behind them to look back at the pad from above: the ground arrows from their feet to the pad
+   * fill the view (QA6 m3). Any look or move input gives the camera back at once.
+   */
+  const WAIT_CAM_HOLD = 3;
+  let waitCamT = 0;
+  let waitCamOn = false;
+  const waitFocus = new THREE.Vector3();
+  function waitCamStep(dt: number): void {
+    const inp = ctx.input.state;
+    const busy = Math.abs(inp.lookX) + Math.abs(inp.lookY) > 0.004 || Math.abs(inp.moveX) + Math.abs(inp.moveY) > 0.1;
+    if (busy || round.phase !== 'wait' || ctx.player.mode !== 'walk') waitCamT = 0;
+    waitCamT = Math.max(0, waitCamT - dt);
+    if (waitCamT <= 0 || camHeld) {
+      if (waitCamOn) {
+        waitCamOn = false;
+        ctx.cameraRig.setOverride(null);
+      }
+      return;
+    }
+    const p = ctx.player.position;
+    const t = toWorld({ x: pad.x, y: pad.y, z: pad.z }, waitFocus);
+    let off = Math.atan2(t.x - p.x, t.z - p.z) - ctx.player.yaw;
+    off = Math.atan2(Math.sin(off), Math.cos(off));
+    waitCamOn = true;
+    ctx.cameraRig.setOverride({ yawOffset: off, distance: 6.5, height: 4.4 });
+  }
+  const offPhase = ctx.events.on('session:phase', () => {
+    camRelease();
+    waitCamT = 0;
+  });
   const head = new THREE.Vector3();
   const tmp = new THREE.Vector3();
 
@@ -245,10 +281,23 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           break;
         case 'wait': {
           booth.setPad('wait');
+          trailOn(true);
+          nudged = false;
           const w = setup.waitPromptAt?.();
           booth.setPrompt('backToPad', w ? new THREE.Vector3(w.x, w.y, w.z) : undefined);
           break;
         }
+        case 'nudge':
+          // Call the child back: a chime, a step toast, the trail's arrows grow and the camera
+          // turns to show the way.
+          nudged = true;
+          waitCamT = WAIT_CAM_HOLD;
+          ctx.audio.play('star', { volume: 0.7, pitch: 1.2 });
+          ctx.events.emit('ui:toast', { icon: 'step' });
+          break;
+        case 'fetch':
+          fetchToPad();
+          break;
         case 'end': {
           setup.hooks.onIdle();
           booth.setPrompt(null);
@@ -295,6 +344,38 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           break;
       }
     }
+  }
+
+  function trailOn(on: boolean): void {
+    if (on === trailIn) return;
+    trailIn = on;
+    if (on) {
+      trail.reset();
+      d.add(trail.mesh, VisionLayer.Both);
+    } else d.remove(trail.mesh);
+  }
+
+  const trailPath: { x: number; z: number }[] = [];
+  /** World x/z waypoints: the child → (the mini-game's waypoints) → the pad. */
+  function waitPathWorld(): { x: number; z: number }[] {
+    const me = toLocal(ctx.player.position);
+    const via = setup.waitPath?.(me) ?? [];
+    trailPath.length = 0;
+    for (const p of [me, ...via, { x: pad.x, y: pad.y, z: pad.z }]) trailPath.push(toWorldXZ(p.x, p.z));
+    return trailPath;
+  }
+
+  /**
+   * The child has not come back: a comic boing pops the hero back onto the pad (the next try
+   * starts there), never a lost round. Not while riding or mid-flop (then the round ends kindly).
+   */
+  function fetchToPad(): void {
+    if (ctx.player.mode !== 'walk') return;
+    const v = kit.padView();
+    fx.burst(head.copy(ctx.player.position).add(tmp.set(0, 1, 0)), 1.6);
+    ctx.audio.play('boing', { volume: 0.8, pitch: 1.3 });
+    ctx.player.teleport(new THREE.Vector3(v.x, v.y + PAD_TOP + 0.05, v.z), v.yaw);
+    fx.burst(toWorld({ x: pad.x, y: pad.y + PAD_TOP + 1, z: pad.z }), 1.8);
   }
 
   const offRespawn = ctx.events.on('player:respawn', () => {
@@ -379,12 +460,15 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
         if (Math.hypot(ctx.player.position.x - site.x, ctx.player.position.z - site.z) > leave) handle(round.cancel('left'));
       }
       handle(round.step(dt, on));
+      if (round.phase !== 'wait') trailOn(false);
+      else trail.update(dt, waitPathWorld(), (x, z) => ctx.world.heightAt(x, z), nudged, padR + 0.35);
       head.copy(ctx.player.position).add(tmp.set(0, 1.5, 0));
       if (fxIn) {
         fx.update(dt, ctx.camera);
         if (round.phase === 'idle' && !fx.busy) fxOn(false);
       }
       camStep(dt);
+      waitCamStep(dt);
       ctx.camera.getWorldPosition(tmp);
       booth.update(dt, tmp);
     },
@@ -392,8 +476,11 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       active = on;
       if (!on) {
         camRelease();
+        waitCamT = 0;
+        waitCamStep(0);
         if (round.busy) handle(round.cancel('far'));
         fxOn(false);
+        trailOn(false);
       } else {
         wasOnPad = onPad();
       }
@@ -402,12 +489,17 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       camRelease();
       round.reset();
       fxOn(false);
+      trailOn(false);
       setup.hooks.onIdle();
       attract();
       wasOnPad = true;
     },
     dispose() {
       camRelease();
+      waitCamT = 0;
+      waitCamStep(0);
+      trailOn(false);
+      trail.dispose();
       offUse();
       offRespawn();
       offPhase();
@@ -454,6 +546,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
       rounds: round.rounds,
       totalGems: round.totalGems,
       onPad: onPad(),
+      trail: trailIn ? trail.mesh.count : 0,
       camHeld,
       settled,
       fxIn,

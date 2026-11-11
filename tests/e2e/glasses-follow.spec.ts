@@ -8,9 +8,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { boot, canvasShot, SHOTS } from './helpers';
+import { boot, canvasShot, channelDiff, shot, SHOTS } from './helpers';
 import { VisionLayer } from '../../src/types';
-import { channelOnly, channelSpread, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
+import { channelOnly, channelSpread, COMBOS, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel, layerFrame, setEye } from './glasses-helpers';
 import { FLY_PRIZE } from '../../src/activities/glasses/glowflies/round';
 import type { GlassesSiteInfo } from '../../src/activities/glasses';
 
@@ -528,6 +528,37 @@ test("Pip's toys: the booth from the arrival and 12 m; at the pad press Use → 
   await boothShots('toys-midtrail', false);
 });
 
+/**
+ * QA6 m12: at the toys celebration (confetti, burst, flying toy), the same frozen frame with and
+ * without the weak layer, for all 4 lens/eye combinations: the strong channel and blue never move.
+ * Also checks that two renders of the same frozen frame are bit-identical on the canvas (the
+ * confetti only moves on a step), and measures how much a full-page screenshot of the same frame
+ * moves (the DOM HUD on top is not frozen; the QA check used page screenshots).
+ */
+async function celebrationSeparation(label: string): Promise<void> {
+  const phase = ((await dbg('toys')) as { kit: { phase: string } }).kit.phase;
+  for (const combo of COMBOS) {
+    await setEye(page, combo.eye);
+    const a = await layerFrame(page, { weak: true, strong: true });
+    const a2 = await layerFrame(page, { weak: true, strong: true });
+    const b = await layerFrame(page, { weak: false, strong: true });
+    const tag = `toys ${label} (${phase}) ${combo.eye.leftLens}-left weak ${combo.eye.weakEye}`;
+    const same = channelDiff(a, a2);
+    expect(Math.max(same.maxR, same.maxG, same.maxB), `${tag}: a frozen frame renders bit-identical twice`).toBe(0);
+    const d = channelDiff(a, b);
+    expect(combo.strong === 'r' ? d.maxR : d.maxG, `${tag}: strong channel untouched by the weak layer`).toBe(0);
+    expect(d.maxB, `${tag}: blue untouched by the weak layer`).toBe(0);
+  }
+  await setEye(page, COMBOS[0].eye);
+  await layerFrame(page, { weak: true, strong: true });
+  // The page screenshot of the same frozen frame (canvas + DOM HUD), twice: only the DOM can differ.
+  const p1 = await shot(page);
+  await page.waitForTimeout(400);
+  const p2 = await shot(page);
+  const pd = channelDiff(p1, p2);
+  console.log(`toys ${label} (${phase}): page-screenshot repeat delta r/g/b max ${pd.maxR}/${pd.maxG}/${pd.maxB} (${pd.r}/${pd.g}/${pd.b} px > 2)`);
+}
+
 test("Pip's toys: follow the trail → the toy pops out (✓, lamp), flies into its place, its prize", async () => {
   const id = 'toys';
   await clearLog();
@@ -546,9 +577,18 @@ test("Pip's toys: follow the trail → the toy pops out (✓, lamp), flies into 
   // The top of the pop, with the default camera behind the child who just arrived.
   await stepN(52);
   await boothShots('toys-pop-1');
+  await celebrationSeparation('pop');
   await expectDrawBudget(page, id, 6);
   // The toy lands in its place, then the prize flies out (+5).
-  await stepN(150);
+  // Into the round's celebration (lamps chase, confetti, the toy flies to the basket).
+  let k = 0;
+  while (((await dbg(id)) as { kit: { phase: string } }).kit.phase !== 'celebrate' && k < 30) {
+    await stepN(5);
+    k++;
+  }
+  await celebrationSeparation('celebrate');
+  await stepN(150 - k * 5);
+  await celebrationSeparation('landed');
   d = await dbg(id);
   expect(d.inBasket).toBe(1);
   expect(d.toysShown).toBe(1);

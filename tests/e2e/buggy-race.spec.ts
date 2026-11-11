@@ -347,6 +347,27 @@ test('race: a buggy driven off the track is popped back at the last checkpoint, 
   await shots('race-reset');
 });
 
+test('race: reversing (S) into the scenery also pops back onto the track (QA6 m1)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    const r0 = race.state().resets;
+    rg.inject({ moveY: -1, moveX: 0.6 });
+    let t = 0;
+    while (race.state().resets === r0 && t < 30) {
+      rg.step(1 / 30, 15, false);
+      t += 0.5;
+    }
+    rg.inject(null);
+    rg.step(1 / 30, 90, false); // past the 2 s "second R leaves" window for the next test
+    return { t, resets: race.state().resets - r0, phase: race.state().phase };
+  });
+  console.log('reverse reset', JSON.stringify(r));
+  expect(r.resets).toBeGreaterThanOrEqual(1);
+  expect(r.t).toBeLessThan(15); // QA waited 25 s and it never reset
+  expect(r.phase).toBe('racing');
+});
+
 test('race: R pops back onto the track; a second R within 2 s leaves the race', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;

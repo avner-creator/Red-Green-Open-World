@@ -106,8 +106,14 @@ export interface RoundRules {
   celebrate?: number;
   prizeTime?: number;
   cooldown?: number;
-  /** A round in play with no result for this long is cancelled quietly (s). */
+  /** A try in play with no result for this long is cancelled quietly (s). */
   stall?: number;
+  /**
+   * `between: 'pad'`: seconds of waiting before the child is called back (sound, toast, the
+   * ground trail pulses), and before the hero is popped back onto the pad.
+   */
+  waitNudge?: number;
+  waitFetch?: number;
   /** Leaving the site centre by more than this cancels a round (m). */
   leaveRadius?: number;
   /** Tier steps (per round): up when hits ≥ upAt (default: all tries), down when hits < downBelow (default minHits). */
@@ -139,6 +145,11 @@ export interface BoothSetup {
    * default: above the pad). Gates puts it ahead of the child, beyond the arch they ran through.
    */
   waitPromptAt?: () => V3;
+  /**
+   * Waypoints (frame-local, y ignored) of the "back to the pad" ground trail from where the child
+   * stands, before the pad (e.g. back through the arch they ran through). Default: straight to the pad.
+   */
+  waitPath?: (from: V3) => V3[];
   /**
    * The mini-game's own static both-eye geometry, merged into the booth's ONE mesh (frame-local
    * metres, y relative to the site's y; UVs in the booth atlas: `swatchUv`, `cellUv`, …).

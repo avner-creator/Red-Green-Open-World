@@ -22,7 +22,7 @@ import { createFriend } from './friend';
 import { BOOTH, CANNONS, CHUTE, COURSE_CENTRE, FOAM_Y, LANE_B, PROPS, RIM_WALLS, ROPE, SOLIDS, START } from './layout';
 import { cannonState, solidBottom, CourseSim } from './sim';
 import type { SimEvent, SimInput } from './sim';
-import { MEDALS, TICKET, friendRate, ghostAt, ghostTime, ghostTimeline, medalFor, prizeFor, starsFor } from './scoring';
+import { MEDALS, ROUND_CAP, TICKET, friendRate, ghostAt, ghostTime, ghostTimeline, medalFor, prizeFor, starsFor } from './scoring';
 import { PrizeTally } from '../skyrides/prizeTally';
 import { WalkInPad } from '../skyrides/walkIn';
 import type { Medal } from './scoring';
@@ -41,6 +41,22 @@ const RESULT_TIMEOUT = 14;
 /** Course work only happens while the hero is this close to the course centre (m). */
 const NEAR = 70;
 const FIXED = 1 / 60;
+/**
+ * Countdown camera: straight in front of the hero over the foam, looking back at the hero and the
+ * friend. (At 0.82π the arm ran past the arch post and a tree crown and eased into the hero's head.)
+ */
+const COUNT_CAM = { distance: 6, height: 2.2, yawOffset: Math.PI } as const;
+/**
+ * Run camera: behind and above the hero. High enough to look down on the floats and the foam
+ * (where to land) and to keep the far village under the top of the frame (Medium triangle budget).
+ */
+const RUN_CAM = { distance: 6.2, height: 4.0, yawOffset: 0 } as const;
+/**
+ * Seconds after GO during which the stick is read relative to the course (straight ahead = W)
+ * instead of the camera, while the camera swings from the front to behind the hero (QA6 B1: W
+ * read against the front camera walked the hero backwards off the start deck).
+ */
+const GO_STEER = 1.5;
 
 type Phase = 'idle' | 'countdown' | 'run' | 'result';
 
@@ -201,6 +217,8 @@ export function createFoamLava(ctx: GameContext): GameSystem {
   let friendDoneAt: number | null = null;
   let friendWobble = 0;
   let flipT = 0;
+  /** Seconds since GO / since a hop back onto the course (see GO_STEER). */
+  let steerT = 99;
   const tally = new PrizeTally(ctx.events);
   const profile = (): ProfileLike | null => (ctx as unknown as { profile?: ProfileLike }).profile ?? null;
 
@@ -282,9 +300,16 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     ui.practice(practice);
     ui.lap(1);
     ui.hud(0, 0, 0);
+    ui.leave(ctx.input.state.device);
+    // Countdown: look at the hero and the friend from the front, then swing behind at GO. The
+    // camera is snapped straight to the front view on the start deck (a teleport snaps it to the
+    // yaw given): easing round from wherever it was swept the arm through the house and the
+    // booth behind the deck and sat inside the hero's head for the first second (QA5 m5 / QA6 m4).
+    const startAt = toWorld(START.hero.x, SOLIDS[0].top, START.hero.z);
+    const heroYaw = m * START.yaw + yaw;
+    ctx.player.teleport(startAt, heroYaw + COUNT_CAM.yawOffset);
     if (ctx.player.mode !== 'external') ctx.player.setExternalController(controller);
-    // Countdown: look at the hero and the friend from the front, then swing behind at GO.
-    ctx.cameraRig.setOverride({ distance: 6, height: 2.2, yawOffset: Math.PI * 0.82 });
+    ctx.cameraRig.setOverride({ ...COUNT_CAM });
     heroWorld();
     friend.setVisible(true);
     void friend.prepare(ctx.player.characterId, runs - 1).then(() => {
@@ -302,6 +327,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     liftBubble.visible = false;
     ui.practice(false);
     ui.jumpHint(null, false);
+    ui.leave(null);
     ui.countdown(null);
     ui.result(null, ctx.input.state.device);
     tally.stop();
@@ -321,9 +347,10 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     pad.disarm();
   }
 
-  function finishRun(time: number): void {
-    const medal = medalFor(time);
-    const beatFriend = friendDoneAt === null;
+  /** Result card. `capped`: the round cap ended it (a ribbon and a gem for trying, never a fail). */
+  function finishRun(time: number, capped = false): void {
+    const medal = capped ? 'ribbon' : medalFor(time);
+    const beatFriend = !capped && friendDoneAt === null;
     // The friend's time: when they crossed the line, or where they would at their normal pace.
     const shownFriend = friendDoneAt ?? time + Math.max(0.4, friendTime - friendClock);
     const stars = starsFor(medal);
@@ -350,6 +377,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     sim.yaw = 0;
     ctx.cameraRig.setOverride({ distance: 5.2, height: 1.9, yawOffset: Math.PI });
     ui.jumpHint(null, false);
+    ui.leave(null);
     // The card shows what the wallet really gained (prize + any stamp/mission bonus it set off).
     last = { time, medal, prize: tally.total, beatFriend };
     ui.result({ time, medal, stars, friendTime: shownFriend, beatFriend, prize: tally.total, practice, friendColor: friend.color }, ctx.input.state.device);
@@ -419,8 +447,15 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         break;
       case 'respawn':
         sfx('boing', 0.7, 1.5);
-        vis.spray(sim.p.x, sim.p.y + 0.3, sim.p.z, 6);
+        if (ev.help) sfx('star', 0.7, 1.2);
+        vis.spray(sim.p.x, sim.p.y + 0.3, sim.p.z, ev.help || ev.hop ? 10 : 6);
         stretch = 0.4;
+        // Put back on the course: the camera cuts to behind the hero again (W = onward).
+        if (ev.help || ev.hop) {
+          steerT = 0;
+          heroWorld();
+          snapCameraBehind();
+        }
         break;
       case 'checkpoint':
         sfx('star', 0.8);
@@ -457,8 +492,20 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     return sim.cp === 2 && p.z > 38 && p.x < 2.4 && p.x > ROPE.x;
   }
 
+  /**
+   * Cut the camera to straight behind the hero (a teleport to where the hero already stands snaps
+   * the follow camera to the yaw given). At GO the slow swing from the front view ran the arm
+   * past the arch post, close to the hero's head.
+   */
+  function snapCameraBehind(): void {
+    ctx.player.teleport(ctx.player.position.clone(), ctx.player.yaw);
+  }
+
   function inputToSim(input: Readonly<InputState>): SimInput {
-    const w = cameraRelative(input.moveX, input.moveY, ctx.cameraRig.yaw);
+    // Just after GO (or a hop back onto the course) the camera is still swinging round: read the
+    // stick against where it is going (behind the hero), so W always runs onward.
+    const camYaw = steerT < GO_STEER ? ctx.player.yaw : ctx.cameraRig.yaw;
+    const w = cameraRelative(input.moveX, input.moveY, camYaw);
     const l = toLocalDir(w.x, w.z);
     return { mx: l.x, mz: l.z, sprint: input.sprint, jumpPressed: input.jumpPressed };
   }
@@ -489,8 +536,8 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       if (ctx.session.state.phase !== 'playing') return true;
       phaseT += dt;
       const click = ui.takeClick();
-      // R always leaves safely (gamepad Y too).
-      if (input.respawnPressed || (phase === 'result' && (click === 'exit' || input.flopPressed))) {
+      // R always leaves safely (gamepad Y too), and so does the leave button on screen.
+      if (input.respawnPressed || click === 'exit' || (phase === 'result' && input.flopPressed)) {
         leave(true);
         return false;
       }
@@ -506,12 +553,20 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         if (left <= 0) {
           phase = 'run';
           phaseT = 0;
+          steerT = 0;
           sim.running = true;
-          ctx.cameraRig.setOverride({ distance: 6.2, height: 2.8, yawOffset: 0 });
+          ctx.cameraRig.setOverride({ ...RUN_CAM });
+          snapCameraBehind();
           bot = botPlan ? new Autopilot(botPlan === 'main' ? MAIN_PLAN : SHORTCUT_PLAN) : null;
         }
       } else if (phase === 'run') {
         if (phaseT > 0.8) ui.countdown(null);
+        steerT += dt;
+        // Round cap: a kind ending for a child who keeps falling (ribbon + a gem, no fail screen).
+        if (sim.time >= ROUND_CAP) {
+          sim.endRound();
+          finishRun(sim.time, true);
+        }
         // Rubber-banded friend: hurries when you lead, dawdles when you trail.
         if (friendDoneAt === null) {
           friendClock += dt * friendRate(sim.progress(), Math.min(1, friendClock / friendTime));
@@ -539,7 +594,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
           begin();
           return true;
         }
-        if (click === 'exit' || phaseT > RESULT_TIMEOUT || (phaseT > 1.2 && Math.hypot(input.moveX, input.moveY) > 0.6)) {
+        if (phaseT > RESULT_TIMEOUT || (phaseT > 1.2 && Math.hypot(input.moveX, input.moveY) > 0.6)) {
           leave(true);
           return false;
         }

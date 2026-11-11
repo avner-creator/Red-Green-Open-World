@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { CAMERA } from '../../config';
+import { cameraRelative } from '../../core/motion-math';
 import { GROUP_VEHICLE, groups } from '../../core/physics';
 import { VisionLayer } from '../../types';
 import type { ExternalController, GameContext, GameSystem, InputState } from '../../types';
@@ -28,6 +29,7 @@ import type { Walker } from './kickabout';
 import { BALL, BUBBLE, FLIP, MATCH, PITCH, RING, createMatch, matchPrize, matchStars, pitchWalls, stepMatch } from './soccer';
 import type { HumanInput, MatchEvent, MatchState } from './soccer';
 import { createTicket } from './ticket';
+import { HOP, HopWatch, hopSide } from './hopover';
 import { createBallMesh, createBonusRing, createBubbles, createChargeSparkle } from './visuals';
 
 /** Bubble centre above the feet and its radius (the hero's legs poke out underneath). */
@@ -684,11 +686,31 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     };
   }
 
+  // A walker pushing into the near puffy sideline gets boinged over it (QA6 m9).
+  const hopWatch = new HopWatch();
+  const hopVel = new THREE.Vector3();
+  function walkOver(dt: number): void {
+    if (player.mode !== 'walk' || !player.grounded) {
+      hopWatch.update(dt, 0);
+      return;
+    }
+    const inp = ctx.input.state;
+    const w = cameraRelative(inp.moveX, inp.moveY, ctx.cameraRig.yaw);
+    const dir = worldToLocal(w.x, w.z, site.yaw);
+    const l = worldToLocal(player.position.x - site.x, player.position.z - site.z, site.yaw);
+    const side = hopWatch.update(dt, Math.abs(player.position.y - site.deckY) < 0.8 ? hopSide(l.x, l.z, dir, gate) : 0);
+    if (!side) return;
+    const v = localToWorld(0, side * HOP.vh, site.yaw);
+    player.launch(hopVel.set(v.x, HOP.vy, v.z));
+    ctx.audio.play('boing', { volume: 0.8, pitch: 1.25 });
+  }
+
   return {
     update(dt) {
       time += dt;
       confetti.update(dt);
       if (phase === 'idle') {
+        if (player.position.distanceToSquared(arena.position) < 30 * 30) walkOver(dt);
         // Kickabout only while someone is close (zero work otherwise).
         if (player.position.distanceToSquared(arena.position) < 30 * 30 || kick.goalT >= 0) {
           updateKickabout(dt);
