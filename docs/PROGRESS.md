@@ -28,3 +28,8 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - Waiting: Stream P (`agent/glasses-depth`) Phase 1 "ready to merge" from the owner.
 - Open minor defects: Pip's bubble overlaps combo/stars badges at 667×375 touch; rocket pads block a child with 0 gems; carnival free play is per attraction, not per booth; site screenshots not yet checked by eye.
 - Stream P Phase 1 (`agent/glasses-depth`, six weaker-eye mini-games, toolkit, Auto challenge, grown-up summary) merged cleanly into `integration/m1` (5af46a3): typecheck, lint, 878 unit tests green; full e2e runs with the three fix branches. Follow-up queued for the world owner after `agent/perf-budget2`: beacons, signpost arms and compass entries for the six mini-game sites, and move at least two more within ~55 m of spawn.
+
+## Batch 2 + Stream P Phase 1 on `main` (2026-11-12 ~03:00 UTC)
+- `npm run verify` green on 438b801: 882 unit, 229 e2e passed, 3 skipped (31.5 min under load).
+- Now on `main`: everything listed under "Batch 2", six weaker-eye mini-games with toolkit / Auto challenge / grown-up summary, secrets re-sited and batched (≤ 12 draws), far-distance culling for attractions, cleared mini-game sites with first wayfinding.
+- Still in flight: `agent/world-finish` (rest of mini-game wayfinding, Low render budget, re-measure Medium), `agent/e2e-speed` (suite time). Stream P Phase 2 continues on `agent/glasses-depth`.
