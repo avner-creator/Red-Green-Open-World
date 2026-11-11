@@ -21,6 +21,12 @@ export const MOVE = { speed: 6.4, sprint: 8.2, accel: 18, hopVy: 5.4, hopBoost: 
  * flips it head over heels.
  */
 export const DASH = { speed: 12.5, seconds: 0.3, cooldown: 0.75, vy: 3.4, kick: 13.5, loft: 3.2, aim: 0.45, aiKick: 0.78 } as const;
+/**
+ * Help for the player (a child with a keyboard): the ball sticks slightly ahead of a running bubble
+ * (dribble), a dash started near the ball homes in on it, and a dash kick is bent hard toward the
+ * goal mouth (aim), unless it is a kick backward.
+ */
+export const ASSIST = { dribbleReach: 0.75, dribbleCone: 0.45, dribbleAccel: 26, homeReach: 3.4, homeCone: 0.1, aim: 0.85, mouth: 1.5 } as const;
 /** Physics sub-step: nothing tunnels, even at the 20 Hz frame-time cap. */
 export const SUB_DT = 1 / 120;
 /** Ball top speed (cartoon, not a cannon). */
@@ -173,7 +179,7 @@ export function createMatch(seconds: number = MATCH.seconds): MatchState {
       role: roles[i % 3],
       human: i === 0,
       // Friends: teammates a little better than rivals, rivals clearly slower than the player.
-      skill: i === 0 ? 1 : team === 'home' ? 0.78 : [0.8, 0.72, 0.68][i - 3],
+      skill: i === 0 ? 1 : team === 'home' ? 0.78 : [0.77, 0.7, 0.64][i - 3],
       flipT: 0,
       pushX: 1,
       pushZ: 0,
@@ -242,7 +248,7 @@ export function matchPrize(stars: number, homeDoubles: number): number {
  */
 export function rivalSkillScale(home: number, away: number): number {
   const lead = away - home;
-  if (lead > 0) return Math.max(0.6, 1 - 0.16 * lead);
+  if (lead > 0) return Math.max(0.55, 1 - 0.2 * lead);
   if (lead < -2) return Math.min(1.12, 1 + 0.04 * (-lead - 2));
   return 1;
 }
@@ -295,9 +301,9 @@ export function aiTarget(a: Agent, m: MatchState, nx: number, nz: number): { x: 
     const z = Math.max(-PITCH.hz + 1.5, Math.min(PITCH.hz - 1.5, ball.z * 0.5 + (a.team === 'home' ? -1.6 : 1.6)));
     return { x: x + nx, z: z + nz, hop: false };
   }
-  // Keeper: stay on the goal line between ball and goal.
+  // Keeper: stay on the goal line between ball and goal (covering the middle; the corners are open).
   const x = -dir * (PITCH.hx - 1.6);
-  const z = Math.max(-PITCH.goalHalf, Math.min(PITCH.goalHalf, ball.z * 0.6));
+  const z = Math.max(-(PITCH.goalHalf - 1), Math.min(PITCH.goalHalf - 1, ball.z * 0.45));
   return { x: x + nx * 0.4, z: z + nz * 0.6, hop: false };
 }
 
@@ -430,7 +436,21 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
     if (a.human) {
       const s = o.input.sprint ? MOVE.sprint : MOVE.speed;
       steerToward(b, o.input.x * s, o.input.z * s, MOVE.accel, dt);
-      if (o.input.hop && live) dash(a, o.input.x, o.input.z, out, idx);
+      if (o.input.hop && live) {
+        // A dash near the ball goes for the ball (unless the stick points well away from it).
+        let dx = o.input.x;
+        let dz = o.input.z;
+        const rx = m.ball.x - b.x;
+        const rz = m.ball.z - b.z;
+        const rl = Math.hypot(rx, rz);
+        const il = Math.hypot(dx, dz);
+        if (rl < ASSIST.homeReach && rl > 1e-3 && (il < 0.2 || (dx * rx + dz * rz) / (il * rl) > ASSIST.homeCone)) {
+          dx = rx;
+          dz = rz;
+        }
+        dash(a, dx, dz, out, idx);
+      }
+      if (live) dribble(m, a, dt);
       continue;
     }
     a.think -= dt;
@@ -477,7 +497,16 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
         const gl = Math.hypot(gx, gz) || 1;
         gx /= gl;
         gz /= gl;
-        const w = gx * nx + gz * nz > 0.2 ? DASH.aim : 0;
+        if (agent.human) {
+          // Aim assist: at the goal mouth (between the posts), from wherever the ball is.
+          const dir = agent.team === 'home' ? 1 : -1;
+          gx = dir * (PITCH.hx + 1) - m.ball.x;
+          gz = Math.max(-ASSIST.mouth, Math.min(ASSIST.mouth, m.ball.z * 0.4)) - m.ball.z;
+          const l2 = Math.hypot(gx, gz) || 1;
+          gx /= l2;
+          gz /= l2;
+        }
+        const w = agent.human ? (gx * nx + gz * nz > -0.3 ? ASSIST.aim : 0) : gx * nx + gz * nz > 0.2 ? DASH.aim : 0;
         let kx = nx * (1 - w) + gx * w;
         let kz = nz * (1 - w) + gz * w;
         const kl = Math.hypot(kx, kz) || 1;
@@ -609,6 +638,25 @@ function simulate(m: MatchState, dt: number, o: StepOptions, out: MatchEvent[], 
     for (const a of m.agents) if (a.team === team) a.cheer = MATCH.goalPause;
     out.push({ kind: 'goal', team, points, double });
   }
+}
+
+/** Dribble: the ball sticks slightly ahead of the player's running bubble. */
+function dribble(m: MatchState, a: Agent, dt: number): void {
+  const b = a.body;
+  const ball = m.ball;
+  const sp = Math.hypot(b.vx, b.vz);
+  if (sp < 1.5 || ball.y > 0.3 || a.flipT > 0) return;
+  const fx = b.vx / sp;
+  const fz = b.vz / sp;
+  const rx = ball.x - b.x;
+  const rz = ball.z - b.z;
+  const d = Math.hypot(rx, rz) || 1;
+  if (d > b.r + ball.r + ASSIST.dribbleReach || (rx * fx + rz * fz) / d < ASSIST.dribbleCone) return;
+  const ahead = b.r + ball.r + 0.3;
+  const px = b.x + fx * ahead;
+  const pz = b.z + fz * ahead;
+  steerToward(ball, b.vx * 1.04 + (px - ball.x) * 5, b.vz * 1.04 + (pz - ball.z) * 5, ASSIST.dribbleAccel, dt);
+  m.lastTouch = a.team;
 }
 
 /** Push `mover` fully out of `fixed` (if they overlap at the same height). Returns true if moved. */

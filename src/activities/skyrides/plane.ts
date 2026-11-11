@@ -21,7 +21,10 @@ import { LIVERIES, PLANE_DIMS, createPlaneModel } from './planeModel';
 import { Rivals, pickFriends } from './rivals';
 import { RUNWAY, buildAirstrip, runwayPoint, siteFor } from './sites';
 import type { SkyHud } from './skyHud';
-import { RideTickets, payPrize } from './tickets';
+import { TRAIL } from './fx';
+import { PrizeTally } from './prizeTally';
+import { RideTickets } from './tickets';
+import { WalkInPad } from './walkIn';
 
 export type PlanePhase = 'idle' | 'board' | 'countdown' | 'takeoff' | 'race' | 'landing' | 'rollout';
 
@@ -41,6 +44,10 @@ export interface PlaneRide {
   readonly contest: ContestScene | null;
   /** Test hook: shorter contests. */
   contestSeconds: number;
+  /** Walk-in start pad (world centre) and how full it is (0..1). */
+  readonly pad: { readonly at: THREE.Vector3; readonly progress: number };
+  /** Parked-plane colliders currently in the physics world (0 while flying). */
+  readonly solidParts: number;
   /** Test hook: put the plane at a pose while racing (returns false if not racing). */
   testPose(x: number, y: number, z: number, yaw: number): boolean;
   update(dt: number): void;
@@ -131,6 +138,26 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
   };
   placePlane(park.x, park.y, park.z, parkYaw, 0, 0);
 
+  // The parked plane is solid (you walked straight through it before): fuselage + both wings,
+  // ground to top wing. Removed while it flies, back when it is parked again.
+  const parkQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), parkYaw);
+  const groundY = park.y - PARK_HEIGHT;
+  const local = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z).applyQuaternion(parkQ).add(new THREE.Vector3(park.x, groundY, park.z));
+  let parkedColliders: ReturnType<GameContext['physics']['addStaticBox']>[] = [];
+  const setParkedSolid = (on: boolean): void => {
+    if (on && parkedColliders.length === 0) {
+      parkedColliders = [
+        ctx.physics.addStaticBox(local(0, 1.05, 0.1), new THREE.Vector3(0.62, 1.05, PLANE_DIMS.length / 2 + 0.15), parkQ),
+        ctx.physics.addStaticBox(local(0, 1.45, 0.25), new THREE.Vector3(PLANE_DIMS.span / 2, 0.75, 0.62), parkQ),
+      ];
+    } else if (!on) {
+      for (const c of parkedColliders) ctx.physics.removeCollider(c);
+      parkedColliders = [];
+    }
+  };
+  setParkedSolid(true);
+  const tally = new PrizeTally(ctx.events);
+
   const award = (kind: ScoreKind | 'trick', pts: number): void => {
     if (pts <= 0) return;
     score += pts;
@@ -168,12 +195,14 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     fly.speed = 0;
     phase = 'idle';
     phaseT = 0;
+    setParkedSolid(true);
   }
 
   function standBeside(): void {
     const side = parkYaw + Math.PI / 2;
-    const x = park.x + Math.sin(side) * 4.5;
-    const z = park.z + Math.cos(side) * 4.5;
+    // Just outside the plane's E radius, so no prompt sits under the podium.
+    const x = park.x + Math.sin(side) * 5.6;
+    const z = park.z + Math.cos(side) * 5.6;
     player.teleport(new THREE.Vector3(x, ctx.world.heightAt(x, z) + 0.05, z), parkYaw);
   }
 
@@ -183,15 +212,24 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     const me = st.find((s) => s.id === 'you');
     const place = me?.place ?? 3;
     const stars = resultStars(score);
-    const prize = prizeFor(place);
-    lastResult = { score, place, stars, prize, scores: entries };
-    if (!tickets.practice) payPrize(ctx, prize);
+    const paid = tickets.payPrize(prizeFor(place));
+    tally.notePrize(paid);
     if (stars > 0) getStuntGate(ctx).stunt({ kind: 'sky', value: score, stars });
+    ctx.events.emit('stamp:earned', { id: 'airstrip' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${place}` });
+    // The podium shows what the wallet really gained this round (prize + stamp/mission bonuses + pickups).
+    const prize = tally.total;
+    lastResult = { score, place, stars, prize, scores: entries };
     ctx.audio.play(place === 1 ? 'fanfare' : 'star');
     const colorOf = (id: string): string => racerViews().find((r) => r.id === id)?.color ?? '#fff';
-    hud.podium({ places: st.map((s) => ({ id: s.id, color: colorOf(s.id), score: s.score })), you: place, stars, prize });
+    hud.practice(false);
+    hud.podium({ places: st.map((s) => ({ id: s.id, color: colorOf(s.id), score: s.score })), you: place, stars, prize, practice: tickets.practice });
+    tally.onChange((n) => {
+      hud.setPrize(n);
+      if (lastResult) lastResult.prize = n;
+    });
     podiumT = 6;
+    pad.disarm();
   }
 
   function dropBalloon(): void {
@@ -500,18 +538,18 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
   function abort(): void {
     // R: leave right away, no prize; the hero hops out next to the plane.
     hud.hidePodium();
+    hud.practice(false);
+    tally.stop();
+    tally.onChange(null);
     ctx.events.emit('player:respawn', {});
   }
 
-  const removeInteract = ctx.interactions.add({
-    id: 'sky-plane',
-    position: () => tmp3.set(park.x, park.y + 0.6, park.z),
-    radius: 4.6,
-    icon: 'rocket',
-    enabled: () => phase === 'idle' && pilot.canTake(),
-    onUse() {
+  function board(): void {
       if (phase !== 'idle' || !pilot.canTake()) return;
       if (!tickets.pay()) return;
+      tally.start();
+      tally.onChange(null);
+      hud.practice(tickets.practice);
       const c = ensureContest();
       c.reset();
       score = 0;
@@ -522,7 +560,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
       startS = c.course.nearest(runwayPoint(site, RUNWAY.length + 20, 0, new THREE.Vector3()));
       rivals?.loadHeroes(pickFriends(player.characterId));
       rivals?.park(rivalSpots, startS);
-      if (!pilot.take(hooks)) return;
+      if (!pilot.take(hooks, model.root.getObjectByName('pip-seat') ?? null)) return;
       enter('board');
       fly.x = park.x;
       fly.y = park.y;
@@ -534,8 +572,22 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
       hud.showContest(true);
       hud.setClock(contestSeconds);
       ctx.audio.play('jump');
-    },
+      setParkedSolid(false);
+  }
+
+  const removeInteract = ctx.interactions.add({
+    id: 'sky-plane',
+    position: () => tmp3.set(park.x, park.y + 0.6, park.z),
+    radius: 4.6,
+    icon: 'rocket',
+    enabled: () => phase === 'idle' && pilot.canTake(),
+    onUse: board,
   });
+
+  // Walk-in start: a ring on the grass by the cockpit (the side you walk up from).
+  const padAt = runwayPoint(site, 15, -4.4, new THREE.Vector3());
+  padAt.y = ctx.world.heightAt(padAt.x, padAt.z);
+  const pad = new WalkInPad(ctx, { at: padAt, enabled: () => phase === 'idle' && pilot.canTake(), onStart: board });
 
   const offPhase = ctx.events.on('session:phase', (e) => {
     if (e.phase === 'playing' && e.previous === 'title') tickets.reset();
@@ -565,6 +617,12 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     get contestSeconds() {
       return contestSeconds;
     },
+    get pad() {
+      return { at: padAt, progress: pad.progress };
+    },
+    get solidParts() {
+      return parkedColliders.length;
+    },
     set contestSeconds(s: number) {
       contestSeconds = s;
     },
@@ -593,8 +651,13 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
       model.update(dt, rpm, phase === 'idle' ? 0 : fly.speed, time);
       if (podiumT > 0) {
         podiumT -= dt;
-        if (podiumT <= 0) hud.hidePodium();
+        if (podiumT <= 0) {
+          hud.hidePodium();
+          tally.stop();
+          tally.onChange(null);
+        }
       }
+      pad.update(dt);
       if (phase === 'idle' || !playing) return;
       const c = contest as ContestScene;
       const r = rivals as Rivals;
@@ -617,7 +680,7 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
         if (puffT <= 0 && (phase === 'race' || phaseT > TAKEOFF_SECONDS * 0.5)) {
           puffT = ctx.input.state.sprint ? 0.03 : 0.06;
           noseDir(fly.yaw, fly.pitch + trickPitch, tmp);
-          c.puffs.spawn(fly.x - tmp.x * 2.6, fly.y - tmp.y * 2.6 + 0.2, fly.z - tmp.z * 2.6, 0, 0.3, 0, 2.4, 0.35, 1.2);
+          c.puffs.spawn(fly.x - tmp.x * 2.6, fly.y - tmp.y * 2.6 + 0.2, fly.z - tmp.z * 2.6, 0, 0.3, 0, TRAIL.life, TRAIL.size, TRAIL.grow);
         }
       }
       // Aim marker for the water balloons: where one dropped now would land.
@@ -647,6 +710,9 @@ export function createPlaneRide(ctx: GameContext, hud: SkyHud): PlaneRide {
     dispose() {
       offPhase();
       removeInteract();
+      pad.dispose();
+      tally.stop();
+      setParkedSolid(false);
       if (pilot.active && phase !== 'idle') pilot.release();
       model.dispose();
       strip.dispose();

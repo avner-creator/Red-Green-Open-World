@@ -44,9 +44,10 @@ describe('foam lava course sim', () => {
     expect(kinds).toContain('grab');
     expect(kinds).toContain('slide');
     expect(kinds).toContain('bounce');
-    expect(events.filter((e) => e.type === 'checkpoint').map((e) => (e as { cp: number }).cp)).toEqual([1, 2, 3]);
+    expect(events.filter((e) => e.type === 'checkpoint').map((e) => (e as { cp: number }).cp)).toEqual([1, 2, 3, 1, 2, 3]);
+    expect(kinds.filter((k) => k === 'lap')).toHaveLength(1);
     // A tidy bot run; kids take roughly 1.5-2.5x (see the medal times).
-    expect(time).toBeGreaterThan(14);
+    expect(time).toBeGreaterThan(28);
     expect(time).toBeLessThan(MEDALS.gold);
   });
 
@@ -93,6 +94,19 @@ describe('foam lava course sim', () => {
     sim.p.y = fin.top;
     for (let i = 0; i < 30; i++) sim.step(DT, NO_INPUT);
     expect(sim.mode).toBe('run');
+    // First lap: the bubble express floats you back to the start line.
+    sim.cp = 3;
+    const ev1 = sim.step(DT, NO_INPUT);
+    expect(ev1.some((e) => e.type === 'lap')).toBe(true);
+    expect(sim.mode).toBe('lift');
+    for (let i = 0; i < 60 * 3 && sim.mode === 'lift'; i++) sim.step(DT, NO_INPUT);
+    expect(sim.mode).toBe('run');
+    expect(sim.cp).toBe(0);
+    expect(sim.p.x).toBeCloseTo(START.hero.x, 1);
+    // Last lap: the finish counts.
+    sim.p.x = fin.x;
+    sim.p.z = fin.z;
+    sim.p.y = fin.top;
     sim.cp = 3;
     const ev = sim.step(DT, NO_INPUT);
     expect(ev.some((e) => e.type === 'finish')).toBe(true);
@@ -152,7 +166,7 @@ describe('foam lava scoring and the friend', () => {
     const bot = new Autopilot(MAIN_PLAN);
     let last = 0;
     let drops = 0;
-    for (let i = 0; i < 60 * 40 && sim.mode !== 'done'; i++) {
+    for (let i = 0; i < 60 * 80 && sim.mode !== 'done'; i++) {
       sim.step(DT, bot.input(sim));
       const p = sim.progress();
       if (p < last - 0.05) drops++;

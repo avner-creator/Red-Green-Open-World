@@ -116,6 +116,9 @@ test('every playable booth plays a full round to a result', async () => {
       return { out, phase: c.info().phase };
     }, id);
     expect(r.out, id).not.toBe('busy');
+    // The first play of EVERY booth is free (QA: only the first booth was); playable[0] had its
+    // free play in the test above.
+    if (id !== playable[0]) expect(r.out, id).toBe('free');
     expect(r.phase, id).toBe('play');
     await playToResult();
     const res = await page.evaluate(() => {
@@ -150,6 +153,55 @@ test('every playable booth plays a full round to a result', async () => {
   const booth = ['balloonPrize', 'ringStar', 'bellSweet', 'luckyDuck', 'glowDodge'];
   for (const g of glassesSeen) expect(booth).toContain(g.split(':')[0]);
   expect(glassesSeen.some((g) => g.endsWith(':true'))).toBe(true);
+});
+
+test('a key-masher (Space every 0.5 s, A/D wiggle) gets at most 1 star at every booth; the card equals the wallet gain', async () => {
+  test.setTimeout(300_000);
+  const rows: string[] = [];
+  for (const id of playable) {
+    const r = await page.evaluate(
+      async ({ id }) => {
+        const c = window.__rgCarnival!;
+        const rg = window.__rg!;
+        c.autopilot(false);
+        rg.setRemaining(240); // keep the session clock from ending mid-round
+        rg.ctx.profile.earn(10, 'test');
+        const out = c.start(id);
+        const walletStart = rg.ctx.profile.wallet;
+        let k = 0;
+        const trail: string[] = [];
+        for (; k < 30 * 80 && c.info().phase !== 'result' && c.info().phase !== null; k++) {
+          if (k % 30 === 0) trail.push(`${k}:${c.info().phase}:${rg.state().playerMode}`);
+          const press = k % 15 === 0;
+          rg.inject({
+            moveX: Math.floor(k / 15) % 2 ? 1 : -1,
+            moveY: ((Math.floor(k / 40) % 3) - 1) * 0.6,
+            jumpPressed: press,
+            jump: k % 15 < 8,
+          });
+          rg.step(1 / 30, 1, false);
+        }
+        rg.inject(null);
+        rg.step(1 / 30, 2, false);
+        const num = (sel: string): number => {
+          const e = document.querySelector<HTMLElement>(sel);
+          return e && e.style.display !== 'none' ? Number((e.textContent ?? '').replace(/[^0-9]/g, '') || 0) : 0;
+        };
+        const info = c.info();
+        const card = num('[data-testid="carnival-prize"] .t') + num('[data-testid="carnival-bonus"] .t');
+        const res = { trail: `${trail.slice(-2).join(' ')} end ${k}:${info.phase}:${rg.state().playerMode} ${JSON.stringify(rg.errors.slice(-2))}`, out, phase: info.phase, scores: info.scores, stars: info.result?.stars ?? -1, card, gained: rg.ctx.profile.wallet - walletStart };
+        c.exit();
+        rg.step(1 / 30, 3, false);
+        return res;
+      },
+      { id },
+    );
+    rows.push(`${id}: ${JSON.stringify(r.scores)} stars ${r.stars} card +${r.card} wallet +${r.gained} (${r.out})`);
+    expect(r.phase, `${id} ${r.trail}`).toBe('result');
+    expect(r.stars, `${id} ${JSON.stringify(r.scores)}`).toBeLessThanOrEqual(1);
+    expect(r.card, id).toBe(r.gained);
+  }
+  console.log(`carnival masher:\n${rows.join('\n')}`);
 });
 
 test('weak-eye-only booth objects touch only the weak channel, all 4 combos', async () => {

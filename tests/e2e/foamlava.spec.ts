@@ -81,22 +81,34 @@ test('E at the booth starts a run; a full round ends on the result card; R leave
   const run = await page.evaluate(() => {
     const rg = window.__rg!;
     const f = window.__rgFoam!;
+    // Two Fun Pass stamps already: this finish lands the third, which pays a Fun Pass prize at the
+    // same moment as the course prize. The card must show both (it showed only the course prize).
+    rg.ctx.events.emit('stamp:earned', { id: 'trampoline' });
+    rg.ctx.events.emit('stamp:earned', { id: 'bungee' });
+    const wallet0 = rg.ctx.profile.wallet;
     f.autopilot('main');
     let frames = 0;
     let midShot = false;
-    while (f.phase() !== 'result' && frames < 60 * 45) {
+    while (f.phase() !== 'result' && frames < 60 * 80) {
       rg.step(1 / 60, 30, false);
       frames += 30;
       if (!midShot && f.sim.cp >= 1) midShot = true;
     }
     f.autopilot(null);
-    return { phase: f.phase(), result: f.lastResult(), cp: f.sim.cp, falls: f.sim.falls, friend: f.friendReady() };
+    rg.step(1 / 60, 30, false);
+    const gained = rg.ctx.profile.wallet - wallet0;
+    return { phase: f.phase(), result: f.lastResult(), cp: f.sim.cp, lap: f.sim.lap, falls: f.sim.falls, friend: f.friendReady(), gained };
   });
   expect(run.phase).toBe('result');
   expect(run.cp).toBe(3);
   expect(run.result).not.toBeNull();
-  expect(run.result!.time).toBeGreaterThan(10);
-  expect(run.result!.time).toBeLessThan(30);
+  expect(run.lap).toBe(2);
+  expect(run.result!.time).toBeGreaterThan(25);
+  expect(run.result!.time).toBeLessThan(55);
+  // Result card = wallet change (course prize + the Fun Pass prize it set off).
+  expect(run.gained).toBeGreaterThan(run.result!.prize - 1);
+  expect(run.result!.prize).toBe(run.gained);
+  await expect(page.getByTestId('foamlava-prize')).toHaveText(`+${run.gained}`);
   expect(['gold', 'silver']).toContain(run.result!.medal);
   expect(run.result!.beatFriend).toBe(true);
   expect(run.friend).toBe(true);
@@ -121,6 +133,60 @@ test('E at the booth starts a run; a full round ends on the result card; R leave
   expect(left.mode).toBe('walk');
   expect(left.dist).toBeLessThan(4);
   await expect(page.getByTestId('foamlava-result')).not.toHaveClass(/on/);
+});
+
+test('walking into the booth, arch, blowers, bubble machine, rope posts or rim never goes through (physics, 8 directions)', async () => {
+  const misses = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = window.__rgFoam!;
+    const V = rg.ctx.camera.position.constructor as new (x: number, y: number, z: number) => import('three').Vector3;
+    const bad: string[] = [];
+    for (const p of f.props()) {
+      // Long rim walls: walk at them square on (from inside and outside).
+      const dirs = p.id === 'rimA' || p.id === 'rimB' ? [0, 4] : p.id.startsWith('rim') ? [2, 6] : [0, 1, 2, 3, 4, 5, 6, 7];
+      const reach = p.id.startsWith('rim') ? 0.6 : p.r + 0.6;
+      for (const k of dirs) {
+        const a = (k / 8) * Math.PI * 2;
+        const sx = p.x + Math.cos(a) * reach;
+        const sz = p.z + Math.sin(a) * reach;
+        // Hip height of a hero standing there, inside the prop's height range.
+        const y = Math.min(p.top - 0.15, Math.max(p.bottom + 0.15, rg.ctx.world.heightAt(sx, sz) + 0.7));
+        const hit = rg.ctx.physics.raycast(new V(sx, y, sz), new V(-Math.cos(a), 0, -Math.sin(a)), reach);
+        // Starting inside a neighbour (the booth sits between the decks): nobody can stand there.
+        if (hit && hit.distance < 0.02) continue;
+        // The prop's own collider stops the ray before the prop's centre.
+        if (!hit || hit.distance > reach - 0.05) bad.push(`${p.id}@${k}`);
+      }
+    }
+    return bad;
+  });
+  expect(misses).toEqual([]);
+});
+
+test('walk-in start: standing on the ring by the booth fills it and starts a run (no button)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = window.__rgFoam!;
+    const far = f.pad().at;
+    rg.teleport(far[0] + 6, far[1] + 0.3, far[2], 0);
+    rg.step(1 / 60, 20, false);
+    const [x, y, z] = f.pad().at;
+    rg.teleport(x, y + 0.3, z, 0);
+    rg.step(1 / 60, 30, false);
+    const half = f.pad().fill;
+    rg.step(1 / 60, 60, false);
+    return { half, phase: f.phase() };
+  });
+  expect(r.half).toBeGreaterThan(0.2);
+  expect(r.phase).toBe('countdown');
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 20, false);
+  });
+  expect(await page.evaluate(() => window.__rgFoam!.phase())).toBe('idle');
 });
 
 test('a foam fall: splash, bubble beard, respawn at the checkpoint, the clock keeps running', async () => {

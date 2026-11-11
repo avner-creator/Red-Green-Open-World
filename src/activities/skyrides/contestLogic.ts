@@ -6,7 +6,8 @@ import { clamp } from './flightModel';
 import type { V3 } from './flightModel';
 
 export const CONTEST = {
-  seconds: 90,
+  /** A 66 s contest: with board, 3-2-1, take-off, landing and podium a round is ~80 s. */
+  seconds: 66,
   countdown: 3,
   /** Points for each thing. */
   points: { hoop: 1, bonusHoop: 3, cloud: 1, golden: 3, trick: 1, duck: 5 } as const,

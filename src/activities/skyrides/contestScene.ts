@@ -15,7 +15,7 @@ import { createCourse, offsetAt } from './course';
 import type { Course } from './course';
 import type { V3 } from './flightModel';
 import { outlineGeometry } from './planeModel';
-import { Puffs, CONFETTI_COLORS } from './fx';
+import { Puffs, CONFETTI_COLORS, TRAIL } from './fx';
 
 /** Course control points (x, z, clearance above the ground, lowest absolute y). */
 export const COURSE_POINTS: readonly (readonly [number, number, number, number])[] = [
@@ -525,7 +525,8 @@ export function createContestScene(ctx: GameContext): ContestScene {
       duckGroup.position.y = duck.y - 0.3 + Math.sin(time * 1.2) * 0.12;
       duckGroup.rotation.z = Math.sin(time * 0.9) * 0.04;
       aim.rotation.y = time;
-      puffs.update(dt);
+      // Trail and pop puffs shrink away next to the camera so they never hide your plane.
+      puffs.update(dt, ctx.camera.position, TRAIL.near);
       confetti.update(dt);
       weakSparks.update(dt);
     },

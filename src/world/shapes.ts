@@ -87,8 +87,8 @@ export function sphereG(detail = 1): THREE.BufferGeometry {
 }
 
 /** Flat torus (lying in XZ). Pass `radius` instead of scaling, so the tube keeps its thickness. */
-export function torusG(tube = 0.1, seg = 24, arc = Math.PI * 2, radius = 1): THREE.BufferGeometry {
-  return cached(`torus${tube},${seg},${arc},${radius}`, () => new THREE.TorusGeometry(radius, tube, 8, seg, arc).rotateX(-Math.PI / 2));
+export function torusG(tube = 0.1, seg = 24, arc = Math.PI * 2, radius = 1, radial = 8): THREE.BufferGeometry {
+  return cached(`torus${tube},${seg},${arc},${radius},${radial}`, () => new THREE.TorusGeometry(radius, tube, radial, seg, arc).rotateX(-Math.PI / 2));
 }
 
 /** Triangular prism: ridge along X (length 1), base width 1 along Z, height 1; base at y=0. */

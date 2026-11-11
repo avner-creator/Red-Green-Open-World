@@ -15,6 +15,7 @@ import { symbolShape } from '../chests/lockModel';
 import { createGlowMaterial } from '../../vision';
 import type { ShapeKind } from './doorLogic';
 import { PartBatch, insideOut, surface } from './batch';
+import type { Surf } from './batch';
 import type { Crag } from './routes';
 
 // ───────────────────────────── shapes ─────────────────────────────
@@ -175,7 +176,7 @@ export interface PedestalModel {
 
 export function buildPedestal(r: number, floating: boolean, post: number, material: THREE.Material): PedestalModel {
   const fixed: THREE.BufferGeometry[] = [];
-  const add = (geo: THREE.BufferGeometry, color: number, s: typeof S_STONE): void => void fixed.push(surface(geo, color, s));
+  const add = (geo: THREE.BufferGeometry, color: number, s: Surf): void => void fixed.push(surface(geo, color, s));
   // Top: cream disc with a gold rim and a dark band below, so the edge reads in both channels.
   add(new THREE.CylinderGeometry(r, r * 0.97, 0.16, 40).translate(0, -0.08, 0), CREAM, S_CREAM);
   add(new THREE.TorusGeometry(r - 0.05, 0.07, 8, 48).rotateX(Math.PI / 2), GOLD, S_GOLD);
@@ -217,8 +218,13 @@ export const VAULT = {
   doorW: 4.5,
   doorH: 3.75,
   doorT: 0.3,
-  /** Height of the button row on the door. */
-  buttonY: 2.35,
+  /** The three round windows on the door where the weak eye sees the sequence (door-local). */
+  screenY: 2.62,
+  screenX: 1.3,
+  screenR: 0.5,
+  /** Floor pads: base and cap sizes, cap height above the ground at rest. */
+  padBaseR: 0.8,
+  padCapH: 0.13,
   /** Outer crag top (the crag's width and depth are per vault: `Crag`). */
   outerTop: 7.2,
   /** How far the door sinks into the floor when it opens. */
@@ -229,12 +235,16 @@ export interface VaultModel {
   /** One mesh (name `secret-vault`), placed at the door base and rotated by the yaw. */
   mesh: THREE.Mesh;
   batch: PartBatch;
-  /** Move the door leaf (door-local offset from its closed pose). */
+  /** Move the door leaf (door-local offset from its closed pose); the window rings move with it. */
   setDoor(x: number, y: number): void;
-  /** Light or darken progress lamp `i` (0..2). */
+  /** Light or darken progress lamp `i` (0..2): the ring round window `i`. */
   setLamp(i: number, on: boolean): void;
   /** Pose the treasure star: spin angle, height above the chamber floor, scale. */
   setStar(spin: number, y: number, scale: number): void;
+  /** Pose the treasure star anywhere (door-local x, y, z): it flies out to the hero. */
+  setStarAt(x: number, y: number, z: number, spin: number, scale: number): void;
+  /** Pose floor pad `i`'s cap: push-in depth (m), sideways shake (m) and look. */
+  setPad(i: number, push: number, shake: number, look: PadLook): void;
   /** Upload what changed this frame. */
   commit(): void;
   dispose(): void;
@@ -270,10 +280,36 @@ function boxesOverlap(a: Box3, b: Box3): boolean {
 const TREASURE_Z = -VAULT.depth * 0.58;
 const STAR_Y = 1.35;
 
-export function buildVault(seed: number, crag: Crag, material: THREE.Material): VaultModel {
+/** Floor pad looks: idle (bright cream), lit (glowing gold: a right step), dark (a wrong step). */
+export type PadLook = 'idle' | 'lit' | 'dark';
+const PAD_LOOK: Record<PadLook, { color: THREE.Color; surf: { rough: number; metal: number; glow: number } }> = {
+  idle: { color: new THREE.Color(0xf1e6cc), surf: { rough: 0.55, metal: 0.05, glow: 0.05 } },
+  lit: { color: new THREE.Color(0xffd23a), surf: { rough: 0.3, metal: 0.4, glow: 1.4 } },
+  dark: { color: new THREE.Color(0x2a2724), surf: { rough: 0.8, metal: 0, glow: 0 } },
+};
+
+/** Door-local rest pose of a floor pad: centre on the ground (y is the ground height there). */
+export interface PadPlace {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Door-local pose of the rule-demo board (centre of its face), facing out of the door, turned by `yaw`. */
+export interface BoardPlace {
+  x: number;
+  /** Ground height under the board. */
+  y: number;
+  z: number;
+  yaw: number;
+}
+
+export const BOARD = { w: 2.4, h: 2.1, bottom: 0.75 } as const;
+
+export function buildVault(seed: number, crag: Crag, material: THREE.Material, pads: readonly PadPlace[] = [], board: BoardPlace | null = null): VaultModel {
   const V = VAULT;
   const fixed: THREE.BufferGeometry[] = [];
-  const add = (geo: THREE.BufferGeometry, color: number, s: typeof S_STONE): void => void fixed.push(surface(geo, color, s));
+  const add = (geo: THREE.BufferGeometry, color: number, s: Surf): void => void fixed.push(surface(geo, color, s));
 
   // Rock: chunky faceted boulders around the chamber, kept out of the room, the doorway and
   // (roughly) inside the crag's outer extents.
@@ -353,13 +389,20 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material): 
   for (const s of [-1, 1]) add(new RoundedBoxGeometry(0.7, V.doorH + 0.5, 0.95, 2, 0.08).translate(s * (V.halfW + 0.35), (V.doorH + 0.5) / 2 - 0.1, -0.12), 0xe9dfc8, S_FRAME);
   add(new RoundedBoxGeometry(V.halfW * 2 + 1.5, 0.8, 1.05, 2, 0.1).translate(0, V.doorH + 0.5, -0.1), 0xe9dfc8, S_FRAME);
   add(new THREE.BoxGeometry(V.halfW * 2 + 0.05, 0.14, 0.5).translate(0, V.doorH + 0.06, -0.05), 0x1d1b19, S_MATTE);
-  // Keystone.
-  add(new RoundedBoxGeometry(0.7, 0.95, 1.15, 2, 0.08).translate(0, V.doorH + 0.62, -0.05), 0xe9dfc8, S_FRAME);
-  // Lamp rings on the lintel.
-  const lampAt = (i: number): [number, number, number] => [(i - 1) * 0.95, i === 1 ? V.doorH + 1.2 : V.doorH + 0.5, i === 1 ? 0.58 : 0.48];
-  for (let i = 0; i < 3; i++) {
-    const [x, y, z] = lampAt(i);
-    add(new THREE.TorusGeometry(0.23, 0.05, 6, 20).translate(x, y, z - 0.02), 0x1d1b19, S_MATTE);
+  // Treasure window over the lintel ("what's inside"): a round gold-framed porthole with bars, and
+  // behind it a glowing heap of gold with a big star. Bright gold on near-black reads in R and G.
+  {
+    const wy = V.doorH + 1.15;
+    const wz = 0.62;
+    add(new THREE.CylinderGeometry(0.86, 0.86, 0.3, 36).rotateX(Math.PI / 2).translate(0, wy, wz - 0.2), 0x1d1b19, S_MATTE);
+    add(new THREE.CylinderGeometry(0.72, 0.72, 0.06, 36).rotateX(Math.PI / 2).translate(0, wy, wz - 0.02), 0xffb92e, { rough: 0.4, metal: 0, glow: 0.9 });
+    add(new THREE.SphereGeometry(0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.15, 0.55, 0.4).translate(0, wy - 0.42, wz + 0.02), 0xffd23a, { rough: 0.3, metal: 0.6, glow: 0.5 });
+    add(new THREE.ExtrudeGeometry(shapeOutline('star', 0.32), { depth: 0.06, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02, bevelSegments: 1 }).translate(0, wy + 0.08, wz + 0.04), 0xfff4cf, { rough: 0.3, metal: 0.3, glow: 1.2 });
+    add(new THREE.TorusGeometry(0.76, 0.1, 10, 40).translate(0, wy, wz + 0.04), 0xe8b84a, S_BRASS);
+    for (const bx of [-0.36, 0, 0.36]) {
+      const hh = Math.sqrt(Math.max(0, 0.72 * 0.72 - bx * bx));
+      add(new THREE.CylinderGeometry(0.045, 0.045, hh * 2, 8).translate(bx, wy, wz + 0.12), 0x1d1b19, { rough: 0.5, metal: 0.6 });
+    }
   }
 
   // Treasure pile inside: gold heap, coin stacks and gems (the big star is its own part: it spins).
@@ -397,16 +440,50 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material): 
   dadd(new THREE.TorusGeometry(0.42, 0.06, 8, 32).translate(0, 1.15, 0.08), 0xe8b84a, S_BRASS);
   for (let i = 0; i < 3; i++) dadd(new THREE.BoxGeometry(0.9, 0.06, 0.06).rotateZ((i * Math.PI) / 3).translate(0, 1.15, 0.08), 0xe8b84a, S_BRASS);
   dadd(new THREE.CylinderGeometry(0.1, 0.1, 0.12, 12).rotateX(Math.PI / 2).translate(0, 1.15, 0.1), 0xe8b84a, S_BRASS);
-  dadd(new THREE.BoxGeometry(V.doorW - 0.9, 0.9, 0.04).translate(0, V.buttonY, 0.0), 0x1d1b19, S_MATTE);
+  // Three round dark windows: the weak eye sees the sequence in them; the strong eye sees empty glass.
+  for (let i = 0; i < 3; i++) {
+    const sx = (i - 1) * V.screenX;
+    dadd(new THREE.CylinderGeometry(V.screenR, V.screenR, 0.06, 32).rotateX(Math.PI / 2).translate(sx, V.screenY, 0.02), 0x111316, { rough: 0.2, metal: 0.3 });
+    // Pips under each window (1, 2, 3): the order, without numbers.
+    for (let p = 0; p <= i; p++) dadd(new THREE.SphereGeometry(0.07, 10, 6).translate(sx + (p - i / 2) * 0.22, V.screenY - V.screenR - 0.2, 0.06), 0xf4ecd8, S_CREAM);
+  }
 
-  // Parts: 0 fixed, 1 door, 2..4 lamps, 5 treasure star.
-  const lamps = [0, 1, 2].map((i) => surface(new THREE.SphereGeometry(0.2, 16, 10).translate(...lampAt(i)), LAMP_OFF.color.getHex(), LAMP_OFF.surf));
+  // Floor pads (both eyes): a dark ring base each; the caps are moving parts below.
+  for (const pd of pads) {
+    add(new THREE.CylinderGeometry(V.padBaseR, V.padBaseR + 0.06, 0.1, 32).translate(pd.x, pd.y + 0.03, pd.z), 0x23262b, { rough: 0.7, metal: 0.2 });
+    add(new THREE.TorusGeometry(V.padBaseR - 0.04, 0.045, 6, 32).rotateX(Math.PI / 2).translate(pd.x, pd.y + 0.09, pd.z), 0xe8b84a, S_BRASS);
+  }
+
+  // Rule-demo board: a dark frame on two posts (its picture is a separate canvas mesh).
+  if (board) {
+    const fr: THREE.BufferGeometry[] = [];
+    const cy = board.y + BOARD.bottom + BOARD.h / 2;
+    for (const s of [-1, 1]) fr.push(new THREE.CylinderGeometry(0.06, 0.07, BOARD.bottom + BOARD.h + 0.15, 8).translate(s * (BOARD.w / 2 - 0.12), board.y + (BOARD.bottom + BOARD.h + 0.15) / 2 - 0.05, -0.08));
+    fr.push(new RoundedBoxGeometry(BOARD.w + 0.16, BOARD.h + 0.16, 0.08, 2, 0.04).translate(0, cy, -0.06));
+    const frame = merge(fr);
+    for (const f of fr) f.dispose();
+    frame.rotateY(board.yaw).translate(board.x, 0, board.z);
+    add(frame, 0x1d1b19, { rough: 0.7, metal: 0.1 });
+  }
+
+  // Parts: 0 fixed, 1 door, 2..4 window rings (lamps, on the door), 5 treasure star, 6.. pad caps.
+  const lamps = [0, 1, 2].map((i) => surface(new THREE.TorusGeometry(V.screenR + 0.06, 0.075, 8, 36).translate((i - 1) * V.screenX, V.screenY, 0.06), LAMP_OFF.color.getHex(), LAMP_OFF.surf));
   const star = surface(
     new THREE.ExtrudeGeometry(shapeOutline('star', 0.42), { depth: 0.14, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2 }).translate(0, 0, -0.07),
     0xffc928,
     S_TREASURE,
   );
-  const all = [merge(fixed), merge(door), ...lamps, star];
+  const caps = pads.map((pd) =>
+    surface(
+      merge([
+        new THREE.CylinderGeometry(V.padBaseR - 0.16, V.padBaseR - 0.1, V.padCapH, 32).translate(0, V.padCapH / 2, 0),
+        new THREE.TorusGeometry(V.padBaseR - 0.16, 0.035, 6, 32).rotateX(Math.PI / 2).translate(0, V.padCapH, 0),
+      ]).translate(pd.x, pd.y + 0.02, pd.z),
+      PAD_LOOK.idle.color.getHex(),
+      PAD_LOOK.idle.surf,
+    ),
+  );
+  const all = [merge(fixed), merge(door), ...lamps, star, ...caps];
   const batch = new PartBatch(all);
   for (const g of [...fixed, ...door, ...all]) g.dispose();
   const mesh = new THREE.Mesh(batch.geometry, material);
@@ -419,11 +496,14 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material): 
   const UPV = new THREE.Vector3(0, 1, 0);
   const p = new THREE.Vector3();
   const sc = new THREE.Vector3();
+  const padAt = pads.map((pd) => new THREE.Vector3(pd.x, pd.y, pd.z));
+  const padLook: PadLook[] = pads.map(() => 'idle');
   const model: VaultModel = {
     mesh,
     batch,
     setDoor(x, y) {
-      batch.setMatrix(1, m.makeTranslation(x, y, 0));
+      m.makeTranslation(x, y, 0);
+      for (const i of [1, 2, 3, 4]) batch.setMatrix(i, m);
     },
     setLamp(i, on) {
       const l = on ? LAMP_ON : LAMP_OFF;
@@ -432,6 +512,19 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material): 
     },
     setStar(spin, y, scale) {
       batch.setMatrix(5, m.compose(p.set(0, y, TREASURE_Z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
+    },
+    setStarAt(x, y, z, spin, scale) {
+      batch.setMatrix(5, m.compose(p.set(x, y, z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
+    },
+    setPad(i, push, shake, look) {
+      const c = padAt[i];
+      if (!c) return;
+      batch.setMatrix(6 + i, m.makeTranslation(shake, -push, 0));
+      if (padLook[i] !== look) {
+        padLook[i] = look;
+        batch.setColor(6 + i, PAD_LOOK[look].color);
+        batch.setSurface(6 + i, PAD_LOOK[look].surf);
+      }
     },
     commit: () => batch.commit(),
     dispose: () => batch.dispose(),
@@ -455,21 +548,18 @@ export interface SignModel {
   dispose(): void;
 }
 
-/** The weak-eye sequence: three big shapes in a row above the door, with 1/2/3 pips and arrows. */
+/** The weak-eye sequence: three big shapes in the door's three windows, with little arrows between. */
 export function buildSign(sequence: readonly ShapeKind[]): SignModel {
   const root = new THREE.Group();
   root.name = 'vault-sign';
   const solid = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const glowMat = createGlowMaterial({ level: 1, coreOpacity: 0.12, rimPower: 2.2, pulse: 0.25 });
-  const stepX = (i: number): number => (i - 1) * 1.45;
+  const stepX = (i: number): number => (i - 1) * VAULT.screenX;
   const solids: THREE.BufferGeometry[] = [];
   const glows: THREE.BufferGeometry[] = [];
   sequence.forEach((kind, i) => {
-    // Pips: 1, 2, 3 dots under the shape (order without numbers).
-    const pips: THREE.BufferGeometry[] = [];
-    for (let p = 0; p <= i; p++) pips.push(new THREE.SphereGeometry(0.075, 10, 6).translate((p - i / 2) * 0.24, -0.66, 0));
-    const step = merge([shadeGrey(shapeSolid(kind, 0.42, 0.14), 1, 0.62, facet), shadeGrey(merge(pips), 1, 0.7)]);
-    for (const p of pips) p.dispose();
+    // The 1, 2, 3 pips are on the door itself (both eyes); the shape sits in its window.
+    const step = shadeGrey(shapeSolid(kind, 0.4, 0.14), 1, 0.62, facet);
     solids.push(step.translate(stepX(i), 0, 0));
     const glow = new THREE.SphereGeometry(0.62, 20, 12).scale(1, 1, 0.35).toNonIndexed();
     glow.deleteAttribute('uv');
@@ -477,7 +567,7 @@ export function buildSign(sequence: readonly ShapeKind[]): SignModel {
   });
   // Little arrows between the shapes (part 3 of the solid batch, never moves).
   const chev: THREE.BufferGeometry[] = [];
-  for (const x of [-0.725, 0.725]) {
+  for (const x of [-VAULT.screenX / 2, VAULT.screenX / 2]) {
     for (const s of [-1, 1]) chev.push(new THREE.BoxGeometry(0.22, 0.06, 0.06).rotateZ(-s * 0.7).translate(x, s * 0.07, 0));
   }
   solids.push(shadeGrey(merge(chev), 0.9, 0.6));
@@ -515,68 +605,53 @@ export function buildSign(sequence: readonly ShapeKind[]): SignModel {
 }
 
 export interface ButtonsModel {
-  /** Door-local root of the one mesh: buttons on the door and tiles on the ground (strong eye). */
+  /** Door-local root of the one mesh: the shapes over the floor pads (strong eye). */
   root: THREE.Group;
   /**
-   * Pose button `i`: door offset (the door sinks/wobbles), extra scale, push-in depth; scale 0
-   * hides it.
+   * Pose pad `i`'s shape: push-in depth (it rides down with the pad), extra scale (0 hides it) and a
+   * little sideways shake.
    */
-  setButton(i: number, doorX: number, doorY: number, scale: number, push: number): void;
-  /** Pose floor tile `i` (scale 0 hides it). */
-  setTile(i: number, scale: number): void;
+  setButton(i: number, push: number, scale: number, shake: number, turn?: number): void;
   commit(): void;
   dispose(): void;
 }
 
 /**
- * Strong-eye shape buttons (on the door at `buttonY`) and matching floor tiles (in front of each
- * button at door-local `tiles[i]`), all in one mesh.
+ * Strong-eye shapes for the floor pads: a big shape standing over each pad (tilted back toward the
+ * player walking up) and a matching flat shape on the pad's cap, all in one mesh. `angles` turn each
+ * one to face straight out from the door centre.
  */
-export function buildButtons(xs: readonly number[], shapes: readonly ShapeKind[], buttonY: number, tiles: readonly { x: number; y: number; z: number }[]): ButtonsModel {
+export function buildButtons(pads: readonly { x: number; y: number; z: number }[], angles: readonly number[], shapes: readonly ShapeKind[], capH: number): ButtonsModel {
   const solid = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   const root = new THREE.Group();
   root.name = 'vault-buttons';
-  // No filled plates: on a layer only coverage and brightness show, so a shape inside a filled
-  // plate would barely read. A bright ring (or frame) with the shape floating inside it reads best.
+  // On a layer only coverage and brightness show: a bright rim ring with the shape floating inside
+  // reads best (a filled plate would hide the shape).
   const parts: THREE.BufferGeometry[] = [];
-  const bAt = xs.map((x) => new THREE.Vector3(x, buttonY, 0.1));
-  xs.forEach((_x, i) => {
-    const rim = shadeGrey(new THREE.TorusGeometry(0.37, 0.05, 6, 32), 0.95, 0.6);
-    const sym = shadeGrey(shapeSolid(shapes[i], 0.24, 0.07).translate(0, 0, 0.04), 1, 0.65, facet);
-    parts.push(merge([rim, sym]).translate(bAt[i].x, bAt[i].y, bAt[i].z));
-  });
-  tiles.forEach((t, i) => {
-    const rim = shadeGrey(
-      merge([
-        new THREE.BoxGeometry(0.86, 0.06, 0.06).translate(0, 0.01, 0.6),
-        new THREE.BoxGeometry(0.86, 0.06, 0.06).translate(0, 0.01, -0.6),
-        new THREE.BoxGeometry(0.06, 0.06, 1.25).translate(0.41, 0.01, 0),
-        new THREE.BoxGeometry(0.06, 0.06, 1.25).translate(-0.41, 0.01, 0),
-      ]),
-      0.95,
-      0.7,
-    );
-    const sym = shadeGrey(shapeSolid(shapes[i], 0.3, 0.04).rotateX(-Math.PI / 2).translate(0, 0.03, 0), 1, 0.8);
-    parts.push(merge([rim, sym]).translate(t.x, t.y, t.z));
+  const centres: THREE.Vector3[] = [];
+  pads.forEach((pd, i) => {
+    const rim = shadeGrey(new THREE.TorusGeometry(0.4, 0.05, 6, 32), 0.95, 0.6);
+    const sym = shadeGrey(shapeSolid(shapes[i], 0.27, 0.08).translate(0, 0, 0.04), 1, 0.65, facet);
+    const standY = capH + 0.78;
+    const stand = merge([rim, sym]).rotateX(-0.45).translate(0, standY, 0);
+    const flat = shadeGrey(shapeSolid(shapes[i], 0.3, 0.03).rotateX(-Math.PI / 2).translate(0, capH + 0.04, 0), 1, 0.8);
+    const g = merge([stand, flat]).rotateY(angles[i] ?? 0).translate(pd.x, pd.y + 0.02, pd.z);
+    parts.push(g);
+    centres.push(new THREE.Vector3(pd.x, pd.y + 0.02 + capH, pd.z));
   });
   const batch = new PartBatch(parts);
   for (const g of parts) g.dispose();
-  // The buttons sink with the door (up to VAULT.sink below their rest height).
-  if (batch.geometry.boundingSphere) batch.geometry.boundingSphere.radius += 2.5;
+  if (batch.geometry.boundingSphere) batch.geometry.boundingSphere.radius += 0.5;
   root.add(new THREE.Mesh(batch.geometry, solid));
-  const n = xs.length;
   const m = new THREE.Matrix4();
   const r = new THREE.Matrix4();
-  const about = (c: THREE.Vector3, ox: number, oy: number, oz: number, s: number): THREE.Matrix4 =>
-    m.makeTranslation(c.x + ox, c.y + oy, c.z + oz).multiply(r.makeScale(s, s, s)).multiply(r.makeTranslation(-c.x, -c.y, -c.z));
-  const tAt = tiles.map((t) => new THREE.Vector3(t.x, t.y, t.z));
   return {
     root,
-    setButton(i, doorX, doorY, scale, push) {
-      batch.setMatrix(i, about(bAt[i], doorX, doorY, -push, scale));
-    },
-    setTile(i, scale) {
-      batch.setMatrix(n + i, about(tAt[i], 0, 0, 0, scale));
+    setButton(i, push, scale, shake, turn = 0) {
+      const c = centres[i];
+      // Turn about the pad's vertical axis (`turn` is relative to the shape's built-in facing).
+      m.makeTranslation(c.x + shake, c.y - push, c.z).multiply(r.makeRotationY(turn)).multiply(r.makeScale(scale, scale, scale)).multiply(r.makeTranslation(-c.x, -c.y, -c.z));
+      batch.setMatrix(i, m);
     },
     commit: () => batch.commit(),
     dispose() {

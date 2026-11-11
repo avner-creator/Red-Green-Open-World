@@ -7,6 +7,7 @@ import { createApplier } from './applier';
 import type { WornSlot } from './look';
 import { GEAR_CATALOG } from './catalog';
 import { createEmotes } from './emotes';
+import { createGifts } from './gift';
 import { withPreviews } from './previews';
 import { createTrails } from './trails';
 
@@ -30,6 +31,8 @@ export interface GearTestApi {
   playEmote(itemId?: string): boolean;
   /** Switch real shop previews on or off (off by default in test mode: `preview()` then returns null). */
   enablePreviews(on: boolean): void;
+  /** Switch the wardrobe gifts (first-minute hat, Fun Pass milestones) on or off (off by default in test mode). */
+  enableGifts(on: boolean): void;
 }
 
 declare global {
@@ -46,6 +49,7 @@ export function createGear(ctx: GameContext): GameSystem {
   const applier = createApplier(ctx);
   const trails = createTrails(ctx);
   const emotes = createEmotes(ctx);
+  const gifts = createGifts(ctx);
   applier.sync(false);
 
   const offs = [
@@ -68,6 +72,7 @@ export function createGear(ctx: GameContext): GameSystem {
       enablePreviews: (on) => {
         previewsOn = on;
       },
+      enableGifts: (on) => gifts.enable(on),
     };
   }
 
@@ -76,12 +81,14 @@ export function createGear(ctx: GameContext): GameSystem {
       applier.update(dt);
       trails.update(dt);
       emotes.update(dt);
+      gifts.update(dt);
     },
     dispose() {
       for (const off of offs) off();
       applier.dispose();
       trails.dispose();
       emotes.dispose();
+      gifts.dispose();
       if (window.__rgGear) delete window.__rgGear;
     },
   };

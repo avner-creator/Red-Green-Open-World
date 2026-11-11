@@ -153,8 +153,9 @@ export function effectsFor(b: Readonly<Pick<BuildSnapshot, 'scoops' | 'toppings'
 
 /**
  * The scoop tower leans like a springy inverted pendulum. Each new scoop gives it a push (along the
- * swing, so piling scoops on while it still wobbles adds up); taller stacks
- * are floppier. Wait for the wobble to settle and even five scoops stand; rush it and it topples.
+ * swing, so piling scoops on while it still wobbles adds up); taller stacks are floppier, and a
+ * tall stack (3+ scoops) sways gently by itself. Put a scoop on a tall tower while it leans and it
+ * goes over (a comic splat; the bottom two stay): wait for the moment it stands upright.
  */
 export const WOBBLE = {
   /** Spring stiffness for n scoops: base / (1 + soft * n²). */
@@ -163,12 +164,24 @@ export const WOBBLE = {
   damping: 2.4,
   /** Push per new scoop, rad/s: kick + kickPerScoop * n. */
   kick: 0.35,
-  kickPerScoop: 0.1,
+  kickPerScoop: 0.07,
   /** Lean (rad) at which the top falls off. */
   topple: 0.55,
   /** Scoops that always stay on after a topple. */
   keep: 2,
+  /** Self-sway of a tall stack: amplitude per scoop above `swayFrom` - 1 (rad) and its rate. */
+  swayFrom: 3,
+  sway: 0.06,
+  swayRate: 2.2,
+  /** Adding scoop n (≥ 4) while the tower leans more than this (rad) tips it over. */
+  safe4: 0.13,
+  safe5: 0.085,
 } as const;
+
+/** Most lean (rad) at which a scoop can go onto a stack that will then have `n` scoops. */
+export function safeLean(n: number): number {
+  return n >= 5 ? WOBBLE.safe5 : n === 4 ? WOBBLE.safe4 : Infinity;
+}
 
 export class StackWobble {
   /** Lean as a 2D vector (x = sideways, z = toward the customer), radians. */
@@ -176,6 +189,8 @@ export class StackWobble {
   z = 0;
   vx = 0;
   vz = 0;
+  /** Sway clock (s). */
+  t = 0;
   constructor(private readonly r: () => number = Math.random) {}
 
   stiffness(n: number): number {
@@ -186,27 +201,39 @@ export class StackWobble {
     return Math.hypot(this.x, this.z);
   }
 
-  /** A new scoop landed on a stack that now has `n` scoops. */
-  push(n: number): void {
+  /** Where a stack of `n` scoops sways to by itself right now (the spring's moving rest). */
+  swayRest(n: number): { x: number; z: number } {
+    const a = n >= WOBBLE.swayFrom ? WOBBLE.sway * (n - WOBBLE.swayFrom + 1) : 0;
+    return { x: a * Math.sin(this.t * WOBBLE.swayRate), z: a * 0.35 * Math.sin(this.t * WOBBLE.swayRate * 0.63 + 1) };
+  }
+
+  /**
+   * A new scoop landed on a stack that now has `n` scoops. Returns true when it was put on while
+   * the tall tower leaned too far: it is going over (it topples within a moment).
+   */
+  push(n: number): boolean {
     const k = WOBBLE.kick + WOBBLE.kickPerScoop * n;
     // Push along the swing (or the lean): a stack still wobbling gains energy and can go over.
     const v = Math.hypot(this.vx, this.vz);
     const l = this.lean();
     let dx: number;
     let dz: number;
-    if (v > 0.1) {
-      dx = this.vx / v;
-      dz = this.vz / v;
-    } else if (l > 0.04) {
+    if (l > 0.04) {
       dx = this.x / l;
       dz = this.z / l;
+    } else if (v > 0.1) {
+      dx = this.vx / v;
+      dz = this.vz / v;
     } else {
       const a = this.r() * Math.PI * 2;
       dx = Math.cos(a);
       dz = Math.sin(a);
     }
-    this.vx += dx * k;
-    this.vz += dz * k;
+    const over = l > safeLean(n);
+    const kick = over ? Math.max(k, 4) : k;
+    this.vx += dx * kick;
+    this.vz += dz * kick;
+    return over;
   }
 
   /** Advance; returns true when the stack topples this step (then it resets upright). */
@@ -220,8 +247,10 @@ export class StackWobble {
     const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
     const h = dt / steps;
     for (let i = 0; i < steps; i++) {
-      this.vx += (-k * this.x - WOBBLE.damping * this.vx) * h;
-      this.vz += (-k * this.z - WOBBLE.damping * this.vz) * h;
+      this.t += h;
+      const rest = this.swayRest(n);
+      this.vx += (-k * (this.x - rest.x) - WOBBLE.damping * this.vx) * h;
+      this.vz += (-k * (this.z - rest.z) - WOBBLE.damping * this.vz) * h;
       this.x += this.vx * h;
       this.z += this.vz * h;
       if (n > WOBBLE.keep && this.lean() > WOBBLE.topple) {
@@ -236,9 +265,14 @@ export class StackWobble {
     this.x = this.z = this.vx = this.vz = 0;
   }
 
-  /** Settled enough that adding another scoop is safe. */
+  /** Settled enough that adding another scoop is safe (upright, not swinging). */
   calm(): boolean {
     return this.lean() < 0.05 && Math.hypot(this.vx, this.vz) < 0.15;
+  }
+
+  /** Upright enough right now for the next scoop (n = the count after adding it). */
+  safeFor(n: number): boolean {
+    return this.lean() < safeLean(n) * 0.8;
   }
 }
 

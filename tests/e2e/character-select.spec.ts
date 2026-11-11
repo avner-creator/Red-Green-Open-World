@@ -165,10 +165,10 @@ test.describe('character select', () => {
       window.__rg!.ctx.events.emit('shop:open', {});
       window.__rg!.step(1 / 60, 3, false);
     });
-    await page.getByTestId('shop-tab-character').click();
-    await expect(page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="panda"]')).toHaveAttribute('data-state', 'equipped');
-    await expect(page.locator('[data-testid="shop"] [data-testid="shop-card"][data-item="bee"]')).toHaveAttribute('data-state', 'poor');
-    await page.getByTestId('shop-close').click();
+    await page.getByTestId('shop-tab-hero').click();
+    await expect(page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="panda"]')).toHaveAttribute('data-state', 'equipped');
+    await expect(page.locator('[data-testid="wardrobe"] [data-testid="shop-card"][data-item="bee"]')).toHaveAttribute('data-state', 'poor');
+    await page.getByTestId('wardrobe-close').click();
     await page.evaluate(() => window.__rg!.step(1 / 60, 3, false));
     expect(await phase(page)).toBe('playing');
     // A wipe locks the paid heroes again and swaps back to a free one.

@@ -117,9 +117,12 @@ test('stunt plane: E boards, 3-2-1, take-off, a full contest, auto landing, podi
     rg.step(1 / 60, 10, false);
     const focus = ctx.interactions.focused?.id ?? null;
     sky.plane.contestSeconds = 30;
+    const stamps: string[] = [];
+    ctx.events.on('stamp:earned', (e) => stamps.push(e.id));
     rg.inject({ usePressed: true });
     rg.step(1 / 60, 1, false);
     rg.inject(null);
+    const wallet0 = ctx.profile.wallet;
     const modeAfterUse = ctx.player.mode;
     const phases: string[] = [sky.plane.phase];
     const dt = 1 / 30;
@@ -153,7 +156,12 @@ test('stunt plane: E boards, 3-2-1, take-off, a full contest, auto landing, podi
     rg.step(1 / 60, 20, false);
     const p = ctx.player.position;
     const podium = document.querySelector('[data-testid="sky-podium"]');
+    const shown = document.querySelector('[data-testid="sky-prize"]')?.textContent ?? null;
     return {
+      stamps,
+      gained: ctx.profile.wallet - wallet0,
+      shown,
+      solid: sky.plane.solidParts,
       focus,
       modeAfterUse,
       phases,
@@ -190,6 +198,13 @@ test('stunt plane: E boards, 3-2-1, take-off, a full contest, auto landing, podi
   expect(r.engine).toBe(0);
   expect(r.override).toBeNull();
   expect(r.podiumOn).toBe(true);
+  // The round earns its Fun Pass stamp, and the podium's gem number is the wallet's real change
+  // (prize + the Glow Gem picked up at speed); before, it showed the place prize only.
+  expect(r.stamps).toContain('airstrip');
+  expect(r.gained).toBeGreaterThan(r.result!.prize - 1);
+  expect(r.result!.prize).toBe(r.gained);
+  expect(r.shown).toBe(`+${r.gained}`);
+  expect(r.solid).toBe(2);
   expect(r.errors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 });
@@ -250,9 +265,13 @@ test('friendly dragon: feed a treat, ride, treasure at speed, glide home, land o
     rg.step(1 / 60, 10, false);
     const focus = ctx.interactions.focused?.id ?? null;
     sky.dragon.tourSeconds = 22;
+    const stamps: string[] = [];
+    ctx.events.on('stamp:earned', (e) => stamps.push(e.id));
     rg.inject({ usePressed: true });
     rg.step(1 / 60, 1, false);
     rg.inject(null);
+    const wallet0 = ctx.profile.wallet;
+    let maxAbove = 0;
     const phases: string[] = [sky.dragon.phase];
     const glasses: string[] = [];
     const offGlasses = ctx.events.on('glasses:result', (e) => glasses.push(`${e.mechanic}:${e.hit}`));
@@ -278,13 +297,25 @@ test('friendly dragon: feed a treat, ride, treasure at speed, glide home, land o
       }
       rg.step(dt, 1, false);
       const p = ctx.player.position;
-      if (sky.dragon.phase === 'tour') maxAgl = Math.max(maxAgl, p.y - ctx.world.heightAt(p.x, p.z));
+      if (sky.dragon.phase === 'tour') {
+        maxAgl = Math.max(maxAgl, p.y - ctx.world.heightAt(p.x, p.z));
+        // Mash flap like a kid: the dragon must stay near the route (it went 80 m up before).
+        rg.inject({ jumpPressed: i % 15 === 0 });
+        const line = sky.dragon.course.at(sky.dragon.course.nearest(p), { x: 0, y: 0, z: 0 });
+        maxAbove = Math.max(maxAbove, p.y - line.y);
+      }
       if (phases[phases.length - 1] !== sky.dragon.phase) phases.push(sky.dragon.phase);
     }
     rg.step(1 / 60, 20, false);
     offGlasses();
     const p = ctx.player.position;
+    const shown = document.querySelector('[data-testid="sky-prize"]')?.textContent ?? null;
     return {
+      stamps,
+      gained: ctx.profile.wallet - wallet0,
+      shown,
+      maxAbove,
+      friendPoints: sky.dragon.friendPoints,
       focus,
       phases,
       glasses,
@@ -308,13 +339,104 @@ test('friendly dragon: feed a treat, ride, treasure at speed, glide home, land o
   expect(r.maxAgl).toBeGreaterThan(12);
   expect(r.befriended).toBe(true);
   expect(r.last).not.toBeNull();
-  expect(r.last!.stars).toBeGreaterThanOrEqual(1);
+  expect(r.last!.place).toBeGreaterThanOrEqual(1);
+  expect(r.friendPoints).toBeGreaterThan(0);
+  expect(r.maxAbove).toBeLessThan(20);
+  expect(r.stamps).toContain('dragonRoost');
+  expect(r.last!.prize).toBe(r.gained);
+  expect(r.shown).toBe(`+${r.gained}`);
   expect(r.mode).toBe('walk');
   expect(r.onLand).toBe(true);
   expect(Math.abs(r.groundGap)).toBeLessThan(0.6);
   expect(r.distToRoost).toBeLessThan(8);
   expect(r.override).toBeNull();
   expect(r.errors).toEqual([]);
+});
+
+test('the parked plane is solid from 8 directions; walk-in rings start the plane and the dragon', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const sky = window.__rgSky!;
+    const ctx = rg.ctx;
+    const V = ctx.camera.position.constructor as new (x: number, y: number, z: number) => import('three').Vector3;
+    // Physics: a ray at hip height from 8 directions stops on the plane (it walked through before).
+    const bad: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const sx = -12 + Math.cos(a) * 5;
+      const sz = 41 + Math.sin(a) * 5;
+      const hit = ctx.physics.raycast(new V(sx, ctx.world.heightAt(sx, sz) + 0.8, sz), new V(-Math.cos(a), 0, -Math.sin(a)), 5);
+      if (!hit || hit.distance > 4.6) bad.push(k);
+    }
+    // Walk-in: stand on the ring by the plane, no button.
+    const pa = sky.plane.pad.at;
+    rg.teleport(pa.x + 5, pa.y + 0.3, pa.z, 0);
+    rg.step(1 / 60, 10, false);
+    rg.teleport(pa.x, pa.y + 0.3, pa.z, 0);
+    rg.step(1 / 60, 90, false);
+    const plane = sky.plane.phase;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    const da = sky.dragon.pad.at;
+    rg.teleport(da.x + 5, da.y + 0.3, da.z, 0);
+    rg.step(1 / 60, 10, false);
+    rg.teleport(da.x, da.y + 0.3, da.z, 0);
+    rg.step(1 / 60, 90, false);
+    const dragon = sky.dragon.phase;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    return { bad, plane, dragon, after: sky.dragon.phase, errors: rg.errors };
+  });
+  expect(r.bad).toEqual([]);
+  expect(r.plane).not.toBe('idle');
+  expect(r.dragon).not.toBe('idle');
+  expect(r.after).toBe('idle');
+  expect(r.errors).toEqual([]);
+});
+
+test('a practice dragon ride (no gems to pay) pays no gems and shows the crossed-out gem', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const sky = window.__rgSky!;
+    const ctx = rg.ctx;
+    ctx.profile.spend(ctx.profile.wallet, 'test');
+    rg.teleport(-32.6, ctx.world.heightAt(-32.6, -125.2) + 0.3, -125.2, Math.PI);
+    rg.step(1 / 60, 10, false);
+    sky.dragon.tourSeconds = 14;
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    const chip = document.querySelector('[data-testid="sky-practice-chip"]')?.classList.contains('on') ?? false;
+    let gotTreasure = false;
+    for (let i = 0; i < 2400 && sky.dragon.phase !== 'idle'; i++) {
+      if (sky.dragon.phase === 'tour' && !gotTreasure) {
+        const spot = sky.dragon.treasureSpots[3];
+        sky.dragon.testPose(spot.x, spot.y - 2.5, spot.z - 30, 0);
+        for (let k = 0; k < 60; k++) {
+          rg.inject({ sprint: true });
+          rg.step(1 / 30, 1, false);
+        }
+        rg.inject(null);
+        gotTreasure = true;
+      }
+      rg.step(1 / 30, 1, false);
+    }
+    rg.step(1 / 60, 20, false);
+    return {
+      chip,
+      wallet: ctx.profile.wallet,
+      treasure: sky.dragon.lastTour?.treasure ?? -1,
+      practiceShown: !!document.querySelector('[data-testid="sky-practice"]'),
+    };
+  });
+  expect(r.chip).toBe(true);
+  expect(r.treasure).toBeGreaterThan(0);
+  expect(r.wallet).toBe(0);
+  expect(r.practiceShown).toBe(true);
 });
 
 test('sky rides never take the player from another ride', async () => {

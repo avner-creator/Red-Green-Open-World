@@ -11,6 +11,7 @@ import { ANCHORS } from '../../src/world/layout';
 import { roadEdgeDistance } from '../../src/world/wayfinding';
 import { ATTRACTIONS, COMPASS_ATTRACTIONS } from '../../src/world/attractions';
 import { DRESSING, SITES, dressingPoints, inZone, raceCutDistance, type Zone } from '../../src/world/sites';
+import { STILE } from '../../src/world/fill/fixes';
 
 const NEW: AnchorName[] = ['carnivalRow', 'iceCream', 'bubbleArena', 'dinoRing', 'raceStart', 'foamCourse', 'airstrip', 'dragonRoost'];
 /** Anchors whose clear circle takes in a road (or the village street and houses): flat over the footprint instead. */
@@ -126,7 +127,10 @@ describe('Carnival Island sites', () => {
 
   it('no world collider stands in a site radius or footprint (except the attractions own nothing yet)', () => {
     const bad: string[] = [];
+    // The walk-up steps to the bubble pitch's wall (owner playtest 4) belong to the arena on purpose.
+    const inStile = (x: number, z: number): boolean => x > STILE.x0 - 0.3 && x < STILE.x1 + 0.3 && z > STILE.z0 - 0.3 && z < STILE.z1 + 0.3;
     for (const c of cols) {
+      if (inStile(c.x, c.z)) continue;
       for (const a of NEW) {
         const d = ANCHORS[a];
         // Village houses and the main-street lamps sit inside the carnival circle but outside its strip.

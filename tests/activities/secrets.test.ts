@@ -2,7 +2,8 @@ import { describe, expect, test } from 'vitest';
 import { buildTerrain, sampleHeight } from '../../src/world/terrain';
 import { PATH_RULES, STONE, checkPath, edgeGap, helixStones, minClearance, onStone, stonesAlong } from '../../src/activities/secrets/pathLogic';
 import type { Stone } from '../../src/activities/secrets/pathLogic';
-import { DOOR_RULES, DoorLock, buttonAt, fromDoorLocal, makeSequence, toDoorLocal } from '../../src/activities/secrets/doorLogic';
+import { DOOR_RULES, DoorLock, fromDoorLocal, makeSequence, padAt, padLocal, toDoorLocal } from '../../src/activities/secrets/doorLogic';
+import { boardPhase, BOARD_LOOP } from '../../src/activities/secrets/board';
 import { buildRoutes, buildVaults } from '../../src/activities/secrets/routes';
 import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from '../../src/activities/secrets/arrowLogic';
 import { ANCHORS, ROADS } from '../../src/world/layout';
@@ -160,11 +161,51 @@ describe('vault doors', () => {
     expect(lock.press(-1)).toBe('ignored');
   });
 
-  test('standing in front of a button selects it; outside the zone selects nothing', () => {
-    DOOR_RULES.buttonX.forEach((x, i) => expect(buttonAt(x + 0.1, 1.5)).toBe(i));
-    expect(buttonAt(0, -0.5)).toBe(-1);
-    expect(buttonAt(0, 4)).toBe(-1);
-    expect(buttonAt(3, 1.5)).toBe(-1);
+  test('pressing the pad that was just pressed right again is ignored (a second E, a hop on the spot)', () => {
+    const lock = new DoorLock([2, 0, 3]);
+    expect(lock.press(2)).toBe('correct');
+    expect(lock.press(2)).toBe('ignored');
+    expect(lock.progress).toBe(1);
+    expect(lock.press(0)).toBe('correct');
+    expect(lock.press(0)).toBe('ignored');
+    expect(lock.press(3)).toBe('opened');
+  });
+
+  test('standing on a floor pad selects it; between and beyond the pads selects nothing', () => {
+    for (let i = 0; i < DOOR_RULES.buttons; i++) {
+      const p = padLocal(i);
+      expect(padAt(p.x, p.z)).toBe(i);
+      expect(padAt(p.x + 0.4, p.z - 0.3)).toBe(i);
+      // Pads stand clear of the door and the rock (in front of it, z > 1.5).
+      expect(p.z).toBeGreaterThan(1.5);
+    }
+    expect(padAt(0, 0.5)).toBe(-1);
+    expect(padAt(0, 6)).toBe(-1);
+    expect(padAt(0, DOOR_RULES.padArc)).toBe(-1); // between the two middle pads
+  });
+
+  test('walking straight from any pad to any other never steps on a third', () => {
+    for (let a = 0; a < DOOR_RULES.buttons; a++) {
+      for (let b = 0; b < DOOR_RULES.buttons; b++) {
+        if (a === b) continue;
+        const pa = padLocal(a);
+        const pb = padLocal(b);
+        for (let k = 0; k <= 100; k++) {
+          const t = k / 100;
+          const on = padAt(pa.x + (pb.x - pa.x) * t, pa.z + (pb.z - pa.z) * t);
+          expect(on === -1 || on === a || on === b, `${a}->${b} at ${t}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  test('the rule board loops: show the order, three steps, open', () => {
+    expect(boardPhase(0.5)).toBe('show');
+    expect(boardPhase(1.5)).toBe('step1');
+    expect(boardPhase(2.3)).toBe('step2');
+    expect(boardPhase(3.1)).toBe('step3');
+    expect(boardPhase(4.5)).toBe('open');
+    expect(boardPhase(BOARD_LOOP + 0.5)).toBe('show');
   });
 
   test('door-local transforms round-trip', () => {

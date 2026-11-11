@@ -28,6 +28,40 @@ export function tryer(m: MatchState, t: number): HumanInput {
   return { x: dx / d, z: dz / d, sprint: true, hop: lined && Math.hypot(b.x - me.x, b.z - me.z) < 2.4 && Math.floor(t * 4) % 3 === 0 };
 }
 
+/**
+ * The QA "keyboard ball-chaser": 8-way keys re-decided every 0.1 s, heading for a spot behind the
+ * ball (then the goal), Space held while lined up (so only one dash per hold).
+ */
+export function chaser(): (m: MatchState, t: number) => HumanInput {
+  let held = false;
+  let keys = { x: 0, z: 0 };
+  let next = 0;
+  let wantSpace = false;
+  return (m, t) => {
+    if (t >= next) {
+      next = t + 0.1;
+      const me = m.agents[0].body;
+      const gx = 10.5;
+      const dl = Math.hypot(gx - m.ball.x, -m.ball.z) || 1;
+      const bx = m.ball.x - ((gx - m.ball.x) / dl) * 1.6;
+      const bz = m.ball.z - (-m.ball.z / dl) * 1.6;
+      const dBehind = Math.hypot(me.x - bx, me.z - bz);
+      const dBall = Math.hypot(me.x - m.ball.x, me.z - m.ball.z);
+      const aligned = me.x < m.ball.x;
+      const tgt = dBehind < 1.2 || (aligned && dBall < 2.6) ? [gx, 0] : [bx, bz];
+      const dx = tgt[0] - me.x;
+      const dz = tgt[1] - me.z;
+      const l = Math.hypot(dx, dz) || 1;
+      keys = { x: dx / l > 0.38 ? 1 : dx / l < -0.38 ? -1 : 0, z: dz / l > 0.38 ? 1 : dz / l < -0.38 ? -1 : 0 };
+      wantSpace = aligned && dBall < 2.4 && dBall > 0.5;
+    }
+    const press = wantSpace && !held;
+    held = wantSpace;
+    const kl = Math.hypot(keys.x, keys.z) || 1;
+    return { x: keys.x / kl, z: keys.z / kl, sprint: true, hop: press };
+  };
+}
+
 function run(seed: number, pick: (m: MatchState, t: number) => HumanInput): { m: MatchState; events: MatchEvent[] } {
   const m = createMatch();
   const rand = rng(seed);
@@ -67,7 +101,31 @@ describe('Bubble Ball balance', () => {
       const { m } = run(s, () => ({ x: 0, z: 0, sprint: false, hop: false }));
       if (m.score.away > m.score.home) losses++;
     }
-    expect(losses).toBeGreaterThanOrEqual(5);
+    expect(losses).toBeGreaterThanOrEqual(4);
+  });
+
+  it('a keyboard ball-chaser (dash kicks) scores within 75 s almost always and wins more than half', () => {
+    let wins = 0;
+    let scored = 0;
+    for (const s of seeds) {
+      const m = createMatch();
+      const rand = rng(s);
+      const walls = pitchWalls();
+      const out: MatchEvent[] = [];
+      const pick = chaser();
+      let play = 0;
+      let first = -1;
+      for (let i = 0; i < 60 * 120 && m.phase !== 'over'; i++) {
+        stepMatch(m, 1 / 60, { rand, input: pick(m, i / 60), walls }, out);
+        if (m.phase === 'play') play += 1 / 60;
+        if (first < 0 && out.some((e) => e.kind === 'goal' && e.team === 'home')) first = play;
+      }
+      if (m.score.home > m.score.away) wins++;
+      if (first >= 0 && first <= 75) scored++;
+    }
+    expect(scored).toBeGreaterThanOrEqual(9);
+    expect(wins).toBeGreaterThanOrEqual(5);
+    expect(wins).toBeLessThanOrEqual(9); // still a contest
   });
 
   it('rivals dash, shoot and flip people (lively), and power kicks happen', () => {

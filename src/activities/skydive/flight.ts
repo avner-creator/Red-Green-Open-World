@@ -57,6 +57,17 @@ export const SKY = {
   ascentOrbitRate: 0.55,
   /** Boarding hop into the basket. */
   boardSeconds: 0.7,
+  /**
+   * Soft leash to the rings (holding a direction can never fly you out to sea): beyond `leashStart`
+   * metres the autopilot gets a growing minimum share, `leashMax` at `leashFull`; past `bowl` it
+   * takes over completely and turns straight home.
+   */
+  leashStart: 12,
+  leashFull: 38,
+  leashMax: 0.95,
+  bowl: 45,
+  /** Freefall: the share of the stick blended towards the rings at full leash. */
+  freefallLeash: 0.95,
   /** Landing ring radii (bullseye, middle, outer), metres. */
   rings: [3, 7, 12] as readonly number[],
   /** Long-glide star thresholds (horizontal metres under canopy). */
@@ -228,10 +239,14 @@ export function stepCanopy(
   dt: number,
 ): void {
   const stick = Math.min(1, Math.hypot(steer.x, steer.z));
-  const w = updateAssist(st, stick, dt);
+  const own = updateAssist(st, stick, dt);
+  const dist = home ? Math.hypot(home.x - pos.x, home.z - pos.z) : 0;
+  // The leash: far from the rings the autopilot always keeps a share (all of it past the bowl).
+  const w = home ? Math.max(own, leashWeight(dist)) : own;
   const turnTo = (want: number, rate: number): number => Math.max(-rate, Math.min(rate, angleTo(st.yaw, want) / Math.max(dt, 1e-4)));
   const manual = stick > SKY.assistDeadZone ? turnTo(Math.atan2(steer.x, steer.z), SKY.canopyTurn * stick) : 0;
-  const assist = home && w > 0 ? turnTo(canopyAssistHeading(pos, st.yaw, home, heightAboveSurface), SKY.canopyAssistTurn) : 0;
+  const homeHeading = home && dist >= SKY.leashFull ? Math.atan2(home.x - pos.x, home.z - pos.z) : home ? canopyAssistHeading(pos, st.yaw, home, heightAboveSurface) : 0;
+  const assist = home && w > 0 ? turnTo(homeHeading, SKY.canopyAssistTurn * (dist >= SKY.leashFull ? 1.4 : 1)) : 0;
   const turn = manual * (1 - w) + assist * w;
   st.turn = turn;
   st.yaw += turn * dt;
@@ -245,6 +260,26 @@ export function stepCanopy(
   pos.x += vel.x * dt;
   pos.y += vel.y * dt;
   pos.z += vel.z * dt;
+}
+
+/** Minimum autopilot share for a canopy (or freefall) `dist` metres from the rings. */
+export function leashWeight(dist: number): number {
+  if (dist >= SKY.bowl) return 1;
+  const k = (dist - SKY.leashStart) / (SKY.leashFull - SKY.leashStart);
+  return SKY.leashMax * clamp01(k);
+}
+
+/**
+ * Freefall steering with the leash: the stick is blended towards "straight at the rings" the
+ * further out the faller is (`target` = the ring centre).
+ */
+export function leashSteer(pos: V3, steer: { x: number; z: number }, target: { x: number; z: number }): { x: number; z: number } {
+  const dx = target.x - pos.x;
+  const dz = target.z - pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-3) return steer;
+  const w = Math.min(1, leashWeight(d)) * SKY.freefallLeash;
+  return { x: steer.x * (1 - w) + (dx / d) * w, z: steer.z * (1 - w) + (dz / d) * w };
 }
 
 /** Steady-state glide ratio under canopy (horizontal metres per metre of height). */

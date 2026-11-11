@@ -5,6 +5,15 @@
  */
 import * as THREE from 'three';
 
+/** Plane smoke trail: small puffs that never hide your own plane (they were up to 3 m wide). */
+export const TRAIL = { life: 1.1, size: 0.28, grow: 0.6, near: 4 } as const;
+
+/** Particles shrink away close to the camera: 0 within `near` m, full size from 2.5 × `near`. */
+export function nearCameraScale(dist: number, near: number): number {
+  if (near <= 0) return 1;
+  return Math.min(1, Math.max(0, (dist - near) / (near * 1.5)));
+}
+
 export interface PuffOptions {
   max: number;
   geometry: THREE.BufferGeometry;
@@ -94,7 +103,8 @@ export class Puffs {
     }
   }
 
-  update(dt: number): void {
+  /** Advance. With `cam`, particles closer than `near` m to it shrink away (never block the view). */
+  update(dt: number, cam?: { x: number; y: number; z: number }, near = 0): void {
     if (!this.dirty && this.alive === 0) return;
     this.dirty = false;
     let alive = 0;
@@ -117,7 +127,8 @@ export class Puffs {
       p.y += p.vy * dt;
       p.z += p.vz * dt;
       const k = p.age / p.life;
-      const s = Math.max(0, (p.size + p.grow * k) * (k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.6) / 0.4)));
+      let s = Math.max(0, (p.size + p.grow * k) * (k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.6) / 0.4)));
+      if (cam && near > 0) s *= nearCameraScale(Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z), near);
       d.position.set(p.x, p.y, p.z);
       d.rotation.set(p.spin + k * 4, p.spin * 1.3 + k * 3, 0);
       d.scale.setScalar(s);

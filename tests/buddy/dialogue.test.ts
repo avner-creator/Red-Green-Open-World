@@ -30,12 +30,30 @@ describe('DialogueQueue', () => {
     expect(q.current?.line.text).toBe('story');
   });
 
-  it('a new story beat replaces the current story line', () => {
+  it('a story line waits for the one being told; only an "interrupt" line (the child asked) cuts in', () => {
     const q = new DialogueQueue();
     q.say(L('step one', PRIORITY.story));
-    expect(q.say(L('step two', PRIORITY.story))).toBe('now');
-    expect(q.current?.line.text).toBe('step two');
-    expect(q.queued).toEqual([]);
+    expect(q.say(L('step two', PRIORITY.story))).toBe('queued');
+    expect(q.current?.line.text).toBe('step one');
+    expect(q.say({ ...L('asked', PRIORITY.story), interrupt: true })).toBe('now');
+    expect(q.current?.line.text).toBe('asked');
+  });
+
+  it('a line is held while the voice is still saying it (never cut mid-word), up to a limit', () => {
+    const q = new DialogueQueue();
+    let talking = true;
+    q.talking = () => talking;
+    q.say(L('a long clip', PRIORITY.story));
+    const d = q.current!.duration;
+    for (let t = 0; t < d + 2; t += 0.1) q.update(0.1);
+    expect(q.current?.line.text).toBe('a long clip');
+    talking = false;
+    q.update(0.1);
+    expect(q.current).toBeNull();
+    talking = true;
+    q.say(L('stuck voice', PRIORITY.story));
+    for (let t = 0; t < 30; t += 0.1) q.update(0.1);
+    expect(q.current).toBeNull();
   });
 
   it('an interrupted tip line comes back first', () => {

@@ -157,3 +157,110 @@ test('R during the balloon ride respawns at the pad and releases the ride', asyn
   expect(Math.abs(r.gap)).toBeLessThan(0.6);
   expect(consoleErrors).toEqual([]);
 });
+
+test('walk into the basket and wait: 3-2-1 countdown, then up (no button press)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    rg.freeze(true);
+    rg.start();
+    rg.step(1 / 60, 3, false);
+    const pad = ctx.world.anchors.balloon.position;
+    const hop = ctx.scene.getObjectByName('balloon-hop-pad');
+    const g = ctx.world.heightAt(pad.x, pad.z);
+    // Start 6 m out on the entrance side (towards spawn) and walk straight at the basket.
+    const sp = ctx.world.anchors.spawn.position;
+    const l = Math.hypot(sp.x - pad.x, sp.z - pad.z);
+    const ux = (sp.x - pad.x) / l;
+    const uz = (sp.z - pad.z) / l;
+    rg.teleport(pad.x + ux * 6, ctx.world.heightAt(pad.x + ux * 6, pad.z + uz * 6) + 0.1, pad.z + uz * 6, Math.atan2(-ux, -uz));
+    rg.step(1 / 30, 2, false);
+    let labels = '';
+    let boardedAt = -1;
+    for (let i = 0; i < 150 && boardedAt < 0; i++) {
+      const p = ctx.player.position;
+      const near = Math.hypot(p.x - pad.x, p.z - pad.z) < 1.6;
+      if (!near) {
+        const cy = ctx.cameraRig.yaw;
+        let dx = pad.x - p.x;
+        let dz = pad.z - p.z;
+        const ll = Math.hypot(dx, dz) || 1;
+        dx /= ll;
+        dz /= ll;
+        rg.inject({ moveX: -dx * Math.cos(cy) + dz * Math.sin(cy), moveY: dx * Math.sin(cy) + dz * Math.cos(cy) });
+      } else rg.inject(null);
+      rg.step(1 / 30, 1, false);
+      const el = document.querySelector('[data-testid="skydive-prompt"].on .key');
+      const t = el?.textContent ?? '';
+      if (t && !labels.endsWith(t)) labels += t;
+      if (ctx.player.mode === 'external') boardedAt = i / 30;
+    }
+    rg.inject(null);
+    rg.step(1 / 30, 60, false);
+    const up = ctx.player.position.y - g;
+    // Release for the next test.
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    return { hop: !!hop, labels, boardedAt, up, errors: rg.errors };
+  });
+  console.log(JSON.stringify(r));
+  expect(r.hop).toBe(true);
+  expect(r.labels).toContain('321');
+  expect(r.boardedAt).toBeGreaterThan(0);
+  expect(r.up).toBeGreaterThan(2);
+  expect(r.errors).toEqual([]);
+});
+
+test('holding forward for the whole ride still lands on the island near the rings, with a prize', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    rg.freeze(true);
+    rg.start();
+    rg.step(1 / 60, 3, false);
+    const stunts: { kind: string; stars: number }[] = [];
+    const off = ctx.events.on('stunt', (e) => stunts.push({ kind: e.kind, stars: e.stars }));
+    const a = ctx.world.anchors.balloon.position;
+    const g = ctx.world.heightAt(a.x, a.z);
+    rg.teleport(a.x + 1.7, g + 0.4, a.z, -Math.PI / 2);
+    rg.step(1 / 60, 5, false);
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    const wallet0 = ctx.profile.wallet;
+    let maxRing = 0;
+    let respawned = false;
+    const offR = ctx.events.on('player:respawn', () => (respawned = true));
+    const rings = ctx.world.anchors.landingRings.position;
+    for (let i = 0; i < 90 * 30; i++) {
+      // Hold forward (and tap Space now and then, like a child would) the whole time.
+      rg.inject({ moveY: 1, jumpPressed: i % 20 === 0 });
+      rg.step(1 / 30, 1, false);
+      const p = ctx.player.position;
+      if (ctx.player.mode === 'external') maxRing = Math.max(maxRing, Math.hypot(p.x - rings.x, p.z - rings.z));
+      if (ctx.player.mode === 'walk' && i > 60) break;
+    }
+    rg.inject(null);
+    rg.step(1 / 30, 10, false);
+    off();
+    offR();
+    const p = ctx.player.position;
+    return {
+      ringDist: Math.hypot(p.x - rings.x, p.z - rings.z),
+      maxRing,
+      onLand: ctx.world.isLand(p.x, p.z),
+      respawned,
+      prize: ctx.profile.wallet - wallet0,
+      stars: stunts.filter((s) => s.kind === 'bullseye').reduce((n, s) => n + s.stars, 0),
+      errors: rg.errors,
+    };
+  });
+  console.log(JSON.stringify(r));
+  expect(r.respawned).toBe(false);
+  expect(r.onLand).toBe(true);
+  expect(r.maxRing).toBeLessThan(75);
+  expect(r.ringDist).toBeLessThan(40);
+  expect(r.stars > 0 || r.prize > 0).toBe(true);
+  expect(r.errors).toEqual([]);
+});

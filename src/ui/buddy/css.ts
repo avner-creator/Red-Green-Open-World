@@ -9,8 +9,9 @@ const CSS = `
   background:#120f0c;border:calc(var(--u)*.55) solid #fff;border-radius:calc(var(--u)*3.2);
   box-shadow:0 0 0 calc(var(--u)*.5) #000,0 calc(var(--u)*.9) 0 calc(var(--u)*.5) #000;
   opacity:0;transform:scale(.4);transform-origin:var(--tx,50%) 110%;transition:opacity .14s,transform .22s cubic-bezier(.3,1.6,.5,1);
-  visibility:hidden;will-change:left,top}
+  visibility:hidden}
 .rg .pipb.on{opacity:1;transform:scale(1);visibility:visible}
+.rg .pipb.ease{transition:opacity .14s,transform .22s cubic-bezier(.3,1.6,.5,1),left .2s ease-out,top .2s ease-out}
 .rg .pipb.below{transform-origin:var(--tx,50%) -10%}
 .rg .pipb .pic{flex:none;width:calc(var(--u)*7.2);height:calc(var(--u)*7.2);display:flex;align-items:center;justify-content:center;
   background:#2b2418;border-radius:50%;box-shadow:inset 0 0 0 calc(var(--u)*.35) #ffd93b}
@@ -42,6 +43,12 @@ const CSS = `
 .rg .pipb .wasd .row{display:flex;gap:calc(var(--u)*.35)}
 .rg .pipb .wasd .cap:first-child{animation:rg-key 1.1s ease-in-out infinite}
 .rg .pipb .wasd .row+.row .cap{animation:none}
+.rg .pipb.compact{gap:calc(var(--u)*1);padding:calc(var(--u)*.9) calc(var(--u)*1.4);border-radius:calc(var(--u)*2.6)}
+.rg .pipb.compact .say{display:none}
+.rg .pipb.compact .pic{width:calc(var(--u)*5.6);height:calc(var(--u)*5.6)}
+.rg .pipb.compact .pic2{width:calc(var(--u)*5);height:calc(var(--u)*5)}
+.rg .pipb.compact .pipact{font-size:calc(var(--u)*2.8)}
+.rg .pipb.compact .pipact .ic.tch{width:calc(var(--u)*5);height:calc(var(--u)*5)}
 @keyframes pip-pop{0%{transform:scale(.3) rotate(-20deg)}100%{transform:scale(1) rotate(0)}}
 
 /* callout: ring + wobbling arrow around a HUD element */

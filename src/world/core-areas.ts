@@ -196,7 +196,7 @@ function garage(k: Kit): CoreAreas {
   for (const sx of [-1.4, 1.4]) box(b, 'metal', rack, sx, 0, 0, 0.08, 2.2, 0.5, C.iron);
   for (const ry of [0.55, 1.6]) {
     box(b, 'metal', rack, 0, ry - 0.08, 0, 2.9, 0.06, 0.5, C.iron);
-    for (let i = 0; i < 4; i++) b.add('rubber', torusG(0.16, 16, Math.PI * 2, 0.28), 0x2a2a2c, M(rack, T(-1.05 + i * 0.7, ry + 0.38, 0, 0, 1, 1, 1, Math.PI / 2)));
+    for (let i = 0; i < 4; i++) b.add('rubber', torusG(0.16, 12, Math.PI * 2, 0.28, 5), 0x2a2a2c, M(rack, T(-1.05 + i * 0.7, ry + 0.38, 0, 0, 1, 1, 1, Math.PI / 2)));
   }
   // Ceiling lights (bright strips).
   for (const px of [-w / 4, w / 4]) b.add('glow', boxG(), C.bulb, M(m, T(px, h - 0.45, 0, 0, 2.8, 0.08, 0.3)));
@@ -231,7 +231,7 @@ function garage(k: Kit): CoreAreas {
   // ── Forecourt props (all outside the anchor circle) ──
   const tyres = (x: number, z: number, n: number): void => {
     const ty = k.h(x, z);
-    for (let i = 0; i < n; i++) b.add('rubber', torusG(0.42, 18), 0x2a2a2c, T(x, ty + 0.2 + i * 0.36, z, i, 0.55, 1.4, 0.55));
+    for (let i = 0; i < n; i++) b.add('rubber', torusG(0.42, 12, Math.PI * 2, 1, 5), 0x2a2a2c, T(x, ty + 0.2 + i * 0.36, z, i, 0.55, 1.4, 0.55));
     b.add('metal', cylG(12), 0x8e959c, T(x, ty + 0.06, z, 0, 0.3, n * 0.36 + 0.2, 0.3));
     k.col.cyl(x, ty, z, n * 0.18 + 0.1, 0.75);
   };

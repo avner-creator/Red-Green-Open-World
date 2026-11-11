@@ -19,6 +19,8 @@ import { buildOuterAreas, type OuterAreas } from './outer';
 import { dressPaths } from './outer/paths';
 import { buildSiteDressing, inSiteClearZone, raceCutDistance, siteKeepouts } from './sites';
 import { GLASSES_WAY } from './attractions';
+import { makeGuard } from './fill/guard';
+import { buildFill, type Fill } from './fill/zones';
 
 /** Inside a glasses-play site's clear circle (+ margin): the mini-games' startup probe wants it empty. */
 const inGlassesSite = (x: number, z: number, m: number): boolean => GLASSES_WAY.some((g) => Math.hypot(x - g.x, z - g.z) < g.r + m);
@@ -30,6 +32,8 @@ export interface Content {
   chestSpots: ChestSpot[];
   wayfinding: Wayfinding;
   outer: OuterAreas;
+  /** Island fill: zones, trails, arches, lights, toys (see fill/zones.ts). */
+  fill: Fill;
 }
 
 export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m: THREE.Mesh) => void): Content {
@@ -70,11 +74,18 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   // Carnival Island sites: entrance dressing, then their footprints and flight/race corridors keep
   // the scatter out (added after the road dressing so kerbs and dashes still run through them).
   keepouts.push(...buildSiteDressing(kit, wayfinding.decals), ...siteKeepouts());
+  // Island fill last: it keeps clear of everything above (guard) and adds its own keepouts.
+  const guard = makeGuard({ h: kit.h, roads: terrain.roads, keepouts, gemSpots, chestSpots, colliders: kit.col.circles });
+  // Fill decor drops out one size class sooner than the rest (keeps far views within budget).
+  kit.b.lodShift = 1;
+  const fill = buildFill(kit, terrain.roads, wayfinding.decals, guard);
+  kit.b.lodShift = 0;
+  keepouts.push(...fill.keepouts);
   // Nothing scattered (trees, rocks) on top of a gem or chest.
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });
   // Hand-placed trees, bushes and rocks give way to the sites and stay off the roads (race line).
   const trees = [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...outer.trees, ...roadTrees, ...pathTrees].filter(
     (t) => !inSiteClearZone(t.x, t.z, 1) && !inGlassesSite(t.x, t.z, 3) && roadEdgeDistance(terrain.roads, t.x, t.z) > 1,
   );
-  return { trees, keepouts, gemSpots, chestSpots, wayfinding, outer };
+  return { trees, keepouts, gemSpots, chestSpots, wayfinding, outer, fill };
 }

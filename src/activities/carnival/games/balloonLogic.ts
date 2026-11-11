@@ -5,9 +5,12 @@ export const ROWS = 4;
 export const WALL_Z = -4.2;
 export const PRIZE_COUNT = 4;
 export const PRIZE_POINTS = 3;
-/** Generous aim assist: a throw within this distance (m, on the wall) of a balloon hits it. */
-export const ASSIST_RADIUS = 0.62;
-export const RESPAWN = 1.6;
+/** Aim assist: a throw within this distance (m, on the wall) of a balloon hits it (aim matters). */
+export const ASSIST_RADIUS = 0.36;
+/** Popped balloons take a while to come back, so throwing at one spot soon finds nothing. */
+export const RESPAWN = 4.2;
+/** A beanbag that hits nothing: the hero fumbles the next one for this long. */
+export const MISS_STUN = 0.6;
 export const PRIZE_RESPAWN = 2.6;
 
 export function slotXY(i: number): [number, number] {

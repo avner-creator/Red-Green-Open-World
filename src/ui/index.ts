@@ -17,12 +17,12 @@ import { createNav } from './nav';
 import { createCredits, createEnd, createPause, createTitle } from './screens';
 import type { Actions, Screen } from './screens';
 import { createSettings } from './settingsScreen';
-import { createShop } from './shop';
 import { createSkillChip } from './skillButton';
 import { createTouchUi } from './touch';
 import { createTutorial } from './tutorial';
 import { createWayfinding } from './wayfinding';
 import { dialogOpen, typingTarget } from './gameKeys';
+import { canDressNow, createDressingRoom, createSeenStore, createWardrobeButton, setWardrobeOpener } from './wardrobe';
 
 /** Title camera: close and low, the hero fills the middle of the screen. */
 const TITLE_CAMERA = { distance: 6.4, height: 0.9, fov: 46 };
@@ -33,7 +33,10 @@ export function createUi(ctx: GameContext): UiApi {
   root.classList.add('rg');
 
   let calibrating = false;
-  /** The Gear Shack is open: the session is paused and the shop is the base screen. */
+  /**
+   * The dressing room was opened from play (HUD button, I key, D-pad left, Gear Shack kiosk): the
+   * session is paused and the dressing room is the base screen; closing it resumes play.
+   */
   let shopOpen = false;
   const tracker = createEconTracker(ctx);
   const stack: Screen[] = [];
@@ -88,7 +91,8 @@ export function createUi(ctx: GameContext): UiApi {
       render();
     },
     openWardrobe: () => {
-      stack.push(wardrobe);
+      if (top() === dress) return;
+      stack.push(dress);
       render();
     },
     openHelp: () => {
@@ -104,8 +108,22 @@ export function createUi(ctx: GameContext): UiApi {
   const title = createTitle(ctx, actions);
   const pause = createPause(actions);
   const end = createEnd(ctx, actions, tracker, () => hud.pass.card());
-  const shop = createShop(ctx, 'shop', closeShop);
-  const wardrobe = createShop(ctx, 'wardrobe', pop);
+  const seen = createSeenStore();
+  ctx.events.on('profile:reset', () => seen.clear());
+  const dress = createDressingRoom(ctx, seen, () => {
+    if (stack[stack.length - 1] === dress) pop();
+    else closeShop();
+  });
+  /** Open the dressing room from play: pause, dressing room on top; closing resumes. */
+  const dressFromPlay = (): void => {
+    if (!canDressNow(ctx) || calibrating || ctx.ui.menuOpen) return;
+    shopOpen = true;
+    ctx.session.pause();
+  };
+  setWardrobeOpener(() => {
+    if (phase() === 'playing') dressFromPlay();
+    else actions.openWardrobe();
+  });
   const credits = createCredits({ back: pop });
   const settings = createSettings(ctx, {
     onClose: pop,
@@ -144,9 +162,11 @@ export function createUi(ctx: GameContext): UiApi {
   // Tests plug a fake wallet in through this hook (the economy calls setCharacterAccess directly).
   if (ctx.testMode) (window as unknown as { __rgSetCharacterAccess?: typeof setCharacterAccess }).__rgSetCharacterAccess = setCharacterAccess;
   const wayfinding = createWayfinding(ctx, { pause, open: (s) => (stack.push(s), render()), back: pop });
-  const all: Screen[] = [title, pause, end, credits, settings, gate, shop, wardrobe, select, wayfinding.screen];
+  const all: Screen[] = [title, pause, end, credits, settings, gate, dress, select, wayfinding.screen];
   for (const s of all) root.append(s.el);
   const hud = createHud(ctx, tracker);
+  const wardrobeBtn = createWardrobeButton(ctx, seen, dressFromPlay);
+  hud.el.append(wardrobeBtn.el);
   const skillChip = createSkillChip(ctx);
   const tutorial = createTutorial(ctx);
   const touch = createTouchUi(ctx);
@@ -156,7 +176,7 @@ export function createUi(ctx: GameContext): UiApi {
   const phase = (): SessionPhase => ctx.session.state.phase;
   const base = (): Screen | null => {
     const p = phase();
-    return p === 'title' ? title : p === 'paused' ? (shopOpen ? shop : pause) : p === 'ended' ? end : null;
+    return p === 'title' ? title : p === 'paused' ? (shopOpen ? dress : pause) : p === 'ended' ? end : null;
   };
   const top = (): Screen | null => {
     if (calibrating) return null;
@@ -180,6 +200,7 @@ export function createUi(ctx: GameContext): UiApi {
     }
     wasMenu = open;
     if (shown === select && t !== select) select.leave();
+    if (shown === dress && t !== dress) dress.leave();
     // Title: the camera comes close so the hero stands big in the middle (the select does the same).
     if (t === title && !titleCam) {
       titleCam = true;
@@ -207,12 +228,24 @@ export function createUi(ctx: GameContext): UiApi {
     },
     tab: (dir) => {
       const t = top();
-      if (t === shop) shop.tab(dir);
+      if (t === dress) dress.tab(dir);
     },
   });
 
   // Help is one key away on the title and in the pause menu too (H / F1 / gamepad Back).
   const helpHere = (): boolean => !calibrating && stack.length === 0 && (top() === title || top() === pause);
+  // Wardrobe: I in play (on foot) or on the title / pause menu.
+  const dressKey = (): void => {
+    if (calibrating || dialogOpen()) return;
+    if (phase() === 'playing' && !stack.length) dressFromPlay();
+    else if (helpHere()) actions.openWardrobe();
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyI' && !e.repeat && !typingTarget(e.target)) {
+      e.preventDefault();
+      dressKey();
+    }
+  });
   window.addEventListener('keydown', (e) => {
     if ((e.code === 'KeyH' || e.code === 'F1') && !e.repeat && helpHere() && !typingTarget(e.target) && !dialogOpen()) {
       e.preventDefault();
@@ -220,12 +253,17 @@ export function createUi(ctx: GameContext): UiApi {
     }
   });
   let backPrev = false;
+  let leftPrev = false;
   const pollHelpPad = (): void => {
     const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
     const pad = [...pads].find((x) => x && x.connected);
     const back = !!pad?.buttons[8]?.pressed;
     if (back && !backPrev && helpHere()) actions.openHelp?.();
     backPrev = back;
+    const left = !!pad?.buttons[14]?.pressed;
+    // D-pad left opens the dressing room in play (menus use the D-pad to move focus).
+    if (left && !leftPrev && phase() === 'playing' && !stack.length) dressFromPlay();
+    leftPrev = left;
   };
 
   ctx.events.on('shop:open', () => {
@@ -254,11 +292,11 @@ export function createUi(ctx: GameContext): UiApi {
       pollHelpPad();
       if (shown === gate) gate.update(dt, pad.aHeld);
       if (shown === settings) settings.update(dt, pad.aHeld);
-      if (shown === shop) shop.update(dt);
-      if (shown === wardrobe) wardrobe.update(dt);
+      if (shown === dress) dress.update(dt);
       if (shown === title) title.update(dt);
       if (shown === glassesSummary) glassesSummary.update(dt);
       hud.update(dt);
+      wardrobeBtn.update(dt);
       skillChip.update();
       if (shown === select) select.update();
       wayfinding.update(dt);

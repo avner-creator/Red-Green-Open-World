@@ -18,8 +18,19 @@ export const RIVAL_SKILLS: readonly RivalSkill[] = [
   { accuracy: 0.38, tempo: [1.9, 3.0] },
 ];
 
+/**
+ * Rubber band: how hard a rival tries, from the player's lead over them (in "hits"). Behind the
+ * player they speed up and aim better (a real contest for a good player); ahead they relax.
+ */
+export function rivalPush(leadHits: number): { tempo: number; accuracy: number } {
+  const l = Math.max(-3, Math.min(5, leadHits));
+  return { tempo: 1 + Math.max(0, l) * 0.14 + Math.min(0, l) * 0.08, accuracy: l * 0.06 };
+}
+
 export class RivalBrain {
   private wait: number;
+  /** The player's lead over this rival in hits (set by the game each frame; 0 = none). */
+  lead = 0;
   constructor(
     readonly skill: RivalSkill,
     private readonly rng: Rng,
@@ -28,9 +39,10 @@ export class RivalBrain {
     this.wait = firstDelay + range(rng, 0, skill.tempo[0]);
   }
 
-  /** Advance; true when the rival acts this frame. */
-  tick(dt: number): boolean {
-    this.wait -= dt;
+  /** Advance; true when the rival acts this frame. `lead`: the player's lead in hits (rubber band). */
+  tick(dt: number, lead = this.lead): boolean {
+    this.lead = lead;
+    this.wait -= dt * rivalPush(lead).tempo;
     if (this.wait > 0) return false;
     this.wait = range(this.rng, this.skill.tempo[0], this.skill.tempo[1]);
     return true;
@@ -38,7 +50,7 @@ export class RivalBrain {
 
   /** Does this action succeed? */
   roll(bonus = 0): boolean {
-    return this.rng() < Math.min(0.95, this.skill.accuracy + bonus);
+    return this.rng() < Math.max(0.05, Math.min(0.95, this.skill.accuracy + bonus + rivalPush(this.lead).accuracy));
   }
 
   /** A random number 0..1 from this rival's stream (aim jitter etc.). */

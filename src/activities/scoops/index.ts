@@ -144,6 +144,8 @@ export function createScoops(ctx: GameContext): Scoops {
   let paid = 0;
   /** Could not pay: a practice cone (no gem prize). */
   let practice = false;
+  /** Wallet right after the ticket (the result shows exactly what it gained). */
+  let walletStart = 0;
   let seed = ctx.testMode ? 1234 : (Date.now() & 0xffff) + 1;
   let r = rng(seed);
   let lastMove = 0;
@@ -233,10 +235,7 @@ export function createScoops(ctx: GameContext): Scoops {
       const price = economy.ticketPrice('scoops');
       const out = economy.rideTicket('scoops');
       if (out === 'paid') paid = price;
-      if (out === 'practice') {
-        practice = true;
-        if (p) ui.showNeed(Math.max(1, price - p.wallet));
-      }
+      if (out === 'practice') practice = true;
     } else {
       const t = ticketFor(cones, p ? p.wallet : undefined);
       if (!t.ok) {
@@ -253,6 +252,8 @@ export function createScoops(ctx: GameContext): Scoops {
       }
     }
     seed += 1;
+    walletStart = p ? p.wallet : 0;
+    ui.setPractice(practice);
     r = rng(seed);
     builder = new ConeBuilder(r, idleJar);
     idleJar = Math.floor(r() * SCOOPS.jars);
@@ -334,7 +335,7 @@ export function createScoops(ctx: GameContext): Scoops {
         break;
       case 'scoop':
         coneView.set(coneState());
-        wobble.push(res.count);
+        if (wobble.push(res.count)) ctx.audio.play('squeak', { pitch: 0.8, volume: 0.7 }); // uh-oh: it leaned
         dropT = 0;
         ctx.audio.play('boing', { pitch: 1.3 + res.count * 0.12, volume: 0.6 });
         if (res.count === SCOOPS.maxScoops) friends.react('cheer');
@@ -415,7 +416,17 @@ export function createScoops(ctx: GameContext): Scoops {
     ctx.events.emit('stunt', { kind: 'scoops', value: score.stars, stars: score.stars });
     ctx.events.emit('stamp:earned', { id: 'iceCream' });
     ctx.events.emit('ui:toast', { icon: 'check' });
-    ui.showResult({ stars: score.stars, gems: p && !practice ? score.gems : null, recipe: score.recipe, secret: score.secret });
+    // Exactly what the wallet got since the ticket: the prize, plus a bonus line for anything else
+    // paid meanwhile (a finished mission, a Fun Pass prize).
+    const gained = p ? Math.max(0, p.wallet - walletStart) : 0;
+    ui.showResult({
+      stars: score.stars,
+      gems: p && !practice ? score.gems : null,
+      recipe: score.recipe,
+      secret: score.secret,
+      bonus: practice ? 0 : gained - score.gems,
+      practice,
+    });
     ctx.audio.play('fanfare', { volume: 0.8 });
     ctx.cameraRig.shake(0.2);
     friends.react('dance');

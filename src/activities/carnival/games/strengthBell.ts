@@ -442,7 +442,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
   return {
     id: 'strengthBell',
     duration: 0,
-    thresholds: [9, 14],
+    thresholds: [11, 15],
     camera: { distance: 5.2, height: -0.5, fov: 72, lookAhead: 0 },
     aimLimits: null,
     how: ['stomp'],
@@ -488,7 +488,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       }
 
       brains.forEach((b, i) => {
-        if (b.tick(dt)) wants[i] = true;
+        if (b.tick(dt, (r.scores[0] - r.scores[i + 1]) / 3)) wants[i] = true;
         const who = i + 1;
         if (!wants[i] || enter < 1 || stomps[who] >= STOMPS || hops[who] || towers[who].phase !== 'rest' || towers[who].settle > 0) return;
         wants[i] = false;

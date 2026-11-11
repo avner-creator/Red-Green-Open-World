@@ -1,5 +1,6 @@
 /**
- * Pip, the puppy buddy: opening tour on a new profile (bubble, gem pickup -> wallet callout),
+ * Pip, the puppy buddy: the spoken welcome story on a new profile (compact bubble, gem pickup ->
+ * wallet callout),
  * skip, returning players, following, chest hint, no console errors. Opt-in screenshots
  * (`RG_SHOTS=1`): Pip beside the hero, speaking, a HUD callout, on the buggy, in freefall, at
  * 640x360 and 1920x1080, full / R / G in test-results/buddy/.
@@ -52,12 +53,16 @@ test.describe('Pip on a brand-new profile', () => {
     await page.close();
   });
 
-  test('the intro bubble appears with pictograms and short text', async () => {
+  test('the welcome story starts with a compact pictogram bubble (Pip says the words)', async () => {
     const bubble = page.getByTestId('pip-bubble');
     await expect(bubble).toHaveClass(/\bon\b/);
     await expect(bubble).toHaveAttribute('data-id', 'intro:welcome');
-    expect(await bubble.getAttribute('data-text')).toBe('Hi! I am Pip!');
+    expect(await bubble.getAttribute('data-text')).toMatch(/^Hi, I'm Pip! Welcome to Carnival Island/);
+    await expect(bubble).toHaveAttribute('data-mode', 'compact');
     await expect(bubble.locator('.pic svg')).toHaveCount(1);
+    await expect(bubble.locator('.say')).toBeHidden();
+    // The move keys, so a non-reader knows they can walk while Pip talks.
+    await expect(bubble.locator('.pipact .cap')).toHaveCount(4);
     // Inside the viewport.
     await step(page, 1.5);
     const box = await bubble.boundingBox();
@@ -69,21 +74,17 @@ test.describe('Pip on a brand-new profile', () => {
     expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
   });
 
-  test('"walk with me" shows the move keys and waits for the child (no timer)', async () => {
-    await step(page, 1.5);
-    expect((await director(page)).step).toBe('move');
-    const bubble = page.getByTestId('pip-bubble');
-    await expect(bubble).toHaveAttribute('data-action', 'move');
-    await expect(bubble.locator('.pipact .cap')).toHaveCount(4);
-    // Pip already runs ahead towards the trampoline.
-    expect((await page.evaluate(() => window.__rgBuddy!.lead())).to).toBe('trampoline');
-    await step(page, 14);
-    expect((await director(page)).step).toBe('move');
+  test('the child can move during the story; all beats are told, then Pip leads to the trampoline', async () => {
     await step(page, 2, { moveY: 1 });
-    expect((await director(page)).step).toBe('look');
+    expect((await director(page)).step).toBe('story');
+    for (let i = 0; i < 20 && (await director(page)).step === 'story'; i++) await step(page, 2);
+    expect((await director(page)).step).toBe('follow');
+    const said = await page.evaluate(() => window.__rgBuddy!.history().map((h) => h.id));
+    expect(said.filter((id) => id === 'intro:welcome' || id.startsWith('story:'))).toEqual(['intro:welcome', 'story:1', 'story:2', 'story:3', 'story:4', 'story:5']);
+    expect((await page.evaluate(() => window.__rgBuddy!.lead())).to).toBe('trampoline');
   });
 
-  test('a first gem pickup brings the wallet callout', async () => {
+  test('a first gem pickup explains gems with the wallet callout', async () => {
     const got = await page.evaluate(() => {
       const rg = window.__rg!;
       let n = 0;
@@ -97,8 +98,9 @@ test.describe('Pip on a brand-new profile', () => {
       return n;
     });
     expect(got).toBeGreaterThan(0);
-    await step(page, 0.2);
-    await expect(page.getByTestId('pip-bubble')).toHaveAttribute('data-id', 'intro:wallet');
+    const bubble = page.getByTestId('pip-bubble');
+    for (let i = 0; i < 30 && (await bubble.getAttribute('data-id')) !== 'econ:gem'; i++) await step(page, 0.25);
+    await expect(bubble).toHaveAttribute('data-id', 'econ:gem');
     await expect(page.getByTestId('pip-callout')).toHaveClass(/\bon\b/);
     const ring = await page.getByTestId('pip-callout').boundingBox();
     const wallet = await page.locator('.hud [data-testid="wallet"]').boundingBox();
@@ -113,19 +115,16 @@ test.describe('Pip on a brand-new profile', () => {
     expect(said).not.toContain('intro:jump');
   });
 
-  test('Pip speaks each intro line aloud: the voice is asked for the matching recorded clip', async () => {
+  test('Pip speaks every story line aloud from its recorded clip', async () => {
     const asked = await page.evaluate(() => window.__rgBuddy!.voice());
     const ids = asked.map((r) => r.id);
-    const at = (id: string): number => ids.indexOf(id);
-    expect(at('hi-i-am-pip')).toBe(0);
-    expect(at('walk-with-me')).toBeGreaterThan(0);
-    expect(at('look-around')).toBeGreaterThan(at('walk-with-me'));
-    expect(at('gems-are-money')).toBeGreaterThan(at('look-around'));
+    expect(ids[0]).toBe('hi-im-pip-welcome-to-carnival-island-a-giant-fun-park');
+    expect(ids.indexOf('a-gem-gems-are-money-for-rides-hats-and-gear')).toBeGreaterThan(5);
     // Every clip it asked for is in the shipped manifest (so it plays a clip, not the fallback).
     const clips = await page.evaluate(async () => (await (await fetch('assets/voice/manifest.json')).json()).clips as Record<string, { file: string }>);
     for (const id of ids) expect(clips[id], id).toBeTruthy();
-    expect(asked.slice(1).every((r) => r.source === 'clip')).toBe(true);
-    const head = await page.evaluate(async (f) => (await fetch(`assets/voice/${f}`)).status, clips['hi-i-am-pip'].file);
+    expect(asked.every((r) => r.source === 'clip')).toBe(true);
+    const head = await page.evaluate(async (f) => (await fetch(`assets/voice/${f}`)).status, clips[ids[0]].file);
     expect(head).toBe(200);
   });
 
@@ -200,7 +199,8 @@ test('Pip follows: within 6 m while the hero walks 30 m, and gives a locked-ches
   });
   await step(page, 5);
   const said = await page.evaluate(() => window.__rgBuddy!.history());
-  expect(said.some((s) => s.id === 'chest:findKey' || s.id === 'chest:shape')).toBe(true);
+  // The first locked chest: its spoken how-to (find the key, bring it back, matching symbol).
+  expect(said.some((s) => s.id === 'howto:chest:0' || s.id.startsWith('chest:'))).toBe(true);
   expect(consoleErrors).toEqual([]);
 });
 
