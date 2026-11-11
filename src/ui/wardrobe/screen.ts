@@ -71,7 +71,7 @@ export function createDressingRoom(ctx: GameContext, seen: SeenStore, onClose: (
     'dr-stage',
     {},
     h('div', 'dr-spot'),
-    stage.canvas ?? h('div', 'dr-nostage', {}, icon('character')),
+    stage.el,
     floatPic,
     h('div', 'dr-turns', {}, turnL, turnR),
     tryBar,

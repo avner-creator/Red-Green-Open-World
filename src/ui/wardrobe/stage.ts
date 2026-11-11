@@ -19,7 +19,8 @@ import type { PlayerAnim } from '../../types';
 export type StageLook = Record<AttachPart, string | null>;
 
 export interface Stage {
-  readonly canvas: HTMLCanvasElement | null;
+  /** Holds the stage canvas (created when the room first opens). */
+  readonly el: HTMLElement;
   /** True once the hero model is on the stage. */
   readonly ready: boolean;
   setHero(id: string): void;
@@ -48,21 +49,42 @@ interface Worn {
 const easeOutBack = (t: number): number => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);
 
 export function createStage(testMode: boolean): Stage {
+  const host = document.createElement('div');
+  host.className = 'dr-host';
   let renderer: THREE.WebGLRenderer | null = null;
   let canvas: HTMLCanvasElement | null = null;
-  try {
-    canvas = document.createElement('canvas');
-    canvas.className = 'dr-canvas';
-    canvas.setAttribute('data-testid', 'wardrobe-stage');
-    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: !testMode, powerPreference: 'low-power', preserveDrawingBuffer: testMode });
-    renderer.setClearColor(0x000000, 0);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
-  } catch {
+  /**
+   * The stage's WebGL context exists only while needed: made when the room opens; in test mode
+   * (software GL, many contexts in one browser) released again when it closes.
+   */
+  const ensureRenderer = (): void => {
+    if (renderer) return;
+    try {
+      const c = document.createElement('canvas');
+      c.className = 'dr-canvas';
+      c.setAttribute('data-testid', 'wardrobe-stage');
+      const r = new THREE.WebGLRenderer({ canvas: c, alpha: true, antialias: !testMode, powerPreference: 'low-power', preserveDrawingBuffer: testMode });
+      r.setClearColor(0x000000, 0);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      r.toneMapping = THREE.ACESFilmicToneMapping;
+      r.toneMappingExposure = 1.15;
+      wireDrag(c);
+      host.replaceChildren(c);
+      renderer = r;
+      canvas = c;
+    } catch {
+      renderer = null;
+      canvas = null;
+    }
+  };
+  const releaseRenderer = (): void => {
+    if (!renderer) return;
+    renderer.dispose();
+    renderer.forceContextLoss();
     renderer = null;
+    canvas?.remove();
     canvas = null;
-  }
+  };
 
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xeef4ff, 0x40384a, 1.5));
@@ -239,25 +261,27 @@ export function createStage(testMode: boolean): Stage {
 
   // Drag to turn.
   let dragX: number | null = null;
-  canvas?.addEventListener('pointerdown', (e) => {
-    dragX = e.clientX;
-    canvas?.setPointerCapture?.(e.pointerId);
-  });
-  canvas?.addEventListener('pointermove', (e) => {
-    if (dragX === null) return;
-    const dx = e.clientX - dragX;
-    dragX = e.clientX;
-    yaw += dx * 0.012;
-    yawVel = dx * 0.6;
-  });
-  const endDrag = (): void => {
-    dragX = null;
-  };
-  canvas?.addEventListener('pointerup', endDrag);
-  canvas?.addEventListener('pointercancel', endDrag);
+  function wireDrag(c: HTMLCanvasElement): void {
+    c.addEventListener('pointerdown', (e) => {
+      dragX = e.clientX;
+      c.setPointerCapture?.(e.pointerId);
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (dragX === null) return;
+      const dx = e.clientX - dragX;
+      dragX = e.clientX;
+      yaw += dx * 0.012;
+      yawVel = dx * 0.6;
+    });
+    const endDrag = (): void => {
+      dragX = null;
+    };
+    c.addEventListener('pointerup', endDrag);
+    c.addEventListener('pointercancel', endDrag);
+  }
 
   return {
-    canvas,
+    el: host,
     get ready() {
       return !!hero && !loading;
     },
@@ -286,14 +310,16 @@ export function createStage(testMode: boolean): Stage {
       running = on;
       last = 0;
       if (on) {
+        ensureRenderer();
         sizeTo();
         if (!raf) raf = requestAnimationFrame(tick);
         // Draw once right away (the first rAF may be a while on a busy machine).
         step(0);
         draw();
-      } else if (raf) {
-        cancelAnimationFrame(raf);
+      } else {
+        if (raf) cancelAnimationFrame(raf);
         raf = 0;
+        if (testMode) releaseRenderer();
       }
     },
     worn() {

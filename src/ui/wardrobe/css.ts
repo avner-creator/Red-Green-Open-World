@@ -31,7 +31,7 @@ export const WARDROBE_CSS = `
   background:radial-gradient(ellipse,rgba(255,255,255,.28),rgba(255,255,255,0) 70%);pointer-events:none}
 .rg .dr-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
 .rg .dr-canvas:active{cursor:grabbing}
-.rg .dr-nostage .ic{font-size:calc(var(--u)*30)}
+.rg .dr-host{position:absolute;inset:0}
 .rg .dr-turns{position:absolute;left:0;right:0;top:44%;display:flex;justify-content:space-between;pointer-events:none}
 .rg .b.dr-turn{pointer-events:auto;font-size:calc(var(--u)*4.4);padding:0;min-width:max(48px,calc(var(--u)*8.5))!important;min-height:max(48px,calc(var(--u)*8.5))!important;border-radius:50%}
 .rg .dr-float{position:absolute;right:4%;top:10%;display:none}
