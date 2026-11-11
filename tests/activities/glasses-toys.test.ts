@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { TOYS, TRAIL } from '../../src/activities/glasses/toys/constants';
-import { advance, makeTrail, pointReject, printGlow, ToyRounds, trailShape } from '../../src/activities/glasses/toys/trail';
+import * as THREE from 'three';
+import { buildBoothGeometry } from '../../src/activities/glasses/booth/geometry';
+import { RoundMachine } from '../../src/activities/glasses/booth/round';
+import { LAND_AT, livePrize, SPOT, TOY_BOOTH, toyPrize, toyRules, TOYS, TRAIL } from '../../src/activities/glasses/toys/constants';
+import { TOYS_DEMO } from '../../src/activities/glasses/toys/demo';
+import { appendToBooth, basketGeometry, poseRange } from '../../src/activities/glasses/toys/models';
+import { ToySession, trailSeed } from '../../src/activities/glasses/toys/session';
+import type { ToyEvent } from '../../src/activities/glasses/toys/session';
+import { advance, makeTrail, pointReject, printGlow, trailShape } from '../../src/activities/glasses/toys/trail';
 import type { Trail, TrailWorld } from '../../src/activities/glasses/toys/trail';
-import type { RoundEvent } from '../../src/activities/glasses/toys/trail';
 
 /** A fake island: a gentle hill, a road to the east, an anchor to the north, a wall to the south-west, a steep cliff to the west. */
 function fakeWorld(): TrailWorld & { walls: { x0: number; z0: number; x1: number; z1: number }[] } {
@@ -184,74 +190,193 @@ describe('glow and progress', () => {
   });
 });
 
-describe('rounds', () => {
+describe('session: one round = one trail = one toy', () => {
   const straight = (seed: number, tier: 1 | 2 | 3): Trail => {
     const prints = Array.from({ length: 12 }, (_, i) => ({ x: i * TRAIL.spacing[tier], y: 0, z: seed % 97, yaw: Math.PI / 2 }));
     const last = prints[prints.length - 1];
     return { prints, end: { ...last, x: last.x + 1 }, spacing: TRAIL.spacing[tier], length: 11 * TRAIL.spacing[tier], candidate: 0, angle: 0, valid: true };
   };
-  const walk = (r: ToyRounds): RoundEvent[] => {
-    const ev: RoundEvent[] = [];
-    for (const p of r.trail().prints) ev.push(...r.update(1 / 60, p.x, p.z));
+  const walk = (s: ToySession): ToyEvent[] => {
+    const ev: ToyEvent[] = [];
+    for (const p of s.trail().prints) ev.push(...s.update(1 / 60, p.x, p.z));
     return ev;
   };
-  const run = (r: ToyRounds, seconds: number): RoundEvent[] => {
-    const ev: RoundEvent[] = [];
-    for (let t = 0; t < seconds; t += 0.1) ev.push(...r.update(0.1, 1e4, 1e4));
+  const wait = (s: ToySession, seconds: number): ToyEvent[] => {
+    const ev: ToyEvent[] = [];
+    for (let t = 0; t < seconds; t += 0.1) ev.push(...s.update(0.1, 1e4, 1e4));
     return ev;
   };
 
-  it('three toys per session, tiers 1 → 2 → 3, worth 5 / 7 / 10, then rest', () => {
-    const r = new ToyRounds(straight);
-    r.reset(42);
-    const found: RoundEvent[] = [];
+  it('three toys, tiers 1 → 2 → 3, worth 5 / 7 / 10 + 10 for the full basket; then free play pays 2', () => {
+    const s = new ToySession(straight);
+    s.reset(42);
+    expect(s.state).toBe('idle');
+    expect(walk(s), 'no trail before GO').toEqual([]);
+    const found: ToyEvent[] = [];
+    const landed: ToyEvent[] = [];
     for (let k = 0; k < 3; k++) {
-      expect(r.state).toBe('trail');
-      expect(r.tier).toBe(k + 1);
-      const ev = walk(r);
-      expect(ev[0]).toEqual({ type: 'start', tier: k + 1 });
+      expect(s.tier).toBe(k + 1);
+      s.begin();
+      expect(s.state).toBe('trail');
+      expect(s.trail().spacing).toBe(TRAIL.spacing[(k + 1) as 1 | 2 | 3]);
+      const ev = walk(s);
+      expect(ev.filter((e) => e.type === 'print')).toHaveLength(12);
       found.push(...ev.filter((e) => e.type === 'found'));
-      expect(r.state).toBe('found');
-      const later = run(r, TOYS.nextAfterFind + 0.2);
-      expect(later.filter((e) => e.type === 'landed')).toEqual([{ type: 'landed', toy: k }]);
+      expect(s.state).toBe('show');
+      expect(s.found, 'the lamp lights at the find').toBe(k + 1);
+      expect(s.inBasket, 'it is not in the basket yet').toBe(k);
+      landed.push(...wait(s, LAND_AT + 0.2).filter((e) => e.type === 'landed'));
+      expect(s.state).toBe('idle');
+      expect(s.inBasket).toBe(k + 1);
     }
     expect(found).toEqual([
-      { type: 'found', tier: 1, gems: 5, toy: 0 },
-      { type: 'found', tier: 2, gems: 7, toy: 1 },
-      { type: 'found', tier: 3, gems: 10, toy: 2 },
+      { type: 'found', toy: 0, free: false, tier: 1, gems: 5 },
+      { type: 'found', toy: 1, free: false, tier: 2, gems: 7 },
+      { type: 'found', toy: 2, free: false, tier: 3, gems: 20 },
     ]);
-    expect(r.state).toBe('done');
-    expect(run(r, 200)).toEqual([]);
+    expect(landed).toEqual([
+      { type: 'landed', toy: 0, free: false, full: false },
+      { type: 'landed', toy: 1, free: false, full: false },
+      { type: 'landed', toy: 2, free: false, full: true },
+    ]);
+    expect(s.done).toBe(true);
+    // Free play: still a trail (tier 3), a small prize, the toy lands on top of the pile.
+    s.begin();
+    expect(s.free).toBe(true);
+    expect(s.tier).toBe(3);
+    const ev = walk(s);
+    expect(ev.find((e) => e.type === 'found')).toMatchObject({ free: true, gems: TOYS.freePlayGems, tier: 3 });
+    expect(wait(s, LAND_AT + 0.2).filter((e) => e.type === 'landed')).toEqual([{ type: 'landed', toy: s.toy, free: true, full: false }]);
+    expect(s.found).toBe(3);
+    expect(s.inBasket).toBe(3);
+    expect(s.topToy).toBe(s.toy);
     // A new session starts over.
-    r.reset(43);
-    expect(r.state).toBe('trail');
-    expect(r.tier).toBe(1);
+    s.reset(43);
+    expect([s.found, s.inBasket, s.topToy, s.tier, s.state]).toEqual([0, 0, -1, 1, 'idle']);
   });
 
-  it('times out 75 s after the first print is reached (never before): a miss, then a new trail of the same tier', () => {
-    const r = new ToyRounds(straight);
-    r.reset(7);
-    expect(run(r, 200)).toEqual([]); // not started: no clock, no miss
-    const seed = r.seed;
-    r.update(1 / 60, r.trail().prints[0].x, r.trail().prints[0].z); // first print
-    expect(r.started).toBe(true);
-    const ev = run(r, TOYS.timeout + 0.2);
-    expect(ev.filter((e) => e.type === 'miss')).toEqual([{ type: 'miss', tier: 1 }]);
-    const next = run(r, TOYS.nextAfterMiss + 0.2);
-    expect(next.filter((e) => e.type === 'trail')).toHaveLength(1);
-    expect(r.tier).toBe(1);
-    expect(r.seed).not.toBe(seed);
-    expect(r.state).toBe('trail');
-    expect(r.started).toBe(false);
+  it('times out 75 s after GO: a miss of that tier; the same toy waits for the next round on a new trail', () => {
+    const s = new ToySession(straight);
+    s.reset(7);
+    s.begin();
+    const seed = s.seed;
+    s.update(1 / 60, s.trail().prints[0].x, s.trail().prints[0].z);
+    const ev = wait(s, TOYS.timeout + 0.2);
+    expect(ev.filter((e) => e.type === 'timeout')).toEqual([{ type: 'timeout', tier: 1 }]);
+    expect(s.state).toBe('idle');
+    expect(s.found).toBe(0);
+    expect(wait(s, 200)).toEqual([]);
+    s.begin();
+    expect(s.tier).toBe(1);
+    expect(s.toy).toBe(0);
+    expect(s.seed).not.toBe(seed);
+    expect(s.next).toBe(0);
   });
 
-  it('trail seeds are deterministic per session seed', () => {
-    const a = new ToyRounds(straight);
-    const b = new ToyRounds(straight);
+  it('a cancelled round drops the trail with no result; a flying toy still lands (settle)', () => {
+    const s = new ToySession(straight);
+    s.reset(5);
+    s.begin();
+    s.update(1 / 60, s.trail().prints[0].x, s.trail().prints[0].z);
+    s.stop();
+    expect(s.state).toBe('idle');
+    expect(wait(s, 100)).toEqual([]);
+    s.begin();
+    walk(s);
+    s.stop();
+    expect(s.state, 'stop does not drop a found toy').toBe('show');
+    expect(s.settle()).toEqual([{ type: 'landed', toy: 0, free: false, full: false }]);
+    expect(s.inBasket).toBe(1);
+  });
+
+  it('trail seeds are deterministic per session seed and new for every round', () => {
+    const a = new ToySession(straight);
+    const b = new ToySession(straight);
     a.reset(99);
     b.reset(99);
+    a.begin();
+    b.begin();
     expect(a.seed).toBe(b.seed);
+    expect(a.seed).toBe(trailSeed(99, 0));
+    a.stop();
+    a.begin();
+    expect(a.seed).toBe(trailSeed(99, 1));
     b.reset(100);
+    b.begin();
     expect(a.seed).not.toBe(b.seed);
+  });
+});
+
+describe('booth: rules, prizes, demo, basket', () => {
+  it('prize table: 5 / 7 / 10 + bonus 10 with the third toy, 2 in free play', () => {
+    expect([0, 1, 2].map((t) => toyPrize(t, false))).toEqual([5, 7, 20]);
+    expect(toyPrize(0, true)).toBe(TOYS.freePlayGems);
+    expect(TOYS.freePlayGems).toBeLessThan(TOYS.gems[1]);
+  });
+
+  it('one-try rounds pay the live prize of the toy found; a time-out pays nothing; tier = toy number', () => {
+    let now = 5;
+    const m = new RoundMachine(toyRules(livePrize(() => now)));
+    expect(m.rules.tries).toBe(1);
+    const run = (hit: boolean): number => {
+      m.start();
+      let paid = 0;
+      for (let i = 0; i < 2000 && m.phase !== 'play'; i++) m.step(0.05);
+      m.report(hit);
+      for (let i = 0; i < 2000 && m.phase !== 'idle'; i++) for (const e of m.step(0.05)) if (e.type === 'pay') paid += e.gems;
+      return paid;
+    };
+    expect(m.tier).toBe(1);
+    expect(run(false)).toBe(0);
+    expect(m.tier, 'a time-out never lowers the tier').toBe(1);
+    expect(run(true)).toBe(5);
+    expect(m.tier).toBe(2);
+    now = 20;
+    expect(run(true)).toBe(20);
+    expect(m.rules.leaveRadius).toBeGreaterThan(46);
+    expect(m.rules.stall).toBeGreaterThan(TOYS.timeout);
+  });
+
+  it('the demo is a 4–6 frame flipbook; the booth has three lamps and a press pad', () => {
+    expect(TOYS_DEMO.frames).toBeGreaterThanOrEqual(4);
+    expect(TOYS_DEMO.frames).toBeLessThanOrEqual(6);
+    expect(TOY_BOOTH.lamps).toBe(TOYS.perSession);
+    expect(TOY_BOOTH.pad.walkIn).toBe(false);
+    expect(TOY_BOOTH.playPrompt).toBe('follow');
+  });
+
+  it('booth, pad, basket and bowl stay inside the 6 m site circle', () => {
+    const b = buildBoothGeometry(TOY_BOOTH);
+    const box = b.marqueeBox;
+    for (const x of [box.min.x, box.max.x]) for (const z of [box.min.z, box.max.z]) expect(Math.hypot(x, z)).toBeLessThan(6);
+    expect(Math.hypot(SPOT.pad.x, SPOT.pad.z) + SPOT.pad.r).toBeLessThan(6);
+    expect(Math.hypot(SPOT.basket.x, SPOT.basket.z) + 1.1).toBeLessThan(6);
+    expect(Math.hypot(SPOT.bowl.x, SPOT.bowl.z) + 0.4).toBeLessThan(6);
+    for (const d of TOY_BOOTH.decals ?? []) expect(Math.hypot(d.x, d.z)).toBeLessThan(6);
+    b.geometry.dispose();
+  });
+
+  it('the basket merges into the booth geometry: one mesh, kit slots untouched, re-posable', () => {
+    const b = buildBoothGeometry(TOY_BOOTH);
+    const geo = b.geometry;
+    const before = geo.getAttribute('position').count;
+    const uv0 = Float32Array.from(geo.getAttribute('uv').array as Float32Array);
+    const keep = geo.getAttribute('uv');
+    const extra = basketGeometry({ x: 1.5, y: 0, z: 0.5 });
+    const r = appendToBooth(geo, extra);
+    expect(geo.getAttribute('uv')).toBe(keep);
+    expect(r.start).toBe(before);
+    expect(geo.getAttribute('position').count).toBe(before + r.count);
+    for (const name of ['normal', 'uv', 'color']) expect(geo.getAttribute(name).count).toBe(before + r.count);
+    expect(Array.from((geo.getAttribute('uv').array as Float32Array).subarray(0, uv0.length))).toEqual(Array.from(uv0));
+    const tris = geo.getAttribute('position').count / 3;
+    console.info(`toys booth + basket: ${tris} triangles (basket ${r.count / 3})`);
+    expect(tris).toBeLessThanOrEqual(2200);
+    poseRange(geo, r, new THREE.Matrix4().makeTranslation(0, 1, 0));
+    expect((geo.getAttribute('position').array as Float32Array)[r.start * 3 + 1]).toBeCloseTo(r.rest[1] + 1, 5);
+    poseRange(geo, r, null);
+    expect((geo.getAttribute('position').array as Float32Array)[r.start * 3 + 1]).toBeCloseTo(r.rest[1], 5);
+    extra.dispose();
+    geo.dispose();
   });
 });
