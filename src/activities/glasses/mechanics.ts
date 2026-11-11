@@ -30,7 +30,7 @@ export const MECHANICS: readonly MechanicDef[] = [
   // Stand on the pad, put the weak-eye magic ring over the strong-eye bubble and press → it pops → gems.
   { id: 'lineup', kind: 'lineUp', pictos: ['pad', 'hoop', 'gems'], create: lineup.create, booth: true },
   // Follow the weak-eye paw prints to Pip's lost toy → gems.
-  { id: 'toys', kind: 'follow', pictos: ['paw', 'toy', 'gems'], create: toys.create },
+  { id: 'toys', kind: 'follow', pictos: ['paw', 'toy', 'gems'], create: toys.create, booth: true },
   // Two halves (one per eye) show which of three arches to run through → gems.
   { id: 'gates', kind: 'lineUp', pictos: ['halves', 'arches', 'gems'], create: gates.create, booth: true },
   // The hidden shape of the dot picture is the answer on the three-button pedestal → gems.
