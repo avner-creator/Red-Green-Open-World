@@ -37,16 +37,16 @@ export interface FingerpostDef {
 
 /**
  * Fingerposts: plaza (big, every attraction) and smaller ones at road junctions. The plaza post
- * stands ~9 m ahead of the spawn point, 2.5 m left of the line of sight, so the spawn camera sees
- * its arms broadside (big icon discs on both faces) between 2.2 and 3.5 m up, below the HUD, and
- * the player's path east stays clear.
+ * stands ~10 m ahead of the spawn point, 5 m right of the line of sight (the island map board
+ * has the spot ahead-left, QA6 m10), so the spawn camera sees its arms broadside (big icon discs on
+ * both faces) between 2.2 and 3.5 m up, and the player's path east stays clear.
  */
 /** The toys trail-head flag (beside the toys fingerpost). */
 export const TOYS_FLAG = { x: -8.4, z: 71.2 } as const;
 
 export const FINGERPOSTS: readonly FingerpostDef[] = [
   {
-    x: 8.4, z: 4.9, scale: 1,
+    x: 10, z: 12.5, scale: 1,
     targets: ['garage', 'trampoline', 'bouncePads', 'launchPads', 'landingRings', 'balloon', 'ranch', 'bungee', 'sillyZone', 'lakePlatform', 'lighthouse'],
     // Arms that share a row point at least ~50° apart so they never overlap.
     rows: [['balloon', 'bouncePads', 'trampoline'], ['garage', 'sillyZone', 'lakePlatform', 'bungee'], ['launchPads', 'ranch', 'lighthouse'], ['landingRings']],

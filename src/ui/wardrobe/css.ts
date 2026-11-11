@@ -89,6 +89,7 @@ export const WARDROBE_CSS = `
 .rg .hud .wbtn .wb-new.on{display:flex;animation:rg-newb .7s ease-in-out infinite alternate}
 @keyframes rg-newb{to{transform:translateY(calc(var(--u)*-.8)) scale(1.15)}}
 .rg .hud .wbtn.off{filter:grayscale(1) brightness(.55);opacity:.75}
+.rg .hud .wbtn.off .wb-key,.rg .hud .wbtn.off .wb-new.on{display:none}
 .rg .hud .wbtn.pop{animation:rg-cbought .6s cubic-bezier(.2,1.6,.4,1)}
 .rg .hud .wbtn.shake{animation:rg-wshake .45s}
 

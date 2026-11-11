@@ -62,12 +62,16 @@ export function createWardrobeButton(ctx: GameContext, seen: SeenStore, open: ()
   return {
     el,
     update(dt) {
-      // Greyed out on rides and in vehicles (still tappable: it shakes "not now").
-      el.classList.toggle('off', !canDressNow(ctx));
+      // Greyed out on rides and in vehicles (still tappable: it shakes "not now"). One clean
+      // disabled look (QA6 m11): just the grey hanger, no "new!" badge and no key cap; the badge
+      // comes back (with its pop) once the hero is on foot again.
+      const can = canDressNow(ctx);
+      const flip = el.classList.contains('off') === can;
+      el.classList.toggle('off', !can);
       check -= dt;
-      if (check > 0) return;
+      if (check > 0 && !flip) return;
       check = 0.25;
-      const fresh = badgeIds(ctx.economy.catalog, (id) => ctx.profile.owns(id), ctx.profile.wallet, seen.ids).length > 0;
+      const fresh = can && badgeIds(ctx.economy.catalog, (id) => ctx.profile.owns(id), ctx.profile.wallet, seen.ids).length > 0;
       badge.classList.toggle('on', fresh);
       if (fresh && !wasNew) retrigger(el, 'pop');
       wasNew = fresh;

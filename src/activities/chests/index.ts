@@ -27,7 +27,7 @@ import { buildKey, buildSymbolHint } from './lockModel';
 import type { KeyModel, SymbolHintModel } from './lockModel';
 import { buildButtons, buildTrail, chestTrail } from './ringModel';
 import type { Trail } from './ringModel';
-import { ApproachHints, CHEST_RULES, ChestLock, Loadout, RING, buttonWorld, keyArea, keyCandidates, nearestButton, pickKeySpot, ringButtons, rightSymbol, sideDirection } from './logic';
+import { ApproachHints, CHEST_RULES, ChestLock, Loadout, RING, buttonWorld, keyArea, keyCandidates, facedButton, pickKeySpot, ringButtons, rightSymbol, sideDirection } from './logic';
 import { buildPictoBadge } from './badge';
 import type { BadgeState, PictoBadge } from './badge';
 import { HintDots, buildCarriedKey } from './hintModel';
@@ -146,6 +146,8 @@ interface Entry {
   collider: { handle: number } | null;
   /** The highlighted tile E presses (-1 none). */
   eTile: number;
+  /** Seconds left of the bigger all-tiles pulse after an E that pressed nothing. */
+  nudge: number;
 }
 
 const easeOutBack = (t: number): number => {
@@ -265,14 +267,15 @@ export function createChests(ctx: GameContext): Chests {
       offs: [],
       collider: { handle: collider.handle },
       eTile: -1,
+      nudge: 0,
     };
     entry.keyPos.copy(entry.keyHome);
 
     const where = (out: THREE.Vector3): THREE.Vector3 => out.set(spot.position.x, spot.position.y + 0.8, spot.position.z);
-    const useChest = (): void => pressNearest(entry);
+    const useChest = (): void => pressFaced(entry);
     // Two prompts at the same spot: a key icon until the key is found (the "?" badge and toast say
     // "find the key"), then a foot-on-a-tile icon: step on the right shape, or press E to step on the
-    // highlighted (nearest) tile.
+    // highlighted tile (the one the hero stands on or clearly faces; else E only pulses the tiles).
     const needKey: Interactable = {
       id: `${entry.id}-key`,
       position: () => where(tmp2.clone()),
@@ -379,12 +382,17 @@ export function createChests(ctx: GameContext): Chests {
     }
   }
 
-  /** E at a chest: the nearest button within reach counts as stepped on. */
-  function pressNearest(e: Entry): void {
-    const k = nearestButton(e.buttons, ctx.player.position.x, ctx.player.position.z, RING.useReach);
+  /**
+   * E at a chest (QA6 m2): presses only the tile the hero stands on or clearly faces within reach
+   * (the highlighted one). Otherwise nothing is pressed and no try is spent: the tiles all pulse
+   * harder for a moment ("step on one"), all alike, so nothing tells the right shape apart.
+   */
+  function pressFaced(e: Entry): void {
+    const k = facedButton(e.buttons, ctx.player.position.x, ctx.player.position.z, ctx.player.yaw);
     if (k < 0) {
-      e.wobble = 1;
-      ctx.audio.play('click');
+      if (e.lock.hasKey) e.nudge = 0.9;
+      else e.wobble = 1;
+      ctx.audio.play('click', { pitch: e.lock.hasKey ? 1.6 : 1, volume: 0.6 });
       return;
     }
     pressButton(e, k);
@@ -568,10 +576,12 @@ export function createChests(ctx: GameContext): Chests {
       // Floor buttons: idle bob, press, boing, wrong-shape sink.
       const stepNow = playing && !e.lock.opened;
       // With the key, near the chest: every tile pulses ("step on one") and the tile E would press
-      // (the nearest in reach) stands up brighter. All tiles alike: the lock's shape stays strong-eye only.
+      // (stood on or clearly faced) stands up brighter. An E that pressed nothing pulses them all
+      // harder for a moment. All tiles alike: the lock's shape stays strong-eye only.
       const invite = stepNow && e.lock.hasKey && dist <= CHEST_PROMPT_R;
-      const eTile = invite ? nearestButton(e.buttons, ctx.player.position.x, ctx.player.position.z, RING.useReach) : -1;
-      const pulse = invite ? 0.5 + 0.5 * Math.sin(time * 5.5) : 0;
+      const eTile = invite ? facedButton(e.buttons, ctx.player.position.x, ctx.player.position.z, ctx.player.yaw) : -1;
+      if (e.nudge > 0) e.nudge = Math.max(0, e.nudge - dt);
+      const pulse = invite ? (0.5 + 0.5 * Math.sin(time * 5.5)) * (1 + 1.6 * Math.min(1, e.nudge * 2)) : 0;
       e.eTile = eTile;
       // Buttons draw only within their draw distance (Low: 40 m, else 75 m, like small props).
       const btnFar = ctx.settings.get().quality === 'low' ? 40 : 75;
@@ -587,7 +597,7 @@ export function createChests(ctx: GameContext): Chests {
         const goal = e.lock.opened ? 0.85 : b.sunk > 0 ? 1 : on ? 0.8 : 0;
         b.press += (goal - b.press) * (1 - Math.exp(-14 * dt));
         const lift = k === eTile && b.sunk <= 0 ? 0.06 + 0.03 * pulse : 0;
-        const bob = e.lock.opened || b.press > 0.3 ? 0 : Math.sin(time * 1.7 + e.index * 1.3 + k * 1.05) * 0.028 + 0.03 + lift;
+        const bob = e.lock.opened || b.press > 0.3 ? 0 : Math.sin(time * 1.7 + e.index * 1.3 + k * 1.05) * 0.028 + 0.03 + lift + 0.03 * pulse * Math.min(1, e.nudge * 2);
         const spring = Math.sin((1 - b.boing) * Math.PI * 3) * b.boing * 0.3;
         if (drawButtons) buttonSet.set(e.index * RING.count + k, b.symbol, {
           x: b.x,

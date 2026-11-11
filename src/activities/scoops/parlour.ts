@@ -20,39 +20,64 @@ export const FLOOR = 0.5;
 const COUNTER_TOP = FLOOR + 1.0;
 const BACK_TOP = FLOOR + 1.0;
 
-/** Every spot the station needs, in the parlour's local frame. */
+/**
+ * Every spot the station needs, in the parlour's local frame.
+ *
+ * The game camera (`BUILD_CAMERA` in index.ts) stands in front of the shop, a little to the right,
+ * and always centres the hero. So the hero builds at the right end of the counter, up on a chef's
+ * step (seen over the counter), and everything they work with runs to their left: tubs, the cone
+ * holder, the sprinkles cannon, sauces and the three jars. The cone stays ~1.9 m beside the hero's
+ * head, clear of the biggest hat, and the whole row fits a 16:9 and a phone screen (QA6 M5).
+ */
 export const LAYOUT = {
   floor: FLOOR,
-  /** Where the hero stands to build (behind the counter, facing the customers). */
-  chef: new THREE.Vector3(0, FLOOR, 0.75),
+  /** Where the hero stands to build: behind the right end of the counter, on the chef's step. */
+  chef: new THREE.Vector3(2.45, FLOOR + 0.45, 0.75),
   /** Where the hero walks up to (in front of the counter) and is handed back. */
   customer: new THREE.Vector3(0, FLOOR, 2.85),
   /** The E prompt. */
   prompt: new THREE.Vector3(0, COUNTER_TOP + 0.35, 2.2),
   /** The cone stands here while it is built (tip of the cone). */
-  holder: new THREE.Vector3(0.45, COUNTER_TOP + 0.12, 1.72),
+  holder: new THREE.Vector3(0.55, COUNTER_TOP + 0.12, 1.72),
   coneRack: (i: number): THREE.Vector3 => new THREE.Vector3(-1.55 + i * 0.3, BACK_TOP + 0.16, -2.42),
-  bottle: (i: number): THREE.Vector3 => new THREE.Vector3(-1.02 + i * 0.33, COUNTER_TOP, 1.62),
-  cannon: new THREE.Vector3(-0.05, COUNTER_TOP, 1.78),
-  tub: (i: number): THREE.Vector3 => new THREE.Vector3(1.02 + i * 0.4, COUNTER_TOP, 1.72),
+  bottle: (i: number): THREE.Vector3 => new THREE.Vector3(-0.72 + i * 0.28, COUNTER_TOP, 1.62),
+  cannon: new THREE.Vector3(0.15, COUNTER_TOP, 1.78),
+  tub: (i: number): THREE.Vector3 => new THREE.Vector3(1.0 + i * 0.4, COUNTER_TOP, 1.72),
   bowl: (i: number): THREE.Vector3 => new THREE.Vector3((i < 3 ? -3.25 : 1.0) + (i % 3) * 0.6, BACK_TOP + 0.09, -2.42),
-  jar: (i: number): THREE.Vector3 => new THREE.Vector3(-2.42 + i * 0.46, COUNTER_TOP + 0.06, 1.72),
-  /** Friends wait here (customer side), facing the hero. */
-  queue: [new THREE.Vector3(-2.45, FLOOR, 2.55), new THREE.Vector3(2.45, FLOOR, 2.6)] as const,
-  /** Friends hang out here while nobody is building. */
-  hangout: [new THREE.Vector3(-3.1, FLOOR, 4.05), new THREE.Vector3(2.55, FLOOR, 4.35)] as const,
+  jar: (i: number): THREE.Vector3 => new THREE.Vector3(-1.95 + i * 0.42, COUNTER_TOP + 0.06, 1.72),
+  /** Friends wait here (customer side), facing the hero: one either side, off the camera's line. */
+  queue: [new THREE.Vector3(-2.9, FLOOR, 2.75), new THREE.Vector3(3.35, FLOOR, 2.5)] as const,
+  /** Friends hang out here while nobody is building (clear of the terrace table and the counter). */
+  hangout: [new THREE.Vector3(-1.25, FLOOR, 4.25), new THREE.Vector3(2.6, FLOOR, 4.3)] as const,
+  /** The terrace table (centre): a clear hero-wide way round it to the flower box. */
+  table: new THREE.Vector3(-2.55, FLOOR, 4.35),
   /** Clear radius of the site (ground pad and dressing stay inside). */
   radius: 6.4,
 } as const;
 
 export const JAR = { radius: 0.19, height: 0.42 } as const;
 
+/** Flower boxes' centre z: they butt against the corner pillars (no hero-sized notch between). */
+const FLOWER_Z = 3.05;
+
 export interface ParlourCollider {
   /** Centre (local) and half extents, yaw relative to the parlour. */
   kind: 'box' | 'cyl';
   c: THREE.Vector3;
   h: THREE.Vector3;
+  /**
+   * Invisible and solid only for the walking hero (camera and gameplay rays pass through): the
+   * shop front above the counter, so the hero can neither get behind the counter nor stand on it.
+   */
+  heroOnly?: boolean;
 }
+
+/**
+ * The closed shop front: the counter plus an invisible pane from its top up to the roof, wall to
+ * wall (x ±3.85, over the old 0.45 m slits at the counter ends). Nobody walks or jumps behind the
+ * counter or onto it; the build hop over it is scripted (QA6 counter row, round 5 M1).
+ */
+export const FRONT = { x: 3.85, z0: 1.33, z1: 2.11, top: FLOOR + 3.7 } as const;
 
 export interface Parlour {
   group: THREE.Group;
@@ -135,6 +160,11 @@ function counters(k: Kit, g: Kit): void {
   k.box(0, FLOOR + 0.5, -2.45, 7.5, 1.0, 0.66, MINT);
   for (let i = 0; i < 13; i++) k.box(-3.6 + i * 0.6, FLOOR + 0.5, -2.11, 0.3, 0.84, 0.02, CREAM);
   k.box(0, BACK_TOP + 0.03, -2.45, 7.6, 0.06, 0.72, 0xf6f4f0);
+  // The chef's step the hero builds on: a chunky wooden crate with a light top and dark slats.
+  const st = LAYOUT.chef;
+  k.box(st.x, (FLOOR + st.y) / 2, st.z, 0.95, st.y - FLOOR, 0.8, WOOD);
+  k.box(st.x, st.y - 0.02, st.z, 0.99, 0.04, 0.84, CREAM);
+  for (const dz of [-0.2, 0.2]) k.box(st.x, (FLOOR + st.y) / 2, st.z + dz * 2.02, 0.97, 0.06, 0.02, WOOD_DARK);
   // Flavour tubs set into the counter.
   FLAVOURS.forEach((f: FlavourId, i) => {
     const p = (LAYOUT.tub(i) as THREE.Vector3).clone();
@@ -188,9 +218,10 @@ function floorAndTerrace(k: Kit): void {
     }
   }
   k.box(0, FLOOR - 0.02, 5.03, 9.2, 0.06, 0.06, RASPBERRY);
-  // Terrace table with a striped parasol and two stools.
-  const tx = 2.9;
-  const tz = 4.05;
+  // Terrace table with a striped parasol and two stools (left of the front: the game camera
+  // looks in from the right).
+  const tx = LAYOUT.table.x;
+  const tz = LAYOUT.table.z;
   k.add(cyl(18), CREAM, T(tx, FLOOR + 0.74, tz, 0, 0.5, 0.05, 0.5));
   k.add(cyl(8), PLUM, T(tx, FLOOR, tz, 0, 0.05, 0.75, 0.05));
   k.add(cyl(14), PLUM, T(tx, FLOOR, tz, 0, 0.25, 0.04, 0.25));
@@ -204,15 +235,15 @@ function floorAndTerrace(k: Kit): void {
     );
   }
   k.add(sphere(8, 6), 0xffd93b, T(tx, FLOOR + 2.7, tz, 0, 0.08, 0.08, 0.08));
-  for (const [sx, sz] of [[tx - 0.75, tz + 0.15], [tx + 0.7, tz - 0.25]]) {
+  for (const [sx, sz] of [[tx - 0.75, tz - 0.1], [tx + 0.55, tz + 0.5]]) {
     k.add(cyl(14), RASPBERRY, T(sx, FLOOR + 0.42, sz, 0, 0.24, 0.07, 0.24));
     k.add(cyl(8), PLUM, T(sx, FLOOR, sz, 0, 0.04, 0.44, 0.04));
   }
   // Flower boxes either side of the front.
   for (const sx of [-1, 1]) {
-    k.box(sx * 3.95, FLOOR + 0.25, 3.3, 0.5, 0.5, 1.2, WOOD);
+    k.box(sx * 3.95, FLOOR + 0.25, FLOWER_Z, 0.5, 0.5, 1.2, WOOD);
     for (let j = 0; j < 6; j++) {
-      const fz = 2.85 + j * 0.18;
+      const fz = FLOWER_Z - 0.45 + j * 0.18;
       k.add(sphere(6, 4), j % 2 ? 0xffffff : 0xffd93b, T(sx * 3.95 + (j % 2 ? 0.1 : -0.1), FLOOR + 0.6, fz, 0, 0.09, 0.07, 0.09));
       k.add(sphere(6, 4), 0x2f5a2a, T(sx * 3.95, FLOOR + 0.5, fz, 0, 0.13, 0.08, 0.1));
     }
@@ -251,7 +282,7 @@ export function buildParlour(): Parlour {
   sp.box(0, FLOOR + 0.5, -2.45, 7.5, 1.0, 0.66, 0);
   sp.add(new THREE.ConeGeometry(1, 1, 8).rotateX(Math.PI).translate(0, 0.5, 0), 0, T(0, FLOOR + 4.1, 0.4, 0, 0.66, 1.85, 0.66));
   sp.add(new THREE.IcosahedronGeometry(1, 0), 0, T(0, FLOOR + 6.3, 0.4, 0, 0.7, 1.5, 0.7));
-  sp.add(new THREE.ConeGeometry(1.25, 0.45, 8).translate(0, 0.225, 0), 0, T(2.9, FLOOR + 2.2, 4.05));
+  sp.add(new THREE.ConeGeometry(1.25, 0.45, 8).translate(0, 0.225, 0), 0, T(LAYOUT.table.x, FLOOR + 2.2, LAYOUT.table.z));
   const proxy = asShadowProxy(new THREE.Mesh(sp.build()));
   group.add(proxy);
   const b = gloss.mesh(glossMat);
@@ -307,9 +338,15 @@ export function buildParlour(): Parlour {
     { kind: 'box', c: new THREE.Vector3(0, FLOOR + 3.9, -0.35), h: new THREE.Vector3(4.4, 0.2, 2.95) },
     { kind: 'cyl', c: new THREE.Vector3(-3.95, FLOOR + 1.8, 2.25), h: new THREE.Vector3(0.22, 1.8, 0.22) },
     { kind: 'cyl', c: new THREE.Vector3(3.95, FLOOR + 1.8, 2.25), h: new THREE.Vector3(0.22, 1.8, 0.22) },
-    { kind: 'cyl', c: new THREE.Vector3(2.9, FLOOR + 0.4, 4.05), h: new THREE.Vector3(0.5, 0.4, 0.5) },
-    { kind: 'box', c: new THREE.Vector3(-3.95, FLOOR + 0.25, 3.3), h: new THREE.Vector3(0.25, 0.25, 0.6) },
-    { kind: 'box', c: new THREE.Vector3(3.95, FLOOR + 0.25, 3.3), h: new THREE.Vector3(0.25, 0.25, 0.6) },
+    { kind: 'cyl', c: new THREE.Vector3(LAYOUT.table.x, FLOOR + 0.4, LAYOUT.table.z), h: new THREE.Vector3(0.5, 0.4, 0.5) },
+    {
+      kind: 'box',
+      c: new THREE.Vector3(0, (FLOOR + FRONT.top) / 2, (FRONT.z0 + FRONT.z1) / 2),
+      h: new THREE.Vector3(FRONT.x, (FRONT.top - FLOOR) / 2, (FRONT.z1 - FRONT.z0) / 2),
+      heroOnly: true,
+    },
+    { kind: 'box', c: new THREE.Vector3(-3.95, FLOOR + 0.25, FLOWER_Z), h: new THREE.Vector3(0.25, 0.25, 0.6) },
+    { kind: 'box', c: new THREE.Vector3(3.95, FLOOR + 0.25, FLOWER_Z), h: new THREE.Vector3(0.25, 0.25, 0.6) },
   ];
 
   return {

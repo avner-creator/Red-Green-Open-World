@@ -3,7 +3,9 @@ import {
   AREA,
   ApproachHints,
   ChestLock,
+  E_PICK,
   Loadout,
+  facedButton,
   RING,
   buttonWorld,
   keyArea,
@@ -80,6 +82,55 @@ describe('symbol ring', () => {
     expect(nearestButton(pts, 2.2, 0, 2.6)).toBe(1);
     expect(nearestButton(pts, 1.4, 0.1, 2.6)).toBe(0);
     expect(nearestButton(pts, 30, 0, 2.6)).toBe(-1);
+  });
+});
+
+describe('E at a chest never spends a try by accident (QA6 m2)', () => {
+  // The six tiles round a chest at the origin, like the game lays them out.
+  const pts = Array.from({ length: RING.count }, (_, i) => {
+    const a = (i / RING.count) * Math.PI * 2;
+    return { x: Math.sin(a) * RING.radius, z: Math.cos(a) * RING.radius };
+  });
+  const yawTo = (fx: number, fz: number, tx: number, tz: number): number => Math.atan2(tx - fx, tz - fz);
+
+  it('at the chest, facing it: no tile (E does nothing)', () => {
+    for (let a = 0; a < 12; a++) {
+      const ang = (a / 12) * Math.PI * 2;
+      const px = Math.sin(ang) * 1.1;
+      const pz = Math.cos(ang) * 1.1;
+      expect(facedButton(pts, px, pz, yawTo(px, pz, 0, 0)), `from ${a}`).toBe(-1);
+    }
+  });
+
+  it('standing on a tile: that tile, whichever way the hero faces', () => {
+    for (const [i, p] of pts.entries()) {
+      for (const yaw of [0, 1.5, 3, -2]) expect(facedButton(pts, p.x + 0.3, p.z - 0.2, yaw)).toBe(i);
+    }
+  });
+
+  it('clearly facing one tile within reach: that tile', () => {
+    for (const [i, p] of pts.entries()) {
+      // 1.2 m outward from the tile, facing it.
+      const l = Math.hypot(p.x, p.z);
+      const px = p.x + (p.x / l) * 1.2;
+      const pz = p.z + (p.z / l) * 1.2;
+      expect(facedButton(pts, px, pz, yawTo(px, pz, p.x, p.z))).toBe(i);
+      // Turned away: nothing.
+      expect(facedButton(pts, px, pz, yawTo(px, pz, p.x, p.z) + Math.PI)).toBe(-1);
+    }
+  });
+
+  it('between two tiles, or one too far away: nothing', () => {
+    const [a, b] = [pts[0], pts[1]];
+    const mx = (a.x + b.x) / 2;
+    const mz = (a.z + b.z) / 2;
+    const l = Math.hypot(mx, mz);
+    const px = mx + (mx / l) * 0.9;
+    const pz = mz + (mz / l) * 0.9;
+    expect(facedButton(pts, px, pz, yawTo(px, pz, mx, mz))).toBe(-1);
+    const far = { x: pts[2].x * 2.4, z: pts[2].z * 2.4 };
+    expect(Math.hypot(far.x - pts[2].x, far.z - pts[2].z)).toBeGreaterThan(E_PICK.reach);
+    expect(facedButton(pts, far.x, far.z, yawTo(far.x, far.z, pts[2].x, pts[2].z))).toBe(-1);
   });
 });
 

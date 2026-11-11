@@ -24,7 +24,7 @@ import {
   barn, beachHut, bigWheel, carousel, festoon, kitePole, lookout, picnicTable, pumpkin, rainbow, sandcastle, scarecrow, telescope, tent,
   umbrella, windmill, wishingWell, zoneArch,
 } from './landmarks';
-import { mapBoard, MAP_BOARD } from './mapboard';
+import { BOARD_R, mapBoard, MAP_BOARD } from './mapboard';
 import { buildFixes } from './fixes';
 import { FILL_ZONES } from './zone-data';
 
@@ -486,18 +486,20 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
   }
 
   // ── Island map on the plaza (pictograms, "you are here") ──
-  // (The spot nearest MAP_BOARD that the guard allows: the plaza corner is busy.)
+  // It stands on the plaza paving (the plaza counts as road for the guard), at MAP_BOARD or the
+  // nearest spot the guard allows (QA6 m10: ahead-left of spawn, in the spawn view).
+  const boardOpts = { inKeepouts: true, onRoad: true, gemGap: 0.8 } as const;
   let best: [number, number] | null = null;
   for (let dz = -3; dz <= 3; dz += 0.5) {
     for (let dx = -3; dx <= 3; dx += 0.5) {
       const x = MAP_BOARD.x + dx;
       const z = MAP_BOARD.z + dz;
-      if (!guard.free(x, z, 2.2, { inKeepouts: true })) continue;
+      if (!guard.free(x, z, BOARD_R, boardOpts)) continue;
       if (!best || Math.hypot(dx, dz) < Math.hypot(best[0] - MAP_BOARD.x, best[1] - MAP_BOARD.z)) best = [x, z];
     }
   }
-  if (best && place('board', 'map', best[0], best[1], 2.2, { inKeepouts: true })) mapBoard(k, d, roads, [...FILL_ZONES], best[0], best[1]);
-  else fill.refused.push({ name: 'board map', why: guard.why(MAP_BOARD.x, MAP_BOARD.z, 2.2, { inKeepouts: true }) ?? '?' });
+  if (best && place('board', 'map', best[0], best[1], BOARD_R, boardOpts)) mapBoard(k, d, roads, [...FILL_ZONES], best[0], best[1]);
+  else fill.refused.push({ name: 'board map', why: guard.why(MAP_BOARD.x, MAP_BOARD.z, BOARD_R, boardOpts) ?? '?' });
   // Lamps at the trail heads of the far zones so they glow at sunset.
   for (const t of TRAILS.slice(0, 7)) {
     const [x, z] = t.pts[t.pts.length - 1];

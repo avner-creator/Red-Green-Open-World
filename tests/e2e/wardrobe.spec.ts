@@ -163,9 +163,27 @@ test.describe('dressing room', () => {
     });
     if (offInCar === 'driving') {
       await expect(page.getByTestId('hud-wardrobe')).toHaveClass(/off/);
+      // One clean disabled state (QA6 m11): something new is waiting, yet no "!" and no key cap.
+      await page.evaluate(() => window.__rg!.ctx.profile.earn(60, 'test'));
+      await step(page, 20);
+      await expect(page.getByTestId('hud-wardrobe-new')).toBeHidden();
+      await expect(page.locator('[data-testid="hud-wardrobe"] .wb-key')).toBeHidden();
       await page.keyboard.press('KeyI');
       await step(page, 2);
       expect(await phase(page)).toBe('playing');
+      // On foot again: the badge is back.
+      await page.evaluate(() => {
+        const rg = window.__rg!;
+        rg.inject({ usePressed: true, use: true });
+        rg.step(1 / 60, 1, false);
+        rg.inject(null);
+        rg.step(1 / 60, 40, false);
+      });
+      if ((await page.evaluate(() => window.__rg!.ctx.player.mode)) === 'walk') {
+        await step(page, 20);
+        await expect(page.getByTestId('hud-wardrobe-new')).toHaveClass(/on/);
+        await expect(page.getByTestId('hud-wardrobe-new')).toBeVisible();
+      }
     }
 
     // Reload: still wearing the bought hat (saved profile), on the player in the world.
