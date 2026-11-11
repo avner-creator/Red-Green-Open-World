@@ -39,8 +39,13 @@ export const REPROMPT_STEPS = [12, 25, 45] as const;
 export const REPROMPT = REPROMPT_STEPS[0];
 /** Minimum seconds between stuck rescues, by how many came right before at the same spot. */
 export const RESCUE_GAPS = [0, 8, 12] as const;
-/** After this many rescues at the same spot (the camera turn did not help), Pip hops the hero free. */
+/** After this many rescues at the same spot (two did not help), Pip hops the hero free. */
 export const HOP_AFTER = 3;
+/** At most this many rescues in RESCUE_WINDOW seconds (QA round 5: 14 in a row at one counter). */
+export const RESCUE_CAP = 4;
+export const RESCUE_WINDOW = 60;
+/** "Come on!" re-invites while the hero does not follow a tour lead (backs off; then only barks). */
+export const INVITE_STEPS = [10, 20, 40] as const;
 /** At most one unsolicited hint/reaction per this many seconds. */
 export const HINT_GAP = UNSOLICITED_GAP;
 /** The intro can be skipped after this many seconds. */
@@ -113,6 +118,12 @@ export interface DirectorView {
   pushing?: boolean;
   /** Radians of look input this frame (mouse, right stick, drag). */
   look?: number;
+  /**
+   * An attraction game is running (the hero is under an external controller: Scoops, race,
+   * carnival, dino sumo…). Pip says nothing unsolicited and starts no lead or rescue; how-tos on
+   * entry and reactions to results are fine.
+   */
+  inGame?: boolean;
 }
 
 export interface LeadOptions {
@@ -178,6 +189,19 @@ export class Director {
   leadKind: LeadKind | null = null;
   /** Number of rescues so far this session (tests). */
   rescues = 0;
+  /** Number of hop-frees so far this session (tests). */
+  frees = 0;
+  /** Why the last lead changed target (debug: `__rgBuddy.lead().why`). */
+  why: string | null = null;
+  /** Places a lead gave up on this session (unreachable). */
+  readonly unreachable = new Set<Attraction>();
+  /** An attraction game is running (see DirectorView.inGame). */
+  quiet = false;
+  private rescueTimes: number[] = [];
+  private pendingLead = false;
+  private invites = 0;
+  private inviteT = 0;
+  private inviteBest = Infinity;
   private guiding = false;
   private lastChestHint = -99;
   private lastHint = -99;
@@ -249,6 +273,15 @@ export class Director {
     this.pushT = 0;
     this.wanderT = 0;
     this.rescues = 0;
+    this.frees = 0;
+    this.why = null;
+    this.unreachable.clear();
+    this.quiet = false;
+    this.rescueTimes = [];
+    this.pendingLead = false;
+    this.invites = 0;
+    this.inviteT = 0;
+    this.inviteBest = Infinity;
     this.reprompts = 0;
     this.lastRescue = -99;
     this.stuckRun = 0;
@@ -451,6 +484,7 @@ export class Director {
   }
 
   onTick(remaining: number): void {
+    if (this.quiet) return;
     if (!this.sunsetSaid && remaining <= 30 && remaining > 0) {
       this.sunsetSaid = true;
       this.say(line(SUNSET, PRIORITY.tip, 'sunset'));
@@ -472,6 +506,19 @@ export class Director {
     this.playT += dt;
     this.sinceProgress += dt;
     this.fed = false;
+    const wasQuiet = this.quiet;
+    this.quiet = !!v.inGame;
+    if (this.quiet) {
+      // Nothing builds up during a game (no "stuck" or "idle" line right after it).
+      this.sinceProgress = 0;
+      this.pushT = 0;
+      this.wanderT = 0;
+      this.inviteT = 0;
+    } else if (wasQuiet && this.pendingLead) {
+      // The game is over: now lead on to the next place.
+      this.pendingLead = false;
+      this.nextLead();
+    }
     this.stillT = v.onFoot && v.heroSpeed < 0.3 ? this.stillT + dt : 0;
     this.pushT = v.onFoot && v.pushing && v.heroSpeed < 2.5 && v.ride === 'none' ? this.pushT + dt : 0;
 
@@ -518,6 +565,10 @@ export class Director {
     if (this.step !== 'done') {
       this.introT += dt;
       this.stepT += dt;
+      if (this.quiet) {
+        this.lastPrompt = this.playT;
+        return;
+      }
       this.updateIntro(dt, v);
       return;
     }
@@ -539,7 +590,9 @@ export class Director {
       this.howTo(topic, PRIORITY.tip);
     }
 
-    if (v.busy || chestNear || this.chain.length) return;
+    if (v.busy || chestNear || this.chain.length || this.quiet) return;
+
+    if (this.reinvite(dt, v)) return;
 
     // One-time HUD tips, spread over the first minutes (quiet while Pip shows the way).
     if (!this.guiding && this.canHint()) {
@@ -742,6 +795,11 @@ export class Director {
   /** After an attraction: lead to the next fun one, or let the child choose. */
   private nextLead(): void {
     if (!this.guiding) return;
+    if (this.quiet) {
+      // Never start a lead (or say "follow me") in the middle of a game: after it.
+      this.pendingLead = true;
+      return;
+    }
     if (this.done.size >= LEAD_ATTRACTIONS) {
       this.guiding = false;
       this.stopLead();
@@ -751,15 +809,71 @@ export class Director {
       return;
     }
     const from = this.sink.anchor(this.at ?? FIRST_ATTRACTION);
-    const next = from ? this.nearestPlace(from, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p)) : null;
+    const next = from ? this.nearestPlace(from, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && !this.unreachable.has(p)) : null;
     if (!next) {
       this.guiding = false;
       this.stopLead();
       return;
     }
     this.leadToPlace(next, 'tour');
+    this.invites = 0;
+    this.inviteT = 0;
+    this.inviteBest = Infinity;
     this.lastHint = this.playT;
     this.say(line(follow(next), PRIORITY.tip, 'guide:follow'));
+  }
+
+  /**
+   * The lead could not get there (Pip made no progress for ~10 s: a wall, a fence, water). Never
+   * stand still: a tour goes on to the next-nearest fun place; any other lead just ends.
+   */
+  leadFailed(why: string): void {
+    const to = this.leadTo;
+    this.why = `${to ?? '?'}: ${why}`;
+    if (!to) return;
+    if (to === FIRST_ATTRACTION && this.step !== 'done') {
+      // The first stop of the story: try again from where everyone is now.
+      this.leadToPlace(to, 'tour');
+      return;
+    }
+    this.unreachable.add(to);
+    const kind = this.leadKind;
+    this.stopLead();
+    if (kind === 'tour' && this.guiding) {
+      const next = this.nearestPlace(this.sink.anchor(to) ?? { x: 0, z: 0 }, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && !this.unreachable.has(p));
+      if (next) {
+        this.leadToPlace(next, 'tour');
+        this.invites = 0;
+        this.inviteT = 0;
+        this.inviteBest = Infinity;
+      } else this.guiding = false;
+    }
+  }
+
+  /**
+   * A child who does not follow the tour lead gets invited again, a few times, further and further
+   * apart (Pip keeps coming back to fetch them meanwhile); then he just waits and barks.
+   */
+  private reinvite(dt: number, v: DirectorView): boolean {
+    if (!this.guiding || this.leadKind !== 'tour' || !this.leadTo || this.invites >= INVITE_STEPS.length) return false;
+    const p = this.sink.anchor(this.leadTo);
+    if (!p) return false;
+    const d = Math.hypot(p.x - v.hero.x, p.z - v.hero.z);
+    if (d < this.inviteBest - 2) {
+      this.inviteBest = d;
+      this.inviteT = 0;
+      return false;
+    }
+    this.inviteT += dt;
+    if (this.inviteT < INVITE_STEPS[this.invites] || !this.canHint()) return false;
+    this.invites++;
+    this.inviteT = 0;
+    const pick = this.bag('follow').next((l) => this.fresh(l.text));
+    this.sink.bark('bark');
+    if (!pick) return false;
+    this.lastHint = this.playT;
+    this.say(line({ ...follow(this.leadTo), text: pick.text }, PRIORITY.tip, 'guide:invite'));
+    return true;
   }
 
   private updateLead(dt: number, v: DirectorView): void {
@@ -795,6 +909,14 @@ export class Director {
     if (!why && this.guiding && this.step !== 'story' && this.wanderT > WANDER_SECONDS) why = 'wander';
     if (!why && this.guiding && this.stillT > IDLE_SECONDS && !v.nearAttraction && this.step !== 'story') why = 'idle';
     if (!why) return false;
+    // Cap: never a long run of rescues (the hop-free below should have helped by then).
+    this.rescueTimes = this.rescueTimes.filter((t) => this.playT - t < RESCUE_WINDOW);
+    if (this.rescueTimes.length >= RESCUE_CAP) {
+      this.pushT = 0;
+      this.wanderT = 0;
+      if (why === 'idle') this.stillT = -IDLE_SECONDS;
+      return false;
+    }
     this.pushT = 0;
     this.wanderT = 0;
     if (why === 'idle') this.stillT = -IDLE_SECONDS;
@@ -811,6 +933,7 @@ export class Director {
 
   private rescue(v: DirectorView, assist: boolean): void {
     this.rescues++;
+    this.rescueTimes.push(this.playT);
     this.lastRescue = this.playT;
     // Lead to the tour's target if there is one, else the nearest fun place not done yet.
     let to: Attraction | null = this.leadTo && this.leadKind === 'tour' ? this.leadTo : null;
@@ -825,6 +948,7 @@ export class Director {
       const p = this.sink.anchor(to);
       if (p && this.sink.hop) {
         this.sink.hop(p);
+        this.frees++;
         this.stuckRun = 0;
         this.stuckAt = null;
       }

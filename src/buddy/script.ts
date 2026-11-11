@@ -253,7 +253,7 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
   ],
   chest: [
     { text: 'A treasure chest! Its hidden key is inside the dotted circle.', icon: 'chest', extra: 'key', mood: 'curious' },
-    { text: 'Bring the key back and step on the shape the chest shows!', icon: 'key', extra: 'lock', mood: 'excited' },
+    { text: 'Bring the key back and step on the shape the chest shows!', icon: 'key', extra: 'paw', mood: 'excited' },
   ],
   workshop: [{ text: 'Pick silly parts for your buggy! Gems pay for them.', icon: 'gear', action: 'use', extra: 'wCar', mood: 'happy' }],
   secrets: [
@@ -287,7 +287,7 @@ export interface KeyNames {
 /** Chest context hints (repeat with a long cooldown while the hero stands at a locked chest). */
 export const CHEST = {
   findKey: { text: 'Find the key with your magic glasses!', icon: 'key', extra: 'chest', mood: 'curious', hold: 2.4 },
-  shape: { text: 'Step on the matching symbol!', icon: 'key', extra: 'lock', mood: 'curious', hold: 2.4 },
+  shape: { text: 'Step on the matching symbol!', icon: 'key', extra: 'paw', mood: 'curious', hold: 2.4 },
 } satisfies Record<string, ScriptLine>;
 
 export const needGems = (n: number): ScriptLine => ({ text: `Need ${n} more gems!`, icon: 'gem', extra: 'ticket', mood: 'worried' });

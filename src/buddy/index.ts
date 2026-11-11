@@ -125,7 +125,11 @@ export interface BuddyTestApi {
   /** What Pip's voice was asked to say, in order (clip id + text + clip/speech). */
   voice(): VoiceRequest[];
   /** Leading state: where Pip leads (attraction id) and the hop state. */
-  lead(): { to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
+  lead(): {
+    to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[];
+    /** Why the lead last re-planned or changed target (watchdog), re-plans of this lead, hop-frees, unreachable places. */
+    why: string | null; replans: number; frees: number; freedAt: [number, number] | null; unreachable: string[];
+  };
   /** Same as pressing T / tapping Pip: Pip says what to do next (a bubble, deterministically). */
   ask(): void;
 }
@@ -185,7 +189,68 @@ export function createBuddy(ctx: GameContext): GameSystem {
     }
   };
   const leader = new Leader(walkable);
+
+  /**
+   * Nearest free spot to stand (QA round 5, M1: stuck on the Scoops counter): on land above the
+   * water, on the bare ground (nothing on top of it), not steep, and no collider within 2 m
+   * (a physics shape query). Rings outwards from the hero; on each ring the side towards `toward`
+   * first. Null when nothing is free within 14 m.
+   */
+  const freeSpot = (toward: V2): { x: number; y: number; z: number } | null => {
+    const h = ctx.player.position;
+    const R = ctx.physics.rapier;
+    let shape: InstanceType<typeof R.Cylinder> | null = null;
+    try {
+      shape = new R.Cylinder(0.9, 2);
+    } catch {
+      shape = null;
+    }
+    const rot = { x: 0, y: 0, z: 0, w: 1 };
+    const crowded = (x: number, y: number, z: number): boolean => {
+      if (!shape) return false;
+      try {
+        const hit = ctx.physics.world.intersectionWithShape({ x, y: y + 1.1, z }, rot, shape, undefined, undefined, undefined, undefined, (c) => {
+          if (c.isSensor() || c.shapeType() === R.ShapeType.HeightField) return false;
+          const b = c.parent();
+          return !b || b.isFixed();
+        });
+        return !!hit;
+      } catch {
+        return false;
+      }
+    };
+    const base = Math.atan2(toward.x - h.x, toward.z - h.z);
+    const N = 16;
+    for (const r of [2.5, 3.5, 5, 6.5, 8, 10, 12, 14]) {
+      for (let i = 0; i < N; i++) {
+        // 0, +1, -1, +2, -2 … steps round from the way out.
+        const k = i === 0 ? 0 : Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+        const a = base + (k * Math.PI * 2) / N;
+        const x = h.x + Math.sin(a) * r;
+        const z = h.z + Math.cos(a) * r;
+        if (!ctx.world.isLand(x, z)) continue;
+        const gy = ctx.world.heightAt(x, z);
+        if (gy < ctx.world.waterLevel + 0.2) continue;
+        if (Math.abs(ctx.world.heightAt(x + 0.8, z) - ctx.world.heightAt(x - 0.8, z)) > 0.7) continue;
+        if (Math.abs(ctx.world.heightAt(x, z + 0.8) - ctx.world.heightAt(x, z - 0.8)) > 0.7) continue;
+        let top = gy;
+        try {
+          raycaster.origin.set(x, gy + 8, z);
+          const hit = ctx.physics.raycast(raycaster.origin, raycaster.dir, 12);
+          if (hit) top = hit.point.y;
+        } catch {
+          /* physics not ready */
+        }
+        if (Math.abs(top - gy) > 0.35) continue; // something stands there (a counter, a roof)
+        if (crowded(x, gy, z)) continue;
+        return { x, y: gy, z };
+      }
+    }
+    return null;
+  };
   let leadOut: LeadOut | null = null;
+  /** Where the last hop-free put the hero (tests). */
+  let freedAt: V2 | null = null;
   /** Seconds left of the stuck-at-a-fence camera help. */
   let assistT = 0;
   let assistOn = false;
@@ -315,11 +380,22 @@ export function createBuddy(ctx: GameContext): GameSystem {
     hop(toward) {
       const p = ctx.player;
       if (p.mode !== 'walk') return;
-      const dx = toward.x - p.position.x;
-      const dz = toward.z - p.position.z;
-      const d = Math.hypot(dx, dz) || 1;
-      // About 5 m towards the way out, 1.8 m high: over a low fence, a comic boing.
-      p.launch(new THREE.Vector3((dx / d) * 6, 9, (dz / d) * 6));
+      const spot = freeSpot(toward);
+      if (spot) {
+        // Two rescues did not free the hero: pop them onto the nearest free ground, facing Pip,
+        // with a little hop (a comic boing). Pip pops in beside them.
+        const yawToPip = Math.atan2(pos.x - spot.x, pos.z - spot.z);
+        p.teleport(new THREE.Vector3(spot.x, spot.y + 0.4, spot.z), yawToPip);
+        p.launch(new THREE.Vector3(0, 4.5, 0));
+        freedAt = { x: spot.x, z: spot.z };
+        placeNearHero();
+      } else {
+        const dx = toward.x - p.position.x;
+        const dz = toward.z - p.position.z;
+        const d = Math.hypot(dx, dz) || 1;
+        // Nothing free nearby: about 5 m towards the way out, 1.8 m high, over a low fence.
+        p.launch(new THREE.Vector3((dx / d) * 6, 9, (dz / d) * 6));
+      }
       voice.bark('yip');
       cheerT = Math.max(cheerT, 1);
     },
@@ -646,6 +722,11 @@ export function createBuddy(ctx: GameContext): GameSystem {
     const dHero = Math.hypot(pos.x - h.x, pos.z - h.z);
     leadOut = leader.active && p.mode === 'walk' ? leader.update(dt, { x: pos.x, z: pos.z }, h) : null;
     if (leadOut?.state === 'arrived') leadOut = null;
+    if (leader.gaveUp) {
+      // Watchdog: this place cannot be reached; the director picks the next-nearest one.
+      director.leadFailed(leader.why ?? 'unreachable');
+      leadOut = null;
+    }
     // Talking but off screen (not leading): come back into view so the bubble sits on Pip.
     if (queue.current && !pipOnScreen && !leadOut) offscreenT += dt;
     else offscreenT = 0;
@@ -674,7 +755,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
       target = { x: pos.x, z: pos.z };
       maxSpeed = 0;
       pose = p.position.y - groundAt(pos.x, pos.z, pos.y + 1) > 8 ? 'cower' : 'sit';
-    } else if (onTramp && ta) {
+    } else if (onTramp && ta && !leadOut) {
+      // (Never while leading on: the hero on the trampoline rim follows Pip, so Pip must go. B1.)
       const d = Math.hypot(pos.x - ta.position.x, pos.z - ta.position.z) || 1;
       const r = TRAMPOLINE_MAT + 0.9;
       target = { x: ta.position.x + ((pos.x - ta.position.x) / d) * r, z: ta.position.z + ((pos.z - ta.position.z) / d) * r };
@@ -859,7 +941,19 @@ export function createBuddy(ctx: GameContext): GameSystem {
       history: () => history.slice(),
       ask: () => ask(),
       voice: () => voice.requests.slice(),
-      lead: () => ({ to: director.leadTo, dest: leader.dest ? [leader.dest.x, leader.dest.z] : null, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
+      lead: () => ({
+        to: director.leadTo,
+        dest: leader.dest ? [leader.dest.x, leader.dest.z] : null,
+        state: leadOut?.state ?? null,
+        rescues: director.rescues,
+        guiding: director.isGuiding,
+        done: [...director.done],
+        why: director.why ?? leader.why,
+        replans: leader.replans,
+        frees: director.frees,
+        freedAt: freedAt ? [freedAt.x, freedAt.z] : null,
+        unreachable: [...director.unreachable],
+      }),
     };
   }
 
@@ -904,6 +998,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
           remaining: ctx.session.state.remaining,
           hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
           busy: queue.busy,
+          inGame: ctx.player.mode === 'external',
         };
         director.update(dt, view);
         queue.update(dt);
