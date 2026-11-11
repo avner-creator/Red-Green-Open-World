@@ -39,7 +39,7 @@ try {
       await setKeys(keys);
       await step(4);
       t += 4;
-      if (t >= next) { await shot(`${tag}-t${Math.round(t / 60)}`); next += 120; }
+      if (t >= next) { await shot(`${tag}-t${Math.round(t / 60)}`); next += 240; }
     }
     await release();
     inf = await info();

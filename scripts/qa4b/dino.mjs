@@ -70,7 +70,7 @@ try {
         const pts = s.points.join(',');
         if (pts !== lastPts) { console.log(`[${tag}] t=${(t / 60).toFixed(1)} points ${pts} clock ${s.clock.toFixed(1)} me ${s.px.toFixed(1)},${s.pz.toFixed(1)} states ${s.dinos.map((d) => d[2]).join('/')}`); lastPts = pts; }
       }
-      if (t >= nextShot) { await shot(`${tag}-t${Math.round(t / 60)}`); nextShot += 90; }
+      if (t >= nextShot) { await shot(`${tag}-t${Math.round(t / 60)}`); nextShot += 180; }
     }
     await release();
     console.log(`[${tag}] ended after ${(t / 60).toFixed(1)} s (play ${((t - firstPlay) / 60).toFixed(1)} s) phase=${await ds('phase')} charge-chunks ${charges} wallet ${await page.evaluate(() => window.__rg.ctx.profile.wallet)}`);
