@@ -12,7 +12,9 @@ export type IconId =
   | 'iTrampoline' | 'iBounce' | 'iCar' | 'iBalloon' | 'iTarget' | 'iRocket'
   | 'iHorse' | 'iBungee' | 'iSilly' | 'iLake' | 'iLighthouse'
   // Carnival Island attractions.
-  | 'iCarnival' | 'iIceCream' | 'iBubble' | 'iDino' | 'iFlag' | 'iFoam' | 'iPlane' | 'iDragon';
+  | 'iCarnival' | 'iIceCream' | 'iBubble' | 'iDino' | 'iFlag' | 'iFoam' | 'iPlane' | 'iDragon'
+  // Glasses-play mini-games: one family (magic-glasses mark on a yellow-ringed badge), one symbol each.
+  | 'iGlowflies' | 'iOddone' | 'iLineup' | 'iToys' | 'iGates' | 'iDotsigns';
 export type PanelId =
   | 'tramp1' | 'tramp2' | 'tramp3'
   | 'bounce1' | 'bounce2'
@@ -26,10 +28,10 @@ export type PictoId = IconId | PanelId;
 
 /**
  * Atlas width (and the unit for UV maths); the atlas is ATLAS_SIZE × ATLAS_H pixels: six 512 px
- * rows of panels and icons, plus one 256 px row of Carnival Island icons at the bottom.
+ * rows of panels and icons, plus a 256 px row of Carnival Island icons and one of glasses-play icons.
  */
 export const ATLAS_SIZE = 2048;
-export const ATLAS_H = 3328;
+export const ATLAS_H = 3584;
 const CELL = 512;
 const COLS = ATLAS_SIZE / CELL;
 
@@ -43,6 +45,8 @@ const ICON_ORDER: IconId[] = [
 ];
 /** Carnival Island icons: one 256 px row under the 512 px grid. */
 const ICON_ROW2: IconId[] = ['iCarnival', 'iIceCream', 'iBubble', 'iDino', 'iFlag', 'iFoam', 'iPlane', 'iDragon'];
+/** Glasses-play icons: a second 256 px row. */
+const ICON_ROW3: IconId[] = ['iGlowflies', 'iOddone', 'iLineup', 'iToys', 'iGates', 'iDotsigns'];
 const GRID_H = 6 * CELL;
 
 /** Pixel rectangles [x, y, size] in the atlas (y down, canvas convention). */
@@ -56,6 +60,7 @@ export const PICTO_RECTS: Readonly<Record<PictoId, readonly [number, number, num
     r[id] = [(cell % COLS) * CELL + (j % 2) * 256, Math.floor(cell / COLS) * CELL + Math.floor(j / 2) * 256, 256];
   });
   ICON_ROW2.forEach((id, i) => (r[id] = [i * 256, GRID_H, 256]));
+  ICON_ROW3.forEach((id, i) => (r[id] = [i * 256, GRID_H + 256, 256]));
   return r;
 })();
 
@@ -716,7 +721,136 @@ function dragon(c: C2, x: number, y: number, s: number): void {
   c.restore();
 }
 
+// ── Glasses-play family: badge with a yellow inner ring and a magic-glasses mark on top ──
+
+function sparkle(c: C2, x: number, y: number, r: number, col = YEL): void {
+  const k = r * 0.28;
+  poly(c, [x, y - r, x + k, y - k, x + r, y, x + k, y + k, x, y + r, x - k, y + k, x - r, y, x - k, y - k], col);
+}
+
+function glassesBg(c: C2): void {
+  iconBg(c);
+  ellipse(c, 50, 50, 39.5, 39.5, null, YEL, 2.6);
+  // Magic glasses: two round lenses and a bridge, one lens filled (the "special" eye), a sparkle.
+  ellipse(c, 40, 22.5, 6.6, 6.6, null, WHITE, 3);
+  ellipse(c, 60, 22.5, 6.6, 6.6, YEL, WHITE, 3);
+  line(c, [46.5, 21, 53.5, 21], 2.6);
+  line(c, [33.4, 21.5, 29.5, 19], 2.6);
+  line(c, [66.6, 21.5, 70.5, 19], 2.6);
+  sparkle(c, 73, 28, 4.2, WHITE);
+}
+
+function paw(c: C2, x: number, y: number, s: number, rot: number, col = WHITE): void {
+  c.save();
+  c.translate(x, y);
+  c.rotate(rot);
+  c.scale(s, s);
+  ellipse(c, 0, 2.5, 5.2, 4.4, col);
+  for (const [tx, ty] of [[-5.6, -3.4], [-2, -6.6], [2, -6.6], [5.6, -3.4]] as [number, number][]) disc(c, tx, ty, 2.1, col);
+  c.restore();
+}
+
+function arch(c: C2, x: number, y: number, w: number, h: number, col: string, lw: number): void {
+  c.beginPath();
+  c.moveTo(x - w / 2, y);
+  c.lineTo(x - w / 2, y - h + w / 2);
+  c.arc(x, y - h + w / 2, w / 2, Math.PI, 0);
+  c.lineTo(x + w / 2, y);
+  c.lineWidth = lw;
+  c.strokeStyle = col;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.stroke();
+}
+
 const DRAW: Record<PictoId, (c: C2) => void> = {
+  // ── glasses-play icons ──
+  iGlowflies: (c) => {
+    glassesBg(c);
+    // A firefly: glowing tail (big yellow disc with a white core), body, two wings, antennae.
+    disc(c, 42, 66, 13, YEL);
+    disc(c, 42, 66, 6.5, WHITE);
+    ellipse(c, 56, 54, 9, 7, WHITE);
+    disc(c, 66, 46, 5.5, WHITE);
+    line(c, [68, 41, 72, 33], 2.2);
+    line(c, [70, 43, 78, 38], 2.2);
+    c.save();
+    c.translate(54, 46);
+    c.rotate(-0.5);
+    ellipse(c, -4, -6, 6, 11, null, WHITE, 2.6);
+    ellipse(c, 6, -7, 5, 9.5, null, WHITE, 2.6);
+    c.restore();
+    sparkle(c, 24, 48, 5);
+    sparkle(c, 72, 72, 4.5);
+    sparkle(c, 28, 80, 3.4, WHITE);
+  },
+  iOddone: (c) => {
+    glassesBg(c);
+    // Three shapes, one different (the yellow star), with a pointer under it.
+    disc(c, 27, 54, 9.5, WHITE);
+    disc(c, 50, 54, 9.5, WHITE);
+    star(c, 73, 54, 13);
+    arrow(c, 73, 86, 73, 70, 4.5, WHITE);
+    line(c, [18, 70, 36, 70], 3.4, GREY);
+    line(c, [41, 70, 59, 70], 3.4, GREY);
+  },
+  iLineup: (c) => {
+    glassesBg(c);
+    // A soap bubble with a magic hoop lining up around it.
+    ellipse(c, 50, 60, 12, 12, null, WHITE, 3.4);
+    c.beginPath();
+    c.arc(50, 60, 7.5, Math.PI * 1.05, Math.PI * 1.45);
+    c.lineWidth = 3;
+    c.strokeStyle = WHITE;
+    c.lineCap = 'round';
+    c.stroke();
+    ellipse(c, 50, 60, 21, 21, null, YEL, 5);
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as [number, number][]) line(c, [50 + dx * 25, 60 + dy * 25, 50 + dx * 31, 60 + dy * 31], 4, YEL);
+    sparkle(c, 25, 38, 4.5, WHITE);
+  },
+  iToys: (c) => {
+    glassesBg(c);
+    // A paw-print trail leading up to a teddy.
+    paw(c, 24, 82, 1.0, 0.7);
+    paw(c, 36, 68, 1.0, 0.5);
+    paw(c, 30, 52, 1.0, 0.2);
+    // Teddy head: ears, face, muzzle, eyes.
+    disc(c, 56, 44, 6, YEL);
+    disc(c, 76, 44, 6, YEL);
+    disc(c, 66, 58, 15, YEL);
+    ellipse(c, 66, 64, 7, 5.5, WHITE);
+    disc(c, 66, 62.5, 2.4, INK);
+    disc(c, 60, 54, 2.2, INK);
+    disc(c, 72, 54, 2.2, INK);
+    sparkle(c, 84, 72, 4.5, WHITE);
+  },
+  iGates: (c) => {
+    glassesBg(c);
+    // Three arches; the middle one is the right one (hero runs through it).
+    arch(c, 25, 76, 15, 30, GREY, 4.2);
+    arch(c, 50, 76, 17, 36, YEL, 5.2);
+    arch(c, 75, 76, 15, 30, GREY, 4.2);
+    line(c, [14, 77, 86, 77], 3, WHITE);
+    person(c, 50, 63, 0.42, 'walk');
+    arrow(c, 50, 92, 50, 82, 3.4, WHITE);
+  },
+  iDotsigns: (c) => {
+    glassesBg(c);
+    // A disc of dots; the dots inside a hidden star are bright and bigger.
+    const inStar = (x: number, y: number): boolean => {
+      const a = Math.atan2(y - 58, x - 50) + Math.PI / 2;
+      const k = Math.abs((((a / (Math.PI / 5)) % 2) + 2) % 2 - 1);
+      return Math.hypot(x - 50, y - 58) < 22 - k * 11;
+    };
+    for (let y = 36; y <= 82; y += 6.2) {
+      for (let x = 24; x <= 78; x += 6.2) {
+        const px = x + (Math.round((y - 36) / 6.2) % 2) * 3.1;
+        if (Math.hypot(px - 50, y - 58) > 26) continue;
+        const hit = inStar(px, y);
+        disc(c, px, y, hit ? 2.7 : 2.0, hit ? YEL : GREY);
+      }
+    }
+  },
   // ── icons ──
   iTrampoline: (c) => {
     iconBg(c);

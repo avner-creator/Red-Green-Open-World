@@ -5,7 +5,9 @@ import { Batcher } from '../../src/world/batch';
 import { Colliders, type Kit } from '../../src/world/props';
 import { buildContent, type Content } from '../../src/world/content';
 import { ANCHORS, LAUNCH_NET } from '../../src/world/layout';
-import { ATTRACTIONS, FINGERPOSTS, roadEdgeDistance } from '../../src/world/wayfinding';
+import { ATTRACTIONS, FINGERPOSTS, GLASSES_WAY, roadEdgeDistance } from '../../src/world/wayfinding';
+import { wayTarget } from '../../src/world/attractions';
+import { FIXED_SITES } from '../../src/activities/glasses/sites';
 import { PICTO_RECTS, ATLAS_H, ATLAS_SIZE, type PictoId } from '../../src/world/pictograms';
 
 let t: TerrainData;
@@ -27,7 +29,7 @@ describe('wayfinding', () => {
     const arms = content.wayfinding.arms;
     expect(arms.length).toBe(FINGERPOSTS.reduce((n, p) => n + p.targets.length, 0));
     for (const a of arms) {
-      const t2 = ANCHORS[a.target];
+      const t2 = wayTarget(a.target);
       const want = Math.atan2(t2.x - a.x, t2.z - a.z);
       expect(angleDiff(a.yaw, want) * (180 / Math.PI), `${a.target} from ${a.x},${a.z}`).toBeLessThan(5);
     }
@@ -37,9 +39,9 @@ describe('wayfinding', () => {
     const targets = [...FINGERPOSTS[0].targets, ...FINGERPOSTS[1].targets];
     for (const att of ATTRACTIONS) expect(targets).toContain(att.anchor);
     // The Carnival Island post: arms in a row point at least 40° apart, so no two arms overlap.
-    for (const p of FINGERPOSTS.slice(1, 2)) {
+    for (const p of FINGERPOSTS.slice(1, 3)) {
       for (const row of p.rows ?? []) {
-        const yaws = row.map((t) => Math.atan2(ANCHORS[t].x - p.x, ANCHORS[t].z - p.z));
+        const yaws = row.map((t) => Math.atan2(wayTarget(t).x - p.x, wayTarget(t).z - p.z));
         for (let i = 0; i < yaws.length; i++) for (let j = i + 1; j < yaws.length; j++) expect(angleDiff(yaws[i], yaws[j]) * (180 / Math.PI), row.join()).toBeGreaterThan(40);
       }
       expect(p.rows?.flat().sort()).toEqual([...p.targets].sort());
@@ -74,7 +76,23 @@ describe('wayfinding', () => {
       expect(placed.some((p) => p.kind === 'beacon' && p.name === att.anchor), att.anchor).toBe(true);
       if (att.panels.length) expect(placed.some((p) => p.kind === 'board' && p.name === att.anchor), att.anchor).toBe(true);
     }
-    expect(content.wayfinding.beacons).toHaveLength(ATTRACTIONS.length);
+    expect(content.wayfinding.beacons).toHaveLength(ATTRACTIONS.length + GLASSES_WAY.length);
+  });
+
+  it('every glasses-play site has a beacon outside its circle, a plaza-post arm and its own icon', () => {
+    expect(GLASSES_WAY.map((g) => g.id).sort()).toEqual(FIXED_SITES.map((f) => f.id).sort());
+    const placed = content.wayfinding.placed;
+    const post = FINGERPOSTS[2];
+    for (const g of GLASSES_WAY) {
+      const b = placed.find((p) => p.kind === 'beacon' && p.name === g.id);
+      expect(b, g.id).toBeDefined();
+      expect(Math.hypot(b!.x - g.x, b!.z - g.z), g.id).toBeGreaterThan(g.r + 1.5);
+      expect(post.targets, g.id).toContain(g.id);
+      // Not inside another glasses site either.
+      for (const o of GLASSES_WAY) if (o !== g) expect(Math.hypot(b!.x - o.x, b!.z - o.z), `${g.id} beacon in ${o.id}`).toBeGreaterThan(o.r + 1);
+    }
+    const icons = [...ATTRACTIONS.map((a) => a.icon), ...GLASSES_WAY.map((g) => g.icon)];
+    expect(new Set(icons).size).toBe(icons.length);
   });
 
   it('rocket pads sit next to Bouncy Park with a ~60 m flight to a flat landing spot', () => {

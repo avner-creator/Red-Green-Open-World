@@ -18,6 +18,10 @@ import { buildWayfinding, roadEdgeDistance, type Wayfinding } from './wayfinding
 import { buildOuterAreas, type OuterAreas } from './outer';
 import { dressPaths } from './outer/paths';
 import { buildSiteDressing, inSiteClearZone, raceCutDistance, siteKeepouts } from './sites';
+import { GLASSES_WAY } from './attractions';
+
+/** Inside a glasses-play site's clear circle (+ margin): the mini-games' startup probe wants it empty. */
+const inGlassesSite = (x: number, z: number, m: number): boolean => GLASSES_WAY.some((g) => Math.hypot(x - g.x, z - g.z) < g.r + m);
 
 export interface Content {
   trees: ManualTree[];
@@ -53,6 +57,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   // Road dressing stays off paved areas, area footprints and gem/chest spots.
   const blocked = (x: number, z: number): boolean =>
     near(x, z, 2) ||
+    inGlassesSite(x, z, 2.5) ||
     raceCutDistance(x, z) < 3 ||
     keepouts.some((k) =>
       k.r !== undefined ? Math.hypot(x - k.x, z - k.z) < k.r + 0.5 : Math.abs(x - k.x) < (k.hx ?? 0) + 0.5 && Math.abs(z - k.z) < (k.hz ?? 0) + 0.5,
@@ -69,7 +74,7 @@ export function buildContent(kit: Kit, terrain: TerrainData, addMeshCollider: (m
   for (const s of [...gemSpots, ...chestSpots]) keepouts.push({ x: s.x, z: s.z, r: 1.6 });
   // Hand-placed trees, bushes and rocks give way to the sites and stay off the roads (race line).
   const trees = [...villageTrees, ...park.trees, ...areas.trees, ...core.trees, ...outer.trees, ...roadTrees, ...pathTrees].filter(
-    (t) => !inSiteClearZone(t.x, t.z, 1) && roadEdgeDistance(terrain.roads, t.x, t.z) > 1,
+    (t) => !inSiteClearZone(t.x, t.z, 1) && !inGlassesSite(t.x, t.z, 3) && roadEdgeDistance(terrain.roads, t.x, t.z) > 1,
   );
   return { trees, keepouts, gemSpots, chestSpots, wayfinding, outer };
 }
