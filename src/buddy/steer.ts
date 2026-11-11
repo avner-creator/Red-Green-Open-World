@@ -9,7 +9,7 @@ export interface V2 {
 
 export const FOLLOW = {
   /** Sideways offset from the hero (m). */
-  side: 1.05,
+  side: 1.35,
   /** How far ahead Pip trots while the hero walks (m, at full walking speed). */
   lead: 1.6,
   /** Closer than this to the slot = arrived. */

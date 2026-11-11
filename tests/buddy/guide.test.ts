@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { Director, STUCK_PUSH_SECONDS, WELCOME_SECONDS } from '../../src/buddy/director';
+import { Director, STUCK_PUSH_SECONDS } from '../../src/buddy/director';
 import type { DirectorSink, DirectorView } from '../../src/buddy/director';
 import { LEAD, Leader } from '../../src/buddy/guide';
 import type { V2 } from '../../src/buddy/steer';
@@ -92,7 +92,7 @@ describe('Pip never leads towards layer objects', () => {
       for (let t = 0; t < s; t += 1 / 30) d.update(1 / 30, v(o));
     };
     d.begin(true);
-    run(WELCOME_SECONDS + 0.2, {});
+    run(1, {});
     run(2, { heroSpeed: 5, look: 0.2 });
     d.onGem({}); // a gem pickup must not steer Pip anywhere
     run(STUCK_PUSH_SECONDS + 1, { hero: { x: 98, z: -40 }, heroSpeed: 0, pushing: true });

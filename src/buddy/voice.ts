@@ -15,7 +15,10 @@ import type { Mood } from './dialogue';
 import { ClipBank } from './clips';
 import { createSpeaker } from './speech';
 import { clipId } from './voiceLines';
-import { INTRO } from './script';
+import { HOWTO, STORY } from './script';
+
+/** Clips fetched first after the first gesture: the welcome story, then the trampoline how-to. */
+const FIRST_CLIPS = [...STORY, ...HOWTO.trampoline].map((l) => l.text);
 
 export type BarkKind = 'yip' | 'bark' | 'whine' | 'pant' | 'sniff' | 'lick';
 
@@ -31,6 +34,11 @@ export interface Voice {
   bark(kind: BarkKind): void;
   /** Stop speech now (a line got interrupted). */
   hush(): void;
+  /**
+   * True when Pip will say this line out loud with his recorded voice: voice level above 0, audio
+   * unlocked and a clip for it exists. Then the bubble shows only pictograms.
+   */
+  audible(text: string): boolean;
   /** Seconds of the recorded clip for this text, once the manifest is loaded (bubble sync). */
   clipSeconds(text: string): number | null;
   /** Everything it was asked to say (kept in test mode only). */
@@ -65,11 +73,14 @@ const baseUrl = (): string => {
 };
 
 /** Test-mode voice: silent, records each request (and whether a clip exists for it). */
-function recorder(): Voice {
+function recorder(settings: SettingsApi): Voice {
   const bank = new ClipBank(baseUrl());
+  void bank.load();
   const requests: VoiceRequest[] = [];
   return {
     requests,
+    // Test mode stands in for an unlocked device: audible when the voice is on and a clip exists.
+    audible: (text) => pipVoiceLevel(settings.get()) > 0 && !!bank.info(text),
     speak(text) {
       void bank.load();
       if (requests.length >= 200) return;
@@ -118,8 +129,8 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
     typeof window === 'undefined' ? null : ((window as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor }).AudioContext ??
       (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext ??
       null);
-  const noop: Voice = { speak() {}, bark() {}, hush() {}, clipSeconds: () => null, requests: [], dispose() {} };
-  if (opts.testMode) return recorder();
+  const noop: Voice = { speak() {}, bark() {}, hush() {}, audible: () => false, clipSeconds: () => null, requests: [], dispose() {} };
+  if (opts.testMode) return recorder(opts.settings);
   if (!ctor) return noop;
 
   let ac: AudioContext | null = null;
@@ -144,7 +155,7 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
   const unlock = (): void => {
     speaker.unlock();
     // Clips load only now (after a gesture, i.e. after boot): the intro first, then the rest.
-    void bank.prefetch(Object.values(INTRO).map((l) => l.text));
+    void bank.prefetch(FIRST_CLIPS);
     try {
       if (!ac) {
         ac = new ctor();
@@ -334,6 +345,10 @@ export function createVoice(opts: { settings: SettingsApi; events: EventBus; tes
 
   return {
     requests: [],
+    audible: (text) => {
+      const s = opts.settings.get();
+      return talkLevel(s) > 1e-4 && !!ready() && !!bank.info(text);
+    },
     clipSeconds: (text) => bank.info(text)?.dur ?? null,
     speak(text, mood) {
       stopTalking();

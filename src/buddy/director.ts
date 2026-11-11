@@ -1,58 +1,56 @@
 /**
- * Story director (no DOM, no three.js): the opening tour for a new player, "welcome back" for a
- * returning one, leading the way to the first attractions, rescues (stuck at a fence, wandering
- * off, standing around), one-time context tips, the trampoline count and reactions.
+ * Story director (no DOM, no three.js): the spoken welcome story for a new player, "welcome back"
+ * for a returning one, leading the way to the first attractions, a spoken how-to at every
+ * attraction (first arrival, and again on request), the economy explained at the moment it
+ * matters, rescues (stuck at a fence, wandering off, standing around), one-time HUD tips, the
+ * trampoline count and reactions.
  * It only decides WHAT Pip says and WHERE he leads; `index.ts` turns that into motion, voice and
  * the bubble. Unit-tested in tests/buddy/director.test.ts and tests/buddy/guide.test.ts.
  *
  * RULES
- *  - Every intro step waits for the action it teaches (move, look, jump) and re-prompts; no timer
- *    pushes the tour on. Place tips ("Jump!") only fire inside that attraction's radius.
+ *  - The story runs while the child can already move; it is skippable. How-tos only fire inside
+ *    that attraction's radius (or when its use prompt is focused).
  *  - Pip leads only to both-eye places (attraction anchors from `places()` / `anchor()`); he never
- *    goes towards, faces or points at a weak-eye or strong-eye object. The sink has no way to ask
- *    for a gem, key or lock position on purpose.
- *  - Never nagging: at most one unsolicited hint every HINT_GAP seconds; context hints (a chest
- *    right here, a place's how-to) win over generic tips; leading stops after LEAD_ATTRACTIONS.
+ *    goes towards, faces or points at a weak-eye or strong-eye object. How-tos explain rules, never
+ *    positions. The sink has no way to ask for a gem, key or lock position on purpose.
+ *  - Restraint: reactions come from shuffle-bag pools (≥ 8 lines), only for firsts, milestones and
+ *    new bests; at most one unsolicited line every UNSOLICITED_GAP seconds; no line is repeated
+ *    within REPEAT_SECONDS (else Pip just barks).
  */
 import type { Line } from './dialogue';
 import { PRIORITY } from './dialogue';
 import type { Goal } from './goals';
 import type { BuddyStore } from './store';
-import type { KeyNames, ScriptLine, TipId } from './script';
-import { ATTRACTIONS, CHEST, CHUTE, COUNT, IDLE, INTRO, RESCUE, needGems, REACT, RETURNING, skillTip, suggest, TIPS, follow, line } from './script';
+import type { EconId, HowToTopic, KeyNames, PoolId, ScriptLine, TipId } from './script';
+import {
+  CHEST, CHUTE, COUNT, ECON, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, STORY_GLASSES_BEAT, SUNSET, TIPS,
+  follow, line, needGems, skillTip, suggest,
+} from './script';
+import { MEGA_GAP, Memory, ShuffleBag, UNSOLICITED_GAP } from './pools';
 import type { V2 } from './steer';
 import { GLASSES_ATTRACTIONS, type Attraction, type GlassesAttraction } from './types';
 
 const isGlasses = (a: Attraction): a is GlassesAttraction => (GLASSES_ATTRACTIONS as readonly string[]).includes(a);
 
-export type IntroStep = 'welcome' | 'move' | 'look' | 'glasses' | 'follow' | 'jump' | 'done';
+export type IntroStep = 'story' | 'follow' | 'jump' | 'done';
 
-/** Seconds the welcome line stays before "walk" (the only step that moves on by time). */
-export const WELCOME_SECONDS = 2.6;
-/** Seconds of "magic glasses" show before Pip leads on. */
-export const GLASSES_SECONDS = 3.6;
-/** Metres the hero must walk to finish the "move" step. */
-export const MOVE_METRES = 4;
-/** Radians of looking around to finish the "look" step. */
-export const LOOK_RADIANS = 0.6;
-/** "Look" re-prompts at most this many times, then the tour moves on (never stalls on it). */
-export const LOOK_PROMPTS = 2;
 /** Seconds between re-prompts of the same step. */
-export const REPROMPT = 12;
-/** At most one unsolicited hint per this many seconds. */
-export const HINT_GAP = 12;
+export const REPROMPT = 15;
+/** At most one unsolicited hint/reaction per this many seconds. */
+export const HINT_GAP = UNSOLICITED_GAP;
 /** The intro can be skipped after this many seconds. */
 export const SKIP_AFTER = 2;
+/** A story beat that never finished (queue trouble) moves on after this many seconds. */
+const BEAT_MAX = 14;
 /** Pressing move without getting anywhere this long = stuck (fence, wall). */
 export const STUCK_PUSH_SECONDS = 3;
 /** Walking away from every attraction this long = lost. */
 export const WANDER_SECONDS = 15;
 /** "Away from everything" = farther than this from the nearest attraction (m). */
 export const WANDER_RADIUS = 24;
-export const STUCK_SECONDS = 40;
-export const IDLE_SECONDS = 15;
-export const REACT_COOLDOWN = 6;
-export const CHEST_HINT_COOLDOWN = 18;
+export const STUCK_SECONDS = 45;
+export const IDLE_SECONDS = 20;
+export const CHEST_HINT_COOLDOWN = 45;
 /** Generic tips stay quiet this long after a chest hint. */
 const CHEST_QUIET = 8;
 /** Pip leads a new player to this many attractions, then lets them choose. */
@@ -62,9 +60,11 @@ export const DONE_AT_SECONDS = 10;
 /** Leaving the trampoline this long during the "jump" step = lead back to it. */
 const JUMP_AWAY_SECONDS = 6;
 /** Seconds of play when Pip first (and again) points at the nearest magic-glasses game nobody tried. */
-export const GLASSES_NUDGE_AT = [50, 140] as const;
+export const GLASSES_NUDGE_AT = [60, 150] as const;
 /** How long Pip waits at the game to show where it is. */
 const GLASSES_LEAD_SECONDS = 9;
+/** Gem pickups between two "gem" cheers. */
+export const GEM_MILESTONE = 5;
 
 /** The first attraction of the tour (free, fun, no button needed but jump). */
 export const FIRST_ATTRACTION: Attraction = 'trampoline';
@@ -76,11 +76,12 @@ export const FUN_ATTRACTIONS: readonly Attraction[] = [
 
 /** When each one-time HUD tip may show (seconds of play), in order. */
 export const TIP_SCHEDULE: readonly { id: TipId; at: number }[] = [
-  { id: 'missions', at: 18 },
-  { id: 'timer', at: 38 },
-  { id: 'skill', at: 55 },
-  { id: 'help', at: 80 },
-  { id: 'pip', at: 105 },
+  { id: 'missions', at: 25 },
+  { id: 'timer', at: 45 },
+  { id: 'skill', at: 70 },
+  { id: 'arrows', at: 95 },
+  { id: 'help', at: 120 },
+  { id: 'pip', at: 150 },
 ];
 
 export type RideView = 'none' | 'basket' | 'freefall' | 'canopy' | 'vehicle' | 'other';
@@ -94,6 +95,8 @@ export interface DirectorView {
   ride: RideView;
   /** Attraction the hero is standing at, if any. */
   nearAttraction: Attraction | null;
+  /** The how-to topic of the use prompt the hero is at (a booth, a vault…), if any. */
+  topic?: HowToTopic | null;
   /** Hint for the chest the hero stands next to (null = no chest near / nothing to say). */
   chestHint: ChestHint;
   keys: KeyNames;
@@ -138,6 +141,14 @@ export interface DirectorSink {
 
 type LeadKind = 'tour' | 'rescue' | 'glasses';
 
+interface ChainItem {
+  line: Line;
+  /** Runs when the line starts. */
+  start?: () => void;
+  /** The how-to topic it belongs to (dropped when the hero walks away); null = story. */
+  topic: HowToTopic | null;
+}
+
 export class Director {
   step: IntroStep = 'done';
   /** Seconds in the current intro step. */
@@ -147,6 +158,8 @@ export class Director {
   playT = 0;
   sinceProgress = 0;
   stillT = 0;
+  /** Story beat now being told (−1 = none yet). */
+  beat = -1;
   readonly visited = new Set<Attraction>();
   /** Attractions the hero actually did something at (leading stops after LEAD_ATTRACTIONS). */
   readonly done = new Set<Attraction>();
@@ -156,27 +169,34 @@ export class Director {
   /** Number of rescues so far this session (tests). */
   rescues = 0;
   private guiding = false;
-  private lastReact = -99;
   private lastChestHint = -99;
   private lastHint = -99;
   private lastPrompt = -99;
-  private prompts = 0;
+  private lastMega = -99;
   private sunsetSaid = false;
-  private walletSaid = false;
-  private idleIndex = 0;
   private bounces = 0;
+  private counted = false;
+  private gems = 0;
+  private bestCombo = 0;
+  private bestStars = 0;
+  private glassesHits = 0;
   private wasFreefall = false;
   private returning = false;
   private glassesNudges = 0;
   private glassesLeadT = 0;
-  private moved = 0;
-  private looked = 0;
   private awayT = 0;
   private pushT = 0;
   private wanderT = 0;
+  private beatT = 0;
   private lastNearest = Infinity;
   private at: Attraction | null = null;
   private atT = 0;
+  /** The how-to topic where the hero is now (focused prompt, else the attraction). */
+  private topicNow: HowToTopic | null = null;
+  private chain: ChainItem[] = [];
+  private fed = false;
+  private readonly memory = new Memory();
+  private readonly bags = new Map<PoolId | 'follow', ShuffleBag<ScriptLine>>();
 
   constructor(
     private readonly sink: DirectorSink,
@@ -199,28 +219,37 @@ export class Director {
     this.sinceProgress = 0;
     this.stillT = 0;
     this.sunsetSaid = false;
-    this.walletSaid = false;
     this.visited.clear();
     this.done.clear();
     this.glassesNudges = 0;
     this.glassesLeadT = 0;
     this.bounces = 0;
+    this.counted = false;
+    this.gems = 0;
+    this.bestCombo = 0;
+    this.bestStars = 0;
+    this.glassesHits = 0;
     this.lastHint = -99;
     this.lastChestHint = -99;
+    this.lastMega = -99;
     this.pushT = 0;
     this.wanderT = 0;
     this.rescues = 0;
     this.at = null;
     this.atT = 0;
+    this.topicNow = null;
+    this.chain = [];
+    this.beat = -1;
+    this.memory.clear();
     this.stopLead();
     this.returning = !runIntro;
     this.guiding = runIntro;
     if (runIntro) {
       this.introT = 0;
-      this.enter('welcome');
+      this.enter('story');
     } else {
       this.step = 'done';
-      this.sink.say(line(RETURNING, PRIORITY.story, 'returning'));
+      this.say(line(RETURNING, PRIORITY.story, 'returning'));
       this.sayGoal(PRIORITY.tip);
     }
   }
@@ -229,44 +258,66 @@ export class Director {
   end(): void {
     this.step = 'done';
     this.guiding = false;
+    this.chain = [];
     this.stopLead();
   }
 
   /** Skip the intro (any non-game key / tap on the bubble). Returns true if it skipped. */
   skip(): boolean {
     if (this.step === 'done' || this.introT < SKIP_AFTER) return false;
+    this.chain = [];
     this.finishIntro();
     this.guiding = false;
     this.stopLead();
-    this.sink.say(line(INTRO.skipped, PRIORITY.story, 'intro:skipped'));
+    this.say(line(INTRO.skipped, PRIORITY.story, 'intro:skipped'));
     return true;
   }
 
-  /** Ask Pip: the current goal (or the HUD element explanation chosen by the caller). */
+  /**
+   * Ask Pip (T / his button / D-pad down): the HUD element explanation chosen by the caller, else
+   * the how-to of the place the hero is at, else the current goal.
+   */
   ask(explain: ScriptLine | null): void {
-    if (explain) this.sink.say(line(explain, PRIORITY.story, 'ask'));
-    else this.sayGoal(PRIORITY.story);
+    if (explain) {
+      this.say(line(explain, PRIORITY.story, 'ask'));
+      return;
+    }
+    if (this.topicNow && this.step !== 'story') {
+      this.chain = this.chain.filter((c) => c.topic === null);
+      this.howTo(this.topicNow, PRIORITY.story, true);
+      return;
+    }
+    this.sayGoal(PRIORITY.story);
   }
 
   // ───────────── events ─────────────
 
   onGem(e: { mega?: boolean; combo?: number }): void {
     this.progress();
-    if (this.guiding && !this.walletSaid) {
-      // A brand-new player's first gem: gems are money (wallet callout).
-      this.walletSaid = true;
-      this.sink.celebrate(false);
-      this.sink.say(line(INTRO.wallet, PRIORITY.story, 'intro:wallet'));
+    this.gems++;
+    const combo = e.combo ?? 1;
+    if (e.mega) {
+      if (this.econ('mega')) return;
+      if (this.playT - this.lastMega >= MEGA_GAP && this.react('mega')) this.lastMega = this.playT;
       return;
     }
-    if (e.mega) this.react(REACT.mega, true);
-    else if ((e.combo ?? 1) >= 3) this.react(REACT.combo);
-    else if (!this.store.tipSeen('combo') && (e.combo ?? 1) >= 2 && this.step === 'done') this.tip('combo', TIPS.combo);
+    if (this.econ('gem')) return;
+    if (combo >= 3 && combo > this.bestCombo) {
+      this.bestCombo = combo;
+      this.react('combo');
+      return;
+    }
+    if (!this.store.tipSeen('combo') && combo >= 2 && this.step === 'done') {
+      this.tip('combo', TIPS.combo);
+      return;
+    }
+    if (this.gems % GEM_MILESTONE === 0) this.react('gem');
   }
 
   onShopOpen(): void {
     this.progress();
     this.didSomething();
+    this.econ('shop');
   }
 
   onStunt(e: { kind: string; stars: number }): void {
@@ -280,82 +331,90 @@ export class Director {
       this.tip('stars', TIPS.stars);
       return;
     }
-    if (e.stars >= 2) this.react(REACT.stunt, true);
+    if (e.stars >= 2) {
+      if (e.stars > this.bestStars) {
+        this.bestStars = e.stars;
+        this.react('stunt');
+      } else if (this.rand() < 0.35) this.react('stunt');
+    }
   }
 
-  /** The hero reached the top of a bounce on the trampoline (Pip barks the count). */
+  /** The hero reached the top of a bounce on the trampoline (Pip barks the count, once a session). */
   onTrampolineApex(): void {
     this.progress();
+    this.sink.bark('yip');
+    if (this.counted && this.step !== 'jump') return;
     this.bounces = Math.min(this.bounces + 1, COUNT.length);
     const word = COUNT[this.bounces - 1];
-    this.sink.bark('yip');
-    if (!this.introActive || this.step === 'jump') {
-      this.sink.say({ text: word, icon: 'wTrampoline', priority: PRIORITY.react, mood: 'excited', hold: 0.5, ttl: 0.6 });
+    if (this.step === 'done' || this.step === 'jump') {
+      this.say({ text: word, icon: 'wTrampoline', priority: PRIORITY.react, mood: 'excited', hold: 0.5, ttl: 0.6, praise: true });
     }
+    if (this.bounces >= COUNT.length) this.counted = true;
     if (this.bounces >= 2) this.markDone('trampoline');
     if (this.step === 'jump' && this.bounces >= 2) this.jumpDone();
   }
 
-  /** Hero left the trampoline: the count starts again next time. */
+  /** Hero left the trampoline: the count starts again next time (until it was counted once). */
   resetBounces(): void {
+    if (this.bounces >= 3) this.counted = true;
     this.bounces = 0;
   }
 
   onChestKey(): void {
     this.progress();
-    this.react(REACT.key, true);
+    if (!this.econ('key')) this.react('key');
   }
 
   onChestOpened(): void {
     this.progress();
-    this.react(REACT.chest, true);
+    this.react('chest', true);
     this.sink.celebrate(true);
   }
 
   onFlop(): void {
-    this.react(REACT.flop);
+    if (this.rand() < 0.5) this.react('flop');
   }
 
   onSkill(): void {
     this.progress();
-    this.react(REACT.skill);
   }
 
-  onEmote(): void {
-    this.react(REACT.emote, true);
-  }
+  onEmote(): void {}
 
   onPurchased(): void {
     this.progress();
-    this.react(REACT.bought, true);
+    this.react('bought', true);
     this.sink.celebrate(false);
   }
 
-  onUnlocked(): void {
-    this.react(REACT.unlocked);
-  }
+  onUnlocked(): void {}
 
-  onTicketPaid(): void {
+  onTicketPaid(free = false): void {
     this.progress();
     this.didSomething();
-    this.react(REACT.ticket, true);
+    if (!free) this.econ('ticket');
   }
 
   onTicketDenied(price: number, wallet: number): void {
-    this.sink.say(line(needGems(Math.max(1, price - wallet)), PRIORITY.tip));
+    this.say(line(needGems(Math.max(1, price - wallet)), PRIORITY.tip));
     this.sink.bark('whine');
+  }
+
+  /** A Fun Pass stamp (or something that earns one) happened. */
+  onStamp(): void {
+    this.progress();
+    if (!this.econ('stamp')) this.react('stamp');
   }
 
   onMissionCompleted(): void {
     this.progress();
-    this.sink.say(line(REACT.goalDone, PRIORITY.tip, 'goal:done'));
+    this.react('goal', true);
     this.sink.celebrate(true);
-    if (!this.guiding) this.sayGoal(PRIORITY.tip);
   }
 
   onJackpot(): void {
     this.progress();
-    this.sink.say(line(REACT.jackpot, PRIORITY.tip));
+    this.react('jackpot', true);
     this.sink.celebrate(true);
   }
 
@@ -363,18 +422,25 @@ export class Director {
     this.progress();
   }
 
+  /** The hero came back down after being way up (not the trampoline). */
+  onLanded(): void {
+    this.react('landed');
+  }
+
   onTick(remaining: number): void {
     if (!this.sunsetSaid && remaining <= 30 && remaining > 0) {
       this.sunsetSaid = true;
-      this.sink.say(line(REACT.sunset, PRIORITY.tip, 'sunset'));
+      this.say(line(SUNSET, PRIORITY.tip, 'sunset'));
     }
   }
 
-  /** Called on every weak-eye game hit/miss event with `hit`. */
+  /** Called on every weak-eye game hit. */
   onGlassesHit(): void {
     this.progress();
     this.didSomething();
-    this.react(REACT.magic);
+    this.glassesHits++;
+    if (this.glassesHits === 1) this.react('magic', true);
+    else if (this.rand() < 0.3) this.react('magic');
   }
 
   // ───────────── frame ─────────────
@@ -382,6 +448,7 @@ export class Director {
   update(dt: number, v: DirectorView): void {
     this.playT += dt;
     this.sinceProgress += dt;
+    this.fed = false;
     this.stillT = v.onFoot && v.heroSpeed < 0.3 ? this.stillT + dt : 0;
     this.pushT = v.onFoot && v.pushing && v.heroSpeed < 2.5 && v.ride === 'none' ? this.pushT + dt : 0;
 
@@ -393,18 +460,37 @@ export class Director {
     } else if (at) this.atT += dt;
     if (at && this.atT > DONE_AT_SECONDS && (!this.leadTo || this.leadTo === at) && !v.pushing) this.markDone(at);
     if (at && v.ride !== 'none') this.markDone(at);
+    const topic: HowToTopic | null = v.topic ?? at;
+    if (topic !== this.topicNow) {
+      // Walked away: an unfinished how-to of the old place is dropped.
+      this.chain = this.chain.filter((c) => c.topic === null || c.topic === topic);
+      this.topicNow = topic;
+    }
 
-    // Chests: context hint, wins over everything generic (repeats with a cooldown while there).
-    if (v.chestHint && this.playT - this.lastChestHint > CHEST_HINT_COOLDOWN) {
-      this.lastChestHint = this.playT;
-      this.lastHint = this.playT;
-      this.sink.say(line(CHEST[v.chestHint], PRIORITY.story, `chest:${v.chestHint}`));
+    // Feed the next line of a story / how-to once Pip is free.
+    if (this.chain.length && !v.busy) {
+      const c = this.chain.shift()!;
+      c.start?.();
+      this.say(c.line);
+      this.fed = true;
+    }
+
+    // Chests: the full how-to the first time, then a short hint now and then while there.
+    if (v.chestHint && this.step === 'done') {
+      if (!this.store.tipSeen('howto:chest')) {
+        this.lastChestHint = this.playT;
+        this.howTo('chest', PRIORITY.story);
+      } else if (this.playT - this.lastChestHint > CHEST_HINT_COOLDOWN && this.fresh(CHEST[v.chestHint].text)) {
+        this.lastChestHint = this.playT;
+        this.lastHint = this.playT;
+        this.say(line(CHEST[v.chestHint], PRIORITY.story, `chest:${v.chestHint}`));
+      }
     }
     const chestNear = !!v.chestHint || this.playT - this.lastChestHint < CHEST_QUIET;
 
     this.onTick(v.remaining);
     this.updateLead(dt, v);
-    if (this.rescueCheck(dt, v, chestNear)) return;
+    if (this.step !== 'story' && this.rescueCheck(dt, v, chestNear)) return;
 
     if (this.step !== 'done') {
       this.introT += dt;
@@ -413,28 +499,26 @@ export class Director {
       return;
     }
 
-    // Rides: the first freefall explains the chute, later ones just cheer.
+    // Rides: the first freefall explains the chute, later ones cheer now and then.
     const ff = v.ride === 'freefall';
     if (ff && !this.wasFreefall) {
       if (!this.store.tipSeen('chute')) this.tip('chute', CHUTE(v.keys));
-      else this.react(REACT.freefall);
+      else if (this.rand() < 0.5) this.react('freefall');
     }
     this.wasFreefall = ff;
 
-    // First visit to an attraction: a one-line how-to (only inside its radius).
     if (at && !this.visited.has(at)) {
       this.visited.add(at);
       this.progress();
-      const id: TipId = `visit:${at}`;
-      if (!this.store.tipSeen(id) && !chestNear) {
-        this.tip(id, ATTRACTIONS[at].howTo(v.keys));
-        this.lastHint = this.playT;
-      }
+    }
+    // First time at a place (attraction or use prompt): its spoken how-to.
+    if (topic && topic !== 'chest' && !this.store.tipSeen(`howto:${topic}`) && !chestNear && !this.chain.some((c) => c.topic === topic)) {
+      this.howTo(topic, PRIORITY.tip);
     }
 
-    if (v.busy || chestNear) return;
+    if (v.busy || chestNear || this.chain.length) return;
 
-    // One-time HUD tips, spread over the first two minutes (quiet while Pip shows the way).
+    // One-time HUD tips, spread over the first minutes (quiet while Pip shows the way).
     if (!this.guiding && this.canHint()) {
       if (this.returning && this.playT > 9 && !this.store.tipSeen('compass')) {
         this.hint('compass', TIPS.compass);
@@ -443,6 +527,12 @@ export class Director {
       for (const t of TIP_SCHEDULE) {
         if (this.playT < t.at || this.store.tipSeen(t.id)) continue;
         if (t.id === 'missions' && !v.hasMissions) continue;
+        if (t.id === 'arrows') {
+          this.lastHint = this.playT;
+          this.store.markTip('arrows');
+          this.howTo('secrets', PRIORITY.tip);
+          return;
+        }
         this.hint(t.id, t.id === 'skill' ? skillTip(v.keys.skill) : TIPS[t.id as keyof typeof TIPS]);
         return;
       }
@@ -460,9 +550,9 @@ export class Director {
     if (this.sinceProgress > STUCK_SECONDS && this.canHint()) {
       this.sinceProgress = 0;
       const best = this.nearestPlace(v.hero, (p) => !this.visited.has(p));
-      if (best) {
+      if (best && this.fresh(suggest(best).text)) {
         this.lastHint = this.playT;
-        this.sink.say(line(suggest(best), PRIORITY.tip, 'stuck'));
+        this.say(line(suggest(best), PRIORITY.tip, 'stuck'));
         this.sink.bark('bark');
       }
       return;
@@ -471,10 +561,11 @@ export class Director {
     // Standing still: a playful idle line now and then.
     if (this.stillT > IDLE_SECONDS && this.canHint()) {
       this.stillT = -10;
-      this.lastHint = this.playT;
-      const pick = IDLE[(this.idleIndex + Math.floor(this.rand() * IDLE.length)) % IDLE.length];
-      this.idleIndex++;
-      this.sink.say(line(pick, PRIORITY.idle, 'idle'));
+      const pick = this.bag('idle').next((l) => this.fresh(l.text));
+      if (pick) {
+        this.lastHint = this.playT;
+        this.say(line(pick, PRIORITY.idle, 'idle'));
+      }
     }
   }
 
@@ -483,99 +574,103 @@ export class Director {
   private enter(step: IntroStep): void {
     this.step = step;
     this.stepT = 0;
-    this.prompts = 0;
-    this.lastPrompt = -99;
+    this.lastPrompt = this.playT;
     switch (step) {
-      case 'welcome':
-        this.sink.say(line(INTRO.welcome, PRIORITY.story, 'intro:welcome'));
-        break;
-      case 'move':
-        // From spawn Pip runs ahead towards the first attraction: "walk with me!".
-        this.moved = 0;
-        this.leadToPlace(FIRST_ATTRACTION, 'tour');
-        this.prompt(INTRO.move, 'intro:move');
-        break;
-      case 'look':
-        this.looked = 0;
-        this.prompt(INTRO.look, 'intro:look');
-        break;
-      case 'glasses':
-        // Pip's own magic glasses + sparkles: the line says gems hide, nothing shows where.
-        this.sink.glasses(GLASSES_SECONDS + 1);
-        this.sink.say(line(INTRO.glasses, PRIORITY.story, 'intro:glasses'));
+      case 'story':
+        this.beat = -1;
+        this.beatT = 0;
+        this.chain = STORY.map((l, i) => ({
+          line: line(l, PRIORITY.story, i === 0 ? 'intro:welcome' : `story:${i}`),
+          topic: null,
+          start: () => {
+            this.beat = i;
+            this.beatT = 0;
+            if (i === STORY_GLASSES_BEAT) this.sink.glasses(5);
+            // The last beat says "follow me": Pip starts running ahead.
+            if (i === STORY.length - 1) this.leadToPlace(FIRST_ATTRACTION, 'tour');
+          },
+        }));
+        // The first beat now (the session just started; nothing else is talking).
+        {
+          const c = this.chain.shift()!;
+          c.start?.();
+          this.say(c.line);
+          this.fed = true;
+        }
         break;
       case 'follow':
         if (this.leadTo !== FIRST_ATTRACTION) this.leadToPlace(FIRST_ATTRACTION, 'tour');
-        this.prompt(follow(FIRST_ATTRACTION), 'intro:follow');
         break;
       case 'jump':
         this.bounces = 0;
         this.awayT = 0;
-        this.prompt(INTRO.jump, 'intro:jump');
+        this.chain = this.chain.filter((c) => c.topic !== null);
+        this.store.markTip('howto:trampoline');
+        this.lastHint = this.playT;
+        this.say(line(INTRO.jump, PRIORITY.story, 'intro:jump'));
+        this.chain.push({ line: line(HOWTO.trampoline[1], PRIORITY.tip, 'howto:trampoline:1'), topic: 'trampoline' });
         break;
       case 'done':
         break;
     }
   }
 
-  /** Say a step's line now and remember it for re-prompts. */
-  private prompt(l: ScriptLine, id: string): void {
-    this.prompts++;
-    this.lastPrompt = this.playT;
-    this.lastHint = this.playT;
-    this.sink.say(line(l, PRIORITY.story, id));
-  }
-
-  private reprompt(l: ScriptLine, id: string): void {
-    if (this.playT - this.lastPrompt < REPROMPT || !this.canHint()) return;
-    this.prompt(l, id);
-    this.sink.bark('bark');
-  }
-
   private updateIntro(dt: number, v: DirectorView): void {
-    // Reaching the trampoline early jumps straight to its step (wherever the tour is).
-    if (v.nearAttraction === FIRST_ATTRACTION && this.step !== 'jump' && this.step !== 'welcome') {
+    // Reaching the trampoline jumps straight to its step (the story is cut short: they are playing).
+    if (v.nearAttraction === FIRST_ATTRACTION && this.step !== 'jump' && (this.step !== 'story' || this.beat >= 1)) {
+      this.chain = [];
+      this.finishStory();
       this.enter('jump');
       return;
     }
     switch (this.step) {
-      case 'welcome':
-        if (this.stepT > WELCOME_SECONDS) this.enter('move');
-        break;
-      case 'move':
-        if (v.onFoot) this.moved += v.heroSpeed * dt;
-        if (this.moved >= MOVE_METRES) this.enter('look');
-        else this.reprompt(INTRO.move, 'intro:move');
-        break;
-      case 'look':
-        this.looked += v.look ?? 0;
-        if (this.looked >= LOOK_RADIANS) this.enter('glasses');
-        else if (this.prompts > LOOK_PROMPTS && this.playT - this.lastPrompt > REPROMPT) this.enter('glasses');
-        else this.reprompt(INTRO.look, 'intro:look');
-        break;
-      case 'glasses':
-        if (this.stepT > GLASSES_SECONDS) this.enter('follow');
+      case 'story':
+        this.beatT += dt;
+        if (this.chain.length === 0 && !v.busy && !this.fed) {
+          this.finishStory();
+          this.enter('follow');
+        } else if (this.beatT > BEAT_MAX && this.chain.length && !this.fed) {
+          // Safety net: never stall the story.
+          const c = this.chain.shift()!;
+          c.start?.();
+          this.say(c.line);
+        }
         break;
       case 'follow':
         if (!this.leadTo) this.leadToPlace(FIRST_ATTRACTION, 'tour');
-        this.reprompt(follow(FIRST_ATTRACTION), 'intro:follow');
+        this.reprompt();
         break;
       case 'jump':
-        if (v.nearAttraction === FIRST_ATTRACTION) {
-          this.awayT = 0;
-          this.reprompt(INTRO.jump, 'intro:jump');
-        } else if ((this.awayT += dt) > JUMP_AWAY_SECONDS) this.enter('follow');
+        if (v.nearAttraction === FIRST_ATTRACTION) this.awayT = 0;
+        else if ((this.awayT += dt) > JUMP_AWAY_SECONDS) this.enter('follow');
         break;
       case 'done':
         break;
     }
+  }
+
+  /** "Follow me" again with a different line (or just a bark once they are used up). */
+  private reprompt(): void {
+    if (this.playT - this.lastPrompt < REPROMPT || !this.canHint()) return;
+    this.lastPrompt = this.playT;
+    this.lastHint = this.playT;
+    this.sink.bark('bark');
+    const text = this.bag('follow').next((l) => this.fresh(l.text));
+    if (text) this.say(line({ ...follow(FIRST_ATTRACTION), text: text.text }, PRIORITY.story, 'intro:follow'));
+  }
+
+  /** The story told (or cut short): its HUD topics count as explained. */
+  private finishStory(): void {
+    this.beat = STORY.length;
+    this.store.markTip('missions');
+    this.store.markTip('econ:gem-intro');
   }
 
   private jumpDone(): void {
     this.markDone(FIRST_ATTRACTION);
     this.finishIntro();
     this.sink.celebrate(true);
-    this.sink.say(line(REACT.landed, PRIORITY.story, 'intro:yay'));
+    this.say(line({ ...POOLS.landed[0], praise: false }, PRIORITY.story, 'intro:yay'));
     this.nextLead();
   }
 
@@ -584,7 +679,8 @@ export class Director {
     this.store.setIntroSeen();
     // The tour already covered these.
     this.store.markTip('compass');
-    this.store.markTip('visit:trampoline');
+    this.store.markTip('missions');
+    this.store.markTip('howto:trampoline');
     this.visited.add(FIRST_ATTRACTION);
   }
 
@@ -626,7 +722,7 @@ export class Director {
       this.stopLead();
       this.store.markTip('compass');
       this.lastHint = this.playT;
-      this.sink.say(line(INTRO.choose, PRIORITY.tip, 'guide:choose'));
+      this.say(line(INTRO.choose, PRIORITY.tip, 'guide:choose'));
       return;
     }
     const from = this.sink.anchor(this.at ?? FIRST_ATTRACTION);
@@ -638,7 +734,7 @@ export class Director {
     }
     this.leadToPlace(next, 'tour');
     this.lastHint = this.playT;
-    this.sink.say(line(follow(next), PRIORITY.tip, 'guide:follow'));
+    this.say(line(follow(next), PRIORITY.tip, 'guide:follow'));
   }
 
   private updateLead(dt: number, v: DirectorView): void {
@@ -671,7 +767,7 @@ export class Director {
     else this.wanderT = Math.max(0, this.wanderT - dt * 2);
     this.lastNearest = nearest;
     if (!why && this.guiding && this.wanderT > WANDER_SECONDS) why = 'wander';
-    if (!why && this.guiding && this.stillT > IDLE_SECONDS && !v.nearAttraction && this.step !== 'welcome') why = 'idle';
+    if (!why && this.guiding && this.stillT > IDLE_SECONDS && !v.nearAttraction && this.step !== 'story') why = 'idle';
     if (!why) return false;
     this.pushT = 0;
     this.wanderT = 0;
@@ -690,9 +786,9 @@ export class Director {
     const kind: LeadKind = this.leadKind === 'tour' || this.step !== 'done' ? 'tour' : 'rescue';
     this.leadToPlace(to, kind, { fetch: true, assist });
     this.sink.bark('bark');
-    if (this.canHint()) {
+    if (this.canHint() && this.fresh(RESCUE.text)) {
       this.lastHint = this.playT;
-      this.sink.say(line(RESCUE, PRIORITY.tip, 'rescue'));
+      this.say(line(RESCUE, PRIORITY.tip, 'rescue'));
     }
   }
 
@@ -724,13 +820,33 @@ export class Director {
     const best = this.nearestPlace(from, (p) => isGlasses(p) && !this.visited.has(p));
     if (!best) return;
     this.lastHint = this.playT;
-    this.sink.say(line(suggest(best), PRIORITY.tip, 'glasses:nudge'));
+    if (this.fresh(suggest(best).text)) this.say(line(suggest(best), PRIORITY.tip, 'glasses:nudge'));
     this.leadToPlace(best, 'glasses');
     this.sink.bark('bark');
     this.glassesLeadT = GLASSES_LEAD_SECONDS;
   }
 
   // ───────────── helpers ─────────────
+
+  /** Every line goes through here (remembered for the no-repeat rule). */
+  private say(l: Line): void {
+    this.memory.note(l.text, this.playT);
+    this.sink.say(l);
+  }
+
+  private fresh(text: string): boolean {
+    return this.memory.fresh(text, this.playT);
+  }
+
+  private bag(id: PoolId | 'follow'): ShuffleBag<ScriptLine> {
+    let b = this.bags.get(id);
+    if (!b) {
+      const items: readonly ScriptLine[] = id === 'follow' ? FOLLOW_AGAIN.map((text) => ({ text, icon: 'paw' as const })) : POOLS[id];
+      b = new ShuffleBag(items, this.rand);
+      this.bags.set(id, b);
+    }
+    return b;
+  }
 
   private canHint(): boolean {
     return this.playT - this.lastHint >= HINT_GAP;
@@ -744,14 +860,45 @@ export class Director {
 
   private tip(id: TipId, l: ScriptLine): void {
     this.store.markTip(id);
-    this.sink.say(line(l, PRIORITY.tip, `tip:${id}`));
+    this.say(line(l, PRIORITY.tip, `tip:${id}`));
   }
 
-  private react(l: ScriptLine, force = false): void {
-    if (this.step !== 'done') return;
-    if (!force && this.playT - this.lastReact < REACT_COOLDOWN) return;
-    this.lastReact = this.playT;
-    this.sink.say(line(l, PRIORITY.react));
+  /** Queue a place's how-to (1–3 lines, said one after the other). */
+  private howTo(topic: HowToTopic, priority: Line['priority'], asked = false): void {
+    this.store.markTip(`howto:${topic}`);
+    const lines = HOWTO[topic];
+    const items: ChainItem[] = lines.map((l, i) => ({ line: line(l, i === 0 ? priority : PRIORITY.tip, `howto:${topic}:${i}`), topic }));
+    if (asked) {
+      // The child asked: say it now.
+      const first = items.shift()!;
+      this.say(first.line);
+    }
+    this.chain.push(...items);
+  }
+
+  /** Explain an economy thing the first time it matters (once ever). True if it spoke. */
+  private econ(id: EconId): boolean {
+    const key: TipId = `econ:${id}`;
+    if (this.store.tipSeen(key)) return false;
+    this.store.markTip(key);
+    this.lastHint = this.playT;
+    this.say(line(ECON[id], PRIORITY.tip, key));
+    return true;
+  }
+
+  /**
+   * A reaction from a pool: only after the intro, only once per UNSOLICITED_GAP (unless forced:
+   * big moments), never while a story or how-to is being told, never a line said in the last
+   * REPEAT_SECONDS. Returns true if Pip said something.
+   */
+  private react(pool: PoolId, force = false): boolean {
+    if (this.step !== 'done' || this.chain.length) return false;
+    if (!force && !this.canHint()) return false;
+    const pick = this.bag(pool).next((l) => this.fresh(l.text));
+    if (!pick) return false;
+    this.lastHint = this.playT;
+    this.say(line(pick, PRIORITY.react));
+    return true;
   }
 
   private progress(): void {
@@ -760,6 +907,6 @@ export class Director {
 
   private sayGoal(priority: Line['priority']): void {
     const g = this.sink.goal();
-    this.sink.say(line(g.line, priority, `goal:${g.id}`));
+    this.say(line(g.line, priority, `goal:${g.id}`));
   }
 }

@@ -31,7 +31,7 @@ const RECIPE = 'kokoro-q8/af_heart/v2:speed0.92+asetrate1.12+rb1.09+comp+mp3-32k
 const MODEL_SHA = 'fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478';
 const VOICE = 'af_heart';
 /** Budget for the whole clip set (bytes). */
-export const BUDGET = 1.5 * 1024 * 1024;
+export const BUDGET = 2.5 * 1024 * 1024;
 
 const args = new Set(process.argv.slice(2));
 const sh = (cmd, argv, opts = {}) => execFileSync(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26, ...opts }).toString();

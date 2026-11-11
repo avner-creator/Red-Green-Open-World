@@ -23,14 +23,15 @@ import { PipAnimator, defaultInput } from './anim';
 import type { AnimInput, Face, Pose } from './anim';
 import type { ChestHint, DirectorSink, DirectorView, RideView } from './director';
 import { Director } from './director';
-import { DialogueQueue, PRIORITY } from './dialogue';
+import { DialogueQueue, PRIORITY, bubbleMode } from './dialogue';
 import type { ActiveLine } from './dialogue';
 import { currentGoal } from './goals';
 import { buildPip } from './model';
 import { classifyRide, externalKind, vehicleSpot } from './rides';
 import type { ExternalKind } from './rides';
-import { EXPLAIN, REACT, line } from './script';
-import type { KeyNames } from './script';
+import { EXPLAIN } from './script';
+import type { HowToTopic, KeyNames } from './script';
+import { topicOfPrompt } from './topics';
 import { sniffSpot } from './sniff';
 import { Leader } from './guide';
 import type { LeadOut } from './guide';
@@ -52,7 +53,7 @@ const VISIT_RADIUS: Record<Attraction, number> = {
   trampoline: 10.5,
   bouncePads: 9,
   garage: 4.5,
-  balloon: 8,
+  balloon: 15,
   launchPads: 10,
   gearShack: 4.5,
   bungee: 5,
@@ -74,6 +75,9 @@ const VISIT_RADIUS: Record<Attraction, number> = {
   dotsigns: 7,
 };
 const TRAMPOLINE_MAT = 9;
+/** Pip is drawn this much bigger than his model (easier to see, more expressive). */
+export const PIP_SCALE = 1.22;
+
 
 type ChestHintFn = () => unknown;
 
@@ -205,6 +209,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let wasSpeaking = false;
   let pipOnScreen = true;
   let carryingKey = false;
+  let focusTopic: HowToTopic | null = null;
+  let stampedGlasses = false;
   const openedChests = new Set<number>();
   let canopy: THREE.Object3D | null = null;
   let padDown = false;
@@ -350,7 +356,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
 
   const history: { text: string; id: string }[] = [];
   queue.onChange = (a: ActiveLine | null) => {
-    ui.show(a);
+    ui.show(a, a ? bubbleMode(a.line, voice.audible(a.line.text)) : 'full');
     if (a) {
       if (ctx.testMode && history.length < 200) history.push({ text: a.line.text, id: a.line.id ?? '' });
       voice.speak(a.line.text, a.line.mood ?? 'happy');
@@ -441,6 +447,11 @@ export function createBuddy(ctx: GameContext): GameSystem {
     }),
     on('glasses:result', (e) => {
       if (e.hit) {
+        if (!stampedGlasses) {
+          // A mini-game's first hit earns its Fun Pass stamp (derived by the pass).
+          stampedGlasses = true;
+          director.onStamp();
+        }
         director.onGlassesHit();
         voice.bark('yip');
       }
@@ -450,7 +461,13 @@ export function createBuddy(ctx: GameContext): GameSystem {
     on('item:unlocked', (e) => {
       if (e.source !== 'starter') director.onUnlocked();
     }),
-    on('ticket:paid', () => director.onTicketPaid()),
+    on('ticket:paid', (e) => director.onTicketPaid(e.free)),
+    on('stamp:earned', () => director.onStamp()),
+    on('interact:focus', (e) => {
+      const id = e.target?.id ?? '';
+      const horse = id.startsWith('vehicle:') && !!ctx.vehicles?.all.some((v) => `vehicle:${v.id}` === id && v.kind === 'horse');
+      focusTopic = e.target ? topicOfPrompt(id, horse) : null;
+    }),
     on('ticket:denied', (e) => director.onTicketDenied(e.price, e.wallet)),
     on('mission:completed', () => {
       director.onMissionCompleted();
@@ -466,6 +483,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
         placeSoon = true;
         carryingKey = false;
         openedChests.clear();
+        focusTopic = null;
+        stampedGlasses = false;
         queue.clear(PRIORITY.story);
         queue.skip();
         const fresh = introAllowed && !store.flags.intro && ctx.profile.data.lifetimeGems === 0;
@@ -578,7 +597,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     else if (cowerT > 0) {
       if (cowerT > 1.2) {
         cheerT = 1.6;
-        if (talk) queue.say(line(REACT.landed, PRIORITY.react));
+        if (talk) director.onLanded();
       }
       cowerT = 0;
     }
@@ -842,6 +861,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
           onFoot: ctx.player.mode === 'walk',
           ride,
           nearAttraction: nearAttraction(),
+          topic: focusTopic,
           chestHint: chestHint(),
           keys: keyNames(),
           remaining: ctx.session.state.remaining,
@@ -866,7 +886,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       model.object.position.copy(pos);
       model.object.rotation.set(0, yaw, 0);
       const s = popT < 1 ? 0.4 + 0.6 * (1 - Math.pow(1 - popT, 3)) + Math.sin(popT * Math.PI) * 0.15 : 1;
-      model.object.scale.setScalar(s);
+      model.object.scale.setScalar(s * PIP_SCALE);
       model.object.updateMatrixWorld(true);
       anim.update(dt, inp);
 
@@ -874,7 +894,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         ui.setDevice(ctx.input.state.device);
         const ps = queue.current ? pipScreen() : null;
         pipOnScreen = !queue.current || !!ps?.on;
-        ui.update(queue.revealFraction(), ps, heroRect());
+        ui.update(queue.revealFraction(), heroRect());
       }
     },
     dispose(): void {
