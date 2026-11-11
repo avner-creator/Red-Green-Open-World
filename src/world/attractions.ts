@@ -5,6 +5,8 @@
  * Pure data, no WebGL.
  */
 import type { AnchorName } from '../types';
+import { FIXED_SITES } from '../activities/glasses/sites';
+import { GLASSES } from '../activities/glasses/constants';
 import { ANCHORS } from './layout';
 import type { IconId, PanelId } from './pictograms';
 
@@ -74,6 +76,82 @@ export const ATTRACTIONS: readonly Attraction[] = [
   { anchor: 'dragonRoost', icon: 'iDragon', arm: 0x245c48, balloon: 0x58c49a, panels: [], beacon: { x: -25, z: -122, h: 14 }, board: NO_BOARD },
 ];
 
+// ───────────────────────────── glasses-play sites ─────────────────────────────
+
+/**
+ * The six glasses-play mini-games (`src/activities/glasses/`). They are not world anchors (the site
+ * table is theirs: `FIXED_SITES`), but they get the same wayfinding as an attraction: a beacon
+ * balloon, a pictogram, fingerpost arms and a compass marker. All of it is both-eye and points at
+ * the site only, never at a weak-eye object inside it.
+ */
+export type GlassesSiteId = 'glowflies' | 'oddone' | 'lineup' | 'toys' | 'gates' | 'dotsigns';
+/** Anything a fingerpost arm can point at. */
+export type WayTarget = AnchorName | GlassesSiteId;
+
+export interface GlassesWay {
+  id: GlassesSiteId;
+  icon: IconId;
+  arm: number;
+  balloon: number;
+  /** Site centre and facing (local +Z = approach). */
+  x: number;
+  z: number;
+  yaw: number;
+  /** Clear circle: the site radius, or the area the mini-game uses beyond it (glow-flies). */
+  r: number;
+  beacon: { x: number; z: number; h: number };
+  /** Stepping-stone trail from the nearest road (the two sites nearest spawn). */
+  trail: boolean;
+}
+
+/** `turn`: the beacon's bearing from the site centre, relative to straight behind (radians). */
+const GLASSES_STYLE: Record<GlassesSiteId, { icon: IconId; balloon: number; trail?: boolean; turn?: number }> = {
+  glowflies: { icon: 'iGlowflies', balloon: 0xf0c832 },
+  oddone: { icon: 'iOddone', balloon: 0xee6a4a, trail: true },
+  lineup: { icon: 'iLineup', balloon: 0x5cc8f0 },
+  toys: { icon: 'iToys', balloon: 0xc88a50, trail: true },
+  gates: { icon: 'iGates', balloon: 0xa070e8 },
+  // Straight behind is the park path; the beacon goes to the north-west, clear of it and the signs.
+  dotsigns: { icon: 'iDotsigns', balloon: 0x6ed07a, turn: (Math.PI * 3) / 4 },
+};
+/** One arm colour for the whole family (deep indigo), so the glasses arms read as a set. */
+const GLASSES_ARM = 0x2e2a6a;
+
+/** The beacon stands behind the site (away from the approach), this far outside its clear circle. */
+const GLASSES_BEACON_OUT = 3;
+
+export const GLASSES_WAY: readonly GlassesWay[] = FIXED_SITES.filter((f): f is typeof f & { id: GlassesSiteId } => f.id in GLASSES_STYLE).map((f) => {
+  const st = GLASSES_STYLE[f.id];
+  const r = Math.max(GLASSES.siteRadius, f.playRadius ?? 0);
+  const d = r + GLASSES_BEACON_OUT;
+  const a = f.yaw + Math.PI + (st.turn ?? 0);
+  return {
+    id: f.id,
+    icon: st.icon,
+    arm: GLASSES_ARM,
+    balloon: st.balloon,
+    x: f.x,
+    z: f.z,
+    yaw: f.yaw,
+    r,
+    beacon: { x: f.x + Math.sin(a) * d, z: f.z + Math.cos(a) * d, h: 11 },
+    trail: !!st.trail,
+  };
+});
+
+const isGlasses = (t: WayTarget): t is GlassesSiteId => t in GLASSES_STYLE;
+
+/** Position, icon and arm colour of anything a fingerpost can point at. */
+export function wayTarget(t: WayTarget): { x: number; z: number; icon: IconId; arm: number } {
+  if (isGlasses(t)) {
+    const g = GLASSES_WAY.find((q) => q.id === t);
+    if (!g) throw new Error(`no glasses site ${t}`);
+    return g;
+  }
+  const a = attractionFor(t);
+  return { x: ANCHORS[t].x, z: ANCHORS[t].z, icon: a.icon, arm: a.arm };
+}
+
 export function attractionFor(a: AnchorName): Attraction {
   const r = ATTRACTIONS.find((q) => q.anchor === a);
   if (!r) throw new Error(`no attraction for anchor ${a}`);
@@ -83,12 +161,20 @@ export function attractionFor(a: AnchorName): Attraction {
 /**
  * For the HUD compass: every attraction with a beacon, its anchor (read live positions from
  * `ctx.world.anchors[anchor]`), its world pictogram id (`drawPictogram` in pictograms.ts draws it on
- * any 2D canvas) and its beacon colour. Same order as the plaza fingerposts.
+ * any 2D canvas) and its beacon colour. Same order as the plaza fingerposts, then the glasses sites.
+ *
+ * The glasses sites are not in `AnchorName` (src/types.ts is not ours to change), so their entries
+ * carry the site id cast to `AnchorName`; the world registers each id as a non-enumerable extra
+ * anchor (`ctx.world.anchors.toys` etc.), so the compass finds a live position while code that
+ * iterates the anchors (`Object.entries`) still sees only the real ones.
  */
-export const COMPASS_ATTRACTIONS: readonly { anchor: AnchorName; icon: IconId; color: number; x: number; z: number }[] = ATTRACTIONS.map((a) => ({
-  anchor: a.anchor,
-  icon: a.icon,
-  color: a.balloon,
-  x: ANCHORS[a.anchor].x,
-  z: ANCHORS[a.anchor].z,
-}));
+export const COMPASS_ATTRACTIONS: readonly { anchor: AnchorName; icon: IconId; color: number; x: number; z: number }[] = [
+  ...ATTRACTIONS.map((a) => ({
+    anchor: a.anchor,
+    icon: a.icon,
+    color: a.balloon,
+    x: ANCHORS[a.anchor].x,
+    z: ANCHORS[a.anchor].z,
+  })),
+  ...GLASSES_WAY.map((g) => ({ anchor: g.id as string as AnchorName, icon: g.icon, color: g.balloon, x: g.x, z: g.z })),
+];

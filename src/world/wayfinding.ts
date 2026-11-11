@@ -5,34 +5,31 @@
  * unit tests can build it and check arm directions and placements.
  */
 import * as THREE from 'three';
-import type { AnchorName } from '../types';
 import { M, T } from './batch';
 import { C, type Kit } from './props';
 import { cylG, rbox, sphereG, torusG, coneG } from './shapes';
-import { ANCHORS, LAUNCH_NET } from './layout';
+import { LAUNCH_NET } from './layout';
 import { PLAZA } from './village';
 import type { ProcessedRoad } from './terrain';
 import type { Keepout } from './scatter';
 import { Decals } from './decals';
 import type { IconId } from './pictograms';
-import { ATTRACTIONS, attractionFor, type Attraction } from './attractions';
+import { ATTRACTIONS, GLASSES_WAY, wayTarget, type Attraction, type GlassesWay, type WayTarget } from './attractions';
 
-export { ATTRACTIONS, type Attraction } from './attractions';
-
-const byAnchor = attractionFor;
+export { ATTRACTIONS, GLASSES_WAY, type Attraction, type WayTarget } from './attractions';
 
 export interface FingerpostDef {
   x: number;
   z: number;
   scale: number;
-  targets: AnchorName[];
+  targets: WayTarget[];
   /**
    * Plaza post only: arms grouped into rows (bottom → top) so six arms fit in 1.3 m, and the arms
    * that point (nearly) straight away from the spawn camera, which get an icon disc hanging from
    * their tip that faces back along the arm.
    */
-  rows?: AnchorName[][];
-  hang?: AnchorName[];
+  rows?: WayTarget[][];
+  hang?: WayTarget[];
   /** Candy-striped post (the Carnival Island post next to the plaza post). */
   stripe?: boolean;
 }
@@ -61,6 +58,15 @@ export const FINGERPOSTS: readonly FingerpostDef[] = [
     rows: [['raceStart', 'foamCourse', 'dinoRing'], ['iceCream', 'bubbleArena', 'dragonRoost'], ['carnivalRow', 'airstrip']],
     hang: ['raceStart'],
   },
+  // Glasses-play post: on the plaza's west rim where the west road leaves (towards the two nearest
+  // glasses sites), a few steps behind and left of spawn. Six arms in two rows (≥ 60° apart in a row);
+  // the two arms pointing straight down the west road carry hanging discs.
+  {
+    x: -10, z: 12.5, scale: 1,
+    targets: ['toys', 'glowflies', 'lineup', 'oddone', 'gates', 'dotsigns'],
+    rows: [['toys', 'glowflies', 'lineup'], ['oddone', 'gates', 'dotsigns']],
+    hang: ['toys'],
+  },
   { x: 49, z: 5, scale: 0.85, targets: ['trampoline', 'garage', 'launchPads', 'balloon', 'raceStart'] },
   { x: 57.5, z: 32, scale: 0.85, targets: ['launchPads', 'balloon', 'landingRings', 'garage'] },
   { x: 63.5, z: 47.5, scale: 0.85, targets: ['balloon', 'landingRings', 'launchPads'] },
@@ -87,7 +93,7 @@ export interface ArmInfo {
   z: number;
   /** Direction the arm points (atan2(dx, dz), same convention as anchor yaw). */
   yaw: number;
-  target: AnchorName;
+  target: WayTarget;
 }
 
 export interface Placed {
@@ -103,7 +109,7 @@ export interface Placed {
 }
 
 export interface BeaconDef {
-  anchor: AnchorName;
+  anchor: WayTarget;
   icon: IconId;
   color: number;
   /** Top of the tether stake (rope start). */
@@ -161,12 +167,12 @@ function fingerpost(k: Kit, d: Decals, def: FingerpostDef, arms: ArmInfo[]): voi
   const y = k.h(x, z);
   const list = targets
     .map((t) => {
-      const a = ANCHORS[t];
+      const a = wayTarget(t);
       return { t, yaw: Math.atan2(a.x - x, a.z - z), dist: Math.hypot(a.x - x, a.z - z) };
     })
     .sort((p, q) => p.yaw - q.yaw);
   // Row of each arm: explicit rows, else one arm per row with the smallest yaw on top.
-  const rowOf = (t: AnchorName, i: number): number => (def.rows ? def.rows.findIndex((r) => r.includes(t)) : list.length - 1 - i);
+  const rowOf = (t: WayTarget, i: number): number => (def.rows ? def.rows.findIndex((r) => r.includes(t)) : list.length - 1 - i);
   const rows = def.rows ? def.rows.length : list.length;
   const plaza = !!def.rows;
   const L = (plaza ? 2.9 : 2.5) * s;
@@ -188,7 +194,7 @@ function fingerpost(k: Kit, d: Decals, def: FingerpostDef, arms: ArmInfo[]): voi
   list.forEach((a, i) => {
     const row = rowOf(a.t, i);
     const ay = y + ARM_LOW + row * gap;
-    const att = byAnchor(a.t);
+    const att = wayTarget(a.t);
     // Local frame: +X along the arm, ±Z are the two faces.
     const am = T(x, ay, z, a.yaw - Math.PI / 2);
     const x0 = pw * 0.3;
@@ -272,7 +278,7 @@ function howToBoard(k: Kit, d: Decals, att: Attraction): Placed {
   return { kind: 'board', name: att.anchor, x, z, r: 0.35, yaw, hw: W / 2 + 0.15 };
 }
 
-function beaconStake(k: Kit, att: Attraction): BeaconDef {
+function beaconStake(k: Kit, att: Pick<Attraction, 'icon' | 'balloon' | 'beacon'> & { anchor: WayTarget }): BeaconDef {
   const { x, z, h } = att.beacon;
   const y = k.h(x, z);
   k.b.add('matte', rbox(1.0, 0.55, 1.0, 0.08), C.stoneDark, T(x, y - 0.05, z, 0.4), { aoY: y, aoH: 0.3, ao: 0.4 });
@@ -280,6 +286,49 @@ function beaconStake(k: Kit, att: Attraction): BeaconDef {
   k.b.add('metal', torusG(0.05, 16, Math.PI * 2, 0.16), C.iron, T(x, y + 1.0, z, 0, 1, 1, 1, Math.PI / 2));
   k.col.box(T(x, y, z, 0.4), 0, 0.3, 0, 0.5, 0.35, 0.5);
   return { anchor: att.anchor, icon: att.icon, color: att.balloon, base: new THREE.Vector3(x, y + 1.0, z), h };
+}
+
+function glassesBeacon(k: Kit, g: GlassesWay): BeaconDef {
+  return beaconStake(k, { anchor: g.id, icon: g.icon, balloon: g.balloon, beacon: g.beacon });
+}
+
+/**
+ * Stepping-stone trail from the nearest road edge to the edge of a glasses site: flat stones in a
+ * gentle zig-zag, flush with the ground (no colliders). Returns the stone spots (scatter keepouts).
+ */
+function steppingStones(k: Kit, roads: readonly ProcessedRoad[], g: GlassesWay): Keepout[] {
+  // Nearest point on any road centreline, then the edge point towards the site.
+  let best = { d: Infinity, x: 0, z: 0, w: 0 };
+  for (const r of roads) {
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const a = r.pts[i];
+      const b = r.pts[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((g.x - a.x) * dx + (g.z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+      const px = a.x + dx * t;
+      const pz = a.z + dz * t;
+      const d = Math.hypot(g.x - px, g.z - pz);
+      if (d < best.d) best = { d, x: px, z: pz, w: r.def.width };
+    }
+  }
+  const ux = (g.x - best.x) / best.d;
+  const uz = (g.z - best.z) / best.d;
+  const s0 = best.w / 2 + 0.7;
+  const s1 = best.d - g.r + 0.4;
+  const out: Keepout[] = [];
+  const n = Math.max(2, Math.round((s1 - s0) / 1.15));
+  for (let i = 0; i <= n; i++) {
+    const s = s0 + ((s1 - s0) * i) / n;
+    const side = (i % 2 ? 1 : -1) * 0.28;
+    const x = best.x + ux * s - uz * side;
+    const z = best.z + uz * s + ux * side;
+    const y = k.h(x, z);
+    const rr = 0.36 + ((i * 37) % 7) * 0.012;
+    k.b.add('matte', cylG(10), i % 3 ? C.stone : 0xbcb29f, T(x, y - 0.05, z, i * 1.3, rr * 1.15, 0.1, rr), { aoY: y, aoH: 0.12, ao: 0.25 });
+    out.push({ x, z, r: 0.8, mown: true });
+  }
+  return out;
 }
 
 /** Painted arrows on the plaza paving towards each road that leads to attractions, plus a ground icon. */
@@ -407,6 +456,14 @@ export function buildWayfinding(k: Kit, roads: readonly ProcessedRoad[], blocked
     beacons.push(beaconStake(k, att));
     placed.push({ kind: 'beacon', name: att.anchor, x: att.beacon.x, z: att.beacon.z, r: 0.75 });
     keepouts.push({ x: att.beacon.x, z: att.beacon.z, r: 2.2 });
+  }
+  // Glasses-play sites: a beacon behind each, the site circle kept clear of scatter, and stepping
+  // stones from the road to the two nearest spawn.
+  for (const g of GLASSES_WAY) {
+    beacons.push(glassesBeacon(k, g));
+    placed.push({ kind: 'beacon', name: g.id, x: g.beacon.x, z: g.beacon.z, r: 0.75 });
+    keepouts.push({ x: g.beacon.x, z: g.beacon.z, r: 2.2 }, { x: g.x, z: g.z, r: g.r + 1 });
+    if (g.trail) keepouts.push(...steppingStones(k, roads, g));
   }
   plazaArrows(k, decals);
   chevrons(k, roads, blocked);

@@ -25,6 +25,7 @@ import { LAUNCH_NET } from './layout';
 import { installLife } from './life';
 import { createOuterLive } from './outer/live';
 import { updateFarLod } from './far-lod';
+import { GLASSES_WAY } from './attractions';
 
 type BootCtx = Pick<GameContext, 'scene' | 'renderer' | 'camera' | 'physics' | 'vision' | 'settings' | 'events' | 'testMode'>;
 
@@ -75,6 +76,13 @@ export async function createWorld(ctx: BootCtx): Promise<WorldApi> {
     target: new THREE.Vector3(LAUNCH_NET.x, heightAt(LAUNCH_NET.x, LAUNCH_NET.z), LAUNCH_NET.z),
     targetRadius: LAUNCH_NET.radius,
   });
+
+  // Glasses-play sites as extra, non-enumerable anchors (see COMPASS_ATTRACTIONS): the compass can
+  // look them up by id, while Object.entries / keys over the anchors still list only real anchors.
+  for (const g of GLASSES_WAY) {
+    const value: Anchor = { position: new THREE.Vector3(g.x, heightAt(g.x, g.z), g.z), yaw: g.yaw, radius: g.r };
+    Object.defineProperty(anchors, g.id, { value, enumerable: false });
+  }
 
   let quality: Quality | null = null;
   const half = WORLD.size / 2;
