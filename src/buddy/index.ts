@@ -546,6 +546,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       director.onFlop();
       voice.bark('whine');
     }),
+    on('player:dizzy', () => director.onDizzy()),
     on('player:skill', () => {
       director.onSkill();
       voice.bark('yip');

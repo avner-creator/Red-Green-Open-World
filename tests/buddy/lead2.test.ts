@@ -8,7 +8,7 @@ import type { Line } from '../../src/buddy/dialogue';
 import { Director, RESCUE_CAP, RESCUE_WINDOW } from '../../src/buddy/director';
 import type { DirectorSink, DirectorView } from '../../src/buddy/director';
 import { LEAD, Leader, planPath } from '../../src/buddy/guide';
-import { CHEST, HOWTO, POOLS } from '../../src/buddy/script';
+import { CHEST, DIZZY, DIZZY_GAP, HOWTO, POOLS } from '../../src/buddy/script';
 import type { ScriptLine } from '../../src/buddy/script';
 import type { V2 } from '../../src/buddy/steer';
 import { createBuddyStore } from '../../src/buddy/store';
@@ -201,6 +201,23 @@ describe('Director: rescues free the hero and are capped (M1)', () => {
   });
 });
 
+describe('Dizzy (carnival spin): a gentle reused line, rate-limited', () => {
+  it('says "Wibble wobble!" at most once per DIZZY_GAP', () => {
+    const r = setup();
+    r.d.begin(false);
+    r.play(5);
+    const n = r.said.length;
+    r.d.onDizzy();
+    r.play(5);
+    r.d.onDizzy();
+    expect(r.said.slice(n).filter((l) => l.id === 'dizzy').map((l) => l.text)).toEqual([DIZZY.text]);
+    r.play(DIZZY_GAP);
+    r.d.onDizzy();
+    expect(r.said.filter((l) => l.id === 'dizzy').length).toBe(2);
+    expect(POOLS.flop.some((p) => p.text === DIZZY.text)).toBe(true);
+  });
+});
+
 describe('Chest hints match the step-on-the-symbol mechanic', () => {
   it('no chest line asks for a button press', () => {
     for (const l of [...HOWTO.chest, CHEST.findKey, CHEST.shape] as ScriptLine[]) {
@@ -208,6 +225,7 @@ describe('Chest hints match the step-on-the-symbol mechanic', () => {
       expect(l.text).not.toMatch(/\bpress\b|\bE\b|button/i);
       expect(l.extra ?? null).not.toBe('lock');
     }
+    expect(CHEST.shape.extra).toBe('step');
     expect(CHEST.shape.text).toMatch(/step/i);
   });
 });

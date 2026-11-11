@@ -23,7 +23,7 @@ import type { Goal } from './goals';
 import type { BuddyStore } from './store';
 import type { EconId, HowToTopic, KeyNames, PoolId, ScriptLine, TipId } from './script';
 import {
-  CHEST, CHUTE, COUNT, ECON, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, STORY_GLASSES_BEAT, SUNSET, TIPS,
+  CHEST, CHUTE, COUNT, DIZZY, DIZZY_GAP, ECON, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, STORY_GLASSES_BEAT, SUNSET, TIPS,
   follow, line, needGems, skillTip, suggest,
 } from './script';
 import { MEGA_GAP, Memory, ShuffleBag, UNSOLICITED_GAP } from './pools';
@@ -209,6 +209,7 @@ export class Director {
   private lastHint = -99;
   private lastPrompt = -99;
   private lastMega = -99;
+  private lastDizzy = -99;
   private sunsetSaid = false;
   private bounces = 0;
   private counted = false;
@@ -424,6 +425,13 @@ export class Director {
     this.progress();
     this.react('chest', true);
     this.sink.celebrate(true);
+  }
+
+  /** The hero got dizzy (a carnival spin): a gentle "wibble wobble", rate-limited (not a nag). */
+  onDizzy(): void {
+    if (this.playT - this.lastDizzy < DIZZY_GAP) return;
+    this.lastDizzy = this.playT;
+    this.say(line(DIZZY, PRIORITY.react, 'dizzy'));
   }
 
   onFlop(): void {
