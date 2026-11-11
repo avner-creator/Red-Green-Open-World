@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sniffHeading, sniffSpot } from '../../src/buddy/sniff';
-import { FOLLOW, arrive, catchUpSpeed, followSlot, forward, generalWay, keepClear, right, shouldTeleport, turnTowards } from '../../src/buddy/steer';
+import { FOLLOW, arrive, catchUpSpeed, followSlot, forward, keepClear, right, shouldTeleport, turnTowards } from '../../src/buddy/steer';
 import type { V2 } from '../../src/buddy/steer';
 import { placeBubble } from '../../src/ui/buddy/place';
 
@@ -63,15 +63,6 @@ describe('follow steering', () => {
     const y = turnTowards(3, -3, 1, 0.1);
     expect(y).toBeGreaterThan(3); // wraps through PI
     expect(y - 3).toBeCloseTo(0.1);
-  });
-
-  it('the intro "general way" is snapped to 8 sectors and stops short of the spot', () => {
-    const hero = { x: 0, z: 0 };
-    const spot = { x: 3, z: 10 };
-    const w = generalWay(hero, spot, 6);
-    expect(Math.hypot(w.x, w.z)).toBeCloseTo(6);
-    const ang = Math.atan2(w.x, w.z) / (Math.PI / 4);
-    expect(Math.abs(ang - Math.round(ang))).toBeLessThan(1e-9);
   });
 });
 

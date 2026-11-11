@@ -9,7 +9,8 @@
  *
  * RULE: Pip never reveals a weak-eye object. He sniffs around when a gem is near (`gem:near`
  * carries no position), with a wander that ignores the gem (sniff.ts). He never faces or walks to
- * a gem, key or lock.
+ * a gem, key or lock: he only leads to attraction anchors (guide.ts), and in the intro he puts
+ * on his own magic glasses instead of showing a way.
  */
 import * as THREE from 'three';
 import { chestHintState } from '../activities/chests';
@@ -31,7 +32,9 @@ import type { ExternalKind } from './rides';
 import { EXPLAIN, REACT, line } from './script';
 import type { KeyNames } from './script';
 import { sniffSpot } from './sniff';
-import { FOLLOW, arrive, catchUpSpeed, followSlot, forward, generalWay, keepClear, right, shouldTeleport, teleportSpot, turnTowards, yawTo } from './steer';
+import { Leader } from './guide';
+import type { LeadOut } from './guide';
+import { FOLLOW, angleDelta, arrive, catchUpSpeed, followSlot, forward, keepClear, right, shouldTeleport, teleportSpot, turnTowards, yawTo } from './steer';
 import type { V2 } from './steer';
 import { createBuddyStore } from './store';
 import { GLASSES_ATTRACTIONS, type Attraction } from './types';
@@ -113,6 +116,8 @@ export interface BuddyTestApi {
   ride(): RideView;
   /** Every line Pip started saying, in order (text + id). */
   history(): { text: string; id: string }[];
+  /** Leading state: where Pip leads (attraction id) and the hop state. */
+  lead(): { to: string | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
 }
 
 declare global {
@@ -145,7 +150,13 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let yaw = 0;
   let side = 1;
   let t = 0;
-  let lead: V2 | null = null;
+  const leader = new Leader((p) => ctx.world.isLand(p.x, p.z));
+  let leadOut: LeadOut | null = null;
+  /** Seconds left of the stuck-at-a-fence camera help. */
+  let assistT = 0;
+  let assistOn = false;
+  let gogglesT = 0;
+  let offscreenT = 0;
   let zoomT = 0;
   let danceT = 0;
   let lickT = 0;
@@ -164,6 +175,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let prevHeroVy = 0;
   let onTramp = false;
   let wasSpeaking = false;
+  let pipOnScreen = true;
   let carryingKey = false;
   const openedChests = new Set<number>();
   let canopy: THREE.Object3D | null = null;
@@ -257,8 +269,15 @@ export function createBuddy(ctx: GameContext): GameSystem {
       if (!talk) return;
       queue.say(l);
     },
-    lead(target) {
-      lead = target;
+    lead(target, opts) {
+      leader.set(target, opts?.radius ?? 6, opts?.fetch ?? false);
+      if (!target) leadOut = null;
+      assistT = target && opts?.assist ? 6 : 0;
+    },
+    glasses(seconds) {
+      gogglesT = Math.max(gogglesT, seconds);
+      cheerT = Math.max(cheerT, 1.2);
+      voice.bark('sniff');
     },
     celebrate(big) {
       zoomT = Math.max(zoomT, big ? 2.4 : 1.3);
@@ -276,19 +295,6 @@ export function createBuddy(ctx: GameContext): GameSystem {
         chestsOpened: ctx.session.state.chests,
         earned: ctx.session.state.earned ?? 0,
       });
-    },
-    gemWay() {
-      const h = hero();
-      let best: V2 | null = null;
-      let bestD = Infinity;
-      for (const s of ctx.world.gemSpots) {
-        const d = Math.hypot(s.position.x - h.x, s.position.z - h.z);
-        if (d > 4 && d < bestD && ctx.world.isLand(s.position.x, s.position.z)) {
-          bestD = d;
-          best = { x: s.position.x, z: s.position.z };
-        }
-      }
-      return best ? generalWay(h, best, Math.min(7, bestD * 0.55)) : null;
     },
     anchor(name) {
       const a = anchorOf(name);
@@ -554,6 +560,12 @@ export function createBuddy(ctx: GameContext): GameSystem {
     let pose: Pose = 'stand';
     let clear: number = FOLLOW.personal;
     const dHero = Math.hypot(pos.x - h.x, pos.z - h.z);
+    leadOut = leader.active && p.mode === 'walk' ? leader.update(dt, { x: pos.x, z: pos.z }, h) : null;
+    if (leadOut?.state === 'arrived') leadOut = null;
+    // Talking but off screen (not leading): come back into view so the bubble sits on Pip.
+    if (queue.current && !pipOnScreen && !leadOut) offscreenT += dt;
+    else offscreenT = 0;
+    const lead = leadOut;
     const sniffing = t < sniffUntil && !lead && !onTramp && p.mode === 'walk' && hs < 2.5 && dHero < 5;
     inp.look = lookV.set(p.position.x, p.position.y + 1.35, p.position.z);
     if (lickPending || lickT > 0) {
@@ -583,14 +595,25 @@ export function createBuddy(ctx: GameContext): GameSystem {
       const r = TRAMPOLINE_MAT + 0.9;
       target = { x: ta.position.x + ((pos.x - ta.position.x) / d) * r, z: ta.position.z + ((pos.z - ta.position.z) / d) * r };
       maxSpeed = catchUpSpeed(Math.hypot(target.x - pos.x, target.z - pos.z), 0);
+    } else if (offscreenT > 0.3) {
+      target = followSlot(h, p.yaw, hs, side);
+      maxSpeed = 12;
     } else if (zoomT > 0) {
       const a = t * 3.4;
       target = { x: h.x + Math.sin(a) * 2.4, z: h.z + Math.cos(a) * 2.4 };
       maxSpeed = 10;
-    } else if (lead) {
-      target = lead;
-      maxSpeed = catchUpSpeed(Math.hypot(target.x - pos.x, target.z - pos.z), hs) * 0.85;
+    } else if (leadOut) {
+      // Leading: run a hop ahead, stop and look back (bark) until the hero is close, fetch them
+      // if they do not come. Fetching is a sprint.
+      target = leadOut.target;
+      const far = Math.hypot(target.x - pos.x, target.z - pos.z);
+      maxSpeed = leadOut.state === 'fetch' ? 12 : Math.max(7.5, catchUpSpeed(far, hs));
       clear = 0.6;
+      if (leadOut.startedWaiting) {
+        voice.bark('bark');
+        barkPulse = 1;
+        cheerT = Math.max(cheerT, 0.5);
+      }
     } else if (sniffing) {
       target = sniffSpot(h, t, 1.3);
       maxSpeed = 2.4;
@@ -629,7 +652,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     else if (pose !== 'dance') {
       // Standing still: face the hero, or the camera while talking (he talks to the player).
       const cam = ctx.camera.position;
-      wantYaw = queue.current && !lead ? yawTo(pos, { x: cam.x, z: cam.z }) : yawTo(pos, h);
+      wantYaw = queue.current && !lead ? yawTo(pos, { x: cam.x, z: cam.z }) : yawTo(pos, h); // leading: looks back at the hero
     }
     if (pose === 'dance') wantYaw = yaw + dt * 5;
     const prevYaw = yaw;
@@ -637,9 +660,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     inp.turn = (yaw - prevYaw) / Math.max(dt, 1e-4);
 
     // Sit when the hero stands still next to him (or while waiting at a lead spot).
-    const atLead = lead && Math.hypot(lead.x - pos.x, lead.z - pos.z) < 1;
-    if (pose === 'stand' && speed < 0.3 && (hs < 0.3 || atLead) && !onTramp && director.stillT > 1.2) pose = 'sit';
-    if (pose === 'stand' && atLead && speed < 0.3) pose = 'sit';
+    if (pose === 'stand' && speed < 0.3 && hs < 0.3 && !lead && !onTramp && director.stillT > 1.2) pose = 'sit';
     inp.pose = pose;
     inp.speed = pose === 'sniff' ? Math.max(speed, 0.6) : speed;
     if (speed > 6) pant = Math.min(1, pant + dt * 0.5);
@@ -652,8 +673,35 @@ export function createBuddy(ctx: GameContext): GameSystem {
     inp.hop = hop;
 
     // Left far behind: pop back next to the hero.
-    const limit = lead ? 45 : FOLLOW.teleportDist;
+    const limit = lead ? 60 : FOLLOW.teleportDist;
     if (!inExternal && shouldTeleport(pos, h, limit)) placeNearHero();
+  };
+
+  /**
+   * Stuck at a fence while pushing forward: ease the camera (movement is camera-relative) towards
+   * Pip's way so the same push walks the hero after him. Looking around cancels it at once.
+   */
+  const updateAssist = (dt: number): void => {
+    const p = ctx.player;
+    const looking = Math.abs(ctx.input.state.lookX) + Math.abs(ctx.input.state.lookY) > 1e-3;
+    const want = assistT > 0 && p.mode === 'walk' && !looking && leader.active && !!ctx.cameraRig;
+    assistT = Math.max(0, assistT - dt);
+    if (looking) assistT = 0;
+    if (want) {
+      const to = leadOut?.state === 'fetch' || !leadOut ? leader.dest : leadOut.target;
+      if (to) {
+        const h = hero();
+        if (Math.hypot(to.x - h.x, to.z - h.z) > 1) {
+          ctx.cameraRig.setOverride({ yawOffset: angleDelta(p.yaw, yawTo(h, to)) });
+          assistOn = true;
+          return;
+        }
+      }
+    }
+    if (assistOn) {
+      assistOn = false;
+      ctx.cameraRig?.setOverride(null);
+    }
   };
 
   const project = (world: THREE.Vector3): { x: number; y: number; z: number } => {
@@ -673,14 +721,26 @@ export function createBuddy(ctx: GameContext): GameSystem {
     return { x: (a.x + b.x) / 2 - w / 2, y: b.y - hgt * 0.08, w, h: hgt * 1.08 };
   };
 
-  const pipScreen = (): { x: number; y: number } | null => {
+  /**
+   * Pip's head on screen. Off screen: the point on the screen edge in his direction (`on` false),
+   * so the bubble docks at that edge with its tail pointing towards him.
+   */
+  const pipScreen = (): { x: number; y: number; on: boolean } | null => {
     if (!model.object.visible) return null;
     const head = model.object.localToWorld(lookV.copy(headLocal));
     const s = project(head);
     const w = ctx.uiRoot.clientWidth || window.innerWidth;
     const hh = ctx.uiRoot.clientHeight || window.innerHeight;
-    if (s.z > 1 || s.x < -20 || s.x > w + 20 || s.y < -20 || s.y > hh + 20) return null;
-    return { x: s.x, y: s.y };
+    if (s.z <= 1 && s.x >= 0 && s.x <= w && s.y >= 0 && s.y <= hh) return { x: s.x, y: s.y, on: true };
+    // Direction from the screen centre (behind the camera, the projection is mirrored).
+    let dx = s.x - w / 2;
+    let dy = s.y - hh / 2;
+    if (s.z > 1) {
+      dx = -dx;
+      dy = Math.abs(dy) + hh;
+    }
+    const k = Math.min(Math.abs((w / 2 - 4) / (dx || 1e-6)), Math.abs((hh / 2 - 4) / (dy || 1e-6)));
+    return { x: w / 2 + dx * k, y: hh / 2 + dy * k, on: false };
   };
 
   const faceFor = (): Face => {
@@ -713,6 +773,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       line: () => queue.current?.line.text ?? null,
       ride: () => ride,
       history: () => history.slice(),
+      lead: () => ({ to: director.leadTo, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
     };
   }
 
@@ -736,10 +797,16 @@ export function createBuddy(ctx: GameContext): GameSystem {
 
       if (!updateRide(dt)) updateFoot(dt);
       prevMode = ctx.player.mode;
+      gogglesT = Math.max(0, gogglesT - dt);
+      if (gogglesT > 0) inp.goggles = true;
+      if (playing) updateAssist(dt);
 
       if (playing) {
         pollPad();
+        const st = ctx.input.state;
         const view: DirectorView = {
+          pushing: Math.hypot(st.moveX, st.moveY) > 0.3,
+          look: Math.abs(st.lookX) + Math.abs(st.lookY),
           hero: hero(),
           heroSpeed: heroSpeed(),
           onFoot: ctx.player.mode === 'walk',
@@ -775,7 +842,9 @@ export function createBuddy(ctx: GameContext): GameSystem {
 
       if (playing) {
         ui.setDevice(ctx.input.state.device);
-        ui.update(queue.revealFraction(), queue.current ? pipScreen() : null, heroRect());
+        const ps = queue.current ? pipScreen() : null;
+        pipOnScreen = !queue.current || !!ps?.on;
+        ui.update(queue.revealFraction(), ps, heroRect());
       }
     },
     dispose(): void {
