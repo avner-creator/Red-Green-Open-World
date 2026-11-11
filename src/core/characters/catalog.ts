@@ -78,6 +78,28 @@ export interface FaceDef {
   readonly inIdle?: boolean;
 }
 
+/**
+ * Chibi look (see ./chibi.ts): bone scales, a relaxed stance and friendlier colours, layered on the
+ * CC0 model at load. Bone scales are multipliers on the rest scale (a number = uniform; a triple =
+ * the bone's local x, y, z: bones run along their local Y).
+ */
+export interface ChibiDef {
+  readonly bones?: Readonly<Record<string, number | readonly [number, number, number]>>;
+  /** Extra model lift after the automatic foot fix, metres in character space. */
+  readonly lift?: number;
+  /** Calm-pose aims: turn `bone` so `child` lies along `dir` (character space, +Z forward). */
+  readonly aim?: readonly { readonly bone: string; readonly child: string; readonly dir: readonly [number, number, number]; readonly w?: number }[];
+  /** Calm-pose extra local rotations (radians, XYZ Euler), e.g. a head tilt. */
+  readonly tilt?: Readonly<Record<string, readonly [number, number, number]>>;
+  /** Flat material recolours by material name (untextured models). */
+  readonly materials?: Readonly<Record<string, string>>;
+  /**
+   * Textured suits: near-black texels become `mitten` on the hands and `accent` elsewhere (never
+   * on the head); `sat` scales the suit's colour saturation (candy look).
+   */
+  readonly suit?: { readonly mitten: string; readonly accent: string; readonly sat?: number; readonly head?: string; readonly collar?: number };
+}
+
 export interface CharacterDef {
   readonly id: CharacterId;
   /** Short display name (2–8 letters, shown big on the select carousel). */
@@ -118,6 +140,8 @@ export interface CharacterDef {
   readonly springs?: readonly string[];
   /** Smooth the normals of a faceted source (rounder look). */
   readonly smooth?: boolean;
+  /** Chibi proportions, stance and colours (see ./chibi.ts). */
+  readonly chibi?: ChibiDef;
   /** Warm shading tweaks (see ./warm.ts). */
   readonly warm?: { readonly fill?: number; readonly rim?: number };
   /** Footsteps per walk/run clip cycle (2 for most; drives the step bounce). */
@@ -168,6 +192,41 @@ function astroAttach(headY: number, headZ: number, faceY: number, faceZ: number)
     head: { bone: 'Head', offset: [0, headY, headZ], scale: 1.25 },
     face: { bone: 'Head', offset: [0, faceY, faceZ], scale: 1.25 },
     back: { bone: 'Torso', offset: [0, 0.95, -0.3], scale: 1.1 },
+  };
+}
+
+/**
+ * Chibi look for the space-suit heroes: bigger head, stubby mitten hands, big boots, a round belly,
+ * arms hanging relaxed at the sides and a friendly head tilt when calm.
+ */
+function astroChibi(mitten: string, accent: string, head = 1.4, headTint?: string, collar?: number): ChibiDef {
+  const fingers = (side: 'L' | 'R'): Record<string, readonly [number, number, number]> => ({
+    [`Pinky1.${side}`]: [0.9, 0.42, 0.9],
+    [`Middle1.${side}`]: [0.9, 0.42, 0.9],
+    [`Index1.${side}`]: [0.9, 0.42, 0.9],
+    [`Thumb1.${side}`]: [0.85, 0.5, 0.85],
+  });
+  return {
+    bones: {
+      Head: head,
+      Abdomen: [1.12, 1, 1.12],
+      'Foot.L': 1.25,
+      'Foot.R': 1.25,
+      ...fingers('L'),
+      ...fingers('R'),
+    },
+    aim: [
+      { bone: 'Hips', child: 'Abdomen', dir: [0, 1, 0] },
+      { bone: 'Abdomen', child: 'Torso', dir: [0, 1, 0.05] },
+      { bone: 'Torso', child: 'Neck', dir: [0, 1, 0.08] },
+      { bone: 'Neck', child: 'Head', dir: [0, 1, 0.1] },
+      { bone: 'UpperArm.L', child: 'LowerArm.L', dir: [0.3, -1, 0.04] },
+      { bone: 'UpperArm.R', child: 'LowerArm.R', dir: [-0.3, -1, 0.04] },
+      { bone: 'LowerArm.L', child: 'Middle1.L', dir: [0.12, -1, 0.3] },
+      { bone: 'LowerArm.R', child: 'Middle1.R', dir: [-0.12, -1, 0.3] },
+    ],
+    tilt: { Head: [0, 0, 0.12] },
+    suit: { mitten, accent, sat: 1.35, head: headTint, collar },
   };
 }
 
@@ -223,6 +282,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Hop', loop: true },
     attach: astroAttach(1.58, 0.15, 1.45, 0.45),
+    chibi: astroChibi('#ffd84a', '#ffb366'),
     price: 0,
     signature: 'superBounce',
     freePowers: ['bounceBall', 'doubleJump'],
@@ -241,6 +301,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Dance', loop: true },
     attach: astroAttach(1.68, 0, 1.42, 0.4),
+    chibi: astroChibi('#ffb08a', '#d9733f'),
     price: 0,
     signature: 'dash',
     freePowers: ['rainbowSlide', 'glide'],
@@ -259,6 +320,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Wave', loop: true },
     attach: astroAttach(1.55, 0, 1.36, 0.3),
+    chibi: astroChibi('#ffa94d', '#9a6a3a', 1.4, '#7a5534'),
     price: 0,
     signature: 'glide',
     freePowers: ['bubbleShield', 'doubleJump'],
@@ -302,6 +364,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Spin', loop: true },
     attach: astroAttach(1.7, 0.08, 1.5, 0.3),
+    chibi: astroChibi('#fff1a8', '#e0609a', 1.4, undefined, 0.2),
     price: 15,
     signature: 'doubleJump',
     freePowers: ['glide', 'rainbowSlide'],
