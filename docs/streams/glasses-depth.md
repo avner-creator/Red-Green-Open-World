@@ -396,6 +396,10 @@ It is listed by the main session as still to assign after QA 4; nothing was chan
 
 ## Test results
 
+**Follow-up after integration (code at `9f07a00`, which includes `origin/main` `32eaf36`;
+`a32d298` adds docs only), 2026-11-12:** `npm run verify` is green — **1072 unit tests passed**
+(102 files); **276 e2e tests passed, 4 skipped** (the skips come from `main`), in 16.7 minutes.
+
 **Phase 2 (final branch, code at `c4368c0`, which includes `origin/main` `b296977` and
 `origin/integration/m1` `161edf3`; later commits are docs only), 2026-11-11:** `npm run verify`
 is green — typecheck and lint clean; **977 unit tests passed** (92 files); build passed;
