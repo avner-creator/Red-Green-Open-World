@@ -176,6 +176,22 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
     return true;
   }
 
+  /** No prop mesh (canopies included, merged batches too) between an eye and the panel's centre, ends and badge. */
+  function panelClear(x: number, z: number, eyeH: number, site: GlassesSite): boolean {
+    const by = ctx.world.heightAt(site.board.x, site.board.z);
+    const eye = new THREE.Vector3(x, ctx.world.heightAt(x, z) + eyeH, z);
+    const ex = Math.cos(site.yaw);
+    const ez = -Math.sin(site.yaw);
+    const to = new THREE.Vector3();
+    for (const [k, h] of [[0, BOARD.panelY], [-2.2, BOARD.panelY], [2.2, BOARD.panelY], [0, BOARD.topperY]] as const) {
+      to.set(site.board.x + ex * k, by + h, site.board.z + ez * k).sub(eye);
+      const len = to.length();
+      to.normalize();
+      if (sceneHit(eye, to, len - 0.6) || sceneHit(eye, to, len - 0.6, true)) return false;
+    }
+    return true;
+  }
+
   /** Nothing at all (terrain included) between an eye at (x, z, ground + `eyeH`) and the board's panel. */
   function sightClear(x: number, z: number, eyeH: number, site: GlassesSite): boolean {
     const by = ctx.world.heightAt(site.board.x, site.board.z) + BOARD.panelY;
@@ -437,6 +453,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         // Aim between the site centre and its board so both are in view.
         const aim = { x: site.x * 0.55 + site.board.x * 0.45, z: site.z * 0.55 + site.board.z * 0.45 };
         let best: { x: number; z: number } | null = null;
+        const boardY = ctx.world.heightAt(site.board.x, site.board.z);
         outer: for (const half of [4, 3, 2, 0]) {
           for (const d of [GLASSES.viewDistance, 14, 10, 17, 8, 20]) {
             for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4]) {
@@ -449,6 +466,10 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
               const back = { x: c.x + (c.x - aim.x) * k, z: c.z + (c.z - aim.z) * k };
               if (half > 0 && (!corridorClear(c.x, c.z, site.board.x, site.board.z, half) || !corridorClear(back.x, back.z, site.board.x, site.board.z, half))) continue;
               if (!sightClear(c.x, c.z, 1.7, site) || !sightClear(back.x, back.z, 3.2, site)) continue;
+              // Not far below the board (the camera would look at its posts), and no prop or
+              // canopy between the camera and any part of the panel.
+              if (half > 0 && ctx.world.heightAt(c.x, c.z) < boardY - 1.5) continue;
+              if (half > 0 && !panelClear(back.x, back.z, 3.2, site)) continue;
               best = c;
               break outer;
             }
