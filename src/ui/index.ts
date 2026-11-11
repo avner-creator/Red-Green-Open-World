@@ -117,8 +117,8 @@ export function createUi(ctx: GameContext): UiApi {
   /** Open the dressing room from play: pause, dressing room on top; closing resumes. */
   const dressFromPlay = (): void => {
     if (!canDressNow(ctx) || calibrating || ctx.ui.menuOpen) return;
-    shopOpen = true;
-    ctx.session.pause();
+    // Same path as the Gear Shack kiosk: pauses with the dressing room on top, and Pip's how-to.
+    ctx.events.emit('shop:open', {});
   };
   setWardrobeOpener(() => {
     if (phase() === 'playing') dressFromPlay();

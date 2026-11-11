@@ -20,6 +20,12 @@
    "spoken": "A mega gem! The spiky ones are worth five!",
    "dur": 2.57
   },
+  "a-present-for-you-a-silly-duck-hat": {
+   "file": "a-present-for-you-a-silly-duck-hat.mp3",
+   "text": "A present for you! A silly duck hat!",
+   "spoken": "A present for you! A silly duck hat!",
+   "dur": 2.11
+  },
   "a-secret-path-stand-on-the-gold-ring-glasses-show-hidden-stones": {
    "file": "a-secret-path-stand-on-the-gold-ring-glasses-show-hidden-stones.mp3",
    "text": "A secret path! Stand on the gold ring. Glasses show hidden stones!",
@@ -241,6 +247,12 @@
    "text": "Don't stop now!",
    "spoken": "Don't stop now!",
    "dur": 1.08
+  },
+  "dress-up-time-pick-a-goofy-hat": {
+   "file": "dress-up-time-pick-a-goofy-hat.mp3",
+   "text": "Dress up time! Pick a goofy hat!",
+   "spoken": "Dress up time! Pick a goofy hat!",
+   "dur": 2.02
   },
   "each-eye-sees-half-a-shape-run-through-the-matching-arch": {
    "file": "each-eye-sees-half-a-shape-run-through-the-matching-arch.mp3",
@@ -913,12 +925,6 @@
    "text": "Pick silly parts for your buggy! Gems pay for them.",
    "spoken": "Pick silly parts for your buggy! Gems pay for them.",
    "dur": 2.76
-  },
-  "pick-something-cool-your-gems-pay-for-it": {
-   "file": "pick-something-cool-your-gems-pay-for-it.mp3",
-   "text": "Pick something cool! Your gems pay for it.",
-   "spoken": "Pick something cool! Your gems pay for it.",
-   "dur": 2.28
   },
   "prize-time": {
    "file": "prize-time.mp3",

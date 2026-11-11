@@ -249,7 +249,10 @@ export const ECON = {
   key: { text: 'You found a key! Bring it back to its chest!', icon: 'key', extra: 'chest', mood: 'excited' },
   ticket: { text: 'The first ride is free. After that, rides cost gems!', icon: 'ticket', extra: 'gem', mood: 'curious', callout: HUD.wallet },
   stamp: { text: 'A Fun Pass stamp! Fill the card for giant prizes!', icon: 'mission', extra: 'jackpot', mood: 'proud', callout: HUD.missions },
-  shop: { text: 'Pick something cool! Your gems pay for it.', icon: 'shop', extra: 'gem', mood: 'happy' },
+  // First time in the dressing room (HUD hanger, I key, Gear Shack kiosk).
+  shop: { text: 'Dress up time! Pick a goofy hat!', icon: 'hat', extra: 'gem', mood: 'happy' },
+  // The first-minute gift (`src/activities/gear/gift.ts`): the rubber-duck hat.
+  gift: { text: 'A present for you! A silly duck hat!', icon: 'hat', mood: 'excited' },
 } satisfies Record<string, ScriptLine>;
 export type EconId = keyof typeof ECON;
 

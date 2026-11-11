@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { chestHintState } from '../activities/chests';
 import { GEMS } from '../config';
+import { GIFT_ITEM } from '../activities/gear/goofy';
 import type { Anchor, GameContext, GameSystem } from '../types';
 import { CONTROL_MAP } from '../ui/controlMap';
 import { createBuddyUi } from '../ui/buddy';
@@ -473,6 +474,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     on('shop:open', () => director.onShopOpen()),
     on('shop:purchased', () => director.onPurchased()),
     on('item:unlocked', (e) => {
+      if (e.itemId === GIFT_ITEM) director.onGift();
       if (e.source !== 'starter') director.onUnlocked();
     }),
     on('ticket:paid', (e) => director.onTicketPaid(e.free)),
