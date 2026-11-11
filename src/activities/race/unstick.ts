@@ -62,7 +62,7 @@ export class StuckWatch {
     if (s.progress > this.best + UNSTICK.progressStep) {
       this.best = s.progress;
       this.sinceProgress = 0;
-    } else this.sinceProgress += s.dt;
+    } else if (s.throttle > UNSTICK.wedgedThrottle || s.speed > 2) this.sinceProgress += s.dt; // a child waiting is not lost
     if (this.flipped >= UNSTICK.flippedSeconds) return 'flipped';
     if (this.wedged >= UNSTICK.wedgedSeconds) return 'wedged';
     if (this.lost >= UNSTICK.lostSeconds || this.sinceProgress >= UNSTICK.noProgressSeconds) return 'lost';

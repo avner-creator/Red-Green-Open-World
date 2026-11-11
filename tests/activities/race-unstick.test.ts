@@ -33,7 +33,7 @@ describe('race stuck watch (QA5 M3)', () => {
   it('a stop with no throttle is not "wedged" (a child may just wait)', () => {
     const w = new StuckWatch();
     w.reset(0);
-    expect(run(w, { ...driving, speed: 0, throttle: 0 }, 5).reason).toBeNull();
+    expect(run(w, { ...driving, speed: 0, throttle: 0 }, 12).reason).toBeNull();
   });
 
   it('flipped: on its side for 1.5 s', () => {
