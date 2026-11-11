@@ -174,7 +174,8 @@ export function create(env: MechanicEnv): Mechanic {
   function goIdle(): void {
     state = 'idle';
     pressed = -1;
-    fade = ODD.idleFade;
+    // After a round (celebration) the circles come back once the booth is at rest again.
+    fade = kit.phase() === 'idle' ? ODD.idleFade : 0;
     applyShapes();
   }
 
@@ -265,7 +266,14 @@ export function create(env: MechanicEnv): Mechanic {
     update(dt) {
       time += dt;
       kit.update(dt);
-      if (state === 'open') {
+      if (state === 'idle') {
+        // The idle circles fade away while a round runs (countdown, celebration), back at rest.
+        const to = kit.phase() === 'idle' ? ODD.idleFade : 0;
+        if (fade !== to) {
+          fade = to > fade ? Math.min(to, fade + dt * 2) : Math.max(to, fade - dt * 4);
+          shapes.setFade(fade);
+        }
+      } else if (state === 'open') {
         if (fade < 1) {
           fade = Math.min(1, fade + dt / ODD.fadeInSeconds);
           shapes.setFade(fade);
