@@ -175,7 +175,21 @@ test('Auto challenge on: hits make the weak object fainter, never touching blue;
   await pacedHits(12);
   await page.evaluate(() => window.__rgChallenge!.advance(20));
   expect(await level()).toBe(6);
-  await results(6, false);
+  // Misses from different mechanics count at once: three of them → level 3.
+  for (const m of ['missA', 'missB', 'missC']) await results(1, false, m);
+  expect(await page.evaluate(() => window.__rgChallenge!.target().level)).toBe(3);
+  // A spree of 6 misses from one mechanic within ~1.5 s of play is paced to one step: level 2.
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    for (let i = 0; i < 6; i++) {
+      rg.ctx.events.emit('glasses:result', { mechanic: 'bellSweet', kind: 'timeIt', tier: 2, hit: false });
+      rg.step(1 / 20, 5, false);
+    }
+  });
+  expect(await page.evaluate(() => window.__rgChallenge!.target().level)).toBe(2);
+  const spree = await page.evaluate(() => window.__rg!.ctx.vision.sessionSummary!().rows.find((r) => r.mechanic === 'bellSweet'));
+  expect(spree).toEqual({ mechanic: 'bellSweet', kind: 'timeIt', tier: 2, hits: 0, misses: 6 });
+  for (const m of ['missD', 'missE']) await results(1, false, m);
   await page.evaluate(() => window.__rgChallenge!.advance(20));
   await frame();
   expect(await level()).toBe(0);

@@ -2,7 +2,8 @@
  * Pure "Auto challenge" staircase (no three.js, no DOM, no clocks: the caller passes playing
  * time in): 3 counted hits in a row → one step harder, where a hit counts only when at least
  * `hitSpacingSeconds` of playing time passed since the last counted hit (bursts are paced),
- * 1 miss → one step easier (streak resets), no hit for `droughtSeconds` of playing time → one
+ * 1 counted miss → one step easier (streak resets), where a miss counts only when at least
+ * `missSpacingSeconds` passed since the last counted miss from the same mechanic, no hit for `droughtSeconds` of playing time → one
  * step easier (counted as a step down, not as a miss). Level is clamped to 0..maxLevel.
  */
 import { CHALLENGE } from './constants';
@@ -15,6 +16,8 @@ export interface StaircaseState {
   streak: number;
   /** Playing time (caller's clock) of the last hit that counted toward the streak; null = none yet. */
   lastCountedHit: number | null;
+  /** Per mechanic: playing time of the last miss that counted (stepped / reset the streak). */
+  lastCountedMiss: Record<string, number>;
   /** Playing seconds since the last hit (or the last drought step). */
   sinceHit: number;
   stepsUp: number;
@@ -29,7 +32,7 @@ export type ForcedPatch = Partial<Pick<ChallengeModifiers, 'level' | 'weakScale'
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 export function createStaircase(): StaircaseState {
-  return { level: 0, maxLevel: CHALLENGE.maxLevel, streak: 0, lastCountedHit: null, sinceHit: 0, stepsUp: 0, stepsDown: 0 };
+  return { level: 0, maxLevel: CHALLENGE.maxLevel, streak: 0, lastCountedHit: null, lastCountedMiss: {}, sinceHit: 0, stepsUp: 0, stepsDown: 0 };
 }
 
 export function resetStaircase(s: StaircaseState): void {
@@ -46,12 +49,17 @@ function step(s: StaircaseState, dir: -1 | 1): StepDir {
 }
 
 /**
- * A hit or a miss at playing time `now` (seconds, monotonic within a session). Returns the level
- * change (−1, 0, +1). A miss always counts at once. Every hit ends a drought, but only a hit at
- * least `hitSpacingSeconds` after the last counted one adds to the streak.
+ * A hit or a miss from `mechanic` at playing time `now` (seconds, monotonic within a session).
+ * Returns the level change (−1, 0, +1). A miss counts (step easier, streak reset) unless the same
+ * mechanic's last counted miss was less than `missSpacingSeconds` ago; then it changes nothing.
+ * Every hit ends a drought, but only a hit at least `hitSpacingSeconds` after the last counted
+ * one (any mechanic) adds to the streak.
  */
-export function staircaseResult(s: StaircaseState, hit: boolean, now: number): StepDir {
+export function staircaseResult(s: StaircaseState, hit: boolean, now: number, mechanic = ''): StepDir {
   if (!hit) {
+    const last = s.lastCountedMiss[mechanic];
+    if (last !== undefined && now - last < CHALLENGE.missSpacingSeconds) return 0;
+    s.lastCountedMiss[mechanic] = now;
     s.streak = 0;
     return step(s, -1);
   }
