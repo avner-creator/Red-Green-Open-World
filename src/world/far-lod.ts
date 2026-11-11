@@ -163,7 +163,42 @@ function collect(root: THREE.Object3D, seen: Set<THREE.Object3D>): void {
   }
   _box.getBoundingSphere(_sp);
   const site: Site = { root, center: _sp.center.clone().applyMatrix4(_inv.copy(root.matrixWorld).invert()), r: _sp.radius };
-  for (const e of loose) e.site = site;
+  // A loose mesh inside a much smaller sub-group (one booth of a long row) is placed by that group's
+  // own bounds, so a far booth's crowd/balloons drop out although the row's near end is close.
+  const subSites = new Map<THREE.Object3D, Site | null>();
+  for (const e of loose) {
+    const p = e.obj.parent;
+    let s: Site | null | undefined = p && p !== root ? subSites.get(p) : null;
+    if (s === undefined && p) {
+      s = subSite(p);
+      if (s && s.r > site.r * 0.6) s = null;
+      subSites.set(p, s);
+    }
+    e.site = s ?? site;
+  }
+}
+
+const _box2 = new THREE.Box3();
+
+/** Bounds of a sub-group: its bounded meshes, else its instanced meshes' instances (null: none). */
+function subSite(group: THREE.Object3D): Site | null {
+  _box2.makeEmpty();
+  for (let pass = 0; pass < 2 && _box2.isEmpty(); pass++) {
+    group.traverse((o) => {
+      const m = o as THREE.InstancedMesh;
+      if (!m.isMesh || !o.visible) return;
+      if (pass === 0 && o.frustumCulled !== false) {
+        const e = entries.get(o);
+        if (e) _box2.union(_sp.copy(e.sphere).applyMatrix4(o.matrixWorld).getBoundingBox(_sb));
+      } else if (pass === 1 && m.isInstancedMesh && m.count > 0) {
+        m.computeBoundingSphere();
+        if (m.boundingSphere && Number.isFinite(m.boundingSphere.radius)) _box2.union(_sp.copy(m.boundingSphere).applyMatrix4(m.matrixWorld).getBoundingBox(_sb));
+      }
+    });
+  }
+  if (_box2.isEmpty()) return null;
+  _box2.getBoundingSphere(_sp);
+  return { root: group, center: _sp.center.clone().applyMatrix4(_inv.copy(group.matrixWorld).invert()), r: _sp.radius };
 }
 
 function swapBack(e: Entry): void {

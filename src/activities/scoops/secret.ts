@@ -5,7 +5,6 @@
  * (still weak-eye-only). Nothing about it is in the main scene, the HUD or positional audio.
  */
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { VisionLayer } from '../../types';
 import type { GameContext } from '../../types';
 import { createGlowMaterial, createLayerMaterial } from '../../vision';
@@ -26,21 +25,13 @@ function starShape(points: number, outer: number, inner: number): THREE.Shape {
 
 /** The day's treat, about 0.2 m tall, centred on the origin. */
 function buildTreat(id: SecretId, bright: THREE.Material, dark: THREE.Material): THREE.Group {
-  // Parts are baked into one mesh per material (2 draws for the whole treat).
   const g = new THREE.Group();
-  const parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
-  const tmp = new THREE.Object3D();
-  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0, rx = 0, rz = 0, ry = 0): void => {
-    tmp.position.set(x, y, z);
-    tmp.rotation.set(rx, ry, rz);
-    tmp.updateMatrix();
-    const flat = geo.index ? geo.toNonIndexed() : geo.clone();
-    geo.dispose();
-    flat.applyMatrix4(tmp.matrix);
-    for (const k of Object.keys(flat.attributes)) if (k !== 'position' && k !== 'normal') flat.deleteAttribute(k);
-    let list = parts.get(mat);
-    if (!list) parts.set(mat, (list = []));
-    list.push(flat);
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0, rx = 0, rz = 0): THREE.Mesh => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, 0, rz);
+    g.add(m);
+    return m;
   };
   switch (id) {
     case 'starCandy': {
@@ -71,15 +62,11 @@ function buildTreat(id: SecretId, bright: THREE.Material, dark: THREE.Material):
       add(new THREE.CylinderGeometry(0.052, 0.052, 0.03, 12), dark, 0, 0.03, 0);
       for (let i = 0; i < 3; i++) {
         const a = (i / 3) * Math.PI * 2;
-        add(new THREE.BoxGeometry(0.008, 0.07, 0.05), bright, Math.sin(a) * 0.06, -0.07, Math.cos(a) * 0.06, 0, 0, a);
+        const fin = add(new THREE.BoxGeometry(0.008, 0.07, 0.05), bright, Math.sin(a) * 0.06, -0.07, Math.cos(a) * 0.06);
+        fin.rotation.y = a;
       }
       add(new THREE.CylinderGeometry(0.01, 0.01, 0.08, 6), dark, 0, -0.13, 0);
       break;
-  }
-  for (const [mat, list] of parts) {
-    const merged = mergeGeometries(list, false);
-    for (const geo of list) geo.dispose();
-    if (merged) g.add(new THREE.Mesh(merged, mat));
   }
   return g;
 }
@@ -105,13 +92,13 @@ export function createSecretTopping(ctx: GameContext, id: SecretId): SecretToppi
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), glowMat);
   group.add(glow);
   // Four sparkles orbiting the treat.
-  // Four sparkles orbiting the treat: one instanced draw.
   const sparkGeo = new THREE.OctahedronGeometry(0.025, 0);
-  const SPARKS = 4;
-  const sparkMesh = new THREE.InstancedMesh(sparkGeo, bright, SPARKS);
-  sparkMesh.frustumCulled = false;
-  group.add(sparkMesh);
-  const spark = new THREE.Object3D();
+  const sparks: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const s = new THREE.Mesh(sparkGeo, bright);
+    sparks.push(s);
+    group.add(s);
+  }
   group.visible = false;
   ctx.vision.add(group, VisionLayer.WeakOnly);
 
@@ -169,14 +156,11 @@ export function createSecretTopping(ctx: GameContext, id: SecretId): SecretToppi
         }
         treat.rotation.y = Math.sin(time * 1.3) * 0.6;
       }
-      for (let i = 0; i < SPARKS; i++) {
-        const a = time * 2.2 + (i / SPARKS) * Math.PI * 2;
-        spark.position.set(Math.cos(a) * 0.2, Math.sin(a * 1.7) * 0.1 + 0.05, Math.sin(a) * 0.2);
-        spark.scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin(time * 5 + i)));
-        spark.updateMatrix();
-        sparkMesh.setMatrixAt(i, spark.matrix);
+      for (let i = 0; i < sparks.length; i++) {
+        const a = time * 2.2 + (i / sparks.length) * Math.PI * 2;
+        sparks[i].position.set(Math.cos(a) * 0.2, Math.sin(a * 1.7) * 0.1 + 0.05, Math.sin(a) * 0.2);
+        sparks[i].scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin(time * 5 + i)));
       }
-      sparkMesh.instanceMatrix.needsUpdate = true;
     },
     dispose() {
       ctx.vision.remove(group);
