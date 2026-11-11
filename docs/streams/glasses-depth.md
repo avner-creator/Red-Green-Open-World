@@ -3,31 +3,97 @@
 Orchestrated stream (the orchestrator writes no code; builders are Opus/Sonnet subagents). Brief:
 `docs/PARALLEL_WORK.md` "Stream P". Design: `docs/GAME_DESIGN.md` "Red-green depth pass".
 
-**Status: Phase 1 in progress** — foundation and all six mechanics merged; polish and QA running.
-This file is updated at every merge into the branch.
+**Status: Phase 1 is done and ready to merge.** The branch contains `origin/main` as of
+`be5b4b2` (2026-11-11). Phase 2 has not started; it waits for the project owner's go-ahead.
 
-## Phase 1 parts
+Verify on the final branch: see "Test results" at the end.
 
-| Part | Where | Builder branch | State |
+## What Phase 1 adds, in one paragraph
+
+Six new mini-games that can only be played with the weaker eye (or with both eyes together),
+a toolkit of weak-eye / strong-eye building blocks for other attractions, an optional grown-up
+"Auto challenge" that gently makes weak-eye things harder after wins and easier after misses
+without touching the saved calibration, and a grown-up session summary with plain counts.
+
+## The six mini-games (`src/activities/glasses/<id>/`)
+
+Each has a wordless pictogram board, pays gems through the economy (`ctx.profile.earn(n,
+'mission')`), reports every hit and miss with the `glasses:result` event, uses at most 6 draw
+calls including its board, and is idle when the player is more than 70 m away.
+
+| Mini-game (id, kind) | How it plays | Why the weak eye is needed | Gems by tier |
 |---|---|---|---|
-| Shared types (additive) | `src/types.ts`, `src/settings.ts` | on `agent/glasses-depth` | merged |
-| Vision toolkit | `src/vision/toolkit/` | `agent/glasses-toolkit` | merged |
-| Per-layer fade, Auto challenge, session tally, debug view | `src/vision/challenge/`, `src/vision/debugView.ts` | `agent/glasses-challenge` | merged |
-| Mechanics framework | `src/activities/glasses/` | `agent/glasses-framework` | merged |
-| "Auto challenge" toggle + grown-up session summary | `src/ui/glasses/` | `agent/glasses-ui` | merged |
-| Glow-flies, Pip's lost toys | `src/activities/glasses/glowflies/`, `toys/` | `agent/glasses-follow` | merged |
-| Odd one out pedestals, Line-up targets | `src/activities/glasses/oddone/`, `lineup/` | `agent/glasses-tellapart` | merged |
-| Half-symbol gates, Dot-picture signs | `src/activities/glasses/gates/`, `dotsigns/` | `agent/glasses-botheyes` | merged |
-| QA pass and full `npm run verify` | — | — | waiting |
+| Glow-flies (`glowflies`, follow) | 4–5 weak-eye fireflies drift over a meadow (up to 8.5 m from the centre, 1.0–2.6 m up; the high ones need a jump). Run or jump through one to catch it. A both-eye lantern jar counts catches. A fly lives 9 / 7 / 5.5 s; one that leaves while the hero was within 3 m is a miss. | The flies exist only on the weak layer; nothing both-eye follows them. | 1 / 2 / 3 |
+| Pip's lost toys (`toys`, follow) | A weak-eye paw-print trail (ground prints plus a floating paw over each; only the next four glow) leads 25–40 m from Pip's basket to a hidden spot. The both-eye toy pops out only when the last print is reached. Three toys per session; a trail times out after 75 s. | The trail is weak-eye-only and the toy is not in the scene until it is found. | 5 / 7 / 10 |
+| Odd one out (`oddone`, tellApart) | Three pedestals with identical buttons and identical dark panels; a weak-eye shape on each, one different. Press the button under the different one. A per-session staircase makes the difference finer after a hit and coarser after a miss (other shape → arrow direction → ring gap side → narrower gap, smaller shape; 8 levels). | The shapes are weak-eye-only; panels, buttons and prompts are identical for every answer. | 2 / 3 / 5 |
+| Line-up bubbles (`lineup`, lineUp) | Stand on the pad: a strong-eye soap bubble floats ahead and a weak-eye sparkly hoop sits somewhere 5°–14° from the screen centre. Steer the hoop over the bubble and press Use. One guess per bubble; the hoop jumps to a new place after every press. | The hoop's place is unknown without the weak eye and the bubble is strong-eye-only. A blind press hits 5 % of the time at tier 1 and under 1 % at tier 3 (simulated in unit tests). | 1 / 2 / 4 |
+| Half-symbol gates (`gates`, lineUp) | A sign shows one half of a symbol to each eye; run through the arch whose both-eye symbol is the two halves together. Each half alone fits two arches. | Neither half alone identifies the arch (proved in both directions). | 3 / 4 / 6 |
+| Dot-picture signs (`dotsigns`, popOut) | A sign shows a red-green dot picture; press the pedestal button with the hidden shape. | Each eye alone sees plain noise; the shape exists only between the two eyes. | 3 / 5 / 8 |
 
-## What was built
+**Guessing does not pay.** In the three "pick one of three" games a miss is followed by a short
+nap (odd one out 5 / 8 s, dot signs 5 / 8 / 12 s, gates 3 / 6 / 8 s on the plate) and hits pay
+1 gem until two in a row are right. A random-guess bot earns about 4–5 gems per minute; a
+player who sees the answer earns 30–75. Line-up: blind play earns about 0.5 gems per minute.
 
-### Vision toolkit (`src/vision/toolkit/`, import from `'../../vision/toolkit'`)
+**Known limit.** Glow-flies are caught by running through them, so a child who cannot see them
+still catches a few by running laps. In the simulation a player heading for the flies catches
+6.6 times as many as one mowing the meadow blind.
+
+**Automated proofs for every mini-game** (`tests/e2e/glasses-follow.spec.ts`,
+`glasses-tellapart.spec.ts`, `glasses-botheyes.spec.ts`; helpers in `glasses-helpers.ts`):
+1. Channel test, all 4 lens/eye combinations: weak-eye parts change only the weak channel,
+   strong-eye parts only the strong channel; the other channel and blue are bit-identical.
+2. Answer-blind: with the weak layer hidden, the frames for two different answers are
+   bit-identical (for the both-eye games also the mirror with the strong layer hidden).
+3. A full round to a hit and one to a miss; the draw budget; idle when far.
+
+## Sites: fixed coordinates
+
+The six sites are a fixed table (`FIXED_SITES` in `src/activities/glasses/sites.ts`); only the
+height comes from the terrain. They no longer move when the world changes. Each site is a circle
+of radius 6 m. No anchor was added or moved.
+
+| id | x | z | Where | Nearest reserved point | Nearest anchor edge | Nearest road edge |
+|---|---|---|---|---|---|---|
+| `glowflies` | −40.7 | 73.2 | west meadow, west of the airstrip | ≥ 35 m | sillyZone ≥ 28 m | ≥ 30 m |
+| `oddone` | −47.4 | −2.2 | woods west of the plaza (49 m from spawn) | foamCourse 27 m | ranch 37 m | west 19 m |
+| `lineup` | 71.7 | −89.5 | by the ridge road towards the bridge | carnivalRow 70 m | trampoline 55 m | ridge 10 m |
+| `toys` | −50 | 13 | beside the west road (50 m from spawn) | foamCourse 40 m | ranch 23 m | west 9 m |
+| `gates` | 48 | 104 | south-east, past the loop road | bubbleArena 48 m | sillyZone 24 m | loop 19 m |
+| `dotsigns` | 64 | 8 | east of the park, by the path to the rocket pads | raceStart 35 m | launchPads 11 m | parklink 8 m |
+
+Rules every site meets (`staticProblems` in `sites.ts`, checked by the unit test
+`tests/activities/glasses-sites.test.ts` against `ANCHORS` and `ROADS` from
+`src/world/layout.ts`, so an anchor or road placed on a site later makes the test fail and name
+the site):
+- outside every anchor radius and anchor target, plus the site radius and a margin;
+- off every road (centreline ≥ half width + 1.5 m + 6 m; 4 m instead of 1.5 m on the race lap
+  roads `east`, `loop`, `south`);
+- centre ≥ 20 m from every reserved point and the whole circle + 2 m outside every reserved
+  footprint (`src/activities/glasses/reserved.ts`): carnivalRow (21, −42), iceCream (24, −2),
+  raceStart (29.5, 11.2) with paddock and podium, foamCourse (−25.5, −18.5) with its strip,
+  airstrip (−12, 46) with the runway and its approach, dragonRoost (−34, −130),
+  bubbleArena (35, 57.5), dinoRing (16, 58.5) with both booths, gearShack (14, 2);
+- ≥ 14 m between sites, ≥ 7 m from every gem and chest spot;
+- checked once when they were chosen: dry land, gentle slope, no collider, trunk or building.
+  If a fixed site is ever blocked at runtime it stays where it is and logs one warning.
+
+What reaches outside a site's circle: glow-flies roam up to 9 m from their centre (no
+colliders); line-up bubbles float 8–13 m ahead in the air (no colliders); the paw trail runs
+25–40 m from the toys site and keeps every print out of anchors, roads, colliders and the
+reserved footprints.
+
+**Asked of the world/UI owners (not done here):** these sites have no beacon, fingerpost arm or
+compass entry yet. Only two are within 55 m of spawn, because the space around the plaza is
+taken; a child will find the others while walking to the Silly Zone, the bridge, the rocket pads
+and the ranch.
+
+## Vision toolkit (`src/vision/toolkit/`, import from `'../../vision/toolkit'`)
 
 Small building blocks for the weak-eye and strong-eye layers. Each factory returns a
-`THREE.Object3D` plus a small controller (`setFade`, `update`, `dispose`); the caller registers the
-object with `ctx.vision.add(obj, VisionLayer.WeakOnly | StrongOnly)`. API cheat sheet with examples:
-`src/vision/toolkit/README.md`.
+`THREE.Object3D` plus a small controller (`setFade`, `update`, `dispose`); the caller registers
+the object with `ctx.vision.add(obj, VisionLayer.WeakOnly | StrongOnly)`. Cheat sheet with
+examples: `src/vision/toolkit/README.md`.
 
 | Block | Factory | Draw calls |
 |---|---|---|
@@ -42,75 +108,51 @@ object with `ctx.vision.add(obj, VisionLayer.WeakOnly | StrongOnly)`. API cheat 
 | Fader for any layer object | `createFader(object)` | – |
 
 Dot pictures: the strong pattern `S` is 50 % random dots from the seed only; the weak pattern is
-`S XOR shape`. Each eye alone sees plain noise; the shape exists only between the two eyes (unit
-tests + a bit-exact e2e proof). `pickCandidates` returns three symbols such that neither half
-alone identifies the answer.
+`S XOR shape`. Each eye alone sees plain noise; the shape exists only between the two eyes.
+`pickCandidates` returns three symbols such that neither half alone identifies the answer.
 
-### Compositor additions (`src/vision/`)
+## Compositor additions (`src/vision/`)
 
-- Separate per-layer multipliers in the compositor (`weakMul`, `strongMul`). At the defaults the
-  output is bit-identical to before (the existing vision, chest and activity specs pass unchanged).
+- Separate per-layer multipliers (`weakMul`, `strongMul`). At the defaults the output is
+  bit-identical to before (the existing vision, chest and activity specs pass unchanged).
 - `ctx.vision.setLayerFade(layer, fade, seconds?)`: fade a whole layer smoothly.
-- **Auto challenge** (`src/vision/challenge/`): runs only while `settings.autoChallenge === true`.
-  Three hits in a row → one step harder; a miss → one step easier; 40 s of play without a hit →
+- **Auto challenge** (`src/vision/challenge/`), only while `settings.autoChallenge === true`:
+  three hits in a row → one step harder; a miss → one step easier; 40 s of play without a hit →
   one step easier. Level 0..6; per level the weak layer is 7 % fainter, the other eye's contrast
-  5 % lower and toolkit objects 4 % smaller (floors 0.58 / 0.70 / 0.76). Changes glide over ~2 s.
-  It resets when a session starts, never calls `settings.set`, never writes storage and never
-  changes the crosstalk limit. Effective weak strength ≤ the calibrated value; effective contrast
-  stays within `[0.4, calibrated]`. The calibration screen always shows the calibrated values.
-  Numbers: `src/vision/challenge/constants.ts`.
+  5 % lower and toolkit objects 4 % smaller (floors 0.58 / 0.70 / 0.76). Changes glide over
+  about 2 s. It resets when a session starts, never calls `settings.set`, never writes storage
+  and never changes the crosstalk limit. Effective weak strength ≤ the calibrated value;
+  effective contrast stays within `[0.4, calibrated]`. The calibration screen always shows the
+  calibrated values. Numbers: `src/vision/challenge/constants.ts`.
 - **Session tally**: `ctx.vision.sessionSummary()` → rows by mechanic and tier (hits, misses),
-  seconds played, staircase steps. Cleared when a session starts, kept after it ends.
-  Inputs: every `glasses:result` event, plus `gem:collected` (as `gems`/find), `chest:key`
-  (`chestKeys`/find) and `chest:opened` (`chests`/lineUp) as hits.
-- Test hooks (`?test=1` only): `window.__rgChallenge` (`effective()`, `staircase()`,
-  `layerCoverage(layer)`, `setDebugView('off' | 'weak' | 'strong')`) and
-  `window.__rgVision.toolkit` (spawn any toolkit block in front of the camera).
+  seconds played, staircase steps. Cleared when a session starts, kept after it ends. Inputs:
+  every `glasses:result` event, plus `gem:collected` (`gems`), `chest:key` (`chestKeys`) and
+  `chest:opened` (`chests`) as hits.
 
-### Mechanics framework (`src/activities/glasses/`)
+## Mechanics framework (`src/activities/glasses/`)
 
-- `types.ts`: the `Mechanic` / `MechanicEnv` contract (read its header). Each mechanic lives in
+- `register.ts`: registration by the per-folder convention (`order = 190`: after every
+  attraction that adds colliders, before gear).
+- `types.ts`: the `Mechanic` / `MechanicEnv` contract (read its header). Each mini-game lives in
   its own subfolder and exports `create(env)`.
-- `sites.ts`: six sites found at boot — on land, gentle slope, outside every anchor radius in
-  `ctx.world.anchors` (anchors added later by other streams are avoided automatically), off the
-  roads, clear of gem and chest spots, free of colliders, board visible from the approach.
-  No anchor was added or moved. Sites found in the current world (x, z): glowflies (12, 24),
-  oddone (−25, −25), lineup (−11, 32) near the plaza (after the merge of main on 2026-11-10; before it
-  oddone (33, −3), lineup (−25, −20)); toys (13, 39) by the garage; gates (61, 10)
-  by the trampoline; dotsigns (45, 58) by the balloon.
+- `sites.ts`, `reserved.ts`: the fixed site table and the reserved places (above).
 - `board.ts` + `pictos.ts`: a wordless pictogram board per site (both eyes, one draw call, reads
   in R-only and G-only).
-- `rewards.ts`: `pay()` uses `ctx.profile.earn(n, 'mission')` when the economy is present and
-  always gives a toast and a sound; `result()` emits `glasses:result`.
-- Far-idle: a mechanic's layer objects are attached and its `update` runs only while the player
+- `rewards.ts`: `pay()` (economy + toast + sound) and `result()` (`glasses:result`).
+- Far-idle: a mini-game's layer objects are attached and its `update` runs only while the player
   is within 60 m (off beyond 70 m) and the session is playing.
-- Test API (`?test=1`): `window.__rgGlasses` (`sites`, `goto`, `debug`, `force`, `reset`,
-  `draws`, `active`, `boardRect`). Proof helpers for specs: `tests/e2e/glasses-helpers.ts`
-  (`expectLayerOnlyTouchesOwnChannel`, `expectAnswerBlindWithoutWeakEye`, `expectDrawBudget`).
+- `gates/layout.ts` (shared by gates, dot signs and odd one out) and `glowflies/layout.ts`:
+  inside the fixed circle, each mini-game turns and shifts its own layout once so the default
+  camera has a clear view (no board, trunk or bush in the way).
 
-### The six mechanics (`src/activities/glasses/<name>/`)
-
-Each has a wordless pictogram board, pays gems through `pay()` (the economy's
-`ctx.profile.earn` when present), reports every hit and miss with `glasses:result`, uses at most
-6 draw calls including its board, and is idle when the player is far.
-
-| Mechanic (id, kind) | How it plays | Why the weak eye is needed | Gems by tier |
-|---|---|---|---|
-| Glow-flies (`glowflies`, follow) | Weak-eye fireflies drift over a meadow patch; run or jump through one to catch it. A both-eye lantern jar counts catches. A fly that times out while you are in the patch is a miss. | The flies exist only on the weak layer; nothing both-eye follows them. | 1 / 2 / 4 |
-| Pip's lost toys (`toys`, follow) | A weak-eye paw-print trail (only the next four prints glow) leads 25–40 m from Pip's basket to a hidden spot; the both-eye toy pops out only when the last print is reached. Three toys per session. | The trail is weak-eye-only and the toy is not in the scene until it is found. | 5 / 7 / 10 |
-| Odd one out (`oddone`, tellApart) | Three pedestals with identical buttons and identical dark panels; a weak-eye shape on each, one different. Press the button under the different one. A per-session staircase makes the difference finer after a hit and coarser after a miss (other shape → arrow direction → ring gap side → narrower gap, smaller shape). | The shapes are weak-eye-only; panels, buttons and prompts are identical for every answer. | 2 / 3 / 5 |
-| Line-up targets (`lineup`, lineUp) | Stand on the aim pad: strong-eye bubbles float ahead and a weak-eye reticle follows the camera aim with a slowly sweeping offset of 4°–7°. Hold the reticle on a bubble for 1 s to pop it. | The reticle is never at the screen centre, so a bubble cannot be popped without seeing it (unit-tested), and the bubbles are strong-eye-only. | 1 / 2 / 4 |
-| Half-symbol gates (`gates`, lineUp) | A sign shows one half of a symbol to each eye; run through the arch whose both-eye symbol is the two halves together. Each half alone fits two arches. | Neither half alone identifies the arch (proved in both directions). | 3 / 4 / 6 |
-| Dot-picture signs (`dotsigns`, popOut) | A sign shows a red-green dot picture; press the pedestal button with the hidden shape. | Each eye alone sees plain noise; the shape exists only between the two eyes. | 3 / 5 / 8 |
-
-### Grown-up UI (`src/ui/glasses/`)
+## Grown-up UI (`src/ui/glasses/`)
 
 - "Auto challenge" toggle in the Glasses tab of the grown-up settings (behind the gate), off by
   default; settings Reset turns it off.
 - "Session summary" button next to it → a summary screen: time played, the Auto challenge line,
-  and a table by kind of glasses play and mechanic with hits / tries and hit rate for the three
+  and a table by kind of glasses play and mini-game with hits / tries and hit rate for the three
   tiers (Easy, Medium, Tricky) plus totals. Plain counts only; a banned-words test guards the
-  wording.
+  wording. Keyboard, gamepad and touch.
 
 ## Interface additions (all additive; nothing renamed, removed or reordered)
 
@@ -123,8 +165,7 @@ Each has a wordless pictogram board, pays gems through `pay()` (the economy's
 - `GameEvents` after `'player:respawn'`: `'glasses:result': { mechanic, kind, tier, hit }` and
   `'glasses:challenge': { modifiers }`.
 
-The insert points were chosen away from the places the economy stream edits (`'gem:collected'`,
-the end of `GameEvents`, the end of the file), so both should merge without conflicts.
+`src/types.ts` merged with `main` (economy and the other streams) without a conflict.
 
 **How other attractions join in (Phase 2 and other streams):** emit
 `ctx.events.emit('glasses:result', { mechanic: '<id>', kind, tier, hit })` whenever the player
@@ -133,17 +174,16 @@ feeds the Auto challenge staircase and the grown-up summary. Use
 `withChallenge(tier, ctx.vision.challenge?.())` from the toolkit for sizes that follow the
 staircase.
 
-## Edits to existing files (complete list)
+## Edits to existing files (complete list, against `origin/main` `be5b4b2`)
 
-Everything else in Phase 1 is new files.
+Everything else in Phase 1 is new files (92 of them).
 
 | File | Change |
 |---|---|
 | `src/types.ts` | +60 lines, the additions listed above |
 | `src/settings.ts` | +2 lines: `sanitizeSettings` keeps a boolean `autoChallenge` |
-| `src/activities/index.ts` | +4 lines: import `createGlasses`, create it last, `update`, `dispose` |
-| `src/ui/settingsScreen.ts` | import `createGlassesSettingsRows`; option `onSummary?()`; build the rows; `...autoRows.rows` before the Calibration row |
-| `src/ui/index.ts` | import `createGlassesSummary`; create it; `onSummary` handler; `all.push(...)` + `root.append(...)` |
+| `src/ui/settingsScreen.ts` | +5 / −1: import `createGlassesSettingsRows`; option `onSummary?()`; build the rows and push their `refresh`; `...autoRows.rows` before the Calibration row |
+| `src/ui/index.ts` | +6: import `createGlassesSummary`; create it; `onSummary` handler; `all.push(...)`, `root.append(...)`; `glassesSummary.update(dt)` while shown |
 | `src/vision/index.ts` | wire layer fades, the challenge driver and the four new `VisionApi` members; install `window.__rgChallenge` in test mode |
 | `src/vision/DichopticPass.ts` | `weakMul` / `strongMul` uniforms, `setRuntime()`, `effective()`, debug view, coverage readback |
 | `src/vision/shaders.ts` | the two multipliers in `compositeLayer`; mask debug modes; `maskCopyFragment` |
@@ -151,41 +191,70 @@ Everything else in Phase 1 is new files.
 | `src/vision/constants.ts` | `COMPOSITE.contrastFloor = 0.4` |
 | `src/vision/testHooks.ts` | +4 lines: `toolkit` field on `window.__rgVision` |
 
-The UI hook lines were placed away from the lines the economy branch changes in the same files.
-`src/config.ts`, `src/main.ts` and `package.json` are untouched.
-
-**Pending (note from the main session, 2026-11-10):** `main` is changing
-`src/activities/index.ts` so that each attraction registers from a `register.ts` in its own
-folder and is discovered automatically. At the next merge of `origin/main` the 4 lines above
-will conflict: they move into `src/activities/glasses/register.ts`, following the convention
-documented at the top of the new `index.ts`. The glasses system must still be created **after**
-every other attraction (its site probe looks at their colliders); if the convention has no
-ordering, the probe is deferred to the first update (it already runs there).
+`src/activities/index.ts` is **not** edited any more: the glasses system registers from
+`src/activities/glasses/register.ts`. `src/config.ts`, `src/main.ts` and `package.json` are
+untouched.
 
 ## Decisions
 
 - "Rebase on `origin/main` hourly" is done as a **merge of `origin/main` into the branch**
   (the branch is pushed with plain pushes only; a rebase would need a force push).
 - "New files only" is read as: all real code in new files/folders; existing files get only
-  additive `src/types.ts` changes and the smallest hooks, each listed above. Without a hook the
-  code is not in the bundle and cannot be tested end to end. The compositor edits are the
-  additions the Auto challenge needs (a weak-layer-only multiplier did not exist).
-- The Auto challenge lives in `src/vision/` (it is about what each eye sees and the calibrated
-  limits). It is runtime-only.
+  additive `src/types.ts` changes and the smallest hooks, each listed above (approved by the
+  main session). The compositor edits are the additions the Auto challenge needs (a
+  weak-layer-only multiplier did not exist).
+- The Auto challenge lives in `src/vision/` and is runtime-only.
 - The grown-up summary is reached from the grown-up settings (already behind the gate), so no
   new entry point was added to kid-facing screens.
-- Activities import the pure data `ROADS` from `src/world/layout` to keep the new sites off
-  roads (`WorldApi` has no road query).
-- Site rules relaxed where the real island had no valid spot: gem/chest spots are kept 1 m from
-  a site's edge (7 m from its centre) instead of 4 m; a site "by an attraction" may be up to 40 m
-  from the anchor's centre (roads ring the balloon field).
-- Builders run only their own e2e specs while several share the 4-CPU machine; the full
-  `npm run verify` is run by the orchestrator on the merged branch.
+- Sites are fixed coordinates (asked for by the main session) and keep clear of the reserved
+  places. To find six valid spots on the merged island the slope limit went from 1.4 m to 1.8 m
+  across a site.
+- Activities import the pure data `ANCHORS`/`ROADS` from `src/world/layout` for the site rules
+  (`WorldApi` has no road query).
+- Line-up was redesigned after QA from "hold the reticle on a bubble" to "steer the hoop over
+  the bubble and press", because a player who never saw the reticle could still pop bubbles by
+  parking one at a fixed place on screen. It also no longer looks like a target range.
+- The anti-guess rule (nap after a miss, 1 gem until two hits in a row) was added after QA
+  showed that random pressing farmed gems at 1 in 3.
+- Builders ran only their own e2e specs while several shared the 4-CPU machine; the full
+  `npm run verify` was run by the orchestrator on the merged branch.
+
+## QA (independent pass on the merged branch, before the fixes above)
+
+No blockers; the channel rule held in every shot and spec; no network calls, no new assets, no
+banned wording in any new file. Majors found and fixed: line-up winnable blind; odd one out
+badly framed; paw prints nearly invisible from the child's view. Minors fixed: views blocked by
+the board, trees or bushes; the toy's pop-out hidden under a canopy; the line-up board; the
+summary's name for odd one out. Numbers: +51 KB gzip of JavaScript (+2.5 %); each mini-game
+3–5 draw calls idle, at most 6 in a celebration; far mini-games cost nothing.
 
 ## How to test
 
-Filled in at the end of Phase 1.
+- Everything: `npm run verify`.
+- Only this stream's specs: `npx playwright test tests/e2e/glasses- --trace off` (seven specs:
+  `glasses-toolkit`, `glasses-challenge`, `glasses-framework`, `glasses-follow`,
+  `glasses-tellapart`, `glasses-botheyes`, `glasses-ui`). Unit tests: `tests/vision/toolkit-*`,
+  `tests/vision/challenge-*`, `tests/activities/glasses-*`, `tests/ui/glasses-*`,
+  `tests/unit/settings-auto-challenge.test.ts`.
+- By hand with `?test=1` in the browser console: `__rgGlasses.sites()` lists the sites,
+  `__rgGlasses.goto('oddone')` walks the hero there, `__rgGlasses.debug(id)` shows the current
+  answer, `__rg.setLayerVisible(1, false)` hides the weak-eye layer (try to win without it),
+  `__rgChallenge.effective()` shows what the Auto challenge is doing,
+  `__rgChallenge.setDebugView('weak')` shows the weak layer's mask.
+- Grown-up parts: Pause → Grown-ups → gate → Glasses tab → "Auto challenge" and "Session
+  summary".
+- Screenshots (full, R-only, G-only) are written by the specs to `test-results/glasses/` and
+  `test-results/glasses-toolkit/`, `test-results/glasses-ui/`.
 
 ## Phase 2 (not started)
 
-Waits for the project owner to say `main` has the economy and the merged attractions.
+Waits for the project owner to say `main` has the economy and the merged attractions. Plan:
+weave the toolkit into what exists (trampoline perfect-bounce ring, parachute-open ring and
+gem-through-hoop bonus in the skydive, boost-pad timing on the buggy/race, skill-ready ring and
+combo number over the hero, "real gem among fakes" at a few gem spots, dot-picture prize codes
+at the Gear Shack), each as a small optional rewarded layer with the smallest diffs in other
+owners' folders.
+
+## Test results
+
+Filled in below after the final run.
