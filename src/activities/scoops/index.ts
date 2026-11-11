@@ -579,8 +579,8 @@ export function createScoops(ctx: GameContext): Scoops {
       effects.update(dt);
       ui.setEffects(effects.active());
       // The friends' character models load only once the game is on (not behind the title screen),
-      // except in test mode, where they load at boot so no model pops in between two compared frames.
-      friends.update(dt, local, near && (ctx.testMode || ctx.session.state.phase !== 'title'));
+      // in test mode too, so the boot request budget (npm run boot:requests) holds there.
+      friends.update(dt, local, near && ctx.session.state.phase !== 'title');
       if (!near) return;
 
       for (let i = timers.length - 1; i >= 0; i--) {
