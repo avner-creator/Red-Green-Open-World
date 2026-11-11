@@ -207,16 +207,18 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
     { text: 'On the edge? Mash to hop back! First to three wins!', icon: 'dragon', action: 'jump', mood: 'excited' },
   ],
   foamCourse: [
-    { text: 'Race a friend across the foam on floats and blocks!', icon: 'bubble', action: 'use', mood: 'excited' },
-    { text: 'Jump the gaps! If you fall in, try again from the checkpoint.', icon: 'flag', action: 'jump', mood: 'silly' },
+    { text: 'Stand on the glowing ring to start the foam race!', icon: 'bubble', mood: 'excited' },
+    { text: 'Hop the wobbly floats, swing on the rope, slide down!', icon: 'bubble', action: 'jump', mood: 'silly' },
+    { text: 'Jump the foam puffs and beat your friend over two laps!', icon: 'flag', action: 'jump', mood: 'excited' },
   ],
   airstrip: [
-    { text: 'Fly the stunt plane! Zoom through hoops and pop cloud balloons!', icon: 'plane', action: 'use', mood: 'excited' },
-    { text: 'Steer where you look. Your power button does loops!', icon: 'plane', action: 'skill', mood: 'excited' },
+    { text: 'Stand on the ring by the plane to take off!', icon: 'plane', mood: 'excited' },
+    { text: 'Fly through striped hoops and pop the clouds!', icon: 'plane', action: 'look', mood: 'excited' },
+    { text: 'Jump drops water balloons on the targets. Beat your two friends!', icon: 'wTarget', action: 'jump', mood: 'excited' },
   ],
   dragonRoost: [
-    { text: 'Give the dragon a snack, then hop on and fly!', icon: 'dragon', action: 'use', mood: 'excited' },
-    { text: 'Jump flaps the wings. Your power button blows bubbles!', icon: 'dragon', action: 'jump', mood: 'silly' },
+    { text: 'Give the dragon a snack, then stand on the glowing ring!', icon: 'dragon', action: 'use', mood: 'excited' },
+    { text: 'Jump flaps the wings. Pop more clouds than the pink dragon!', icon: 'dragon', action: 'jump', mood: 'silly' },
   ],
   // The six magic-glasses games: one rule-neutral line each (their rounds are being reworked).
   glowflies: [{ text: 'Catch the glow-flies! Run or jump right through them!', icon: 'glasses', action: 'jump', mood: 'excited' }],

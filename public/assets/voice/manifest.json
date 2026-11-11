@@ -326,11 +326,11 @@
    "spoken": "Fly, fly, fly!",
    "dur": 1.22
   },
-  "fly-the-stunt-plane-zoom-through-hoops-and-pop-cloud-balloons": {
-   "file": "fly-the-stunt-plane-zoom-through-hoops-and-pop-cloud-balloons.mp3",
-   "text": "Fly the stunt plane! Zoom through hoops and pop cloud balloons!",
-   "spoken": "Fly the stunt plane! Zoom through hoops and pop cloud balloons!",
-   "dur": 3.48
+  "fly-through-striped-hoops-and-pop-the-clouds": {
+   "file": "fly-through-striped-hoops-and-pop-the-clouds.mp3",
+   "text": "Fly through striped hoops and pop the clouds!",
+   "spoken": "Fly through striped hoops and pop the clouds!",
+   "dur": 2.26
   },
   "follow-me": {
    "file": "follow-me.mp3",
@@ -380,11 +380,11 @@
    "spoken": "Get a 3 gem combo!",
    "dur": 1.44
   },
-  "give-the-dragon-a-snack-then-hop-on-and-fly": {
-   "file": "give-the-dragon-a-snack-then-hop-on-and-fly.mp3",
-   "text": "Give the dragon a snack, then hop on and fly!",
-   "spoken": "Give the dragon a snack, then hop on and fly!",
-   "dur": 2.52
+  "give-the-dragon-a-snack-then-stand-on-the-glowing-ring": {
+   "file": "give-the-dragon-a-snack-then-stand-on-the-glowing-ring.mp3",
+   "text": "Give the dragon a snack, then stand on the glowing ring!",
+   "spoken": "Give the dragon a snack, then stand on the glowing ring!",
+   "dur": 2.86
   },
   "goal-done-woohoo": {
    "file": "goal-done-woohoo.mp3",
@@ -476,6 +476,12 @@
    "spoken": "Hop over rolling balls, and step away from flying ones!",
    "dur": 3.12
   },
+  "hop-the-wobbly-floats-swing-on-the-rope-slide-down": {
+   "file": "hop-the-wobbly-floats-swing-on-the-rope-slide-down.mp3",
+   "text": "Hop the wobbly floats, swing on the rope, slide down!",
+   "spoken": "Hop the wobbly floats, swing on the rope, slide down!",
+   "dur": 2.83
+  },
   "hop-up-the-stones-and-climb-to-win-the-star": {
    "file": "hop-up-the-stones-and-climb-to-win-the-star.mp3",
    "text": "Hop up the stones and climb to win the star!",
@@ -554,11 +560,17 @@
    "spoken": "Jump again to open your parachute. Land on the rings!",
    "dur": 2.93
   },
-  "jump-flaps-the-wings-your-power-button-blows-bubbles": {
-   "file": "jump-flaps-the-wings-your-power-button-blows-bubbles.mp3",
-   "text": "Jump flaps the wings. Your power button blows bubbles!",
-   "spoken": "Jump flaps the wings. Your power button blows bubbles!",
-   "dur": 3.14
+  "jump-drops-water-balloons-on-the-targets-beat-your-two-friends": {
+   "file": "jump-drops-water-balloons-on-the-targets-beat-your-two-friends.mp3",
+   "text": "Jump drops water balloons on the targets. Beat your two friends!",
+   "spoken": "Jump drops water balloons on the targets. Beat your two friends!",
+   "dur": 3.55
+  },
+  "jump-flaps-the-wings-pop-more-clouds-than-the-pink-dragon": {
+   "file": "jump-flaps-the-wings-pop-more-clouds-than-the-pink-dragon.mp3",
+   "text": "Jump flaps the wings. Pop more clouds than the pink dragon!",
+   "spoken": "Jump flaps the wings. Pop more clouds than the pink dragon!",
+   "dur": 3.29
   },
   "jump-on-the-trampoline-hold-jump-to-bounce-higher": {
    "file": "jump-on-the-trampoline-hold-jump-to-bounce-higher.mp3",
@@ -566,11 +578,11 @@
    "spoken": "Jump on the trampoline! Hold jump to bounce higher!",
    "dur": 2.86
   },
-  "jump-the-gaps-if-you-fall-in-try-again-from-the-checkpoint": {
-   "file": "jump-the-gaps-if-you-fall-in-try-again-from-the-checkpoint.mp3",
-   "text": "Jump the gaps! If you fall in, try again from the checkpoint.",
-   "spoken": "Jump the gaps! If you fall in, try again from the checkpoint.",
-   "dur": 3.24
+  "jump-the-foam-puffs-and-beat-your-friend-over-two-laps": {
+   "file": "jump-the-foam-puffs-and-beat-your-friend-over-two-laps.mp3",
+   "text": "Jump the foam puffs and beat your friend over two laps!",
+   "spoken": "Jump the foam puffs and beat your friend over two laps!",
+   "dur": 2.83
   },
   "jump-when-the-board-bounces-up-for-a-deeper-dive": {
    "file": "jump-when-the-board-bounces-up-for-a-deeper-dive.mp3",
@@ -920,12 +932,6 @@
    "spoken": "Put the net over a duck, then scoop!",
    "dur": 1.68
   },
-  "race-a-friend-across-the-foam-on-floats-and-blocks": {
-   "file": "race-a-friend-across-the-foam-on-floats-and-blocks.mp3",
-   "text": "Race a friend across the foam on floats and blocks!",
-   "spoken": "Race a friend across the foam on floats and blocks!",
-   "dur": 2.71
-  },
   "race-two-friends-three-laps-around-the-roads": {
    "file": "race-two-friends-three-laps-around-the-roads.mp3",
    "text": "Race two friends, three laps around the roads!",
@@ -1058,11 +1064,17 @@
    "spoken": "Stand on a rocket pad and blast up onto the big net!",
    "dur": 3.02
   },
-  "steer-where-you-look-your-power-button-does-loops": {
-   "file": "steer-where-you-look-your-power-button-does-loops.mp3",
-   "text": "Steer where you look. Your power button does loops!",
-   "spoken": "Steer where you look. Your power button does loops!",
-   "dur": 2.5
+  "stand-on-the-glowing-ring-to-start-the-foam-race": {
+   "file": "stand-on-the-glowing-ring-to-start-the-foam-race.mp3",
+   "text": "Stand on the glowing ring to start the foam race!",
+   "spoken": "Stand on the glowing ring to start the foam race!",
+   "dur": 2.47
+  },
+  "stand-on-the-ring-by-the-plane-to-take-off": {
+   "file": "stand-on-the-ring-by-the-plane-to-take-off.mp3",
+   "text": "Stand on the ring by the plane to take off!",
+   "spoken": "Stand on the ring by the plane to take off!",
+   "dur": 2.26
   },
   "step-on-a-bounce-pad-it-throws-you-to-the-next-one": {
    "file": "step-on-a-bounce-pad-it-throws-you-to-the-next-one.mp3",
