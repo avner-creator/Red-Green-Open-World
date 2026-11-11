@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import type { PlayerModel } from './player-model';
+import { springStep } from './characters/wobble-math';
 import { MOVE } from './tuning';
 
 const TAU = Math.PI * 2;
@@ -55,6 +56,10 @@ export interface PlayerFx {
    * `stretch` like setExtra's. Written on the next update.
    */
   setSkillPose(flip: number, spin: number, stretch: number): void;
+  /** Body-frame acceleration for the lean/stumble springs (forward, side), m/s². Visual only. */
+  lean(fwd: number, side: number): void;
+  /** Forward stumble impulse (radians-ish) after a hard landing. */
+  stumble(amount: number): void;
 }
 
 export function createPlayerFx(model: PlayerModel): PlayerFx {
@@ -74,11 +79,16 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
   let skillFlip = 0;
   let skillSpin = 0;
   let skillStretch = 0;
+  const leanP = { x: 0, v: 0 };
+  const leanR = { x: 0, v: 0 };
+  let leanFwd = 0;
+  let leanSide = 0;
 
   const write = (): void => {
     const st = Math.max(-0.9, extraStretch + skillStretch);
     model.squash.scale.set(baseSxz * (1 - st * 0.5), baseSy * (1 + st), baseSxz * (1 - st * 0.5));
-    model.spin.rotation.set(baseFlip + skillFlip, baseTwist + skillSpin, 0);
+    const lean = flopT >= 0 ? 0 : 1;
+    model.spin.rotation.set(baseFlip + skillFlip + leanP.x * lean, baseTwist + skillSpin, leanR.x * lean);
     if (hasExtraQ) model.spin.quaternion.premultiply(extraQ);
     model.spin.position.y = model.centre + baseHop;
   };
@@ -105,7 +115,16 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
       hasExtraQ = false;
       extraStretch = 0;
       skillFlip = skillSpin = skillStretch = 0;
+      leanP.x = leanP.v = leanR.x = leanR.v = 0;
+      leanFwd = leanSide = 0;
       write();
+    },
+    lean(fwd, side) {
+      leanFwd = fwd;
+      leanSide = side;
+    },
+    stumble(amount) {
+      leanP.v += amount * 14;
     },
     setSkillPose(flip, spin, stretch) {
       skillFlip = flip;
@@ -119,6 +138,9 @@ export function createPlayerFx(model: PlayerModel): PlayerFx {
       write();
     },
     update(dt) {
+      // Lean & stumble: the body tips with braking/turning and bobs back (inertia, cartoon-soft).
+      springStep(leanP, -0.35 * leanFwd, 7, 0.32, dt, 0.18);
+      springStep(leanR, 0.3 * leanSide, 7, 0.35, dt, 0.14);
       // Damped spring for squash/stretch.
       const k = 260;
       const c = 16;

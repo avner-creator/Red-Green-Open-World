@@ -6,10 +6,14 @@
  */
 import * as THREE from 'three';
 import { finish, finishMaterial, mergeFinished } from '../core/vertex-finish';
-import { CAMERA } from '../config';
+import { CAMERA, PLAYER } from '../config';
 import type { GameContext } from '../types';
 import { BOUNCE, MAT } from './constants';
-import { ThresholdAwards, boostedApex, flightTime, nextBounceApex, speedFromApex } from './bounceLogic';
+import {
+  SURPRISE, ThresholdAwards, autoTrickPose, boostedApex, flightTime, keepOnBed, makeRng, nextBounceApex, rollSurprise,
+  speedFromApex, superApex,
+} from './bounceLogic';
+import type { AutoTrick, BounceSurprise } from './bounceLogic';
 import type { Arc, ArrivalInfo, Flight, FlightHooks } from './flight';
 import type { ThrillConfetti } from './thrillConfetti';
 import { getStuntGate } from './stuntGate';
@@ -224,6 +228,29 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     sprite.position.set(gaugeX + 3, MAT.top + h, 0);
     root.add(sprite);
   });
+  // Bonus star (both-eye: bright gold with a near-black rim, reads in R and G alone): hangs
+  // somewhere up the column on some bounces; flying through it pays a star.
+  const starShape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    const r = i % 2 ? 0.42 : 1;
+    if (i === 0) starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.26, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 1 }).center();
+  const starRimGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.1, bevelEnabled: false }).center().scale(1.22, 1.22, 1);
+  disposables.push(starGeo, starRimGeo);
+  const bonusStar = new THREE.Group();
+  bonusStar.name = 'trampoline-bonus-star';
+  bonusStar.add(
+    new THREE.Mesh(starGeo, mat(new THREE.MeshStandardMaterial({ color: 0xffd21f, emissive: 0x7a5a00, roughness: 0.35, metalness: 0.2 }))),
+    new THREE.Mesh(starRimGeo, mat(new THREE.MeshBasicMaterial({ color: 0x0e1226 }))),
+  );
+  bonusStar.scale.setScalar(0.9);
+  bonusStar.visible = false;
+  ctx.scene.add(bonusStar);
+  let starSpin = 0;
+
   let nextRing = 0;
   function spawnRings(power: number): void {
     for (let k = 0; k < 2; k++) {
@@ -245,6 +272,40 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   let landDepth = 0;
   let landDwell = 0.1;
   let lastDepth = 0;
+  /** Jelly ripple amplitude of the last landing (m). */
+  let rippleAmp = 0;
+  // Surprises: seeded (test mode pins the seed so e2e is repeatable).
+  const SEED = 0x5eed;
+  let rng = makeRng(ctx.testMode ? SEED : (Math.random() * 4294967296) >>> 0);
+  let surprise: BounceSurprise | null = null;
+  /** Surprises on (always in play; tests opt in with `__rgTramp.setSurprises(true)` or `&surprise=1`). */
+  let surprises = !ctx.testMode || new URLSearchParams(location.search).get('surprise') === '1';
+  let superCount = 0;
+  let bonusStars = 0;
+  let autoTrick: { kind: AutoTrick; t: number; dur: number; yaw0: number } | null = null;
+  const stopAutoTrick = (): void => {
+    if (!autoTrick) return;
+    autoTrick = null;
+    ctx.player.setTilt(0, 0);
+  };
+  if (ctx.testMode) {
+    (window as unknown as { __rgTramp?: unknown }).__rgTramp = {
+      get surprise() {
+        return surprise;
+      },
+      get superCount() {
+        return superCount;
+      },
+      get bonusStars() {
+        return bonusStars;
+      },
+      get star() {
+        return bonusStar.visible ? bonusStar.position.toArray() : null;
+      },
+      reseed: (seed: number) => (rng = makeRng(seed)),
+      setSurprises: (on: boolean) => (surprises = on),
+    };
+  }
 
   const dist = (x: number, z: number): number => Math.hypot(x - cx, z - cz);
   const onMat = (): boolean => {
@@ -252,13 +313,15 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     return dist(p.x, p.z) < R + MAT.rimTube && p.y > matTopY - 0.35 && p.y < matTopY + 0.9;
   };
 
-  function applyDepth(depth: number): void {
-    if (depth === 0 && lastDepth === 0) return;
-    lastDepth = depth;
+  function applyDepth(depth: number, ripple = 0, t = 0): void {
+    if (depth === 0 && lastDepth === 0 && ripple === 0) return;
+    lastDepth = depth + ripple;
     const arr = matGeo.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < vertCount; i++) {
       const f = radial[i];
-      arr.setY(i, MAT.top - depth * (1 - f * f));
+      // Jelly bed: the dip plus rings of ripple running out to the rim.
+      const rip = ripple ? ripple * Math.sin(17 * f - 13 * t) * (1 - f) * f * 4 : 0;
+      arr.setY(i, MAT.top - depth * (1 - f * f) - rip);
     }
     arr.needsUpdate = true;
     matGeo.computeVertexNormals();
@@ -274,7 +337,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
   }
 
   /** The arc of the next bounce (apex m) from the player's current horizontal velocity. */
-  function makeArc(apex: number, vx: number, vz: number, withDwell: boolean): Arc {
+  function makeArc(apex: number, vx: number, vz: number, withDwell: boolean, kick?: { x: number; z: number }): Arc {
     const p = ctx.player.position;
     let hx = vx * BOUNCE.keepHorizontal;
     let hz = vz * BOUNCE.keepHorizontal;
@@ -290,6 +353,12 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     if (Math.hypot(lx, lz) > BOUNCE.recentreFrom) {
       hx -= (lx * BOUNCE.recentre) / T;
       hz -= (lz * BOUNCE.recentre) / T;
+    }
+    if (kick) {
+      // Random sideways boing, shrunk so the landing stays on the bed.
+      const k = keepOnBed(p.x + hx * T - cx, p.z + hz * T - cz, kick.x, kick.z, T, R * SURPRISE.safeShare);
+      hx += k.kx;
+      hz += k.kz;
     }
     const f = Math.min(1, dist(p.x, p.z) / R);
     const D = 0.3 + 0.55 * (apex / BOUNCE.maxHeight);
@@ -340,6 +409,8 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
       }
       if (!info.upright) {
         // Landed mid-flip: comic flop (Flight does it), then the mat is just a mat.
+        stopAutoTrick();
+        bonusStar.visible = false;
         chainApex = 0;
         sinceLand = 0;
         landDepth = 0.5;
@@ -358,9 +429,37 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
         ctx.audio.play('boing', { pitch: 1.4, volume: 0.6 });
         return null;
       }
-      chainApex = apex;
-      boingFx(apex);
-      return makeArc(apex, info.vIn.x, info.vIn.z, true);
+      stopAutoTrick();
+      bonusStar.visible = false;
+      surprise = surprises
+        ? rollSurprise(rng, apex, BOUNCE.maxHeight)
+        : { kickX: 0, kickZ: 0, superBoing: false, trick: 'none', starAt: -1, starX: 0, starZ: 0 };
+      const top = surprise.superBoing ? superApex(apex, BOUNCE.maxHeight) : apex;
+      chainApex = top;
+      boingFx(top);
+      const arc = makeArc(top, info.vIn.x, info.vIn.z, true, { x: surprise.kickX, z: surprise.kickZ });
+      rippleAmp = 0.05 + 0.1 * (top / BOUNCE.maxHeight);
+      if (surprise.superBoing) {
+        // Wind-up: sink deep, wobble, then BOING.
+        superCount++;
+        arc.dwell = (arc.dwell ?? 0.1) + 0.28;
+        arc.dip = (arc.dip ?? 0.3) * 1.7;
+        landDepth = arc.dip;
+        landDwell = arc.dwell;
+        rippleAmp = 0.22;
+        superFx(top);
+      }
+      const T = flightTime(top);
+      if (surprise.trick !== 'none') autoTrick = { kind: surprise.trick, t: -(arc.dwell ?? 0), dur: T * 0.62, yaw0: ctx.player.yaw };
+      if (surprise.starAt >= 0) {
+        // On the way up, near the line of flight (a nudge of the stick on small bounces reaches it).
+        const h = surprise.starAt * top;
+        const vy = arc.vy;
+        const tUp = (vy - Math.sqrt(Math.max(0, vy * vy - 2 * PLAYER.gravity * h))) / PLAYER.gravity + (arc.dwell ?? 0);
+        bonusStar.position.set(info.pos.x + arc.vx * tUp + surprise.starX, matTopY + h + 0.9, info.pos.z + arc.vz * tUp + surprise.starZ);
+        bonusStar.visible = true;
+      }
+      return arc;
     },
     camera() {
       const f = Math.min(1, Math.max(0, (ctx.player.position.y - matTopY) / BOUNCE.maxHeight));
@@ -371,8 +470,22 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     },
     onEnd() {
       chainApex = 0;
+      stopAutoTrick();
+      bonusStar.visible = false;
     },
   };
+
+  /** SUPER BOING: deep wobble, big boing, fanfare, confetti and a bigger shockwave. */
+  function superFx(apex: number): void {
+    const p = ctx.player.position;
+    ctx.audio.play('bigBoing', { pitch: 0.78 });
+    ctx.audio.play('fanfare', { volume: 0.7, pitch: 1.1 });
+    ctx.audio.play('whoosh', { volume: Math.min(1, apex / 40), pitch: 0.9 });
+    ctx.cameraRig.shake(0.6);
+    spawnRings(1.6);
+    flight.visual.kick(-14);
+    confetti.burst(new THREE.Vector3(p.x, p.y + 0.5, p.z), 90);
+  }
 
   /** Extra fanfare for a skill-boosted first bounce (a ground-pound goes straight to the top). */
   function boostFx(boost: number, apex: number): void {
@@ -454,10 +567,40 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
       (blob.material as THREE.MeshBasicMaterial).opacity = 0.55 - 0.2 * Math.min(1, h / BOUNCE.maxHeight);
     }
 
-    // Mat squash.
+    // Auto trick (visual only, done well before the landing so the hero lands upright).
+    if (autoTrick) {
+      if (!(flight.active && flight.owner === 'trampoline')) stopAutoTrick();
+      else {
+        autoTrick.t += dt;
+        const pose = autoTrickPose(autoTrick.kind, Math.max(0, autoTrick.t) / autoTrick.dur);
+        player.setTilt(pose.pitch, pose.roll);
+        if (autoTrick.kind === 'twirl') player.yaw = autoTrick.yaw0 + pose.yaw;
+        if (autoTrick.t >= autoTrick.dur) stopAutoTrick();
+      }
+    }
+
+    // Bonus star: spins and bobs; flying through it pays a star.
+    if (bonusStar.visible) {
+      starSpin += dt * 3;
+      bonusStar.rotation.y = starSpin;
+      const p = player.position;
+      const dx = p.x - bonusStar.position.x;
+      const dy = p.y + 0.9 - bonusStar.position.y;
+      const dz = p.z - bonusStar.position.z;
+      if (dx * dx + dy * dy + dz * dz < 1.9 * 1.9) {
+        bonusStar.visible = false;
+        bonusStars++;
+        ctx.audio.play('star', { pitch: 1.2 });
+        confetti.burst(bonusStar.position.clone(), 40);
+        getStuntGate(ctx).stunt({ kind: 'bigBounce', value: chainApex, stars: 1 });
+      }
+    }
+
+    // Mat squash and jelly ripple.
     if (sinceLand < 3) {
       sinceLand += dt;
-      applyDepth(depthAt(sinceLand, landDepth, landDwell));
+      const rip = rippleAmp * Math.exp(-2.4 * sinceLand);
+      applyDepth(depthAt(sinceLand, landDepth, landDwell), sinceLand < 2.9 && rip > 0.002 ? rip : 0, sinceLand);
     }
   }
 
@@ -469,6 +612,10 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
 
   function reset(): void {
     awards.reset();
+    stopAutoTrick();
+    bonusStar.visible = false;
+    if (ctx.testMode) rng = makeRng(SEED);
+    superCount = bonusStars = 0;
     chainApex = 0;
     rest = false;
     sinceLand = 9;
@@ -494,6 +641,7 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
       chainApex = 0;
       for (const c of colliders) ctx.physics.removeCollider(c);
       root.removeFromParent();
+      bonusStar.removeFromParent();
       for (const d of disposables) d.dispose();
     },
   };

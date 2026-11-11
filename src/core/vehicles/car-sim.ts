@@ -205,6 +205,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
   const hard = new THREE.Vector3();
   const pointVel = new THREE.Vector3();
   const tmp = new THREE.Vector3();
+  const perpV = new THREE.Vector3();
   const lastSet = new THREE.Vector3();
   // Interpolation: the body pose and wheels after the previous and the latest physics step.
   const prevPos = new THREE.Vector3();
@@ -235,6 +236,12 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
   let airTime = 0;
   let hopCooldown = 0;
   let bumpCooldown = 0;
+  /** Deterministic wobble source for bump tilts (same drive → same wobble; tests stay repeatable). */
+  let bumpSeed = 0x9e3779b9;
+  const bumpRand = (): number => {
+    bumpSeed = (Math.imul(bumpSeed ^ (bumpSeed >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) >>> 0;
+    return bumpSeed / 4294967296 - 0.5;
+  };
   let flippedFor = 0;
   let parked = false;
   const parkAt = new THREE.Vector3();
@@ -382,7 +389,12 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
         ev.bump = dv;
         bumpCooldown = 0.35;
         // A comic little hop off the bump (and never more than a hop).
-        velocity.y = Math.max(velocity.y, Math.min(4.5, 1.6 + dv * 0.22) * m.bounceScale);
+        velocity.y = Math.max(velocity.y, Math.min(4.8, 1.9 + dv * 0.24) * m.bounceScale);
+        // ...with a wonky tilt: nose and one side kick up a little (auto-righting brings it back).
+        const k = Math.min(1, dv / 8) * m.bounceScale;
+        omega.addScaledVector(right, (0.9 + bumpRand()) * 1.2 * k);
+        omega.addScaledVector(fwd, bumpRand() * 2.2 * k);
+        body.setAngvel({ x: omega.x, y: omega.y, z: omega.z }, true);
       }
     }
 
@@ -432,7 +444,7 @@ export function createCarSim(physics: PhysicsApi, start: THREE.Vector3, startYaw
       omega.addScaledVector(up, (target - wu) * (1 - Math.exp(-DRIVE.yawFollow * dt)) * gf);
       // Settle pitch/roll wobble on the ground (springs do the rest).
       tmp.copy(up).multiplyScalar(omega.dot(up));
-      const perp = omega.clone().sub(tmp);
+      const perp = perpV.copy(omega).sub(tmp);
       omega.addScaledVector(perp, -(1 - Math.exp(-2.5 * dt)) * gf);
       // Boost: a strong extra push up to the raised top speed.
       if (m.extraTop > 0 && forwardSpeed > -1 && forwardSpeed < topSpeed) velocity.addScaledVector(fwd, Math.min(topSpeed - forwardSpeed, 9 * dt) * gf);
