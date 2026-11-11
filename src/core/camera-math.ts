@@ -62,3 +62,26 @@ export function steerOverrideYaw(
   if (d < -Math.PI) d += Math.PI * 2;
   return yaw + d * (1 - Math.exp(-rate * dt));
 }
+
+/**
+ * Spring-arm length for one frame (pure). `hard` is the furthest the camera may be (it never goes
+ * past it: instant pull-in), `soft` the furthest it would like to be (a fatter probe that sees an
+ * obstacle coming, so the arm eases in before it has to snap). Eases in at `inRate`, back out at
+ * `outRate` (1/s). Null = clear.
+ */
+export function resolveArm(
+  current: number,
+  want: number,
+  hard: number | null,
+  soft: number | null,
+  inRate: number,
+  outRate: number,
+  dt: number,
+): number {
+  const hardLim = hard === null ? want : Math.min(want, hard);
+  const target = Math.min(hardLim, soft === null ? want : Math.min(want, soft));
+  let d = current;
+  if (d > target) d += (target - d) * (1 - Math.exp(-inRate * dt));
+  else d += (target - d) * (1 - Math.exp(-outRate * dt));
+  return Math.min(d, hardLim);
+}
