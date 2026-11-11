@@ -65,3 +65,12 @@ describe('touch column', () => {
     expect(CONTROL_MAP.emote.touch).toBe('sparkle');
   });
 });
+
+describe('help card icons', () => {
+  it('rows shown together on the on-foot card have distinct icons (sprint is not the skill bolt)', () => {
+    const foot: ControlId[] = ['move', 'look', 'jump', 'sprint', 'air', 'use', 'skill', 'emote', 'respawn'];
+    const icons = foot.map((id) => CONTROL_MAP[id].icon);
+    expect(new Set(icons).size).toBe(icons.length);
+    expect(CONTROL_MAP.sprint.icon).toBe('wRun');
+  });
+});
