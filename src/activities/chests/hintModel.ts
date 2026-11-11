@@ -44,6 +44,7 @@ export class HintDots {
     this.mesh = new THREE.InstancedMesh(this.geo, this.mat, capacity);
     this.mesh.name = 'chest-hint-dots';
     this.mesh.count = 0;
+    this.mesh.visible = false;
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
@@ -81,6 +82,8 @@ export class HintDots {
     if (!run) return;
     if (!shown && !run.shown) return;
     run.shown = shown;
+    // No draw call at all while no chest shows its dots.
+    this.mesh.visible = this.runs.some((r) => r.shown);
     for (let k = 0; k < run.count; k++) {
       const idx = run.first + k;
       if (!shown) {

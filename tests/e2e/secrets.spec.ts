@@ -239,8 +239,9 @@ test('vault: stepping on pads; wrong order wobbles and starts over, the weak eye
       rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.1, z, yaw);
       rg.step(1 / 60, 12, false);
     }, { x, z, ox, oz, yaw });
-    expect((await info()).doors[0].selected).toBe(button);
     const before = (await info()).doors[0];
+    // Standing on the pad selects it (once the door opens, no pad is selectable any more).
+    expect(before.open ? -1 : button).toBe(before.selected);
     if (before.progress > 0 && !before.open) {
       // After a right step, an extra E on the same pad changes nothing.
       await use();
@@ -374,7 +375,7 @@ test('stones and arrows touch only the weak channel, vault buttons only the stro
   await page.evaluate(() => window.__rg!.setEye({ leftLens: 'red', weakEye: 'left' }));
 });
 
-test('clear without words: start rings and signs at every path, a rule board that plays, a treasure window', async () => {
+test('clear without words: start rings and signs at every path, a rule board that plays', async () => {
   const s = await info();
   expect(s.starts).toHaveLength(4);
   for (const [i, p] of s.paths.entries()) {
