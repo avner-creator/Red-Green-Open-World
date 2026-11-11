@@ -136,12 +136,15 @@ test('glow-flies: weak layer only, answer-blind, catch and fly-off, budget', asy
   // Inside the patch it flies off: a miss with its tier.
   const before = await dbg(id);
   const alive = before.flies.filter((f: { state: string }) => f.state === 'alive');
-  await page.evaluate((s) => {
-    const back = s.yaw + Math.PI;
-    window.__rg!.teleport(s.x + Math.sin(back) * 6.6, s.y + 0.5, s.z + Math.cos(back) * 6.6);
+  // Stand 2 m (inside noticeRadius 3, outside catchRadius 1.1) from a live fly, then time everything out.
+  const target = alive[0];
+  expect(target, 'a live fly to stand beside').toBeTruthy();
+  await page.evaluate((f) => {
+    window.__rg!.teleport(f.x + 2, f.y - 0.85, f.z);
+    window.__rg!.step(1 / 60, 1, false);
     window.__rgGlasses!.force('glowflies', { lifeLeft: 0.01 });
     window.__rg!.step(1 / 60, 3, false);
-  }, sites.find((s) => s.id === id)!);
+  }, target);
   log = await logged();
   const misses = log.results.filter((r) => r.mechanic === id && !r.hit);
   expect(misses.length).toBeGreaterThanOrEqual(1);
