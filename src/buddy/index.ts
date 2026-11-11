@@ -117,7 +117,7 @@ export interface BuddyTestApi {
   /** Every line Pip started saying, in order (text + id). */
   history(): { text: string; id: string }[];
   /** Leading state: where Pip leads (attraction id) and the hop state. */
-  lead(): { to: string | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
+  lead(): { to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
 }
 
 declare global {
@@ -150,7 +150,29 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let yaw = 0;
   let side = 1;
   let t = 0;
-  const leader = new Leader((p) => ctx.world.isLand(p.x, p.z));
+  const rayO = new THREE.Vector3();
+  const rayD = new THREE.Vector3();
+  /** A hop is fine when it ends on land and nothing (a wall, a fence, a shop) is in the way. */
+  const walkable = (from: V2, to: V2): boolean => {
+    if (!ctx.world.isLand(to.x, to.z)) return false;
+    const d = Math.hypot(to.x - from.x, to.z - from.z);
+    if (d < 1) return true;
+    const ux = (to.x - from.x) / d;
+    const uz = (to.z - from.z) / d;
+    const y0 = ctx.world.heightAt(from.x, from.z) + 1;
+    const y1 = ctx.world.heightAt(to.x, to.z) + 1;
+    rayO.set(from.x + ux * 0.7, y0 + ((y1 - y0) * 0.7) / d, from.z + uz * 0.7);
+    rayD.set(to.x - rayO.x, y1 - rayO.y, to.z - rayO.z);
+    const len = rayD.length();
+    rayD.divideScalar(len || 1);
+    try {
+      const hit = ctx.physics.raycast(rayO, rayD, len);
+      return !hit || hit.distance > len - 2.5;
+    } catch {
+      return true;
+    }
+  };
+  const leader = new Leader(walkable);
   let leadOut: LeadOut | null = null;
   /** Seconds left of the stuck-at-a-fence camera help. */
   let assistT = 0;
@@ -306,7 +328,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       if (name === 'trampoline') {
         const h = hero();
         const d = Math.hypot(h.x - a.position.x, h.z - a.position.z) || 1;
-        const r = TRAMPOLINE_MAT + 1.2;
+        const r = TRAMPOLINE_MAT - 1.5; // on the mat's edge: inside the visit radius
         return { x: a.position.x + ((h.x - a.position.x) / d) * r, z: a.position.z + ((h.z - a.position.z) / d) * r };
       }
       return { x: a.position.x, z: a.position.z };
@@ -773,7 +795,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       line: () => queue.current?.line.text ?? null,
       ride: () => ride,
       history: () => history.slice(),
-      lead: () => ({ to: director.leadTo, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
+      lead: () => ({ to: director.leadTo, dest: leader.dest ? [leader.dest.x, leader.dest.z] : null, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
     };
   }
 

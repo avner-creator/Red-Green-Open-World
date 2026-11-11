@@ -383,7 +383,7 @@ export class Director {
     this.playT += dt;
     this.sinceProgress += dt;
     this.stillT = v.onFoot && v.heroSpeed < 0.3 ? this.stillT + dt : 0;
-    this.pushT = v.onFoot && v.pushing && v.heroSpeed < 1.5 && v.ride === 'none' ? this.pushT + dt : 0;
+    this.pushT = v.onFoot && v.pushing && v.heroSpeed < 2.5 && v.ride === 'none' ? this.pushT + dt : 0;
 
     // Where the hero is: first visits, "done" after a while or any action there.
     const at = v.nearAttraction;
@@ -391,7 +391,7 @@ export class Director {
       this.at = at;
       this.atT = 0;
     } else if (at) this.atT += dt;
-    if (at && this.atT > DONE_AT_SECONDS) this.markDone(at);
+    if (at && this.atT > DONE_AT_SECONDS && (!this.leadTo || this.leadTo === at) && !v.pushing) this.markDone(at);
     if (at && v.ride !== 'none') this.markDone(at);
 
     // Chests: context hint, wins over everything generic (repeats with a cooldown while there).
@@ -490,7 +490,9 @@ export class Director {
         this.sink.say(line(INTRO.welcome, PRIORITY.story, 'intro:welcome'));
         break;
       case 'move':
+        // From spawn Pip runs ahead towards the first attraction: "walk with me!".
         this.moved = 0;
+        this.leadToPlace(FIRST_ATTRACTION, 'tour');
         this.prompt(INTRO.move, 'intro:move');
         break;
       case 'look':
@@ -503,7 +505,7 @@ export class Director {
         this.sink.say(line(INTRO.glasses, PRIORITY.story, 'intro:glasses'));
         break;
       case 'follow':
-        this.leadToPlace(FIRST_ATTRACTION, 'tour');
+        if (this.leadTo !== FIRST_ATTRACTION) this.leadToPlace(FIRST_ATTRACTION, 'tour');
         this.prompt(follow(FIRST_ATTRACTION), 'intro:follow');
         break;
       case 'jump':
@@ -600,7 +602,7 @@ export class Director {
     if (!p) return false;
     this.leadTo = a;
     this.leadKind = kind;
-    this.sink.lead(p, { radius: 6, ...opts });
+    this.sink.lead(p, { radius: 2.5, ...opts });
     return true;
   }
 
@@ -662,7 +664,7 @@ export class Director {
       return false;
     }
     let why: 'stuck' | 'wander' | 'idle' | null = null;
-    if (this.pushT > STUCK_PUSH_SECONDS && !v.nearAttraction) why = 'stuck';
+    if (this.pushT > STUCK_PUSH_SECONDS && (!v.nearAttraction || (this.leadTo && v.nearAttraction !== this.leadTo))) why = 'stuck';
     // Wandering: moving, far from everything and getting farther (only while Pip shows the way).
     const nearest = this.nearestDist(v.hero);
     if (v.heroSpeed > 1 && nearest > WANDER_RADIUS && nearest >= this.lastNearest - 0.05) this.wanderT += dt;

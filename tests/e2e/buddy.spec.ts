@@ -52,11 +52,11 @@ test.describe('Pip on a brand-new profile', () => {
     await page.close();
   });
 
-  test('the intro bubble appears with a pictogram and short text', async () => {
+  test('the intro bubble appears with pictograms and short text', async () => {
     const bubble = page.getByTestId('pip-bubble');
     await expect(bubble).toHaveClass(/\bon\b/);
     await expect(bubble).toHaveAttribute('data-id', 'intro:welcome');
-    expect(await bubble.getAttribute('data-text')).toBe('Welcome to Carnival Island!');
+    expect(await bubble.getAttribute('data-text')).toBe('Hi! I am Pip!');
     await expect(bubble.locator('.pic svg')).toHaveCount(1);
     // Inside the viewport.
     await step(page, 1.5);
@@ -69,11 +69,21 @@ test.describe('Pip on a brand-new profile', () => {
     expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
   });
 
-  test('the tour reaches "find a gem", and a pickup brings the wallet callout', async () => {
-    await step(page, 7.5);
-    expect((await director(page)).step).toBe('findGem');
-    await expect(page.getByTestId('pip-bubble')).toHaveAttribute('data-id', 'intro:findGem');
-    // Pick up a gem: put the player's chest on gem spots until one is collected.
+  test('"walk with me" shows the move keys and waits for the child (no timer)', async () => {
+    await step(page, 1.5);
+    expect((await director(page)).step).toBe('move');
+    const bubble = page.getByTestId('pip-bubble');
+    await expect(bubble).toHaveAttribute('data-action', 'move');
+    await expect(bubble.locator('.pipact .cap')).toHaveCount(4);
+    // Pip already runs ahead towards the trampoline.
+    expect((await page.evaluate(() => window.__rgBuddy!.lead())).to).toBe('trampoline');
+    await step(page, 14);
+    expect((await director(page)).step).toBe('move');
+    await step(page, 2, { moveY: 1 });
+    expect((await director(page)).step).toBe('look');
+  });
+
+  test('a first gem pickup brings the wallet callout', async () => {
     const got = await page.evaluate(() => {
       const rg = window.__rg!;
       let n = 0;
@@ -88,22 +98,19 @@ test.describe('Pip on a brand-new profile', () => {
     });
     expect(got).toBeGreaterThan(0);
     await step(page, 0.2);
-    expect((await director(page)).step).toBe('wallet');
     await expect(page.getByTestId('pip-bubble')).toHaveAttribute('data-id', 'intro:wallet');
     await expect(page.getByTestId('pip-callout')).toHaveClass(/\bon\b/);
     const ring = await page.getByTestId('pip-callout').boundingBox();
     const wallet = await page.locator('.hud [data-testid="wallet"]').boundingBox();
     expect(ring && wallet).toBeTruthy();
-    // The ring surrounds the wallet chip.
     expect(ring!.x).toBeLessThanOrEqual(wallet!.x);
     expect(ring!.y).toBeLessThanOrEqual(wallet!.y);
     expect(ring!.x + ring!.width).toBeGreaterThanOrEqual(wallet!.x + wallet!.width);
   });
 
-  test('then the shop step leads to the Gear Shack', async () => {
-    await step(page, 4);
-    expect((await director(page)).step).toBe('shop');
-    expect(await page.evaluate(() => window.__rgBuddy!.history().map((h) => h.id))).toContain('intro:shop');
+  test('the jump tip is never said away from the trampoline', async () => {
+    const said = await page.evaluate(() => window.__rgBuddy!.history().map((h) => h.id));
+    expect(said).not.toContain('intro:jump');
   });
 
   test('no console errors', async () => {

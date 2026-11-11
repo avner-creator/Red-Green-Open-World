@@ -49,7 +49,8 @@ export class Leader {
   private waiting = false;
   private fetching = false;
 
-  constructor(private readonly walkable: (p: V2) => boolean = () => true) {}
+  /** `walkable(from, to)`: the straight run from `from` to `to` is on land and not blocked. */
+  constructor(private readonly walkable: (from: V2, to: V2) => boolean = () => true) {}
 
   /** Lead to `dest` (null = stop leading). `fetchFirst`: run to the hero before leading. */
   set(dest: V2 | null, arriveRadius = 6, fetchFirst = false): void {
@@ -69,10 +70,10 @@ export class Leader {
   private hopFrom(from: V2, dest: V2): V2 {
     const base = Math.atan2(dest.x - from.x, dest.z - from.z);
     const d = Math.min(LEAD.hop, dist(from, dest));
-    for (const off of [0, 0.5, -0.5, 1, -1]) {
+    for (const off of [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4]) {
       const a = base + off;
       const p = { x: from.x + Math.sin(a) * d, z: from.z + Math.cos(a) * d };
-      if (this.walkable(p)) return p;
+      if (this.walkable(from, p)) return p;
     }
     return toward(from, dest, d);
   }

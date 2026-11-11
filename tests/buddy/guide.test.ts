@@ -51,7 +51,7 @@ describe('Leader: runs ahead, looks back, waits, fetches', () => {
   });
 
   it('skips hop spots that are not walkable (water)', () => {
-    const L = new Leader((p) => p.z > -0.5 || p.x < 2);
+    const L = new Leader((_f, p) => p.z > -0.5 || p.x < 2);
     L.set({ x: 60, z: -30 });
     const o = L.update(0.1, { x: 0, z: 0 }, { x: 0, z: 0 })!;
     expect(o.target.z).toBeGreaterThan(-0.5);
