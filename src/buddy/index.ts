@@ -28,7 +28,7 @@ import { DialogueQueue, PRIORITY, bubbleMode } from './dialogue';
 import type { ActiveLine } from './dialogue';
 import { currentGoal } from './goals';
 import { buildPip } from './model';
-import { classifyRide, externalKind, vehicleSpot } from './rides';
+import { RIDE_SCALE, SEAT_DROP, classifyRide, externalKind, vehicleSpot } from './rides';
 import type { ExternalKind } from './rides';
 import { EXPLAIN } from './script';
 import type { HowToTopic, KeyNames } from './script';
@@ -120,6 +120,8 @@ export interface BuddyTestApi {
   director(): { step: string; introT: number; playT: number };
   line(): string | null;
   ride(): RideView;
+  /** Pip's current drawn scale (smaller on rides). */
+  scale(): number;
   /** Every line Pip started saying, in order (text + id). */
   history(): { text: string; id: string }[];
   /** What Pip's voice was asked to say, in order (clip id + text + clip/speech). */
@@ -271,6 +273,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let attached = false;
   /** In a sky ride's back seat (`player.object.userData.pipSeat`). */
   let seated = false;
+  /** Pip's size on the current ride (1 on foot): small on the buggy, horse and sky rides. */
+  let rideScale = 1;
   let extKind: ExternalKind = 'other';
   let prevMode = ctx.player.mode;
   let prevHeroVy = 0;
@@ -616,6 +620,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
     if (seat) {
       seat.updateWorldMatrix(true, false);
       pos.setFromMatrixPosition(seat.matrixWorld);
+      pos.y -= SEAT_DROP; // low in the back seat: only his head pokes out
+      rideScale = RIDE_SCALE.seat;
       const e = seat.matrixWorld.elements;
       yaw = Math.atan2(e[8]!, e[10]!);
       inp.pose = 'sit';
@@ -631,11 +637,13 @@ export function createBuddy(ctx: GameContext): GameSystem {
       return true;
     }
     ride = classifyRide(ctx, extKind, canopy);
+    rideScale = 1;
     let pose: Pose | null = null;
     switch (ride) {
       case 'vehicle': {
         if (!p.vehicle) break;
         yaw = vehicleSpot(p.vehicle, pos);
+        rideScale = p.vehicle.kind === 'car' ? RIDE_SCALE.car : RIDE_SCALE.horse;
         pose = 'ride';
         inp.wind = Math.min(1, Math.abs(p.vehicle.speed) / 10);
         inp.look = null;
@@ -938,6 +946,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       director: () => ({ step: director.step, introT: director.introT, playT: director.playT }),
       line: () => queue.current?.line.text ?? null,
       ride: () => ride,
+      scale: () => model.object.scale.x,
       history: () => history.slice(),
       ask: () => ask(),
       voice: () => voice.requests.slice(),
@@ -1018,7 +1027,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       model.object.position.copy(pos);
       model.object.rotation.set(0, yaw, 0);
       const s = popT < 1 ? 0.4 + 0.6 * (1 - Math.pow(1 - popT, 3)) + Math.sin(popT * Math.PI) * 0.15 : 1;
-      model.object.scale.setScalar(s * PIP_SCALE);
+      model.object.scale.setScalar(s * PIP_SCALE * rideScale);
       model.object.updateMatrixWorld(true);
       anim.update(dt, inp);
 

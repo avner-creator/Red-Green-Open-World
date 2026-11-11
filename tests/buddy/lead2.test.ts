@@ -9,6 +9,7 @@ import { Director, RESCUE_CAP, RESCUE_WINDOW } from '../../src/buddy/director';
 import type { DirectorSink, DirectorView } from '../../src/buddy/director';
 import { LEAD, Leader } from '../../src/buddy/guide';
 import { CHEST, HOWTO, POOLS } from '../../src/buddy/script';
+import type { ScriptLine } from '../../src/buddy/script';
 import type { V2 } from '../../src/buddy/steer';
 import { createBuddyStore } from '../../src/buddy/store';
 import type { Attraction } from '../../src/buddy/types';
@@ -202,7 +203,7 @@ describe('Director: rescues free the hero and are capped (M1)', () => {
 
 describe('Chest hints match the step-on-the-symbol mechanic', () => {
   it('no chest line asks for a button press', () => {
-    for (const l of [...HOWTO.chest, CHEST.findKey, CHEST.shape]) {
+    for (const l of [...HOWTO.chest, CHEST.findKey, CHEST.shape] as ScriptLine[]) {
       expect(l.action ?? null).not.toBe('use');
       expect(l.text).not.toMatch(/\bpress\b|\bE\b|button/i);
       expect(l.extra ?? null).not.toBe('lock');
