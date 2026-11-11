@@ -56,10 +56,10 @@ of radius 6 m. No anchor was added or moved.
 
 | id | x | z | Where | Nearest reserved point | Nearest anchor edge | Nearest road edge |
 |---|---|---|---|---|---|---|
-| `glowflies` | −68.4 | 19 | open meadow beside the west road, by the ranch fence (69 m from spawn) | foamCourse 57 m | ranch 10 m | west 16 m |
+| `glowflies` | −68.8 | 18.8 | open meadow beside the west road, by the ranch fence (69 m from spawn) | foamCourse 57 m | ranch 10 m | west 17 m |
 | `oddone` | −36.5 | 3 | meadow between the west road and the foam course (37 m from spawn) | foamCourse 24 m | foamCourse 19 m | west 9 m |
 | `lineup` | 71.7 | −89.5 | by the ridge road towards the bridge | carnivalRow 70 m | trampoline 55 m | ridge 10 m |
-| `toys` | −50 | 13 | beside the west road (50 m from spawn) | foamCourse 40 m | ranch 23 m | west 9 m |
+| `toys` | −30.5 | 69.7 | west meadow beside the airstrip, approach from the runway side (68 m from spawn) | airstrip 30 m | airstrip 10 m | south 33 m |
 | `gates` | 48 | 104 | south-east, past the loop road | bubbleArena 48 m | sillyZone 24 m | loop 19 m |
 | `dotsigns` | 64 | 8 | east of the park, by the path to the rocket pads | raceStart 35 m | launchPads 11 m | parklink 8 m |
 
@@ -81,10 +81,15 @@ the site):
   mode no console warning: `__rgGlasses.sites()` reports `valid: false` and `problem`, and
   `tests/e2e/glasses-framework.spec.ts` fails naming the site and what blocks it).
 
-Re-sited after the M1 integration merge: `glowflies` (was −40.7, 73.2: a scatter rock and bushes
-from `src/world/scatter.ts` now stand on it) and `oddone` (was −47.4, −2.2: scatter oaks and a
-bush). Both new rows came from `__rgGlasses.search` on the merged world; the mini-games' own layout
-search succeeds there (odd one out: 0 problems; glow-flies: 3, the usual minimum).
+Re-sited after the M1 integration merge (new rows from `__rgGlasses.search` on the merged world,
+checked with `trySite`, `probe` and the new dev helper `__rgGlasses.sight`):
+- `glowflies` was (−40.7, 73.2): a scatter rock and bushes (`src/world/scatter.ts`) now stand on it.
+  Layout search: 3 problems, the minimum anywhere on the island (yaw 0.7, slot 1).
+- `oddone` was (−47.4, −2.2): scatter oaks and a bush. Layout search: 0 problems.
+- `toys` was (−50, 13): still free, but scatter pines now stand where the default camera sits
+  behind a child at the basket (no trail on screen), and its westward trail would run through the
+  new glow-flies meadow. The new spot has a clear camera to the first eight prints, and its
+  trails head west, away from the other sites (the first one ends 60 m from the nearest).
 
 What reaches outside a site's circle: glow-flies roam up to 9 m from their centre (no
 colliders); line-up bubbles float 8–13 m ahead in the air (no colliders); the paw trail runs
@@ -92,7 +97,7 @@ colliders); line-up bubbles float 8–13 m ahead in the air (no colliders); the 
 reserved footprints.
 
 **Asked of the world/UI owners (not done here):** these sites have no beacon, fingerpost arm or
-compass entry yet. Only two are within 55 m of spawn, because the space around the plaza is
+compass entry yet. Only one is within 55 m of spawn, because the space around the plaza is
 taken; a child will find the others while walking to the Silly Zone, the bridge, the rocket pads
 and the ranch.
 
