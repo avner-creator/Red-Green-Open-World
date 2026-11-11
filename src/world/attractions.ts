@@ -71,7 +71,7 @@ export const ATTRACTIONS: readonly Attraction[] = [
   { anchor: 'raceStart', icon: 'iFlag', arm: 0x2a2d34, balloon: 0x30343c, panels: [], beacon: { x: 38.5, z: 6.5, h: 12 }, board: NO_BOARD },
   { anchor: 'foamCourse', icon: 'iFoam', arm: 0x1d6464, balloon: 0x3cc4c0, panels: [], beacon: { x: -35.5, z: -15.5, h: 13 }, board: NO_BOARD },
   { anchor: 'airstrip', icon: 'iPlane', arm: 0x8a4a14, balloon: 0xe8742a, panels: [], beacon: { x: -26, z: 63, h: 14 }, board: NO_BOARD },
-  { anchor: 'dragonRoost', icon: 'iDragon', arm: 0x245c48, balloon: 0x58c49a, panels: [], beacon: { x: -43, z: -124, h: 14 }, board: NO_BOARD },
+  { anchor: 'dragonRoost', icon: 'iDragon', arm: 0x245c48, balloon: 0x58c49a, panels: [], beacon: { x: -25, z: -122, h: 14 }, board: NO_BOARD },
 ];
 
 export function attractionFor(a: AnchorName): Attraction {

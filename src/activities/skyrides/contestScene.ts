@@ -324,6 +324,10 @@ export function createContestScene(ctx: GameContext): ContestScene {
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   }
   both.add(hoopMesh, cloudMesh, cloudOutline, raftMesh, duckGroup, aim, puffs.mesh, confetti.mesh);
+  bonusMesh.name = 'sky-contest-bonus';
+  goldMesh.name = 'sky-contest-gold';
+  chevMesh.name = 'sky-contest-chevrons';
+  weakSparks.mesh.name = 'sky-contest-weak-sparks';
   weak.add(bonusMesh, goldMesh, chevMesh, weakSparks.mesh);
   both.visible = false;
   weak.visible = false;

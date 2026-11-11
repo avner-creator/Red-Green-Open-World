@@ -62,8 +62,8 @@ export function between(ax: number, ay: number, az: number, bx: number, by: numb
 export const UNIT = {
   box: new THREE.BoxGeometry(1, 1, 1),
   cyl: new THREE.CylinderGeometry(1, 1, 1, 14, 1, false),
-  cylLow: new THREE.CylinderGeometry(1, 1, 1, 8, 1, false),
-  sphere: new THREE.SphereGeometry(1, 16, 10),
+  cylLow: new THREE.CylinderGeometry(1, 1, 1, 6, 1, false),
+  sphere: new THREE.SphereGeometry(1, 14, 9),
   sphereLow: new THREE.SphereGeometry(1, 10, 6),
   cone: new THREE.ConeGeometry(1, 1, 12),
 };

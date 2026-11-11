@@ -73,6 +73,8 @@ export class ThrillConfetti {
       this.mesh.setMatrixAt(i, this.zero);
       this.mesh.setColorAt(i, new THREE.Color(PALETTE[i % PALETTE.length]));
     }
+    // Idle confetti costs no draw call: the mesh only shows while a piece is alive.
+    this.mesh.visible = false;
     this.group.add(this.mesh);
     for (let i = 0; i < 3; i++) {
       const sprite = new THREE.Sprite(this.flashMat.clone());
@@ -110,6 +112,7 @@ export class ThrillConfetti {
       this.mesh.setColorAt(i, new THREE.Color(PALETTE[(i * 7 + n) % PALETTE.length]));
     }
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    this.mesh.visible = true;
     const f = this.flashes.find((x) => x.t >= 1) ?? this.flashes[0];
     f.t = 0;
     f.sprite.position.copy(origin);
@@ -149,6 +152,7 @@ export class ThrillConfetti {
       this.mesh.setMatrixAt(i, this.dummy.matrix);
     }
     if (any) this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.visible = any;
     for (const f of this.flashes) {
       if (f.t >= 1) continue;
       f.t += dt / 0.7;
@@ -165,6 +169,7 @@ export class ThrillConfetti {
       this.mesh.setMatrixAt(i, this.zero);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.visible = false;
     for (const f of this.flashes) {
       f.t = 9;
       f.sprite.visible = false;
