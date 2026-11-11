@@ -45,7 +45,8 @@ export interface Friends {
   /** Friend `i` eats their copy: 0..1. */
   setEaten(i: number, f: number): void;
   /** `local` = the player's position in the parlour frame; `near` = player within update range. */
-  update(dt: number, local: THREE.Vector3, near: boolean): void;
+  /** `hidden`: draw nobody (Low, while the hero is busy on another ride), but keep loading. */
+  update(dt: number, local: THREE.Vector3, near: boolean, hidden?: boolean): void;
   readonly loaded: boolean;
   dispose(): void;
 }
@@ -159,8 +160,13 @@ export function createFriends(parent: THREE.Object3D, playerId: string): Friends
       // Lift the cone toward the mouth while eating.
       f.cone.root.position.set(0.28 - 0.22 * Math.min(1, k * 3), 1.05 + 0.2 * Math.min(1, k * 3), 0.32);
     },
-    update(dt, local, near) {
+    update(dt, local, near, hidden = false) {
       if (arrived.length) attachArrived();
+      if (hidden) {
+        for (const f of friends) f.root.visible = false;
+        if (near) load();
+        return;
+      }
       if (!near) {
         for (const f of friends) f.root.visible = local.lengthSq() < 90 * 90;
         return;

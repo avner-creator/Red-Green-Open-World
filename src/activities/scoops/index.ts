@@ -595,7 +595,10 @@ export function createScoops(ctx: GameContext): Scoops {
       ui.setEffects(effects.active());
       // The friends' character models load only once the game is on (not behind the title screen),
       // in test mode too, so the boot request budget (npm run boot:requests) holds there.
-      friends.update(dt, local, near && ctx.session.state.phase !== 'title');
+      // Low: while the hero is busy elsewhere (driving, riding, in another round), the idle friends
+      // are not drawn (a capped frame during rounds; they pop back when the hero walks again).
+      const busyElsewhere = phase === 'idle' && ctx.player.mode !== 'walk' && ctx.settings.get().quality === 'low';
+      friends.update(dt, local, near && ctx.session.state.phase !== 'title', busyElsewhere);
       if (!near) return;
 
       // Behind the counter is a closed room (counter, walls, 0.45 m slits): a hero who got in there

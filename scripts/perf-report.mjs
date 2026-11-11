@@ -16,11 +16,14 @@
 //   --json    machine-readable rows on stdout (or into the file)
 //   --check   exit 1 when a view is over budget (Low/Medium; High is not budgeted)
 //   --list    print the view names and exit
+//   --query=k[&k2] extra URL query (e.g. nofarlod, for a before/after look)
+//   --shots=dir  save each counted frame as dir/<quality>-<view>.png (for before/after checks)
 // Subsets (--views) run in the same order, but NPCs and Pip have walked a different amount by then,
 // so a subset can differ from the full run by a draw or two; the full run is the reference.
 import { chromium } from '@playwright/test';
 import { preview } from 'vite';
-import { writeFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 /** Frame budget without shadows (main + layer + post). */
 export const BUDGET = { low: { draws: 130, tris: 280_000 }, medium: { draws: 230, tris: 500_000 } };
@@ -37,6 +40,8 @@ const check = flag('--check');
 const jsonOut = flag('--json') ? '-' : opt('--json');
 const qualities = (args.find((a) => !a.startsWith('--')) ?? 'low,medium').split(',');
 const viewArg = opt('--views');
+const shots = opt('--shots');
+const extraQuery = opt('--query');
 
 /** Landmarks of the seven island-fill zones (copy of src/world/fill/zone-data.ts FILL_ZONES). */
 const FILL_ZONES = [
@@ -500,7 +505,7 @@ try {
     const netIdle = async () => {
       for (let i = 0; i < 600 && (pending > 0 || Date.now() - lastNet < 400); i++) await new Promise((r) => setTimeout(r, 100));
     };
-    await page.goto(`http://localhost:${port}/?test=1&quality=${quality}`);
+    await page.goto(`http://localhost:${port}/?test=1&quality=${quality}${extraQuery ? `&${extraQuery}` : ''}`);
     await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 240000 });
     await page.evaluate((z) => (window.__rgPerfZones = z), FILL_ZONES);
     await page.evaluate(install, GROUPS);
@@ -529,6 +534,14 @@ try {
       const pick = stable ? tail[tail.length - 1] : tail.reduce((a, b) => (b.frame.draws > a.frame.draws || (b.frame.draws === a.frame.draws && b.frame.tris > a.frame.tris) ? b : a));
       const row = { quality, view, round, stable, samples: samples.length, status, ...pick };
       if (detail) row.detail = await page.evaluate(() => window.__perf.detail());
+      if (shots) {
+        mkdirSync(shots, { recursive: true });
+        const url = await page.evaluate(() => {
+          window.__rg.render();
+          return document.getElementById('game').toDataURL('image/png');
+        });
+        writeFileSync(`${shots}/${quality}-${view}.png`, Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'));
+      }
       rows.push(row);
       if (round) await page.evaluate(() => window.__perf.reset());
       const b = BUDGET[quality];

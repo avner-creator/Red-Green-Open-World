@@ -41,9 +41,9 @@ const standIns = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry | null>(
 /** Can this mesh get a stand-in? Plain static meshes only (no skinning, morphs, dynamic attributes). */
 function standInOk(o: THREE.Object3D): boolean {
   const m = o as THREE.Mesh;
-  if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || Array.isArray(m.material)) return false;
+  if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) return false;
   const g = m.geometry;
-  if (g.morphAttributes.position || g.groups.length > 1) return false;
+  if (g.morphAttributes.position) return false;
   if (Object.values(g.attributes).some((a) => (a as THREE.BufferAttribute).usage !== undefined && (a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage)) return false;
   const tris = g.index ? g.index.count / 3 : g.attributes.position.count / 3;
   return tris >= STAND_IN.minTris;
