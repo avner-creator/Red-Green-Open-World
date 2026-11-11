@@ -237,7 +237,7 @@ function bulbString(k: Kit, a: THREE.Vector3, c: THREE.Vector3, sag: number): vo
     const mid = prev.clone().add(p).multiplyScalar(0.5);
     k.b.add('metal', boxG(), WIRE, T(mid.x, mid.y - 0.01, mid.z, yaw, 0.025, 0.025, d, -Math.asin((p.y - prev.y) / d)));
     if (i < n) {
-      k.b.add('glow', sphereG(1), i % 3 === 0 ? 0xffd27a : BULB, T(p.x, p.y - 0.12, p.z, 0, 0.085, 0.11, 0.085));
+      k.b.add('glow', sphereG(0), i % 3 === 0 ? 0xffd27a : BULB, T(p.x, p.y - 0.12, p.z, 0, 0.085, 0.11, 0.085));
       k.b.add('metal', cylG(6), WIRE, T(p.x, p.y - 0.05, p.z, 0, 0.03, 0.05, 0.03));
     }
     prev = p.clone();
@@ -271,8 +271,8 @@ function gate(k: Kit, d: Decals, g: NonNullable<Dressing['gate']>, icon: IconId 
   // Arc (half torus, stood up across the path) springing from the pillar tops.
   const am = T(x, y0, z, yaw);
   const up = (lx: number, ly: number, lz: number): THREE.Matrix4 => M(am, T(lx, ly, lz, 0, 1, 1, 1, Math.PI / 2));
-  k.b.add('paint', torusG(0.16, 32, Math.PI, w / 2), RED, up(0, 0, 0));
-  k.b.add('paint', torusG(0.07, 32, Math.PI, w / 2 + 0.24), CREAM, up(0, 0, 0));
+  k.b.add('paint', torusG(0.16, 24, Math.PI, w / 2, 6), RED, up(0, 0, 0));
+  k.b.add('paint', torusG(0.07, 24, Math.PI, w / 2 + 0.24, 4), CREAM, up(0, 0, 0));
   // Bulbs along the arc (front and back).
   for (let i = 1; i < 12; i++) {
     const a = (i / 12) * Math.PI;
@@ -283,7 +283,7 @@ function gate(k: Kit, d: Decals, g: NonNullable<Dressing['gate']>, icon: IconId 
   // Roundel with the icon on top of the arc, both faces.
   const ry = w / 2 + 0.78;
   k.b.add('paint', cylG(28), CREAM, M(am, T(0, ry, -0.1, 0, 0.62, 0.2, 0.62, Math.PI / 2)));
-  k.b.add('paint', torusG(0.06, 28, Math.PI * 2, 0.64), GOLD, up(0, ry, 0));
+  k.b.add('paint', torusG(0.06, 20, Math.PI * 2, 0.64, 4), GOLD, up(0, ry, 0));
   if (icon) d.add(icon, M(am, T(0, ry, 0.105)), 1.12, 1.12, true, 0.21);
 }
 

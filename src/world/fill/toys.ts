@@ -107,11 +107,10 @@ export function mushroom(k: Kit, x: number, z: number, s: number, cap: number): 
   const H = 1.35 * s;
   const R = 1.05 * s;
   const W = TOY.wobble;
-  toyPart(k, cylG(14, 0.8), WHITE, T(x, y, z, 0, 0.42 * s, H - 0.2 * s, 0.42 * s), pivot, W, [0, 1, 0], H);
-  toyPart(k, torusG(0.08, 18, Math.PI * 2, 0.4), 0xe8e0cc, T(x, y + H * 0.55, z, 0, s, s, s), pivot, W, [0, 1, 0], H);
-  // Cap: a dome (squashed sphere) with a cream rim underneath.
-  toyPart(k, sphereG(2), cap, T(x, y + H - 0.1 * s, z, 0, R, 0.62 * s, R), pivot, W, [0, 1, 0], H);
-  toyPart(k, cylG(18), 0xf3e6c8, T(x, y + H - 0.2 * s, z, 0, R * 0.9, 0.14 * s, R * 0.9), pivot, W, [0, 1, 0], H);
+  toyPart(k, cylG(10, 0.8, true), WHITE, T(x, y, z, 0, 0.42 * s, H - 0.2 * s, 0.42 * s), pivot, W, [0, 1, 0], H);
+    // Cap: a dome (squashed sphere) with a cream rim underneath.
+  toyPart(k, sphereG(1), cap, T(x, y + H - 0.1 * s, z, 0, R, 0.62 * s, R), pivot, W, [0, 1, 0], H);
+  toyPart(k, cylG(12), 0xf3e6c8, T(x, y + H - 0.2 * s, z, 0, R * 0.9, 0.14 * s, R * 0.9), pivot, W, [0, 1, 0], H);
   // White spots on the dome (points on the unit sphere, mapped onto the squashed cap).
   const cy = y + H - 0.1 * s;
   for (let i = 0; i < 6; i++) {
@@ -121,7 +120,7 @@ export function mushroom(k: Kit, x: number, z: number, s: number, cap: number): 
     const dy = Math.sin(el);
     const dz = Math.cos(el) * Math.sin(az);
     const r = (i === 0 ? 0.3 : 0.2) * s;
-    toyPart(k, sphereG(1), WHITE, T(x + dx * R * 0.97, cy + dy * 0.62 * s * 0.97, z + dz * R * 0.97, -az, r, r * 0.5, r, Math.PI / 2 - el), pivot, W, [0, 1, 0], H);
+    toyPart(k, sphereG(0), WHITE, T(x + dx * R * 0.97, cy + dy * 0.62 * s * 0.97, z + dz * R * 0.97, -az, r, r * 0.5, r, Math.PI / 2 - el), pivot, W, [0, 1, 0], H);
   }
   // Solid drum: walk into the side (bump) or land on the top (bounce).
   k.col.cyl(x, y, z, (H + 0.35 * s) / 2, R * 0.85);
@@ -137,9 +136,9 @@ export function duck(k: Kit, x: number, z: number, yaw: number, s = 1): ToyDef {
     return T(x + f.x * s, y + f.y * s, z + f.z * s, yaw, sx * s, sy * s, sz * s, pitch);
   };
   const YEL = 0xffd23a;
-  toyPart(k, sphereG(2), YEL, m(0, 0.55, -0.1, 0.78, 0.55, 0.95), pivot, W, [0, 1, 0], 1.6 * s);
-  toyPart(k, sphereG(2), YEL, m(0, 0.38, -0.95, 0.35, 0.3, 0.32), pivot, W, [0, 1, 0], 1.6 * s); // tail
-  toyPart(k, sphereG(2), YEL, m(0, 1.18, 0.42, 0.48, 0.46, 0.46), pivot, W, [0, 1, 0], 1.6 * s); // head
+  toyPart(k, sphereG(1), YEL, m(0, 0.55, -0.1, 0.78, 0.55, 0.95), pivot, W, [0, 1, 0], 1.6 * s);
+  toyPart(k, sphereG(1), YEL, m(0, 0.38, -0.95, 0.35, 0.3, 0.32), pivot, W, [0, 1, 0], 1.6 * s); // tail
+  toyPart(k, sphereG(1), YEL, m(0, 1.18, 0.42, 0.48, 0.46, 0.46), pivot, W, [0, 1, 0], 1.6 * s); // head
   toyPart(k, coneG(10), 0xf06a1c, m(0, 1.12, 0.84, 0.17, 0.4, 0.12, Math.PI / 2), pivot, W, [0, 1, 0], 1.6 * s); // beak
   for (const sx of [-1, 1]) {
     toyPart(k, sphereG(1), WHITE, m(sx * 0.2, 1.3, 0.78, 0.11, 0.12, 0.06), pivot, W, [0, 1, 0], 1.6 * s);
@@ -184,12 +183,12 @@ export function springFlower(k: Kit, x: number, z: number, petal: number): ToyDe
   const pivot: [number, number, number] = [x, y + 0.15, z];
   const S = TOY.sway;
   k.b.add('paint', cylG(14), INK, T(x, y, z, 0, 0.4, 0.15, 0.4), { aoY: y, aoH: 0.2, ao: 0.3 });
-  for (let i = 0; i < 4; i++) toyPart(k, torusG(0.05, 14, Math.PI * 2, 0.22), 0xc9ced6, T(x, y + 0.25 + i * 0.16, z), pivot, S, [0, 1, 0], 1.8);
+  for (let i = 0; i < 4; i++) toyPart(k, torusG(0.05, 10, Math.PI * 2, 0.22, 4), 0xc9ced6, T(x, y + 0.25 + i * 0.16, z), pivot, S, [0, 1, 0], 1.8);
   toyPart(k, cylG(8), 0x3b8a3a, T(x, y + 0.8, z, 0, 0.06, 0.65, 0.06), pivot, S, [0, 1, 0], 1.8);
   const fy = y + 1.55;
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
-    toyPart(k, sphereG(1), petal, T(x + Math.cos(a) * 0.32, fy, z + Math.sin(a) * 0.32, -a, 0.24, 0.24, 0.1), pivot, S, [0, 1, 0], 1.8);
+    toyPart(k, sphereG(0), petal, T(x + Math.cos(a) * 0.32, fy, z + Math.sin(a) * 0.32, -a, 0.24, 0.24, 0.1), pivot, S, [0, 1, 0], 1.8);
   }
   toyPart(k, sphereG(1), 0xf2c14e, T(x, fy, z, 0, 0.2, 0.2, 0.14), pivot, S, [0, 1, 0], 1.8);
   toyPart(k, sphereG(1), WHITE, T(x, fy, z, 0, 0.1, 0.1, 0.17), pivot, S, [0, 1, 0], 1.8);

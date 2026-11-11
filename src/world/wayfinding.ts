@@ -211,7 +211,7 @@ function fingerpost(k: Kit, d: Decals, def: FingerpostDef, arms: ArmInfo[]): voi
       // Big icon discs on both faces (wider than the arm), staggered along the arm row by row.
       const R = 0.34 * s;
       const dx = x0 + (row % 2 ? 1.85 : 1.15) * s;
-      k.b.add('paint', cylG(28), CREAM, M(am, T(dx, 0, -0.13 * s, 0, R, 0.26 * s, R, Math.PI / 2)));
+      k.b.add('paint', cylG(18), CREAM, M(am, T(dx, 0, -0.13 * s, 0, R, 0.26 * s, R, Math.PI / 2)));
       d.add(att.icon, M(am, T(dx, 0, 0.132 * s)), R * 1.8, R * 1.8, true, 0.264 * s);
     } else {
       d.add(att.icon, M(am, T(x0 + 1.05 * s, 0, 0.087 * s)), H * 0.9, H * 0.9, true, 0.174 * s);
@@ -224,7 +224,7 @@ function fingerpost(k: Kit, d: Decals, def: FingerpostDef, arms: ArmInfo[]): voi
       const rx = x0 + (hang ? len - 0.25 * s : (i % 2 ? 1.5 : 2.02) * s);
       const ry = hang ? -H / 2 - 0.07 * s - R : 0;
       if (hang) k.b.add('metal', boxG2(), C.iron, M(am, T(rx, -H / 2 - 0.05 * s, 0, 0, 0.05 * s, 0.12 * s, 0.05 * s)));
-      k.b.add('paint', cylG(28), CREAM, M(am, T(rx - 0.05 * s, ry, 0, 0, R, 0.1 * s, R, 0, -Math.PI / 2)));
+      k.b.add('paint', cylG(18), CREAM, M(am, T(rx - 0.05 * s, ry, 0, 0, R, 0.1 * s, R, 0, -Math.PI / 2)));
       d.add(att.icon, M(am, T(rx + 0.056 * s, ry, 0, Math.PI / 2)), R * 1.86, R * 1.86, true, 0.112 * s);
     }
     arms.push({ x, z, yaw: a.yaw, target: a.t });

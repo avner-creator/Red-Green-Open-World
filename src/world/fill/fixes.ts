@@ -122,7 +122,7 @@ function villageHedges(k: Kit): void {
     for (let i = 0; i < 9; i++) {
       const t = (i / 8 - 0.5) * (len - 0.6);
       for (const s of [-1, 1]) {
-        k.b.add('matte', blobG(300 + i, 1, 0.2), i % 2 ? C.leaf : C.leafDark, T(x + t, y + 1.9 + (i % 3) * 0.12, z + s * (w / 2 + 0.05), i, 0.5, 0.45, 0.35));
+        k.b.add('matte', blobG(300 + i, 0, 0.2), i % 2 ? C.leaf : C.leafDark, T(x + t, y + 1.9 + (i % 3) * 0.12, z + s * (w / 2 + 0.05), i, 0.5, 0.45, 0.35));
       }
       k.b.add('paint', sphereG(0), [0xfff2c8, 0xf0a8c0, 0xffffff][i % 3], T(x + t, y + 1.4 + (i % 2) * 0.4, z + (i % 2 ? 1 : -1) * (w / 2 + 0.18), 0, 0.09, 0.09, 0.09));
     }

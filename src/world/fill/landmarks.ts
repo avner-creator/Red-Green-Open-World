@@ -6,7 +6,7 @@
  */
 import * as THREE from 'three';
 import { M, T } from '../batch';
-import { C, bunting, type Kit } from '../props';
+import { C, type Kit } from '../props';
 import { blobG, boxG, coneG, cylG, flagG, prismG, rbox, sphereG, torusG } from '../shapes';
 import { TOY } from '../materials';
 import type { Decals } from '../decals';
@@ -88,8 +88,8 @@ export function bigWheel(k: Kit, d: Decals, x: number, z: number, yaw: number): 
   k.col.box(T(dx, k.h(dx, dz), dz, yaw), 0, 0.2, 0, 2.5, 0.25, 1.5);
   // The wheel: two rims, spokes, a hub star and pods (spheres: they look right at any angle).
   for (const s of [-0.7, 0.7]) {
-    toyPart(k, torusG(0.3, 56, Math.PI * 2, R), 0xf4efe6, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
-    toyPart(k, torusG(0.2, 40, Math.PI * 2, R * 0.55), 0xe2483c, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
+    toyPart(k, torusG(0.3, 40, Math.PI * 2, R, 6), 0xf4efe6, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
+    toyPart(k, torusG(0.2, 28, Math.PI * 2, R * 0.55, 5), 0xe2483c, T(x + ax[0] * s, hub, z + ax[2] * s, yaw, 1, 1, 1, Math.PI / 2), pivot, S, ax, w);
   }
   const pods = [0xe2483c, 0xf2c14e, 0x3a72d8, 0xf08a24, 0xd8409a, 0x4caf50];
   for (let i = 0; i < 12; i++) {
@@ -209,7 +209,7 @@ export function pumpkin(k: Kit, x: number, z: number, s: number, seed: number): 
   const y = k.h(x, z);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + seed;
-    k.b.add('paint', sphereG(1), i % 2 ? 0xf07a1c : 0xe86a14, T(x + Math.cos(a) * 0.16 * s, y + 0.34 * s, z + Math.sin(a) * 0.16 * s, a, 0.34 * s, 0.32 * s, 0.22 * s), { aoY: y, aoH: 0.3, ao: 0.3 });
+    k.b.add('paint', sphereG(0), i % 2 ? 0xf07a1c : 0xe86a14, T(x + Math.cos(a) * 0.16 * s, y + 0.34 * s, z + Math.sin(a) * 0.16 * s, a, 0.34 * s, 0.32 * s, 0.22 * s), { aoY: y, aoH: 0.3, ao: 0.3 });
   }
   k.b.add('paint', cylG(6), 0x3b6a2a, T(x, y + 0.6 * s, z, 0, 0.05 * s, 0.18 * s, 0.05 * s));
   if (s > 0.9) k.col.sphere(x, y + 0.3 * s, z, 0.38 * s);
@@ -369,7 +369,7 @@ export function rainbow(k: Kit, d: Decals, x: number, z: number, yaw: number): v
   const bands = [0xe2483c, 0xf08a24, 0xf2d23c, 0x4caf50, 0x3a72d8, 0x8a4cc8];
   bands.forEach((c, i) => {
     const r = 9.6 - i * 0.62;
-    k.b.add('paint', torusG(0.32, 40, Math.PI, r), c, T(x, y - 0.3, z, yaw, 1, 1, 1, Math.PI / 2));
+    k.b.add('paint', torusG(0.32, 28, Math.PI, r, 6), c, T(x, y - 0.3, z, yaw, 1, 1, 1, Math.PI / 2));
   });
   for (const s of [-1, 1]) {
     const [cx, cz] = at(x, z, yaw, s * 7.9, 0);
@@ -436,32 +436,27 @@ export function zoneArch(k: Kit, d: Decals, x: number, z: number, yaw: number, s
     const py = k.h(px, pz);
     top = Math.max(top, py + H);
     k.b.add('matte', rbox(0.9, 0.5, 0.9, 0.06), C.stone, T(px, py - 0.1, pz, yaw), { aoY: py, aoH: 0.3, ao: 0.35 });
-    const n = 8;
-    for (let i = 0; i < n; i++) k.b.add('paint', cylG(12), i % 2 ? color : CREAM, T(px, py + 0.35 + (i * (H - 0.35)) / n, pz, 0, 0.28, (H - 0.35) / n, 0.28));
-    k.b.add('gloss', sphereG(1), 0xf2c14e, T(px, py + H + 0.25, pz, 0, 0.32, 0.32, 0.32));
+    const n = 4;
+    for (let i = 0; i < n; i++) k.b.add('paint', cylG(8, 1, true), i % 2 ? color : CREAM, T(px, py + 0.35 + (i * (H - 0.35)) / n, pz, 0, 0.28, (H - 0.35) / n, 0.28));
+    k.b.add('gloss', sphereG(0), 0xf2c14e, T(px, py + H + 0.25, pz, 0, 0.32, 0.32, 0.32));
     k.col.cyl(px, py, pz, H / 2, 0.42);
   }
   const ay = Math.min(top, y + H);
   // Half-ring over the gap (lies in the plane across the road).
-  k.b.add('paint', torusG(0.24, 28, Math.PI, half), color, T(x, ay, z, yaw + Math.PI / 2, 1, 1, 1, Math.PI / 2));
-  k.b.add('paint', torusG(0.1, 28, Math.PI, half - 0.34), CREAM, T(x, ay, z, yaw + Math.PI / 2, 1, 1, 1, Math.PI / 2));
-  for (let i = 1; i < 10; i++) {
-    const th = (i / 10) * Math.PI;
+  k.b.add('paint', torusG(0.24, 16, Math.PI, half, 5), color, T(x, ay, z, yaw + Math.PI / 2, 1, 1, 1, Math.PI / 2));
+  k.b.add('paint', torusG(0.1, 16, Math.PI, half - 0.34, 4), CREAM, T(x, ay, z, yaw + Math.PI / 2, 1, 1, 1, Math.PI / 2));
+  for (let i = 1; i < 8; i++) {
+    const th = (i / 8) * Math.PI;
     const [bx, bz] = at(x, z, yaw + Math.PI / 2, 0, Math.cos(th) * half);
     k.b.add('glow', sphereG(0), 0xffe2b0, T(bx, ay + Math.sin(th) * half + 0.28, bz, 0, 0.13, 0.13, 0.13));
   }
   // Roundel at the crown.
   const ry = ay + half + 0.9;
-  k.b.add('paint', cylG(28), CREAM, T(x, ry, z, yaw, 1.05, 0.22, 1.05, Math.PI / 2));
-  k.b.add('paint', torusG(0.08, 28, Math.PI * 2, 1.05), color, T(x, ry, z, yaw, 1, 1, 1, Math.PI / 2));
+  k.b.add('paint', cylG(16), CREAM, T(x, ry, z, yaw, 1.05, 0.22, 1.05, Math.PI / 2));
+  k.b.add('paint', torusG(0.08, 20, Math.PI * 2, 1.05, 4), color, T(x, ry, z, yaw, 1, 1, 1, Math.PI / 2));
   d.add(icon, T(x + Math.sin(yaw) * 0.115, ry, z + Math.cos(yaw) * 0.115, yaw), 1.9, 1.9, true, 0.23);
-  // Little pennants hanging from the ring.
-  const a = new THREE.Vector3(...pt(at(x, z, yaw + Math.PI / 2, 0, -half + 0.3), ay + 0.9));
-  const b = new THREE.Vector3(...pt(at(x, z, yaw + Math.PI / 2, 0, half - 0.3), ay + 0.9));
-  bunting(k.b, a, b, [color, CREAM, 0xf2c14e, CREAM], 0.2);
 }
 
-const pt = ([x, z]: [number, number], y: number): [number, number, number] => [x, y, z];
 
 /**
  * Carnival lantern posts beside a road or trail: a striped post every `step` m with a crown of

@@ -26,10 +26,10 @@ function fountain(k: Kit): void {
   const b = k.b;
   // Basin: outer wall + rim + water.
   b.add('matte', cylG(40), 0xd6ccb8, T(x, y, z, 0, 4.3, 0.5, 4.3), { aoY: y, aoH: 0.5, ao: 0.3 });
-  b.add('paint', torusG(0.26, 64, Math.PI * 2, 4.2), 0xe9e1cf, T(x, y + 0.62, z));
+  b.add('paint', torusG(0.26, 48, Math.PI * 2, 4.2, 6), 0xe9e1cf, T(x, y + 0.62, z));
   b.add('gloss', discG(40), 0x4f9fae, T(x, y + 0.5, z, 0, 4.05, 0.07, 4.05));
   // Ripple rings (bright) on the water.
-  for (const r of [2.7, 3.3]) b.add('gloss', torusG(0.04, 48, Math.PI * 2, r), 0xcfeff2, T(x, y + 0.57, z, 0, 1, 0.3, 1));
+  for (const r of [2.7, 3.3]) b.add('gloss', torusG(0.04, 36, Math.PI * 2, r, 3), 0xcfeff2, T(x, y + 0.57, z, 0, 1, 0.3, 1));
   // Pedestal, lower bowl, column, upper bowl, finial.
   b.add('matte', cylG(16, 0.8), 0xd6ccb8, T(x, y + 0.5, z, 0, 0.75, 1.3, 0.75));
   b.add('paint', cylG(32, 1), 0xe9e1cf, T(x, y + 1.8, z, 0, 2.0, 0.22, 2.0));
@@ -58,7 +58,7 @@ export function buildVillage(k: Kit, opts: HouseOpts): ManualTree[] {
   ringBand(k, px, pz, y + 0.07, 12.5, 13.3, 0xaba293);
   ringBand(k, px, pz, y + 0.07, 13.3, pr, 0xd2c8b5);
   // Curb ring.
-  k.b.add('matte', torusG(0.18, 128, Math.PI * 2, pr), 0x9d9485, T(px, y + 0.02, pz));
+  k.b.add('matte', torusG(0.18, 72, Math.PI * 2, pr, 4), 0x9d9485, T(px, y + 0.02, pz));
   // Radial dark stone spokes (a compass rose) in the inner ring.
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;

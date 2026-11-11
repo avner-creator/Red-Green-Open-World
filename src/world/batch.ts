@@ -34,7 +34,7 @@ const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 const CLASS_R = [0.3, 0.6, 1.5, 4] as const;
 const CLASSES = CLASS_R.length + 1;
 export const STATIC_MAX_DIST: Record<Quality, readonly number[]> = {
-  low: [Infinity, 55, 36, 22, 15],
+  low: [Infinity, 46, 30, 19, 13],
   medium: [Infinity, 220, 125, 75, 50],
   high: [Infinity, 320, 180, 110, 75],
 };
@@ -72,6 +72,8 @@ interface CellRange {
   start: number;
   /** End (in vertices) of the parts of each size class and all bigger ones. */
   ends: number[];
+  /** Bounding sphere (x, y, z, r) of the parts of each size class (r < 0: none), for the distance cut. */
+  cls: Float32Array;
 }
 
 interface Layer {
@@ -101,15 +103,28 @@ function buildLayer(parts: Part[], material: THREE.Material, positionsOnly: bool
   let v = 0;
   let cur: CellRange | null = null;
   let curKey = -1;
+  const clsBox = Array.from({ length: CLASSES }, () => new THREE.Box3());
+  const closeClasses = (c: CellRange): void => {
+    for (let k = 0; k < CLASSES; k++) {
+      if (clsBox[k].isEmpty()) continue;
+      clsBox[k].getCenter(tmpV);
+      c.cls.set([tmpV.x, tmpV.y, tmpV.z, clsBox[k].getSize(tmpS).length() / 2], k * 4);
+    }
+  };
   for (const p of parts) {
     if (p.cell !== curKey || !cur) {
-      if (cur) cells.push(cur);
+      if (cur) {
+        closeClasses(cur);
+        cells.push(cur);
+      }
       curKey = p.cell;
       box.makeEmpty();
-      cur = { x: 0, y: 0, z: 0, r: 0, start: v, ends: new Array<number>(CLASSES).fill(v) };
+      for (const b of clsBox) b.makeEmpty();
+      cur = { x: 0, y: 0, z: 0, r: 0, start: v, ends: new Array<number>(CLASSES).fill(v), cls: new Float32Array(CLASSES * 4).fill(-1) };
     }
     tmpBox.setFromBufferAttribute(p.geo.attributes.position as THREE.BufferAttribute);
     box.union(tmpBox);
+    clsBox[p.cls].union(tmpBox);
     box.getCenter(tmpV);
     cur.x = tmpV.x;
     cur.y = tmpV.y;
@@ -118,7 +133,10 @@ function buildLayer(parts: Part[], material: THREE.Material, positionsOnly: bool
     v += p.geo.attributes.position.count;
     for (let k = p.cls; k < CLASSES; k++) cur.ends[k] = v;
   }
-  if (cur) cells.push(cur);
+  if (cur) {
+    closeClasses(cur);
+    cells.push(cur);
+  }
   // Identity index rewritten per view. It starts with everything, so a mesh nobody updates draws whole.
   const idx = new Uint32Array(total);
   for (let i = 0; i < total; i++) idx[i] = i;
@@ -147,11 +165,18 @@ function selectLayer(L: Layer, frustum: THREE.Frustum, cam: THREE.Vector3, maxD:
     _sphere.center.set(c.x, c.y, c.z);
     _sphere.radius = c.r + pad;
     if (!frustum.intersectsSphere(_sphere)) continue;
-    const d = Math.hypot(c.x - cam.x, c.y - cam.y, c.z - cam.z) - c.r;
-    let cls = -1;
-    while (cls + 1 < CLASSES && d <= maxD[cls + 1]) cls++;
-    const end = cls < 0 ? c.start : c.ends[cls];
-    for (let i = c.start; i < end; i++) arr[k++] = i;
+    // Each size class is cut at its own distance, measured to that class's own bounding sphere (a
+    // cell's small props are not kept alive by a big building in the same cell).
+    let from = c.start;
+    for (let q = 0; q < CLASSES; q++) {
+      const to = c.ends[q];
+      const r = c.cls[q * 4 + 3];
+      if (to > from && r >= 0) {
+        const d = Math.hypot(c.cls[q * 4] - cam.x, c.cls[q * 4 + 1] - cam.y, c.cls[q * 4 + 2] - cam.z) - r;
+        if (d <= maxD[q]) for (let i = from; i < to; i++) arr[k++] = i;
+      }
+      from = to;
+    }
   }
   // Nothing of this material in view: skip the draw call altogether.
   L.count = k;
