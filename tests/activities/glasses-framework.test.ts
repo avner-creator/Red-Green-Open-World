@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GLASSES } from '../../src/activities/glasses/constants';
 import { FarIdle, hashString, seededRng } from '../../src/activities/glasses/idle';
 import { GLASSES_PICTOS, glassesPictoUv, swatchUv } from '../../src/activities/glasses/pictos';
 import { pay, result } from '../../src/activities/glasses/rewards';
@@ -69,6 +70,17 @@ describe('far-idle', () => {
     expect(f.active).toBe(false);
     f.update(10);
     f.reset();
+    expect(f.active).toBe(false);
+  });
+
+  it('the mini-games default to on inside 40 m, off beyond 48 m (layer content unreadable farther out)', () => {
+    expect(GLASSES.activateRadius).toBe(40);
+    expect(GLASSES.deactivateRadius).toBe(48);
+    const f = new FarIdle();
+    expect(f.update(45)).toBe(false); // the plaza → a mini-game 45 m away: stays off
+    expect(f.update(39)).toBe(true);
+    expect(f.update(47.5)).toBe(false); // hysteresis band: stays on
+    expect(f.update(49)).toBe(true);
     expect(f.active).toBe(false);
   });
 });

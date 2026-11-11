@@ -21,9 +21,13 @@ export const GLASSES = {
   /** Dev search helper (`searchSite`): step between candidates (golden-angle spiral) and number of candidates. */
   searchStep: 1.25,
   searchCount: 1600,
-  /** Far-idle: a mechanic switches on inside `activateRadius` and off beyond `deactivateRadius`. */
-  activateRadius: 60,
-  deactivateRadius: 70,
+  /**
+   * Far-idle: a mechanic switches on inside `activateRadius` and off beyond `deactivateRadius`
+   * (player distance; the camera is ~5.5 m further). Beyond ~45 m the layer content (0.75–1.3 m
+   * shapes, ~0.1 m dots, 1 m prints) is ≤ 7 px per metre at 640×360 (≤ 14 at 1280×720): unreadable.
+   */
+  activateRadius: 40,
+  deactivateRadius: 48,
   /** `goto` viewing distance from the site centre (the approach side). */
   viewDistance: 12,
 } as const;

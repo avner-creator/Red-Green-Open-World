@@ -8,6 +8,7 @@
  */
 import type * as THREE from 'three';
 import type { GameContext, GameSystem, VisionLayer } from '../../../types';
+import { cameraSafe } from '../camera';
 import { hashString, seededRng } from '../idle';
 import { pay, result } from '../rewards';
 import { IDENTITY_CHALLENGE } from '../types';
@@ -55,7 +56,7 @@ export function createWeave(ctx: GameContext, opts: WeaveOptions): GameSystem {
       challenge: () => ctx.vision.challenge?.() ?? IDENTITY_CHALLENGE,
       add(object, layer) {
         if (objects.has(object)) env.remove(object);
-        objects.set(object, layer);
+        objects.set(cameraSafe(object), layer);
         ctx.vision.add(object, layer);
         return object;
       },

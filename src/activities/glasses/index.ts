@@ -15,6 +15,7 @@ import { ROADS } from '../../world/layout'; // read-only pure data: keeps sites 
 import { VisionLayer } from '../../types';
 import type { GameContext, GameSystem } from '../../types';
 import { createBoard, createBoardMaterial } from './board';
+import { cameraSafe } from './camera';
 import type { Board } from './board';
 import { BOARD, GLASSES } from './constants';
 import { FarIdle, hashString, seededRng } from './idle';
@@ -410,7 +411,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
       challenge: () => ctx.vision.challenge?.() ?? IDENTITY_CHALLENGE,
       add(object, layer) {
         if (objects.has(object)) env.remove(object);
-        objects.set(object, layer);
+        objects.set(cameraSafe(object), layer);
         if (layer === VisionLayer.Both || idle.active) ctx.vision.add(object, layer);
         return object;
       },

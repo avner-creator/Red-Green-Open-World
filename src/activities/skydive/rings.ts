@@ -21,6 +21,8 @@ export const HOOPS = {
   step: 1.1,
   /** A pass within this distance of the hoop centre collects its bonus gem. */
   pickup: 2.8,
+  /** Walking: the weak-eye hoop gems are drawn only within this horizontal distance (m) of the ring centre (always during a ride). */
+  gemShowRadius: 80,
 } as const;
 
 export interface Hoop {
@@ -243,6 +245,9 @@ export function createLandingRings(ctx: GameContext, approach: THREE.Vector2): L
         spin.rotation.z = time * 0.25 + i;
       });
       placeHoops();
+      // Off-screen-sized from farther away: skip their draws (always shown while riding, e.g. the skydive).
+      const p = ctx.player.position;
+      weak.visible = ctx.player.mode === 'external' || Math.hypot(p.x - cx, p.z - cz) <= HOOPS.gemShowRadius;
       markers.forEach((mk, i) => {
         mk.gem.rotation.y = time * 1.6 + i;
         mk.group.position.y = hoops[i].center.y + Math.sin(time * 2 + i) * 0.18;

@@ -69,3 +69,62 @@ export function haloTexture(): THREE.Texture {
   }
   return new THREE.CanvasTexture(canvas);
 }
+
+/** The real gem's halo opacity (gems.ts `haloMat`). */
+export const HALO_OPACITY = 0.45;
+
+/**
+ * One fake gem and its halo quad in ONE geometry, so the fakes and every halo/puff are a single
+ * instanced draw: attribute `part` (0 = gem, 1 = halo quad), RGBA colour (the gem's greys at
+ * alpha 1; the halo white at the real halo's opacity) and uv (the halo's; unused on the gem).
+ * Each instance draws only the part named by its per-instance `kind` (see `fakesMaterial`).
+ */
+export function gemAndHaloGeometry(gem: THREE.BufferGeometry, kind: THREE.InstancedBufferAttribute): THREE.BufferGeometry {
+  const quad = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+  const gp = gem.getAttribute('position');
+  const gc = gem.getAttribute('color');
+  const qp = quad.getAttribute('position');
+  const qu = quad.getAttribute('uv');
+  const n = gp.count + qp.count;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 4);
+  const uv = new Float32Array(n * 2);
+  const part = new Float32Array(n);
+  for (let i = 0; i < gp.count; i++) {
+    pos.set([gp.getX(i), gp.getY(i), gp.getZ(i)], i * 3);
+    col.set([gc.getX(i), gc.getY(i), gc.getZ(i), 1], i * 4);
+  }
+  for (let j = 0; j < qp.count; j++) {
+    const i = gp.count + j;
+    pos.set([qp.getX(j), qp.getY(j), qp.getZ(j)], i * 3);
+    col.set([1, 1, 1, HALO_OPACITY], i * 4);
+    uv.set([qu.getX(j), qu.getY(j)], i * 2);
+    part[i] = 1;
+  }
+  quad.dispose();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('part', new THREE.BufferAttribute(part, 1));
+  geo.setAttribute('kind', kind);
+  return geo;
+}
+
+/**
+ * The material for `gemAndHaloGeometry`: the real gem's unlit vertex greys (gem instances) and the
+ * real halo's texture × opacity (halo instances), blended like the real halo. The vertices of the
+ * part an instance does not draw collapse to a point (no fragments). Fully transparent halo texels
+ * are discarded, so a halo's empty corners never hide anything drawn after it.
+ */
+export function fakesMaterial(haloTex: THREE.Texture): THREE.MeshBasicMaterial {
+  const mat = new THREE.MeshBasicMaterial({ map: haloTex, vertexColors: true, transparent: true, alphaTest: 1 / 512 });
+  mat.onBeforeCompile = (s) => {
+    s.vertexShader =
+      'attribute float part;\nattribute float kind;\nvarying float vPart;\n' +
+      s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vPart = part;\n  if (abs(part - kind) > 0.5) transformed = vec3(0.0);');
+    s.fragmentShader = 'varying float vPart;\n' + s.fragmentShader.replace('#include <map_fragment>', 'if (vPart > 0.5) {\n#include <map_fragment>\n}');
+  };
+  mat.customProgramCacheKey = () => 'glasses-weave-fakes';
+  return mat;
+}

@@ -13,7 +13,8 @@
  *  - One round per spot per respawn cycle; the tier rises after two hits in a row, falls after a miss.
  *
  * Everything is on the WeakOnly layer (like the real gems): the strong eye sees nothing at all.
- * Draw calls while a cluster stands: fakes (1 InstancedMesh) + their halos/puffs (1) = 2; 0 otherwise.
+ * Draw calls while a cluster stands and is in the camera's view: 1 (the fakes, their halos and the
+ * puffs are one InstancedMesh, culled by the cluster's bounding sphere); 0 otherwise.
  * No hook in other folders: public `ctx.world.gemSpots` and the `gem:collected` / `gem:respawned` events.
  */
 import * as THREE from 'three';
@@ -28,7 +29,7 @@ import { FIXED_SITES } from '../../sites';
 import type { WeaveEnv, WeavePart } from '../types';
 import { eligibleSpots, FAKE_FACETS, FAKES, firstTouch, nextLadder, pickSpots, TELLS, triangle } from './logic';
 import type { Ladder, P3, SpotInfo, Tell } from './logic';
-import { fakeGemGeometry, haloTexture } from './look';
+import { fakeGemGeometry, fakesMaterial, gemAndHaloGeometry, haloTexture } from './look';
 
 /** The real gem's scale, bob and spin (gems.ts). */
 const GEM_SCALE = 1.15;
@@ -36,6 +37,8 @@ const BOB = 0.15;
 const SPIN = 1.2;
 /** Puffs when a cluster appears in view (s). */
 const PUFF = 0.5;
+/** Instances: two fakes and their halos (far one first: gem, halo, gem, halo), then three puffs. */
+const INSTANCES = 7;
 
 interface Cluster {
   k: number;
@@ -73,12 +76,12 @@ export function create(env: WeaveEnv): WeavePart {
 
   // ───────────── meshes (built once, attached only while a cluster stands) ─────────────
   let geos: Record<Tell, THREE.BufferGeometry> | null = null;
-  const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  let mat: THREE.Material | null = null;
   let haloTex: THREE.Texture | null = null;
-  const haloGeo = new THREE.PlaneGeometry(1, 1);
-  const haloMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false });
-  let gemsMesh: THREE.InstancedMesh | null = null;
-  let halos: THREE.InstancedMesh | null = null;
+  /** Per instance: 0 = draw the gem part, 1 = draw the halo part. */
+  const kind = new THREE.InstancedBufferAttribute(new Float32Array(INSTANCES), 1);
+  kind.setUsage(THREE.DynamicDrawUsage);
+  let mesh: THREE.InstancedMesh | null = null;
   const root = new THREE.Group();
   root.name = 'glasses:weave:fakes';
   const dummy = new THREE.Object3D();
@@ -138,21 +141,25 @@ export function create(env: WeaveEnv): WeavePart {
     present = spots.map(() => true);
     spent = spots.map(() => false);
     blocked = spots.map(() => false);
-    geos = { flip: fakeGemGeometry(undefined, true, true), facets: fakeGemGeometry(FAKE_FACETS), sparkle: fakeGemGeometry(undefined, false) };
+    const both = (g: THREE.BufferGeometry): THREE.BufferGeometry => {
+      const out = gemAndHaloGeometry(g, kind);
+      g.dispose();
+      return out;
+    };
+    geos = { flip: both(fakeGemGeometry(undefined, true, true)), facets: both(fakeGemGeometry(FAKE_FACETS)), sparkle: both(fakeGemGeometry(undefined, false)) };
     haloTex = haloTexture();
-    haloMat.map = haloTex;
-    haloMat.needsUpdate = true;
-    gemsMesh = new THREE.InstancedMesh(geos.flip, mat, 2);
-    gemsMesh.name = 'glasses:weave:fakes:gems';
-    halos = new THREE.InstancedMesh(haloGeo, haloMat, 5);
-    halos.name = 'glasses:weave:fakes:halos';
-    for (const m of [gemsMesh, halos]) {
-      m.frustumCulled = false;
-      m.castShadow = false;
-      m.receiveShadow = false;
-      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      root.add(m);
-    }
+    mat = fakesMaterial(haloTex);
+    mesh = new THREE.InstancedMesh(geos.flip, mat, INSTANCES);
+    mesh.name = 'glasses:weave:fakes:gems';
+    // Drawn only when the cluster's sphere is in the view (set when armed); after the other
+    // transparent layer objects, so its depth-writing halos never hide them.
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(), FAKES.side + 2);
+    mesh.frustumCulled = true;
+    mesh.renderOrder = 1;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    root.add(mesh);
     ready = true;
     return true;
   }
@@ -227,10 +234,11 @@ export function create(env: WeaveEnv): WeavePart {
     for (let j = 0; j < 12; j++) {
       const angle = base + (j * Math.PI) / 6;
       const fk = corners(s, answer, angle);
-      if (!fk || !gemsMesh || !geos) continue;
+      if (!fk || !mesh || !geos) continue;
       const tier = ladder.tier;
       const tell = TELLS[tier];
-      gemsMesh.geometry = geos[tell];
+      mesh.geometry = geos[tell];
+      mesh.boundingSphere?.center.set(s.x, s.y, s.z);
       armed = {
         k,
         answer,
@@ -285,14 +293,23 @@ export function create(env: WeaveEnv): WeavePart {
 
   function draw(): void {
     const a = armed;
-    if (!a || !gemsMesh || !halos) return;
+    if (!a || !mesh) return;
+    const m = mesh;
     const dir = a.tell === 'sparkle' ? -1 : 1;
     const q = ctx.camera.quaternion;
-    a.fakes.forEach((f, i) => {
+    const cam = ctx.camera.position;
+    // Far fake first: each gem, then its halo (depth-tested against the gem, like the real halo).
+    const d = a.fakes.map((f) => Math.hypot(f.p.x - cam.x, f.p.y - cam.y, f.p.z - cam.z));
+    const order = d[0] >= d[1] ? [0, 1] : [1, 0];
+    order.forEach((i, slot) => {
+      const f = a.fakes[i];
+      const gi = slot * 2;
+      kind.setX(gi, 0);
+      kind.setX(gi + 1, 1);
       const k = f.poof < 0 ? 0 : Math.min(1, Math.max(0, f.poof - f.delay) / FAKES.poof);
       if (k >= 1) {
-        gemsMesh!.setMatrixAt(i, zero);
-        halos!.setMatrixAt(i, zero);
+        m.setMatrixAt(gi, zero);
+        m.setMatrixAt(gi + 1, zero);
         return;
       }
       const y = f.p.y + Math.sin(time * 2 + f.phase) * BOB;
@@ -301,17 +318,18 @@ export function create(env: WeaveEnv): WeavePart {
       dummy.rotation.set(0, dir * time * SPIN + f.off, 0);
       dummy.scale.setScalar(GEM_SCALE * (1 + 0.6 * k) * (1 - k));
       dummy.updateMatrix();
-      gemsMesh!.setMatrixAt(i, dummy.matrix);
+      m.setMatrixAt(gi, dummy.matrix);
       dummy.quaternion.copy(q);
       dummy.scale.setScalar((2.2 + Math.sin(time * 3 + f.phase) * 0.25) * (1 + 1.8 * k) * Math.sqrt(1 - k));
       dummy.updateMatrix();
-      halos!.setMatrixAt(i, dummy.matrix);
+      m.setMatrixAt(gi + 1, dummy.matrix);
     });
     // Puffs over all three corners (the real gem too) when a cluster appears in view.
     const tri = triangle(a.real, a.answer, a.angle);
     for (let j = 0; j < 3; j++) {
+      kind.setX(4 + j, 1);
       if (a.puff < 0 || a.puff >= PUFF) {
-        halos.setMatrixAt(2 + j, zero);
+        m.setMatrixAt(4 + j, zero);
         continue;
       }
       const k = a.puff / PUFF;
@@ -320,10 +338,10 @@ export function create(env: WeaveEnv): WeavePart {
       dummy.quaternion.copy(q);
       dummy.scale.setScalar((2.4 + 3.2 * k) * (1 - k));
       dummy.updateMatrix();
-      halos.setMatrixAt(2 + j, dummy.matrix);
+      m.setMatrixAt(4 + j, dummy.matrix);
     }
-    gemsMesh.instanceMatrix.needsUpdate = true;
-    halos.instanceMatrix.needsUpdate = true;
+    m.instanceMatrix.needsUpdate = true;
+    kind.needsUpdate = true;
   }
 
   function update(dt: number): void {
@@ -407,12 +425,9 @@ export function create(env: WeaveEnv): WeavePart {
     dispose() {
       for (const off of offs) off();
       if (armed) disarm();
-      gemsMesh?.dispose();
-      halos?.dispose();
+      mesh?.dispose();
       if (geos) for (const g of Object.values(geos)) g.dispose();
-      mat.dispose();
-      haloGeo.dispose();
-      haloMat.dispose();
+      mat?.dispose();
       haloTex?.dispose();
     },
     debug() {
