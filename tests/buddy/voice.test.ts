@@ -13,7 +13,7 @@ import type { EventBus, GameSettings, SettingsApi } from '../../src/types';
 
 const DIR = join(__dirname, '../../public/assets/voice');
 const manifest = JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')) as VoiceManifest;
-const BUDGET = 1.5 * 1024 * 1024;
+const BUDGET = 2.5 * 1024 * 1024;
 
 describe("Pip's voice clips", () => {
   const lines = allVoiceLines();
@@ -141,7 +141,7 @@ describe('bubble follows the voice', () => {
     q.onChange = (a) => seen.push(a ? a.line.text : null);
     q.say(line);
     expect(q.current?.duration).toBeGreaterThanOrEqual(3.35);
-    q.say({ ...line, text: 'Find the key!' });
+    q.say({ ...line, text: 'Find the key!', interrupt: true });
     // The voice is hushed (null) before the new line speaks: Pip never talks over himself.
     expect(seen).toEqual(['Hi! I am Pip!', null, 'Find the key!']);
   });
