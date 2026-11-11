@@ -11,7 +11,9 @@ import type { BuddyStore } from './store';
 import type { KeyNames, ScriptLine, TipId } from './script';
 import { ATTRACTIONS, CHEST, CHUTE, COUNT, IDLE, INTRO, needGems, REACT, RETURNING, skillTip, suggest, TIPS, line } from './script';
 import type { V2 } from './steer';
-import type { Attraction } from './types';
+import { GLASSES_ATTRACTIONS, type Attraction, type GlassesAttraction } from './types';
+
+const isGlasses = (a: Attraction): a is GlassesAttraction => (GLASSES_ATTRACTIONS as readonly string[]).includes(a);
 
 export type IntroStep = 'welcome' | 'glasses' | 'findGem' | 'wallet' | 'shop' | 'trampoline' | 'choose' | 'done';
 
@@ -31,6 +33,10 @@ export const STUCK_SECONDS = 40;
 export const IDLE_SECONDS = 15;
 export const REACT_COOLDOWN = 6;
 export const CHEST_HINT_COOLDOWN = 18;
+/** Seconds of play when Pip first (and again) points at the nearest magic-glasses game nobody tried. */
+export const GLASSES_NUDGE_AT = [50, 140] as const;
+/** How long Pip waits at the game to show where it is. */
+const GLASSES_LEAD_SECONDS = 9;
 
 /** When each one-time HUD tip may show (seconds of play), in order. */
 export const TIP_SCHEDULE: readonly { id: TipId; at: number }[] = [
@@ -97,6 +103,8 @@ export class Director {
   private wasFreefall = false;
   private returning = false;
   private nextBark = 3;
+  private glassesNudges = 0;
+  private glassesLeadT = 0;
 
   constructor(
     private readonly sink: DirectorSink,
@@ -115,6 +123,8 @@ export class Director {
     this.stillT = 0;
     this.sunsetSaid = false;
     this.visited.clear();
+    this.glassesNudges = 0;
+    this.glassesLeadT = 0;
     this.bounces = 0;
     this.shopOpened = false;
     this.returning = !runIntro;
@@ -293,6 +303,15 @@ export class Director {
       if (!this.store.tipSeen(id)) this.tip(id, ATTRACTIONS[at].howTo(v.keys));
     }
 
+    // Magic-glasses games: hold the lead for a few seconds, drop it once the hero arrives.
+    if (this.glassesLeadT > 0) {
+      this.glassesLeadT -= dt;
+      if (this.glassesLeadT <= 0 || (at && isGlasses(at))) {
+        this.glassesLeadT = 0;
+        this.sink.lead(null);
+      }
+    }
+
     // Chests: what to do next (repeats with a cooldown while standing there).
     if (v.chestHint && this.playT - this.lastChestHint > CHEST_HINT_COOLDOWN) {
       this.lastChestHint = this.playT;
@@ -311,6 +330,14 @@ export class Director {
       if (this.playT < t.at || this.store.tipSeen(t.id)) continue;
       if (t.id === 'missions' && !v.hasMissions) continue;
       this.tip(t.id, t.id === 'skill' ? skillTip(v.keys.skill) : TIPS[t.id as keyof typeof TIPS]);
+      return;
+    }
+
+    // Early nudge: point at the nearest magic-glasses game not tried yet (site only, never an object).
+    const nudge = GLASSES_NUDGE_AT[this.glassesNudges];
+    if (nudge !== undefined && this.playT > nudge && !this.triedGlasses()) {
+      this.glassesNudges++;
+      this.nudgeGlasses(v.hero);
       return;
     }
 
@@ -432,6 +459,34 @@ export class Director {
     this.store.markTip('visit:gearShack');
     this.store.markTip('visit:trampoline');
     this.sink.lead(null);
+  }
+
+  /** Called on every weak-eye game hit/miss event with `hit`. */
+  onGlassesHit(): void {
+    this.progress();
+    this.react(REACT.magic);
+  }
+
+  private triedGlasses(): boolean {
+    return GLASSES_ATTRACTIONS.some((g) => this.visited.has(g));
+  }
+
+  private nudgeGlasses(from: V2): void {
+    const places = this.sink.places().filter((p) => isGlasses(p.name) && !this.visited.has(p.name));
+    let best: Attraction | null = null;
+    let bestD = Infinity;
+    for (const p of places) {
+      const d = Math.hypot(p.x - from.x, p.z - from.z);
+      if (d < bestD) {
+        bestD = d;
+        best = p.name;
+      }
+    }
+    if (!best) return;
+    this.sink.say(line(suggest(best), PRIORITY.tip, 'glasses:nudge'));
+    this.sink.lead(this.sink.anchor(best));
+    this.sink.bark('bark');
+    this.glassesLeadT = GLASSES_LEAD_SECONDS;
   }
 
   private tip(id: TipId, l: ScriptLine): void {

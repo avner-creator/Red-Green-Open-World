@@ -195,3 +195,45 @@ describe('Director: tips and nudges', () => {
     expect(said.at(-1)!.text).toBe('Press Space for the parachute!');
   });
 });
+
+describe('Director: magic-glasses games', () => {
+  const setupG = () => {
+    const r = setup();
+    return r;
+  };
+  it('points at the nearest unvisited glasses game early, once per nudge', () => {
+    const said: Line[] = [];
+    const leads: (V2 | null)[] = [];
+    const sink: DirectorSink = {
+      say: (l) => said.push(l),
+      lead: (t) => leads.push(t),
+      celebrate: () => {},
+      bark: () => {},
+      goal: () => ({ id: 'g', line: { text: 'x', icon: 'gem' } }),
+      gemWay: () => null,
+      anchor: (n) => (n === 'toys' ? { x: 10, z: 0 } : { x: 90, z: 0 }),
+      places: () => [
+        { name: 'glowflies', x: 90, z: 0 },
+        { name: 'toys', x: 10, z: 0 },
+      ],
+    };
+    const d = new Director(sink, createBuddyStore(false), () => 0);
+    d.begin(false);
+    tick(d, 52);
+    const n = said.find((l) => l.id === 'glasses:nudge');
+    expect(n?.text).toBe('Try the magic toy hunt!');
+    expect(leads.at(-1)).toEqual({ x: 10, z: 0 });
+    tick(d, 10);
+    expect(leads.at(-1)).toBeNull();
+    expect(said.filter((l) => l.id === 'glasses:nudge')).toHaveLength(1);
+  });
+  it('does not nudge when a glasses game was already visited, and cheers a hit', () => {
+    const { d, said } = setupG();
+    d.begin(false);
+    d.update(0.1, view({ nearAttraction: 'oddone' }));
+    tick(d, 60);
+    expect(said.some((l) => l.id === 'glasses:nudge')).toBe(false);
+    d.onGlassesHit();
+    expect(said.at(-1)?.icon).toBe('glasses');
+  });
+});

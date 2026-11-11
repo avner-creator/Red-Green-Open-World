@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { chestHintState } from '../activities/chests';
 import { GEMS } from '../config';
-import type { GameContext, GameSystem } from '../types';
+import type { Anchor, GameContext, GameSystem } from '../types';
 import { CONTROL_MAP } from '../ui/controlMap';
 import { createBuddyUi } from '../ui/buddy';
 import type { Rect } from '../ui/buddy/place';
@@ -34,7 +34,7 @@ import { sniffSpot } from './sniff';
 import { FOLLOW, arrive, catchUpSpeed, followSlot, forward, generalWay, keepClear, right, shouldTeleport, teleportSpot, turnTowards, yawTo } from './steer';
 import type { V2 } from './steer';
 import { createBuddyStore } from './store';
-import type { Attraction } from './types';
+import { GLASSES_ATTRACTIONS, type Attraction } from './types';
 import { createVoice } from './voice';
 
 /** Keys that play the game: they never skip the intro (moving must not skip the tour). */
@@ -62,6 +62,12 @@ const VISIT_RADIUS: Record<Attraction, number> = {
   foamCourse: 8,
   airstrip: 12,
   dragonRoost: 8,
+  glowflies: 7,
+  oddone: 7,
+  lineup: 7,
+  toys: 7,
+  gates: 7,
+  dotsigns: 7,
 };
 const TRAMPOLINE_MAT = 9;
 
@@ -194,13 +200,17 @@ export function createBuddy(ctx: GameContext): GameSystem {
     return { use: pick('use') || 'the hand', jump: pick('jump') || 'jump', skill: pick('skill') };
   };
 
+  /** World anchor by Pip's id (glasses sites are non-enumerable extra anchors, not in AnchorName). */
+  const anchorOf = (a: Attraction) => (ctx.world.anchors as unknown as Record<string, Anchor | undefined>)[a];
+
   const availableAttractions = (): Attraction[] => {
     const list: Attraction[] = [
       'trampoline', 'gearShack', 'balloon', 'launchPads', 'garage', 'bouncePads', 'bungee', 'sillyZone',
       'carnivalRow', 'iceCream', 'bubbleArena', 'dinoRing', 'raceStart', 'foamCourse', 'airstrip', 'dragonRoost',
     ];
     if (ctx.vehicles?.all.some((v) => v.kind === 'horse')) list.push('ranch');
-    return list.filter((a) => !!ctx.world.anchors[a]);
+    list.push(...GLASSES_ATTRACTIONS);
+    return list.filter((a) => !!anchorOf(a));
   };
 
   const attractionPos = (a: Attraction): V2 | null => {
@@ -208,7 +218,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       const car = ctx.vehicles?.all.find((v) => v.kind === 'car');
       if (car) return { x: car.position.x, z: car.position.z };
     }
-    const an = ctx.world.anchors[a];
+    const an = anchorOf(a);
     return an ? { x: an.position.x, z: an.position.z } : null;
   };
 
@@ -281,7 +291,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       return best ? generalWay(h, best, Math.min(7, bestD * 0.55)) : null;
     },
     anchor(name) {
-      const a = ctx.world.anchors[name];
+      const a = anchorOf(name);
       if (!a) return null;
       if (name === 'gearShack') {
         const f = forward(a.yaw);
@@ -394,6 +404,12 @@ export function createBuddy(ctx: GameContext): GameSystem {
     on('player:emote', () => {
       danceT = 3;
       director.onEmote();
+    }),
+    on('glasses:result', (e) => {
+      if (e.hit) {
+        director.onGlassesHit();
+        voice.bark('yip');
+      }
     }),
     on('shop:open', () => director.onShopOpen()),
     on('shop:purchased', () => director.onPurchased()),

@@ -19,6 +19,9 @@ export function overlaps(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+/** Breathing room kept around HUD boxes (px). */
+const PAD = 6;
+
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
 /**
@@ -62,8 +65,9 @@ export function placeBubble(
     const r = { x: c.x, y: c.y, w, h };
     let k = hero && overlaps(r, hero) ? 1e9 : 0;
     for (const a of avoid) {
-      const ox = Math.min(r.x + r.w, a.x + a.w) - Math.max(r.x, a.x);
-      const oy = Math.min(r.y + r.h, a.y + a.h) - Math.max(r.y, a.y);
+      // Inflate each HUD box a little so the bubble's outline never touches it.
+      const ox = Math.min(r.x + r.w, a.x + a.w + PAD) - Math.max(r.x, a.x - PAD);
+      const oy = Math.min(r.y + r.h, a.y + a.h + PAD) - Math.max(r.y, a.y - PAD);
       if (ox > 0 && oy > 0) k += ox * oy;
     }
     return k;
@@ -76,6 +80,23 @@ export function placeBubble(
     if (k < best) {
       best = k;
       pick = c;
+    }
+  }
+  if (best > 0) {
+    // No tidy candidate is clear of the HUD: scan the whole area for a free spot nearest the best one.
+    let gb = best;
+    let gd = Infinity;
+    const step = 6;
+    for (let y = minY; y <= maxY + 0.5; y += step) {
+      for (let x = minX; x <= maxX + 0.5; x += step) {
+        const k = cost({ x, y });
+        const d = Math.hypot(x - pick.x, y - pick.y);
+        if (k < gb || (k === gb && d < gd)) {
+          gb = k;
+          gd = d;
+          pick = { x, y, below: y > anchor.y };
+        }
+      }
     }
   }
   const r = Math.min(h / 2, 28);
