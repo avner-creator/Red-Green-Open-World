@@ -32,7 +32,7 @@ const NO_RECEIVE: ReadonlySet<MatKey> = new Set<MatKey>(['glow']);
 const CLASS_R = [0.3, 0.6, 1.5, 4] as const;
 const CLASSES = CLASS_R.length + 1;
 export const STATIC_MAX_DIST: Record<Quality, readonly number[]> = {
-  low: [Infinity, 140, 80, 45, 30],
+  low: [Infinity, 55, 36, 22, 15],
   medium: [Infinity, 220, 125, 75, 50],
   high: [Infinity, 320, 180, 110, 75],
 };

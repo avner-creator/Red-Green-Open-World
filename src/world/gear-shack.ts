@@ -462,19 +462,28 @@ export function createGearShackLive(mats: Materials, h: HeightFn): GearShackLive
   const pinGeo = mergeGeometries(blades, false);
   for (const g of blades) g.dispose();
   const pinMat = mats.get('cloth');
-  const wheels: THREE.Mesh[] = [];
+  // Both pinwheels in one instanced draw.
+  const wheels: { x: number; speed: number }[] = [-1, 1].map((sx, i) => ({ x: sx * 1.8, speed: 3.2 + i * 0.7 }));
+  let pins: THREE.InstancedMesh | null = null;
   if (pinGeo) {
     const n = pinGeo.attributes.position.count;
     pinGeo.setAttribute('aWave', new THREE.BufferAttribute(new Float32Array(n), 1));
-    for (const s of [-1, 1]) {
-      const w = new THREE.Mesh(pinGeo, pinMat);
-      w.position.set(s * 1.8, 3.38, 1.13);
-      w.scale.setScalar(1.15);
-      w.castShadow = true;
-      group.add(w);
-      wheels.push(w);
-    }
+    pins = new THREE.InstancedMesh(pinGeo, pinMat, wheels.length);
+    pins.castShadow = true;
+    group.add(pins);
   }
+  const pm = new THREE.Matrix4();
+  const pq = new THREE.Quaternion();
+  const pp = new THREE.Vector3();
+  const ps = new THREE.Vector3(1.15, 1.15, 1.15);
+  const pz = new THREE.Vector3(0, 0, 1);
+  const placePins = (time: number): void => {
+    if (!pins) return;
+    wheels.forEach((w, i) => pins!.setMatrixAt(i, pm.compose(pp.set(w.x, 3.38, 1.13), pq.setFromAxisAngle(pz, -time * w.speed), ps)));
+    pins.instanceMatrix.needsUpdate = true;
+  };
+  placePins(0);
+  pins?.computeBoundingSphere();
 
   let t = 0;
   return {
@@ -483,12 +492,12 @@ export function createGearShackLive(mats: Materials, h: HeightFn): GearShackLive
       t += dt;
       gem.rotation.y = t * 1.3;
       gem.position.y = gemBase.y + Math.sin(t * 2.1) * 0.07;
-      wheels.forEach((w, i) => (w.rotation.z = -t * (3.2 + i * 0.7)));
+      placePins(t);
     },
     setQuality(q) {
       const shadows = q !== 'low';
       gem.castShadow = shadows;
-      for (const w of wheels) w.castShadow = shadows;
+      if (pins) pins.castShadow = shadows;
     },
   };
 }

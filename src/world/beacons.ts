@@ -7,12 +7,13 @@ import * as THREE from 'three';
 import { patch } from './materials';
 import { pictoUv } from './pictograms';
 import type { BeaconDef } from './wayfinding';
+import type { Quality } from '../types';
 
 const R = 2.4;
 
 /** Balloon: a slightly tall sphere with 10 alternating gores (aStripe = 1 on white gores) and a knot. */
-function balloonGeo(): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(R, 20, 10).toNonIndexed();
+function balloonGeo(seg = 20, rings = 10): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(R, seg, rings).toNonIndexed();
   const pos = g.attributes.position;
   const stripe = new Float32Array(pos.count);
   for (let i = 0; i < pos.count; i += 3) {
@@ -53,6 +54,8 @@ function balloonGeo(): THREE.BufferGeometry {
 export interface Beacons {
   group: THREE.Group;
   update(t: number, camera: THREE.Camera): void;
+  /** Low: a coarser balloon (same gores, half the triangles). */
+  setQuality(q: Quality): void;
 }
 
 export function createBeacons(defs: readonly BeaconDef[], atlas: THREE.Texture): Beacons {
@@ -67,7 +70,9 @@ export function createBeacons(defs: readonly BeaconDef[], atlas: THREE.Texture):
     fragmentPre: 'varying float vStripe;',
     fragment: 'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.91, 0.86), step(0.5, vStripe));',
   });
-  const balloons = new THREE.InstancedMesh(balloonGeo(), balloonMat, n);
+  const fullGeo = balloonGeo();
+  let lowGeo: THREE.BufferGeometry | null = null;
+  const balloons = new THREE.InstancedMesh(fullGeo, balloonMat, n);
   balloons.name = 'beacon:balloons';
 
   const badgeMat = new THREE.MeshStandardMaterial({
@@ -116,6 +121,9 @@ export function createBeacons(defs: readonly BeaconDef[], atlas: THREE.Texture):
 
   return {
     group,
+    setQuality(q) {
+      balloons.geometry = q === 'low' ? (lowGeo ??= balloonGeo(10, 7)) : fullGeo;
+    },
     update(t, camera) {
       camera.getWorldPosition(camPos);
       defs.forEach((d, i) => {
