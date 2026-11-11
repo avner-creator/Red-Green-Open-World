@@ -402,8 +402,9 @@ test('rival buggies in a race move smoothly at every display rate', async () => 
   for (const rate of RATES) {
     expect.soft(results[rate].speed, `rivals moving @${rate}`).toBeGreaterThan(4);
     // Rivals are posed every rendered frame from their lap position (no fixed-step aliasing): their
-    // horizontal velocity changes only as much as real cornering / rubber-banding does.
-    expect.soft(results[rate].jerk, `rival horizontal jerk @${rate}`).toBeLessThan(JERK_MAX * 2);
+    // horizontal velocity changes only as much as cornering, rubber-banding and their deliberate
+    // comic wobbles/hops do (≤ ~1.4 m/s per frame measured; aliasing would be 10+).
+    expect.soft(results[rate].jerk, `rival horizontal jerk @${rate}`).toBeLessThan(2.5);
   }
   await page.evaluate(() => {
     window.__rgRace?.exit();

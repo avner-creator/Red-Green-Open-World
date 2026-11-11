@@ -1,12 +1,14 @@
 import { defineConfig } from '@playwright/test';
 
-// Software WebGL 2 (SwiftShader) is slow: small viewport, one worker, generous timeouts.
+// Software WebGL 2 (SwiftShader) is slow: small viewport, generous timeouts. Spec files run in
+// parallel (RG_WORKERS, default 2); tests inside a file share one page and run in order.
 export default defineConfig({
   testDir: 'tests/e2e',
   outputDir: 'test-results/pw',
   timeout: 120_000,
   expect: { timeout: 30_000 },
-  workers: 1,
+  workers: Number(process.env.RG_WORKERS ?? 2),
+  fullyParallel: false,
   retries: 0,
   reporter: [['list']],
   use: {
