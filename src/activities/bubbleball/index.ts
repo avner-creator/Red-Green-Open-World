@@ -67,6 +67,8 @@ export interface BubbleBallTestApi {
   triangles(): number;
   /** The ball now (match ball, or the kickabout ball between matches), pitch space. */
   ball(): { x: number; y: number; z: number; vx: number; vz: number };
+  /** Put the kickabout ball at rest at pitch (x, z) (between matches only). */
+  placeBall(x: number, z: number): void;
   /** Pitch-space position of a world point (feet y relative to the deck top). */
   local(x: number, y: number, z: number): [number, number, number];
   /** Show/hide only this game's weak-eye objects (channel tests). */
@@ -618,6 +620,12 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
       ball: () => {
         const b = match?.ball ?? kick.ball;
         return { x: b.x, y: b.y, z: b.z, vx: b.vx, vz: b.vz };
+      },
+      placeBall: (x, z) => {
+        if (match) return;
+        resetKickabout(kick, x, z);
+        placeBall(0);
+        ballBody.setTranslation(toWorld(x, BALL.r, z, new THREE.Vector3()), true);
       },
       local: (x, y, z) => {
         const l = worldToLocal(x - site.x, z - site.z, site.yaw);

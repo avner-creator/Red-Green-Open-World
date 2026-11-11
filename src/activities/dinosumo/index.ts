@@ -37,7 +37,7 @@ type Phase = 'idle' | 'loading' | 'round' | 'result';
 
 export interface DinoSumoTestApi {
   phase(): Phase;
-  state(): { points: number[]; clock: number; phase: string; weakPops: number; px: number; pz: number } | null;
+  state(): { points: number[]; clock: number; phase: string; weakPops: number; px: number; pz: number; dinos: [number, number, string][] } | null;
   booth(): [number, number, number];
   start(): void;
   setClock(seconds: number): void;
@@ -499,6 +499,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
           weakPops: round.weakPops,
           px: round.dinos[0].body.x,
           pz: round.dinos[0].body.z,
+          dinos: round.dinos.map((d) => [d.body.x, d.body.z, d.state] as [number, number, string]),
         },
       booth: () => [model.booth.x, model.booth.y, model.booth.z],
       start: () => {
