@@ -22,8 +22,8 @@ import { MECHANICS } from './mechanics';
 import type { MechanicDef } from './mechanics';
 import { createGlassesAtlas } from './pictos';
 import { pay, result } from './rewards';
-import { findSites, siteToWorld, SITE_PLANS } from './sites';
-import type { GlassesSite, SitePlan, SiteWorld } from './sites';
+import { boardOf, FIXED_SITES, groundProblem, searchSite, siteToWorld, staticProblems } from './sites';
+import type { FixedSite, GlassesSite, SiteWorld, XZ } from './sites';
 import { IDENTITY_CHALLENGE } from './types';
 import type { Mechanic, MechanicEnv } from './types';
 
@@ -54,6 +54,15 @@ export interface GlassesTestApi {
   active(id: string): boolean;
   /** Screen rectangle (CSS px) of the site's board for the current camera, or null if behind it. */
   boardRect(id: string): { x0: number; y0: number; x1: number; y1: number } | null;
+  /**
+   * DEV: run the site search (every rule + live probes) from `start`, facing `faceTo`, keeping
+   * clear of the other fixed sites. Returns a `FIXED_SITES` row to freeze, or null.
+   */
+  search(id: string, start: XZ, faceTo: XZ | null, playRadius?: number, stats?: boolean): (FixedSite & { stats?: Record<string, number> }) | null | Record<string, number>;
+  /** DEV: build mechanic `id` at a trial site (board included), return its debug(), tear it down. */
+  trySite(id: string, row: { x: number; z: number; yaw: number; slot: number }): Record<string, unknown>;
+  /** DEV: what is wrong with a site centre right now (static rules, ground, board views by slot). */
+  probe(x: number, z: number, yaw: number, playRadius?: number): { problems: string[]; ground: string | null; views: boolean[] };
 }
 
 declare global {
@@ -87,7 +96,7 @@ export function countDraws(root: THREE.Object3D): number {
   return n;
 }
 
-export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SITE_PLANS): GameSystem {
+export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FIXED_SITES): GameSystem {
   const entries: Entry[] = [];
   let built = false;
   let atlas: THREE.Texture | null = null;
@@ -96,6 +105,11 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
 
   /** Runtime collider probe: anything solid above the ground or across the circle. */
   function blocked(x: number, z: number, r: number): boolean {
+    return blockReason(x, z, r) !== null;
+  }
+
+  /** Why the circle is not free (for warnings and the dev probe), or null. */
+  function blockReason(x: number, z: number, r: number): string | null {
     const h = ctx.world.heightAt(x, z);
     for (const rr of [0, r * 0.5, r]) {
       const steps = rr === 0 ? 1 : 8;
@@ -105,11 +119,11 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
         const sz = z + Math.sin(a) * rr;
         const gy = ctx.world.heightAt(sx, sz);
         const hit = ctx.physics.raycast(tmp.set(sx, gy + 40, sz), DOWN, 80);
-        if (hit && hit.point.y > gy + 0.5) return true;
+        if (hit && hit.point.y > gy + 0.5) return `collider above ground at (${sx.toFixed(1)}, ${sz.toFixed(1)}) +${(hit.point.y - gy).toFixed(1)} m`;
       }
     }
     // The play area itself (the rim beyond it only needs to be free of buildings: down rays above).
-    for (const y of [0.45, 1.2, 2.2]) if (!discClear(x, z, (r - 1.5) * 0.6, h + y)) return true;
+    for (const y of [0.45, 1.2, 2.2]) if (!discClear(x, z, (r - 1.5) * 0.6, h + y)) return `wall or trunk in the play area at +${y} m`;
     // Visual-only things have no collider (tree canopies, low fences, bushes): probe the main
     // scene's meshes too. Only reached by candidates that passed every cheaper rule.
     for (let k = 0; k < 5; k++) {
@@ -117,13 +131,15 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
       const sx = k === 4 ? x : x + Math.cos(a) * r * 0.6;
       const sz = k === 4 ? z : z + Math.sin(a) * r * 0.6;
       const gy = ctx.world.heightAt(sx, sz);
-      if (sceneHit(tmp2.set(sx, gy + 14, sz), DOWN, 14 - 0.9)) return true;
+      const m = sceneHitName(tmp2.set(sx, gy + 14, sz), DOWN, 14 - 0.9);
+      if (m) return `mesh ${m} overhead at (${sx.toFixed(1)}, ${sz.toFixed(1)})`;
     }
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * Math.PI * 2;
-      if (sceneHit(tmp2.set(x, h + 0.75, z), dir.set(Math.cos(a), 0, Math.sin(a)), r)) return true;
+      const m = sceneHitName(tmp2.set(x, h + 0.75, z), dir.set(Math.cos(a), 0, Math.sin(a)), (r - 1.5) * 0.75);
+      if (m) return `mesh ${m} in the circle`;
     }
-    return false;
+    return null;
   }
 
   /**
@@ -135,8 +151,9 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
     for (let o = -r + 0.2; o < r; o += 0.4) {
       const half = Math.sqrt(Math.max(0, r * r - o * o));
       const hit = ctx.physics.raycast(tmp.set(x - half, y, z + o), east, 2 * half);
-      // Rising ground (a walkable normal) is not an obstacle; fences, walls and trunks are.
-      if (hit && hit.normal.y < 0.7) return false;
+      // Ground (a near-vertical normal either way: a ray entering rising terrain sees it from below)
+      // is not an obstacle; fences, walls and trunks are.
+      if (hit && Math.abs(hit.normal.y) < 0.7) return false;
     }
     return true;
   }
@@ -154,7 +171,23 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
       const cx = ex + (gx / glen) * t;
       const cz = ez + (gz / glen) * t;
       const hit = ctx.physics.raycast(tmp2.set(cx - px * half, ctx.world.heightAt(cx, cz) + 1.2, cz - pz * half), side, half * 2);
-      if (hit && hit.normal.y < 0.7) return false;
+      if (hit && Math.abs(hit.normal.y) < 0.7) return false;
+    }
+    return true;
+  }
+
+  /** No prop mesh (canopies included, merged batches too) between an eye and the panel's centre, ends and badge. */
+  function panelClear(x: number, z: number, eyeH: number, site: GlassesSite): boolean {
+    const by = ctx.world.heightAt(site.board.x, site.board.z);
+    const eye = new THREE.Vector3(x, ctx.world.heightAt(x, z) + eyeH, z);
+    const ex = Math.cos(site.yaw);
+    const ez = -Math.sin(site.yaw);
+    const to = new THREE.Vector3();
+    for (const [k, h] of [[0, BOARD.panelY], [-2.2, BOARD.panelY], [2.2, BOARD.panelY], [0, BOARD.topperY]] as const) {
+      to.set(site.board.x + ex * k, by + h, site.board.z + ez * k).sub(eye);
+      const len = to.length();
+      to.normalize();
+      if (sceneHit(eye, to, len - 0.6) || sceneHit(eye, to, len - 0.6, true)) return false;
     }
     return true;
   }
@@ -180,7 +213,7 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
     const to = new THREE.Vector3();
     const wall = (fx: number, fy: number, fz: number, dx: number, dy: number, dz: number, len: number): boolean => {
       const hit = ctx.physics.raycast(eye.set(fx, fy, fz), to.set(dx, dy, dz), len);
-      return !!hit && hit.normal.y < 0.7;
+      return !!hit && Math.abs(hit.normal.y) < 0.7;
     };
     // Around the board itself (a trunk there means a canopy over or in front of it).
     if (!discClear(b.x, b.z, 3.5, by + 1.2)) return false;
@@ -250,16 +283,34 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
   };
   /** First visible prop mesh (or, with `heavy`, merged batch) along the ray that is not at ground level. */
   function sceneHit(origin: THREE.Vector3, direction: THREE.Vector3, far: number, heavy = false): boolean {
+    return sceneHitName(origin, direction, far, heavy) !== null;
+  }
+  /** Name of the first such mesh (or null). Our own boards and mechanic objects never count. */
+  function sceneHitName(origin: THREE.Vector3, direction: THREE.Vector3, far: number, heavy = false): string | null {
     raycaster.set(origin, direction);
     raycaster.near = 0;
     raycaster.far = far;
     const list = propList();
     for (const hh of raycaster.intersectObjects(heavy ? batches : list, false)) {
       if (hh.point.y < ctx.world.heightAt(hh.point.x, hh.point.z) + 0.3) continue;
-      return true;
+      if (ours(hh.object)) continue;
+      return hh.object.name || hh.object.type;
+    }
+    return null;
+  }
+  const ours = (o: THREE.Object3D): boolean => {
+    for (const e of entries) {
+      if (o === e.board.mesh) return true;
+      for (const t of e.objects.keys()) {
+        let hit = false;
+        t.traverse((c) => {
+          if (c === o) hit = true;
+        });
+        if (hit) return true;
+      }
     }
     return false;
-  }
+  };
 
   function attach(e: Entry, on: boolean): void {
     for (const [o, layer] of e.objects) {
@@ -279,67 +330,86 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
     }
   }
 
-  function build(): void {
-    if (built) return;
-    built = true;
-    const a = ctx.world.anchors as unknown as SiteWorld['anchors'];
-    const world: SiteWorld = {
+  /** The live world with the runtime probes (site checks and the dev search). */
+  function probeWorld(): SiteWorld {
+    heavyBudget = 40;
+    return {
       heightAt: (x, z) => ctx.world.heightAt(x, z),
       isLand: (x, z) => ctx.world.isLand(x, z),
       waterLevel: ctx.world.waterLevel,
-      anchors: a,
+      anchors: ctx.world.anchors as unknown as SiteWorld['anchors'],
       gemSpots: ctx.world.gemSpots,
       chestSpots: ctx.world.chestSpots,
       roads: ROADS,
+      half: ctx.world.size / 2,
       blocked,
       view,
-      beginSite: () => {
-        heavyBudget = 40;
-      },
     };
-    const sites = findSites(world, plans);
+  }
+
+  function build(): void {
+    if (built) return;
+    built = true;
+    const sites = table.map((f, index) => {
+      const board = boardOf(f);
+      const site: GlassesSite & { valid: boolean } = {
+        id: f.id, index, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: f.near, board, valid: true,
+      };
+      // Fixed means fixed: a site that something now stands on is reported, never moved.
+      const problem = groundProblem(probeWorld(), f.x, f.z);
+      if (problem) {
+        site.valid = false;
+        console.warn(`glasses: fixed site ${f.id} at (${f.x}, ${f.z}) is ${problem}; leaving it where it is`);
+      }
+      return site;
+    });
     atlas = createGlassesAtlas();
     boardMat = createBoardMaterial(atlas);
     for (const site of sites) {
       const def = MECHANICS.find((m) => m.id === site.id);
       if (!def) continue;
-      if (!site.valid) console.warn(`glasses: no valid site for ${site.id}; using its preferred point`);
-      const board = createBoard(ctx, boardMat, { x: site.board.x, y: ctx.world.heightAt(site.board.x, site.board.z), z: site.board.z, yaw: site.yaw }, def.pictos);
-      const objects = new Map<THREE.Object3D, VisionLayer>();
-      const idle = new FarIdle();
-      // The entry is completed right below; the env closes over it.
-      const entry = { def, site, board, idle, objects } as Entry;
-      const env: MechanicEnv = {
-        ctx,
-        id: def.id,
-        kind: def.kind,
-        site,
-        rng: seededRng(hashString(def.id)),
-        local: (x, z) => siteToWorld(site, x, z),
-        groundAt: (x, z) => ctx.world.heightAt(x, z),
-        board: (pictos) => board.setPictos(pictos),
-        pay: (gems) => {
-          pay(ctx, gems);
-        },
-        result: (tier, hit) => result(ctx.events, def.id, def.kind, tier, hit),
-        challenge: () => ctx.vision.challenge?.() ?? IDENTITY_CHALLENGE,
-        add(object, layer) {
-          if (objects.has(object)) env.remove(object);
-          objects.set(object, layer);
-          if (layer === VisionLayer.Both || idle.active) ctx.vision.add(object, layer);
-          return object;
-        },
-        remove(object) {
-          if (!objects.has(object)) return;
-          objects.delete(object);
-          ctx.vision.remove(object);
-        },
-        tracked: () => [...objects.keys()],
-        isActive: () => idle.active,
-      };
-      entry.mech = def.create(env);
-      entries.push(entry);
+      entries.push(makeEntry(def, site));
     }
+  }
+
+  /** Board + mechanic for one site. */
+  function makeEntry(def: MechanicDef, site: GlassesSite & { valid: boolean }): Entry {
+    if (!boardMat) throw new Error('glasses: board material missing');
+    const board = createBoard(ctx, boardMat, { x: site.board.x, y: ctx.world.heightAt(site.board.x, site.board.z), z: site.board.z, yaw: site.yaw }, def.pictos);
+    const objects = new Map<THREE.Object3D, VisionLayer>();
+    const idle = new FarIdle();
+    // The entry is completed right below; the env closes over it.
+    const entry = { def, site, board, idle, objects } as Entry;
+    const env: MechanicEnv = {
+      ctx,
+      id: def.id,
+      kind: def.kind,
+      site,
+      rng: seededRng(hashString(def.id)),
+      local: (x, z) => siteToWorld(site, x, z),
+      groundAt: (x, z) => ctx.world.heightAt(x, z),
+      board: (pictos) => board.setPictos(pictos),
+      pay: (gems) => {
+        pay(ctx, gems);
+      },
+      result: (tier, hit) => result(ctx.events, def.id, def.kind, tier, hit),
+      challenge: () => ctx.vision.challenge?.() ?? IDENTITY_CHALLENGE,
+      add(object, layer) {
+        if (objects.has(object)) env.remove(object);
+        objects.set(object, layer);
+        if (layer === VisionLayer.Both || idle.active) ctx.vision.add(object, layer);
+        return object;
+      },
+      remove(object) {
+        if (!objects.has(object)) return;
+        objects.delete(object);
+        ctx.vision.remove(object);
+      },
+      tracked: () => [...objects.keys()],
+      isActive: () => idle.active,
+    };
+    entry.mech = def.create(env);
+    return entry;
   }
 
   const byId = (id: string): Entry => {
@@ -383,6 +453,7 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
         // Aim between the site centre and its board so both are in view.
         const aim = { x: site.x * 0.55 + site.board.x * 0.45, z: site.z * 0.55 + site.board.z * 0.45 };
         let best: { x: number; z: number } | null = null;
+        const boardY = ctx.world.heightAt(site.board.x, site.board.z);
         outer: for (const half of [4, 3, 2, 0]) {
           for (const d of [GLASSES.viewDistance, 14, 10, 17, 8, 20]) {
             for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4]) {
@@ -395,6 +466,10 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
               const back = { x: c.x + (c.x - aim.x) * k, z: c.z + (c.z - aim.z) * k };
               if (half > 0 && (!corridorClear(c.x, c.z, site.board.x, site.board.z, half) || !corridorClear(back.x, back.z, site.board.x, site.board.z, half))) continue;
               if (!sightClear(c.x, c.z, 1.7, site) || !sightClear(back.x, back.z, 3.2, site)) continue;
+              // Not far below the board (the camera would look at its posts), and no prop or
+              // canopy between the camera and any part of the panel.
+              if (half > 0 && ctx.world.heightAt(c.x, c.z) < boardY - 1.5) continue;
+              if (half > 0 && !panelClear(back.x, back.z, 3.2, site)) continue;
               best = c;
               break outer;
             }
@@ -416,6 +491,38 @@ export function createGlasses(ctx: GameContext, plans: readonly SitePlan[] = SIT
         return n;
       },
       active: (id) => byId(id).idle.active,
+      search(id, start, faceTo, playRadius, wantStats) {
+        const others = table.some((f) => f.id === id) ? table.filter((f) => f.id !== id) : [];
+        const st: Record<string, number> = {};
+        const row = searchSite(probeWorld(), start, { id, near: '?', faceTo: faceTo ?? undefined, others, playRadius, stats: st });
+        return row ?? (wantStats ? st : null);
+      },
+      trySite(id, row) {
+        build();
+        const def = MECHANICS.find((m) => m.id === id);
+        if (!def) throw new Error(`glasses: unknown mechanic ${id}`);
+        const f: FixedSite = { id, near: '?', ...row };
+        const site = { id, index: -1, x: f.x, y: ctx.world.heightAt(f.x, f.z), z: f.z, yaw: f.yaw, radius: GLASSES.siteRadius, near: '?', board: boardOf(f), valid: true };
+        const e = makeEntry(def, site);
+        e.idle.active = true;
+        setActive(e, true);
+        e.mech.update(1 / 60);
+        const out = e.mech.debug();
+        setActive(e, false);
+        e.mech.dispose();
+        for (const o of e.objects.keys()) ctx.vision.remove(o);
+        e.board.dispose();
+        return out;
+      },
+      probe(x, z, yaw, playRadius) {
+        const w = probeWorld();
+        const others = table.filter((f) => Math.hypot(f.x - x, f.z - z) > 0.5);
+        return {
+          problems: staticProblems(w, x, z, { playRadius, others }),
+          ground: groundProblem(w, x, z) && `${groundProblem(w, x, z)}: ${blockReason(x, z, GLASSES.siteRadius + 1.5) ?? ''}`,
+          views: [0, 1, 2].map((slot) => view(x, z, yaw, boardOf({ id: '', x, z, yaw, slot, near: '' }))),
+        };
+      },
       boardRect(id) {
         const mesh = byId(id).board.mesh;
         const geo = mesh.geometry;

@@ -10,16 +10,15 @@ export const GLASSES = {
   spotClear: 1,
   /** Clearance from a road's edge to the site's edge. */
   roadMargin: 1.5,
+  /** Clearance from the race-lap roads (east, loop, south) to the site's edge. */
+  raceRoadMargin: 4,
+  /** Clearance from a reserved footprint to the site's edge. */
+  reservedMargin: 2,
   /** Ground must be this far above the water level. */
   minAboveWater: 1.5,
   /** Max height difference between the centre and any rim sample (gentle slope). */
-  maxRise: 1.4,
-  /** Plaza sites: distance band from `anchors.spawn`. */
-  plazaMin: 15,
-  plazaMax: 45,
-  /** Attraction sites: at most this far from the attraction anchor's centre (the balloon field is ringed by roads: ~38 m). */
-  nearMax: 40,
-  /** Spiral search: step between candidates (golden-angle spiral) and number of candidates. */
+  maxRise: 1.8,
+  /** Dev search helper (`searchSite`): step between candidates (golden-angle spiral) and number of candidates. */
   searchStep: 1.25,
   searchCount: 1600,
   /** Far-idle: a mechanic switches on inside `activateRadius` and off beyond `deactivateRadius`. */

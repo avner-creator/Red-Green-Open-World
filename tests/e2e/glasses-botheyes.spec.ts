@@ -253,14 +253,16 @@ test('gates: run through the right arch → hit, wrong arch → miss, the plate 
   expect(d.round).toBe(round + 2);
   expect(d.state).toBe('open');
   // The first hit after a miss pays 1 gem.
-  const before = d.gems;
+  const gemsBefore = d.gems;
+  const walletBefore = await wallet();
   await teleport(d.arches[d.answer].front, facing);
   await step(2);
   await teleport(d.arches[d.answer].back, facing);
   await step(3);
   d = await debug<GatesDebug>('gates');
   expect(d.hits).toBe(2);
-  expect(d.gems - before).toBe(1);
+  expect(d.gems - gemsBefore).toBe(1);
+  expect(await wallet()).toBe(walletBefore + 1);
   await events();
 });
 

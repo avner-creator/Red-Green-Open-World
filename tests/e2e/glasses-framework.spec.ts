@@ -11,6 +11,7 @@ import { boot, canvasShot } from './helpers';
 import { channelOnly, channelSpread, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel } from './glasses-helpers';
 import { ROADS } from '../../src/world/layout';
 import type { GlassesSiteInfo } from '../../src/activities/glasses';
+import { FIXED_SITES } from '../../src/activities/glasses/sites';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -44,9 +45,13 @@ test.afterAll(async () => {
   await page.close();
 });
 
-test('six valid sites on land, outside every anchor and off the roads', async () => {
-  expect(sites.map((s) => s.id)).toEqual(['glowflies', 'oddone', 'lineup', 'toys', 'gates', 'dotsigns']);
-  const world = await page.evaluate((ids) => {
+test('the sites are the fixed table: on land, nothing standing on them, off anchors and roads', async () => {
+  expect(sites.map((s) => s.id)).toEqual(FIXED_SITES.map((f) => f.id));
+  for (const f of FIXED_SITES) {
+    const s = sites.find((x) => x.id === f.id)!;
+    expect([s.x, s.z, s.yaw], f.id).toEqual([f.x, f.z, f.yaw]);
+  }
+  const world = await page.evaluate(() => {
     const w = window.__rg!.ctx.world;
     const anchors = Object.entries(w.anchors).map(([name, a]) => ({
       name,
@@ -55,32 +60,30 @@ test('six valid sites on land, outside every anchor and off the roads', async ()
       r: a.radius,
       t: a.target ? { x: a.target.x, z: a.target.z, r: a.targetRadius ?? 0 } : null,
     }));
-    const pts = window.__rgGlasses!.sites().filter((s) => ids.includes(s.id));
-    return { anchors, land: pts.map((s) => w.isLand(s.x, s.z) && s.y > w.waterLevel + 1), spawn: { x: w.anchors.spawn.position.x, z: w.anchors.spawn.position.z } };
-  }, sites.map((s) => s.id));
-  console.log(sites.map((s) => `${s.id} (${s.x.toFixed(1)}, ${s.y.toFixed(1)}, ${s.z.toFixed(1)}) near ${s.near}`).join('\n'));
-  expect(world.land.every(Boolean)).toBe(true);
+    const g = window.__rgGlasses!;
+    const rows = g.sites().map((s) => ({ id: s.id, land: w.isLand(s.x, s.z) && s.y > w.waterLevel + 1 }));
+    return { anchors, rows };
+  });
+  console.log(sites.map((s) => `${s.id} (${s.x}, ${s.y.toFixed(1)}, ${s.z}) yaw ${s.yaw} near ${s.near}`).join('\n'));
+  for (const r of world.rows) expect(r.land, `${r.id} on land`).toBe(true);
   for (const s of sites) {
-    expect(s.valid, s.id).toBe(true);
+    // `valid` = the startup probe found no collider, trunk or building on the site (before its own props).
+    expect(s.valid, `${s.id}: nothing stands on the site`).toBe(true);
     for (const a of world.anchors) {
-      expect(Math.hypot(s.x - a.x, s.z - a.z), `${s.id} vs ${a.name}`).toBeGreaterThanOrEqual(a.r + s.radius);
+      expect(Math.hypot(s.x - a.x, s.z - a.z), `${s.id} vs anchor ${a.name}`).toBeGreaterThanOrEqual(a.r + s.radius);
       if (a.t) expect(Math.hypot(s.x - a.t.x, s.z - a.t.z), `${s.id} vs ${a.name} target`).toBeGreaterThanOrEqual(a.t.r + s.radius);
     }
     for (const r of ROADS)
       for (let i = 1; i < r.points.length; i++) expect(segDist(s.x, s.z, r.points[i - 1], r.points[i]) - r.width / 2, `${s.id} vs road ${r.id}`).toBeGreaterThan(s.radius);
   }
-  for (const s of sites.slice(0, 3)) {
-    const d = Math.hypot(s.x - world.spawn.x, s.z - world.spawn.z);
-    expect(d).toBeGreaterThanOrEqual(15);
-    expect(d).toBeLessThanOrEqual(45);
-  }
 });
 
 test('far mechanics are idle; one becomes active on approach', async () => {
-  const far = sites[5]; // beside the balloon
-  // The plaza site farthest from it (beyond the deactivate radius, so the hysteresis cannot keep it on).
-  const dist = (s: (typeof sites)[number]): number => Math.hypot(s.x - far.x, s.z - far.z);
-  const near = sites.slice(0, 3).reduce((a, b) => (dist(b) > dist(a) ? b : a));
+  // The two sites farthest apart: each is beyond the other's deactivate radius.
+  let pair: [GlassesSiteInfo, GlassesSiteInfo] = [sites[0], sites[1]];
+  for (const a of sites) for (const b of sites) if (Math.hypot(a.x - b.x, a.z - b.z) > Math.hypot(pair[0].x - pair[1].x, pair[0].z - pair[1].z)) pair = [a, b];
+  const [near, far] = pair;
+  expect(Math.hypot(near.x - far.x, near.z - far.z)).toBeGreaterThan(90);
   await page.evaluate((id) => {
     window.__rgGlasses!.goto(id);
     window.__rg!.step(1 / 60, 2, false);
@@ -93,10 +96,9 @@ test('far mechanics are idle; one becomes active on approach', async () => {
   }, far.id);
   expect(await page.evaluate((id) => window.__rgGlasses!.active(id), far.id)).toBe(true);
   expect(await page.evaluate((id) => window.__rgGlasses!.active(id), near.id)).toBe(false);
-  expect(await page.evaluate((id) => window.__rgGlasses!.debug(id), far.id)).toMatchObject({ active: true });
 });
 
-test('each stub stays within the draw budget', async () => {
+test('each mechanic stays within the draw budget', async () => {
   for (const s of sites) expect(await expectDrawBudget(page, s.id, 6)).toBeGreaterThanOrEqual(1);
 });
 
