@@ -1,7 +1,7 @@
 /**
  * The fakes' look: the real Glow Gem's faceted geometry and grey shading (`buildGemGeometry` in
  * `src/activities/gems.ts`), rebuilt with two knobs so a fake can differ in ONE way only:
- * the number of facets, or no sparkle (the real gem's bright top table and its alternating
+ * upside down (point up), the number of facets, or no sparkle (the real gem's bright top table and its alternating
  * light/dark facet stripes). With the defaults it is vertex-for-vertex the real gem (unit-tested),
  * and the halo is the same texture.
  */
@@ -12,7 +12,11 @@ import { REAL_FACETS } from './logic';
 /** Grey of the top table on a fake without sparkle (the real gem's table is 1.0). */
 export const DULL_TABLE = 0.62;
 
-export function fakeGemGeometry(facets: number = REAL_FACETS, sparkle = true): THREE.BufferGeometry {
+/** Height range of the real gem (pavilion tip to table): a flipped fake is moved back into it. */
+const GEM_BOTTOM = -0.75;
+const GEM_TOP = 0.22;
+
+export function fakeGemGeometry(facets: number = REAL_FACETS, sparkle = true, flip = false): THREE.BufferGeometry {
   const crown = new THREE.CylinderGeometry(0.28, 0.5, 0.22, facets, 1).translate(0, 0.11, 0).toNonIndexed();
   const pavilion = new THREE.ConeGeometry(0.5, 0.75, facets, 1, true).rotateX(Math.PI).translate(0, -0.375, 0).toNonIndexed();
   const geo = mergeGeometries([crown, pavilion], false);
@@ -44,6 +48,8 @@ export function fakeGemGeometry(facets: number = REAL_FACETS, sparkle = true): T
     for (let k = 0; k < 3; k++) colors.set([grey, grey, grey], (i + k) * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // Point up: same shading, same height range as the real gem (so it bobs at the same place).
+  if (flip) geo.rotateX(Math.PI).translate(0, GEM_BOTTOM + GEM_TOP, 0);
   return geo;
 }
 

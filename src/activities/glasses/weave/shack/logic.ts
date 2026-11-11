@@ -7,28 +7,36 @@ import { hitPay, settle } from '../../gates/guard';
 import type { Guard } from '../../gates/guard';
 
 /**
- * Layout, metres, in the Gear Shack's local frame (origin on the ground at `ANCHORS.gearShack`,
- * +Z = the counter side, +X = the right side wall, whose outside is free). The board hangs on that
- * wall over its gem roundel; the three gift boxes stand on the paving in front of it, all ≥ 3.5 m
- * from the shop prompt (local (0, 1.2)) and clear of the paint cans at (2.25, 0.35..0.97).
+ * Layout, metres, in a frame turned half round from the Gear Shack's own (origin on the ground at
+ * `ANCHORS.gearShack`, yaw = the shack's yaw + π): here +X is the shack's LEFT side wall, which
+ * faces the south-east part of the plaza (the approach from the village street and the park road)
+ * and is never behind the plaza fingerpost; -Z is the counter side. The board stands on two legs
+ * against that wall (taller than it: a billboard beside the kiosk), next to the toy rocket (shack-local (-2.05, 0.45) = here (2.05, -0.45)), and
+ * runs past the back corner; the three gift boxes stand on the paving in front of it, all ≥ 3.5 m
+ * from the shop prompt (here (0, -1.2)) and clear of the plaza bench at about (4.5, 0) (probed).
  */
 export const SHACK_WEAVE = {
-  /** Outside face of the right side wall (wainscot / roundel). */
-  wallX: 1.9,
+  /** Turn of this frame from the shack's own frame (π = the left side wall). */
+  turn: Math.PI,
+  /** Outside face of the side wall. */
+  wallX: 1.92,
   /** Board centre (along the wall, height), frame edge, dark panel edge, dot picture edge. */
-  boardZ: -0.06,
-  boardY: 1.72,
-  frame: 1.72,
-  panel: 1.5,
-  picture: 1.38,
-  /** Gift boxes: distance from the shack centre, positions along the wall, body edge, lid. */
-  boxX: 3.8,
-  boxZ: [-1.32, -0.06, 1.2] as const,
-  box: 0.6,
+  boardZ: 1.5,
+  boardY: 2.15,
+  frame: 2.3,
+  panel: 2.1,
+  picture: 1.98,
+  /** Gift boxes: distance from the shack centre, positions along the wall, body edge. */
+  boxX: 3.15,
+  boxZ: [0.6, 1.5, 2.4] as const,
+  box: 0.66,
   /** Prompt (box top) and where the hero stands to press (in front of each box). */
-  promptY: 0.86,
-  standX: 4.65,
+  promptY: 0.9,
+  standX: 4.05,
   reach: 1.25,
+  /** The play spot (hero, default camera) in front of the middle box, and the approach distance. */
+  viewX: 5.2,
+  approach: 14,
   /** Active (attached) inside this radius around the anchor, off beyond `off` (hysteresis). */
   on: 25,
   off: 28,
@@ -39,7 +47,7 @@ export const SHACK_WEAVE = {
   wobble: 0.8,
 } as const;
 
-/** Dot grid per tier for the 1.38 m picture (coarser than the 2.5 m Phase 1 signs). */
+/** Dot grid per tier for the 1.98 m picture (coarser than the 2.5 m Phase 1 signs). */
 export const SHACK_DOTS: Readonly<Record<GlassesTier, { cells: number; dotScale: number }>> = {
   1: { cells: 14, dotScale: 0.86 },
   2: { cells: 16, dotScale: 0.8 },

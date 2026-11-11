@@ -93,7 +93,7 @@ describe('fakes: tier ladder and tells', () => {
       seq.push(l.tier);
     }
     expect(seq).toEqual([1, 2, 2, 3, 3, 3, 2, 1, 1, 1]);
-    expect(TELLS).toEqual({ 1: 'spin', 2: 'facets', 3: 'sparkle' });
+    expect(TELLS).toEqual({ 1: 'flip', 2: 'facets', 3: 'sparkle' });
   });
 
   it('random picking: right about 1 in 3; pays at most +2 per spot per respawn', () => {
@@ -122,6 +122,24 @@ describe('fakes: the look', () => {
     const same = fakeGemGeometry();
     expect(arr(same, 'position')).toEqual(arr(real, 'position'));
     expect(arr(same, 'color')).toEqual(arr(real, 'color'));
+  });
+
+  it('tier 1 is the real gem upside down: same height range, same width, same greys', () => {
+    const real = buildGemGeometry();
+    const flip = fakeGemGeometry(undefined, true, true);
+    real.computeBoundingBox();
+    flip.computeBoundingBox();
+    const r = real.boundingBox!;
+    const f = flip.boundingBox!;
+    for (const k of ['x', 'y', 'z'] as const) {
+      expect(f.min[k]).toBeCloseTo(r.min[k], 5);
+      expect(f.max[k]).toBeCloseTo(r.max[k], 5);
+    }
+    expect(arr(flip, 'color')).toEqual(arr(real, 'color'));
+    // The point is at the top: the highest vertex is a single tip, the lowest a flat table ring.
+    const ys = arr(flip, 'position').filter((_, i) => i % 3 === 1);
+    expect(Math.max(...ys)).toBeCloseTo(r.max.y, 5);
+    expect(ys.filter((y) => Math.abs(y - f.min.y) < 1e-4).length).toBeGreaterThan(8);
   });
 
   it('tier 2 differs only in facets (5), tier 3 only in shading: no bright table, no facet stripes', () => {

@@ -3,8 +3,9 @@
  * the hero comes near one whose Glow Gem is there, two weak-eye fakes appear beside it, the three
  * on the corners of a triangle (the real gem at a random corner). The fakes have the real gem's
  * geometry, size, shading and halo; ONE thing gives them away, finer with the tier:
- *   tier 1: they spin the other way · tier 2: 5 facets instead of 8 · tier 3: no sparkle (the real
- *   gem's bright top table and its light/dark facet stripes are missing).
+ *   tier 1: they stand on their heads (point up) · tier 2: 5 facets instead of 8 · tier 3: no
+ *   sparkle (no bright top table, no light/dark facet stripes) and they spin the other way.
+ * Only spots whose cluster is in open view from at least 3 of 4 approach directions are used.
  *
  *  - Touching a fake first (along the hero's path) → it poofs on the layer, a miss, round over (the
  *    other fake poofs too). The real gem still pays as always when collected.
@@ -88,6 +89,34 @@ export function create(env: WeaveEnv): WeavePart {
 
   const idOf = (s: SpotInfo): string => `gem${s.index}`;
 
+  /**
+   * From how many of the four compass directions (eye at `viewDist`, child's eye height) the whole
+   * cluster is in open view: clear lines to the spot and to both sides of it (± the cluster's reach).
+   */
+  function openApproaches(s: SpotInfo): number {
+    const o = new THREE.Vector3();
+    const d = new THREE.Vector3();
+    let n = 0;
+    for (let k = 0; k < 4; k++) {
+      const ax = Math.cos((k * Math.PI) / 2);
+      const az = Math.sin((k * Math.PI) / 2);
+      const ex = s.x + ax * FAKES.viewDist;
+      const ez = s.z + az * FAKES.viewDist;
+      o.set(ex, ctx.world.heightAt(ex, ez) + 1.6, ez);
+      let clear = true;
+      for (const side of [-1, 0, 1]) {
+        const tx = s.x - az * side * FAKES.side * 0.6;
+        const tz = s.z + ax * side * FAKES.side * 0.6;
+        d.set(tx - o.x, s.y - o.y, tz - o.z);
+        const len = d.length();
+        const hit = ctx.physics.raycast(o, d.normalize(), len);
+        if (hit && hit.distance < len - 0.4) clear = false;
+      }
+      if (clear) n++;
+    }
+    return n;
+  }
+
   function init(): boolean {
     if (ready) return true;
     const world = ctx.world as typeof ctx.world | undefined;
@@ -104,15 +133,16 @@ export function create(env: WeaveEnv): WeavePart {
       ...FIXED_SITES.map((s) => ({ x: s.x, z: s.z, r: GLASSES.siteRadius + (s.playRadius ?? 0) + FAKES.siteMargin })),
       ...Object.values(world.anchors).map((a) => ({ x: a.position.x, z: a.position.z, r: a.radius + FAKES.anchorMargin })),
     ];
-    spots = pickSpots(eligibleSpots(all, { circles, reserved: (x, z) => isReserved(x, z, FAKES.reservedPad) }), env.rng);
+    const open = eligibleSpots(all, { circles, reserved: (x, z) => isReserved(x, z, FAKES.reservedPad) }).filter((s) => openApproaches(s) >= FAKES.viewMin);
+    spots = pickSpots(open, env.rng);
     present = spots.map(() => true);
     spent = spots.map(() => false);
     blocked = spots.map(() => false);
-    geos = { spin: fakeGemGeometry(), facets: fakeGemGeometry(FAKE_FACETS), sparkle: fakeGemGeometry(undefined, false) };
+    geos = { flip: fakeGemGeometry(undefined, true, true), facets: fakeGemGeometry(FAKE_FACETS), sparkle: fakeGemGeometry(undefined, false) };
     haloTex = haloTexture();
     haloMat.map = haloTex;
     haloMat.needsUpdate = true;
-    gemsMesh = new THREE.InstancedMesh(geos.spin, mat, 2);
+    gemsMesh = new THREE.InstancedMesh(geos.flip, mat, 2);
     gemsMesh.name = 'glasses:weave:fakes:gems';
     halos = new THREE.InstancedMesh(haloGeo, haloMat, 5);
     halos.name = 'glasses:weave:fakes:halos';
@@ -256,7 +286,7 @@ export function create(env: WeaveEnv): WeavePart {
   function draw(): void {
     const a = armed;
     if (!a || !gemsMesh || !halos) return;
-    const dir = a.tell === 'spin' ? -1 : 1;
+    const dir = a.tell === 'sparkle' ? -1 : 1;
     const q = ctx.camera.quaternion;
     a.fakes.forEach((f, i) => {
       const k = f.poof < 0 ? 0 : Math.min(1, Math.max(0, f.poof - f.delay) / FAKES.poof);
