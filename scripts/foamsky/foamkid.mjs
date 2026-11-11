@@ -24,7 +24,7 @@ try {
   await shot('booth');
   const w0 = await fo(() => window.__rg.ctx.profile.wallet);
   await tap('KeyE');
-  let t = 0, i = 0, nextShot = 0, fellOnce = false, wanderT = 0, minFriend = 9;
+  let t = 0, i = 0, nextShot = 0, fellOnce = false, wanderT = 0;
   const t0 = Date.now();
   while (t < 150 * 60) {
     const s = await local();

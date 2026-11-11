@@ -108,7 +108,7 @@ export async function open(dirName, { query = '', width = 960, height = 540 } = 
  * `dist` m away, hold the keys toward the centre for `secs` (re-aimed every 6 frames) and record
  * the closest approach and whether the hero ever got past the centre (a pass-through).
  */
-export async function probe8(g, name, x, z, { dist = 4, secs = 2.2, sprint = false, minClear = 0.3, leave = null } = {}) {
+export async function probe8(g, name, x, z, { dist = 4, secs = 2.2, sprint = false, minClear = 0.3 } = {}) {
   const out = [];
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2;

@@ -4,7 +4,7 @@
 import { open, probe8 } from './lib.mjs';
 
 const g = await open('skykid');
-const { page, shot, step, st, pos, release, tap, walkTo, tp, setKeys, visibleText } = g;
+const { page, shot, step, st, release, tap, walkTo, tp, setKeys, visibleText } = g;
 const ev = (f, a) => page.evaluate(f, a);
 const wallet = () => ev(() => window.__rg.ctx.profile.wallet);
 const pip = () => ev(() => { const b = window.__rgBuddy; if (!b) return 'no-pip'; const p = b.pos(); const h = window.__rg.state().playerPosition; return `pip ${b.ride()} ${b.pose()} d=${Math.hypot(p[0] - h[0], p[1] - h[1], p[2] - h[2]).toFixed(1)}`; });
