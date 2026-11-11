@@ -7,8 +7,8 @@
  * read the dynamic state back. Everything is in the course frame (see layout.ts).
  */
 import { PLAYER } from '../../config';
-import { CANNON, CANNONS, CHECKPOINTS, CHUTE, FINISH_ID, FOAM_Y, PIT, ROPE, ROUTE, SOLIDS } from './layout';
-import type { SolidDef } from './layout';
+import { CANNON, CANNONS, CHECKPOINTS, CHUTE, FINISH_ID, FOAM_Y, LANE_B, PIT, PROPS, ROPE, ROUTE, RUN_BOUNDS, SOLIDS } from './layout';
+import type { PropDef, SolidDef } from './layout';
 
 export const RUN = {
   walk: PLAYER.walkSpeed,
@@ -61,6 +61,8 @@ export type SimEvent =
   | { type: 'release'; early: boolean }
   | { type: 'puff'; cannon: number }
   | { type: 'puffHit'; cannon: number }
+  /** Bumped into the friend (comic boing for both). */
+  | { type: 'bump' }
   | { type: 'splash'; x: number; z: number }
   | { type: 'respawn'; cp: number }
   | { type: 'checkpoint'; cp: number }
@@ -88,11 +90,51 @@ export interface SolidState {
   bob: number;
   /** Seconds since someone stood on it (visual squash). */
   touched: number;
+  /** Turntable floats (a surprise each run): turn rate (rad/s) and the current turn. */
+  spin: number;
+  angle: number;
 }
 
 export type RopeState = 'parked' | 'held' | 'return';
 
 const clamp = (v: number, a: number, b: number): number => Math.min(b, Math.max(a, v));
+
+/** The friend's body radius (bump). */
+export const FRIEND_RADIUS = 0.42;
+const WALK_TOP = SOLIDS.find((s) => s.id === 'walk')?.top ?? 1;
+
+/** Push a point (radius `r`) out of a box/cylinder footprint; kills the velocity into it. */
+function pushOut(p: { x: number; z: number }, v: { x: number; z: number }, s: PropDef, r: number): void {
+  if (s.shape === 'box') {
+    const hx = (s.hx ?? 0) + r;
+    const hz = (s.hz ?? 0) + r;
+    const dx = p.x - s.x;
+    const dz = p.z - s.z;
+    if (Math.abs(dx) >= hx || Math.abs(dz) >= hz) return;
+    if (hx - Math.abs(dx) < hz - Math.abs(dz)) {
+      p.x = s.x + Math.sign(dx || 1) * hx;
+      if (v.x * Math.sign(dx || 1) < 0) v.x = 0;
+    } else {
+      p.z = s.z + Math.sign(dz || 1) * hz;
+      if (v.z * Math.sign(dz || 1) < 0) v.z = 0;
+    }
+    return;
+  }
+  const rr = (s.r ?? 0) + r;
+  const dx = p.x - s.x;
+  const dz = p.z - s.z;
+  const d = Math.hypot(dx, dz);
+  if (d >= rr) return;
+  const nx = d > 1e-6 ? dx / d : 1;
+  const nz = d > 1e-6 ? dz / d : 0;
+  p.x = s.x + nx * rr;
+  p.z = s.z + nz * rr;
+  const vn = v.x * nx + v.z * nz;
+  if (vn < 0) {
+    v.x -= vn * nx;
+    v.z -= vn * nz;
+  }
+}
 
 function halfX(s: SolidDef): number {
   return s.shape === 'box' ? (s.hx ?? 0) : (s.r ?? 0);
@@ -147,7 +189,7 @@ export class CourseSim {
   falls = 0;
   /** Seconds left of the bubble beard (set on a splash). */
   beard = 0;
-  readonly solids: SolidState[] = SOLIDS.map(() => ({ dip: 0, dipV: 0, tx: 0, tz: 0, tvx: 0, tvz: 0, bob: 0, touched: 99 }));
+  readonly solids: SolidState[] = SOLIDS.map(() => ({ dip: 0, dipV: 0, tx: 0, tz: 0, tvx: 0, tvz: 0, bob: 0, touched: 99, spin: 0, angle: 0 }));
   rope: { state: RopeState; theta: number; omega: number; t: number; from: number } = { state: 'parked', theta: ROPE.parked, omega: 0, t: 0, from: ROPE.parked };
   /** Free-running clock for idle motion (bobbing) and the cannons outside a run. */
   worldTime = 0;
@@ -163,6 +205,9 @@ export class CourseSim {
   private swingPassed = false;
   private readonly blasted: boolean[] = CANNONS.map(() => false);
   private readonly hitBy: boolean[] = CANNONS.map(() => false);
+  private touchingFriend = false;
+  /** Seconds left of a blower knock-back (the stick can't cancel the comic flight). */
+  private knockT = 0;
 
   /** Put the hero on the start line and reset the course for a new run. */
   reset(pos: { x: number; z: number }, yaw = 0): void {
@@ -182,13 +227,34 @@ export class CourseSim {
     this.beard = 0;
     this.coyote = 0;
     this.buffer = 0;
+    this.knockT = 0;
+    this.touchingFriend = false;
     this.splashT = 0;
     this.rope = { state: 'parked', theta: ROPE.parked, omega: 0, t: 0, from: ROPE.parked };
     for (let i = 0; i < this.blasted.length; i++) this.blasted[i] = this.hitBy[i] = false;
     for (const st of this.solids) {
       st.dip = st.dipV = st.tx = st.tz = st.tvx = st.tvz = 0;
+      st.angle = 0;
       st.touched = 99;
     }
+  }
+
+  /**
+   * This run's surprise: two of the pool floats become slow turntables (which ones and which way
+   * change every run). `seed` picks them deterministically.
+   */
+  setSpinners(seed: number): number[] {
+    const floats = SOLIDS.map((s, i) => (s.kind === 'float' ? i : -1)).filter((i) => i >= 0);
+    for (const i of floats) {
+      this.solids[i].spin = 0;
+      this.solids[i].angle = 0;
+    }
+    const a = floats[Math.abs(seed) % floats.length];
+    const b = floats[(Math.abs(seed) + 1 + (Math.abs(seed) % 2)) % floats.length];
+    const dir = seed % 2 === 0 ? 1 : -1;
+    this.solids[a].spin = 0.9 * dir;
+    if (b !== a) this.solids[b].spin = -0.75 * dir;
+    return [a, b];
   }
 
   /** Clock the cannons follow: the run clock in a run, else the world clock. */
@@ -283,7 +349,23 @@ export class CourseSim {
         const dipWant = on ? (s.kind === 'float' ? 0.1 : s.kind === 'plank' ? 0.14 : 0.03) : 0;
         st.dipV += ((dipWant - st.dip) * 60 - st.dipV * 7) * dt;
         st.dip += st.dipV * dt;
-        if (s.kind === 'float') st.bob = 0.05 * Math.sin(wt * 1.9 + i * 2.3);
+        if (s.kind === 'float') {
+          st.bob = 0.05 * Math.sin(wt * 1.9 + i * 2.3);
+          if (st.spin !== 0) {
+            const da = st.spin * dt;
+            st.angle += da;
+            // A turntable float carries you round with it.
+            if (on) {
+              const dx = this.p.x - s.x;
+              const dz = this.p.z - s.z;
+              const c = Math.cos(da);
+              const sn = Math.sin(da);
+              this.p.x = s.x + dx * c + dz * sn;
+              this.p.z = s.z - dx * sn + dz * c;
+              this.yaw += da;
+            }
+          }
+        }
       } else if (s.kind === 'bubble') {
         st.bob = 0.12 * Math.sin(wt * 2.2 + i * 1.9);
         st.dipV += (-st.dip * 90 - st.dipV * 9) * dt;
@@ -351,6 +433,8 @@ export class CourseSim {
     let tx = mag > 0 ? (input.mx / Math.hypot(input.mx, input.mz)) * mag * speed : 0;
     let tz = mag > 0 ? (input.mz / Math.hypot(input.mx, input.mz)) * mag * speed : 0;
     let accel: number = wasGrounded ? RUN.accelGround : RUN.accelAir;
+    this.knockT = Math.max(0, this.knockT - dt);
+    if (this.knockT > 0) accel = 0;
     if (gs && groundSolid && (groundSolid.kind === 'float' || groundSolid.kind === 'plank' || groundSolid.kind === 'block')) {
       if (groundSolid.kind !== 'block') accel = RUN.accelSoapy;
       const slope = Math.hypot(gs.tx, gs.tz);
@@ -394,6 +478,8 @@ export class CourseSim {
     const soft = (wasGrounded || this.coyote > 0) && v.y <= 0.01;
     const refY = soft ? Math.max(p.y, this.lastGroundY) : p.y;
     this.resolveSides(soft, Math.max(refY, prevY));
+    this.confine();
+    this.resolveProps();
     this.resolveGround(Math.max(prevY, soft ? this.lastGroundY : prevY), soft, events);
     if (this.grounded) this.lastGroundY = p.y;
 
@@ -452,6 +538,83 @@ export class CourseSim {
         }
       }
     }
+  }
+
+  /** Push the hero out of the props (booth, arch, blowers, machine, posts, poles): solid, never stood on. */
+  private resolveProps(): void {
+    for (const s of PROPS) {
+      if (this.p.y >= s.top || this.p.y + RUN.height < s.bottom) continue;
+      pushOut(this.p, this.v, s, RUN.radius);
+    }
+  }
+
+  /**
+   * Keep a run on the course: inside the rim over the pit, and on the entrance strip in front of
+   * it. (Before, running or jumping off a float could carry the hero over the rim onto the hill.)
+   */
+  private confine(): void {
+    const p = this.p;
+    const v = this.v;
+    // A hair inside the rim: the body may lean over the tube, the feet stay over the pit.
+    const r = 0.05;
+    const x0 = PIT.x0 + r;
+    const x1 = PIT.x1 - r;
+    if (p.x > x1) {
+      p.x = x1;
+      if (v.x > 0) v.x = 0;
+    } else if (p.x < x0) {
+      p.x = x0;
+      if (v.x < 0) v.x = 0;
+    }
+    if (p.z > PIT.z1 - r) {
+      p.z = PIT.z1 - r;
+      if (v.z > 0) v.z = 0;
+    } else if (p.z < RUN_BOUNDS.z0) {
+      p.z = RUN_BOUNDS.z0;
+      if (v.z < 0) v.z = 0;
+    }
+  }
+
+  /**
+   * The friend is solid: a cylinder at its feet `(x, y, z)`. Walking into them pushes you out with a
+   * little comic bounce; returns a `bump` event on first contact.
+   */
+  bumpFriend(x: number, y: number, z: number): SimEvent[] {
+    const out: SimEvent[] = [];
+    if (!this.running || (this.mode !== 'run' && this.mode !== 'slide')) {
+      this.touchingFriend = false;
+      return out;
+    }
+    const dx = this.p.x - x;
+    const dz = this.p.z - z;
+    const d = Math.hypot(dx, dz);
+    const rr = FRIEND_RADIUS + RUN.radius;
+    if (d >= rr || Math.abs(this.p.y - y) > 1.3) {
+      this.touchingFriend = false;
+      return out;
+    }
+    const nx = d > 1e-6 ? dx / d : 0;
+    const nz = d > 1e-6 ? dz / d : -1;
+    this.p.x = x + nx * rr;
+    this.p.z = z + nz * rr;
+    const vn = this.v.x * nx + this.v.z * nz;
+    if (vn < 0) {
+      this.v.x -= vn * nx;
+      this.v.z -= vn * nz;
+    }
+    if (!this.touchingFriend) {
+      // Boing: a little hop back.
+      this.v.x += nx * 2.2;
+      this.v.z += nz * 2.2;
+      if (this.grounded && this.mode === 'run') {
+        this.v.y = 2.6;
+        this.grounded = false;
+        this.ground = -1;
+      }
+      out.push({ type: 'bump' });
+    }
+    this.touchingFriend = true;
+    return out;
   }
 
   /** Highest surface under the hero that it could stand on, including the ground outside the pit. */
@@ -534,9 +697,14 @@ export class CourseSim {
         const can = CANNONS[c];
         if (this.hitBy[c] || cannonState(clock, can.offset).state !== 'blast') continue;
         if (p.x < can.x || p.x > CANNON.reachX || Math.abs(p.z - can.z) > CANNON.halfZ || p.y > CANNON.maxY) continue;
+        // The puff blows at knee height: jump and it passes under you.
+        if (p.y > this.walkwayTop() + CANNON.dodge) continue;
         this.hitBy[c] = true;
-        this.v.x = CANNON.pushX;
-        this.v.y = CANNON.pushY;
+        // Foam battle: a comic knock-back along the walkway (not into the foam), pulled to its middle.
+        this.v.x = (LANE_B - p.x) * 3;
+        this.v.y = CANNON.knockY;
+        this.v.z = CANNON.knockZ;
+        this.knockT = 0.5;
         this.grounded = false;
         this.ground = -1;
         events.push({ type: 'puffHit', cannon: c });
@@ -544,6 +712,11 @@ export class CourseSim {
     }
     if (!this.grounded && this.inPit(p.x, p.z) && p.y < FOAM_Y - 0.05) this.splash(events);
     else if (p.y < -4) this.splash(events);
+  }
+
+  /** Height of the blower walkway's top. */
+  private walkwayTop(): number {
+    return WALK_TOP;
   }
 
   private splash(events: SimEvent[]): void {

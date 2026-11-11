@@ -18,7 +18,8 @@ export interface Friend {
   /** Card colour (light) for the HUD dot. */
   readonly color: string;
   setVisible(on: boolean): void;
-  pose(p: GhostPose, dt: number): void;
+  /** Follow the ghost run; `wobble` 0..1 squashes the friend after a bump. */
+  pose(p: GhostPose, dt: number, wobble?: number): void;
   /** Wave/cheer while waiting. */
   idle(x: number, y: number, z: number, yaw: number, anim: PlayerAnim, dt: number): void;
   dispose(): void;
@@ -29,9 +30,20 @@ const ORDER: readonly CharacterId[] = ['frog', 'panda', 'bee', 'flamingo', 'rex'
 export function createFriend(parent: THREE.Object3D): Friend {
   const cache = new Map<CharacterId, Promise<LoadedCharacter | null>>();
   let current: LoadedCharacter | null = null;
+  /** Loaded but not attached yet: models attach on a simulation step (pose/idle), never in a promise callback. */
+  let pending: LoadedCharacter | null = null;
   let id: CharacterId | null = null;
   let visible = false;
   let anim: PlayerAnim | null = null;
+
+  /** Attach a model that finished loading (called from the per-frame update). */
+  function attach(): void {
+    if (!pending) return;
+    current = pending;
+    pending = null;
+    current.object.visible = visible;
+    parent.add(current.object);
+  }
 
   function play(a: PlayerAnim): void {
     if (!current || a === anim) return;
@@ -60,28 +72,30 @@ export function createFriend(parent: THREE.Object3D): Friend {
       }
       const loaded = await p;
       if (current) current.object.removeFromParent();
-      current = loaded;
+      current = null;
+      pending = loaded;
       id = loaded ? want : null;
       anim = null;
-      if (current) {
-        current.object.visible = visible;
-        parent.add(current.object);
-      }
     },
     setVisible(on) {
       visible = on;
       if (current) current.object.visible = on;
+      if (pending) pending.object.visible = on;
     },
-    pose(p, dt) {
+    pose(p, dt, wobble = 0) {
+      attach();
       if (!current) return;
       const o = current.object;
       o.position.set(p.x, p.y, p.z);
+      const w = wobble * 0.22 * Math.sin(wobble * 26);
+      o.scale.set(1 + w, 1 - w, 1 + w);
       o.rotation.set(p.anim === 'fall' ? 1.2 : 0, p.yaw, 0, 'YXZ');
       if (p.anim === 'fall') o.position.y += 0.35;
       play(p.anim === 'fall' ? 'fall' : p.anim);
       current.update(dt);
     },
     idle(x, y, z, yaw, a, dt) {
+      attach();
       if (!current) return;
       current.object.position.set(x, y, z);
       current.object.rotation.set(0, yaw, 0);
@@ -91,6 +105,7 @@ export function createFriend(parent: THREE.Object3D): Friend {
     dispose() {
       if (current) current.object.removeFromParent();
       current = null;
+      pending = null;
     },
   };
 }

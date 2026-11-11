@@ -129,6 +129,11 @@ export const CANNONS: readonly { x: number; z: number; offset: number }[] = [
 ];
 export const CANNON = {
   period: 2.8,
+  /** A puff passes under feet at least this high above the walkway (a jump dodges it). */
+  dodge: 0.55,
+  /** Knock-back of a hit: back along the walkway (+z), up, and pulled to the walkway centre. */
+  knockZ: 5.2,
+  knockY: 5.5,
   /** Seconds of swelling before a puff. */
   warn: 0.7,
   /** Seconds a puff pushes. */
@@ -176,3 +181,51 @@ export const BOOTH = { x: 0, z: -2.2, use: { x: 0, z: -4.6 } } as const;
 /** Rough clear radius of the whole course around the course-frame point (0, 20). */
 export const COURSE_RADIUS = 27;
 export const COURSE_CENTRE = { x: 0, z: 20.5 } as const;
+
+/**
+ * Props that are solid but not stood on (both in a run and, as Rapier colliders, when walking
+ * around): booth, arch pillars, blower stands with their barrels, bubble machine, rope-swing posts,
+ * checkpoint flag poles and the pit rim. `bottom`/`top` are heights above the course ground.
+ */
+export interface PropDef {
+  id: string;
+  shape: 'box' | 'cyl';
+  x: number;
+  z: number;
+  hx?: number;
+  hz?: number;
+  r?: number;
+  bottom: number;
+  top: number;
+}
+
+const RIM_T = 0.18;
+/** Rim tube height (top of the inflatable): you can hop over it from outside, never walk through. */
+export const RIM_TOP = FOAM_Y + 0.35;
+
+export const PROPS: readonly PropDef[] = [
+  { id: 'booth', shape: 'box', x: BOOTH.x, z: BOOTH.z, hx: 1.05, hz: 0.7, bottom: -1, top: 2.9 },
+  { id: 'machine', shape: 'box', x: -6.7, z: -0.6, hx: 0.53, hz: 0.53, bottom: -1, top: 2.1 },
+  { id: 'archA', shape: 'cyl', x: 5.75, z: 1.7, r: 0.45, bottom: -1, top: 4.7 },
+  { id: 'archB', shape: 'cyl', x: -5.75, z: 1.7, r: 0.45, bottom: -1, top: 4.7 },
+  ...CANNONS.map((c, i): PropDef => ({ id: `blower${i}`, shape: 'box', x: c.x - 0.1, z: c.z, hx: 0.55, hz: 0.6, bottom: -1, top: 1.6 })),
+  { id: 'ropePostS', shape: 'cyl', x: ROPE.x, z: ROPE.z - 2.5, r: 0.22, bottom: -1, top: ROPE.y + 0.5 },
+  { id: 'ropePostN', shape: 'cyl', x: ROPE.x, z: ROPE.z + 2.5, r: 0.22, bottom: -1, top: ROPE.y + 0.5 },
+  { id: 'flag1', shape: 'cyl', x: 5.2, z: 20.8, r: 0.1, bottom: 2.0, top: 4.4 },
+  { id: 'flag2', shape: 'cyl', x: 5.25, z: 42.7, r: 0.1, bottom: 2.3, top: 4.7 },
+  { id: 'flag3', shape: 'cyl', x: -5.25, z: 26.9, r: 0.1, bottom: 1.0, top: 3.4 },
+];
+
+/** The pit rim as four walls (front piece between the decks only). Rapier colliders when walking. */
+export const RIM_WALLS: readonly PropDef[] = [
+  { id: 'rimA', shape: 'box', x: PIT.x1, z: (PIT.z0 + PIT.z1) / 2, hx: RIM_T, hz: (PIT.z1 - PIT.z0) / 2, bottom: -1, top: RIM_TOP },
+  { id: 'rimB', shape: 'box', x: PIT.x0, z: (PIT.z0 + PIT.z1) / 2, hx: RIM_T, hz: (PIT.z1 - PIT.z0) / 2, bottom: -1, top: RIM_TOP },
+  { id: 'rimN', shape: 'box', x: 0, z: PIT.z1, hx: (PIT.x1 - PIT.x0) / 2 + RIM_T, hz: RIM_T, bottom: -1, top: RIM_TOP },
+  { id: 'rimF', shape: 'box', x: 0, z: PIT.z0, hx: 1.2, hz: RIM_T, bottom: -1, top: RIM_TOP },
+];
+
+/**
+ * Where a run may take the hero (course frame): between the rim lines (x), from the entrance strip
+ * in front of the booth (z0) to the far rim. Nobody wanders off onto the hill mid-run.
+ */
+export const RUN_BOUNDS = { z0: -5.4 } as const;

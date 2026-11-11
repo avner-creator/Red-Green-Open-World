@@ -636,7 +636,7 @@ export function buildCourse(scene: THREE.Object3D): CourseVisuals {
       floatIds.forEach((i, k) => {
         const s = SOLIDS[i];
         const st = sim.solids[i];
-        e.set(Math.atan(st.tz), 0, -Math.atan(st.tx));
+        e.set(Math.atan(st.tz), st.angle, -Math.atan(st.tx), 'XYZ');
         q.setFromEuler(e);
         dummy.position.set(s.x, s.top - 0.17 - st.dip + st.bob, s.z);
         dummy.quaternion.copy(q);

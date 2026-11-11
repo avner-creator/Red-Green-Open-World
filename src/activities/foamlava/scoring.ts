@@ -30,6 +30,14 @@ export function prizeFor(medal: Medal, beatFriend: boolean): number {
   return base + (beatFriend ? 1 : 0);
 }
 
+/**
+ * The friend's playback rate (rubber band): they hurry when you lead and dawdle when you trail, so
+ * the race stays close and a kid who keeps going can win (`progress` 0..1 along the route).
+ */
+export function friendRate(heroProgress: number, friendProgress: number): number {
+  return Math.min(1.3, Math.max(0.62, 1 + (heroProgress - friendProgress) * 1.8));
+}
+
 /** Ticket rule: the first run each session is free, then 3 gems. */
 export const TICKET = 3;
 
