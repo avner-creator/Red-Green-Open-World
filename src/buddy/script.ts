@@ -147,7 +147,7 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
   bouncePads: [{ text: 'Step on a bounce pad. It throws you to the next one!', icon: 'wPads', mood: 'excited' }],
   launchPads: [{ text: 'Stand on a rocket pad and blast up onto the big net!', icon: 'wRocket', mood: 'excited' }],
   balloon: [
-    { text: 'This balloon flies you sky-high! Hop in the basket!', icon: 'wBalloon', action: 'use', mood: 'excited' },
+    { text: 'This balloon flies you sky-high! Walk into the basket and wait.', icon: 'wBalloon', action: 'move', mood: 'excited' },
     { text: 'At the top, jump out and fly through the gems!', icon: 'parachute', action: 'jump', mood: 'excited' },
     { text: 'Jump again to open your parachute. Land on the rings!', icon: 'parachute', action: 'jump', extra: 'wTarget', mood: 'happy' },
   ],
@@ -161,10 +161,10 @@ export const HOWTO: Record<HowToTopic, readonly ScriptLine[]> = {
   ],
   gearShack: [{ text: 'The Gear Shack! Spend gems on hats, capes and cool gear!', icon: 'shop', action: 'use', extra: 'hat', mood: 'happy' }],
   ranch: [{ text: 'Hop on a pony and gallop around the island!', icon: 'horse', action: 'use', mood: 'happy' }],
+  // Wobble Park (agent/silly-balloon): a 45 s round, start pad, arrows over the tube people.
   sillyZone: [
-    { text: 'Step on the big round button for a silly flop!', icon: 'flop', mood: 'silly' },
-    { text: 'Bump the mushrooms, push the beach ball, ride the see-saw!', icon: 'party', mood: 'silly' },
-    { text: 'Run through the wiggly tube guys. They just wobble, hehe!', icon: 'wRun', mood: 'silly' },
+    { text: 'Wobble Park! Stand on the glowing pad to start!', icon: 'party', mood: 'silly' },
+    { text: 'Bump every tube person with an arrow before time runs out!', icon: 'wRun', mood: 'excited' },
   ],
   bungee: [
     { text: 'Clip in at the bridge, then dive off the springboard!', icon: 'bungee', action: 'use', mood: 'excited' },
