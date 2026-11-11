@@ -30,7 +30,7 @@ import { Confetti } from '../chests/confetti';
 import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from './arrowLogic';
 
 import type { ArrowPlace } from './arrowLogic';
-import { DOOR_RULES, DoorLock, SHAPES, fromDoorLocal, makeSequence, padAt, padLocal, toDoorLocal } from './doorLogic';
+import { DOOR_RULES, DoorLock, PadStepper, SHAPES, fromDoorLocal, makeSequence, padAngle, padLocal, toDoorLocal } from './doorLogic';
 import { STONE, onStone } from './pathLogic';
 import type { Stone } from './pathLogic';
 import { TREASURE_STAR_Y, VAULT, arrowGeometry, buildButtons, buildPedestal, buildSign, buildVault, haloGeometry, layerBasic, stoneGeometry } from './models';
@@ -167,8 +167,8 @@ interface DoorRt {
   /** Pad push (0..1) and shake (0..1) per pad. */
   padPush: Float32Array;
   padShake: Float32Array;
-  /** The pad the player stood on last frame (-1 none): a step is pressing a pad you were not on. */
-  lastPad: number;
+  /** Deliberate steps: a pad counts after a short stand on it (or a step into its middle), never when crossed. */
+  stepper: PadStepper;
   /** 0..1 star flight out of the vault (starts once the door is mostly down). */
   starFly: number;
   starFrom: THREE.Vector3;
@@ -430,7 +430,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     });
   /** The rule board stands left of the pads, turned a little toward the approach. */
   const boardPlace = (def: VaultDef): BoardPlace => {
-    const lx = -(DOOR_RULES.padArc + 0.9);
+    const lx = DOOR_RULES.boardX;
     const lz = 3.3;
     const o = fromDoorLocal(def.yaw, lx, lz);
     return { x: lx, y: h(def.x + o.x, def.z + o.z) - def.y, z: lz, yaw: 0.55 };
@@ -476,7 +476,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     strong.name = `vault-${def.id}-strong`;
     strong.position.copy(cull.position);
     strong.rotation.y = def.yaw;
-    const buttons = buildButtons(pads, DOOR_RULES.padAngles, SHAPES, VAULT.padCapH);
+    const buttons = buildButtons(pads, SHAPES.map((_s, i) => padAngle(i)), SHAPES, VAULT.padCapH);
     strong.add(distanceCull(buttons.root, DRAW.vaultLayer));
     ctx.vision.add(strong, VisionLayer.StrongOnly);
 
@@ -514,7 +514,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       padLook: pads.map(() => 'idle' as PadLook),
       padPush: new Float32Array(pads.length),
       padShake: new Float32Array(pads.length),
-      lastPad: -1,
+      stepper: new PadStepper(),
       starFly: 0,
       starFrom: new THREE.Vector3(),
       starSpin: 0,
@@ -545,7 +545,11 @@ export function createSecrets(ctx: GameContext): Secrets {
       radius: 1.6,
       icon: 'hand',
       enabled: () => !rt.lock.opened && rt.selected >= 0 && ctx.session.state.phase === 'playing',
-      onUse: () => press(rt, rt.selected),
+      onUse: () => {
+        // E is a deliberate step too: the dwell on this pad does not press it again.
+        rt.stepper.done = true;
+        press(rt, rt.selected);
+      },
     };
     rt.off = ctx.interactions.add(prompt);
 
@@ -635,11 +639,10 @@ export function createSecrets(ctx: GameContext): Secrets {
       const def = d.def;
       const l = toDoorLocal(def.x, def.z, def.yaw, pp.x, pp.z);
       const levelOk = Math.abs(pp.y - def.y) < 2;
-      const on = playing && !d.lock.opened && levelOk && ctx.player.mode === 'walk' ? padAt(l.x, l.z) : -1;
-      // A step = standing on a pad you were not on last frame.
-      if (on >= 0 && on !== d.lastPad) press(d, on);
-      d.lastPad = on;
-      d.selected = on;
+      const can = playing && !d.lock.opened && levelOk && ctx.player.mode === 'walk';
+      const step = d.stepper.update(l.x, l.z, dt, can);
+      if (step >= 0) press(d, step);
+      d.selected = d.stepper.pad;
 
       // Door wobble (wrong press) and opening.
       if (d.openT > 0 && d.openT < 1) {
@@ -718,11 +721,12 @@ export function createSecrets(ctx: GameContext): Secrets {
       }
       // Pads: pushed in when stepped on, shake on a miss, lit for each right step.
       for (let i = 0; i < d.pads.length; i++) {
-        const stand = i === d.selected ? 0.05 : 0;
+        // Standing on a pad sinks it a little; the dwell disc fills while a step is being counted.
+        const stand = i === d.selected ? 0.02 + 0.03 * (d.stepper.done ? 1 : d.stepper.fill) : 0;
         const push = Math.max(stand, 0.08 * d.padPush[i]);
         const shake = Math.sin(time * 40 + i) * 0.06 * d.padShake[i] * d.padShake[i];
-        d.model.setPad(i, push, shake, d.padLook[i]);
-        d.buttons.setButton(i, push, d.lock.opened ? 0 : 1 + 0.15 * (i === d.selected ? 1 : 0) + 0.2 * d.flash[i], shake, camYaw - DOOR_RULES.padAngles[i]);
+        d.model.setPad(i, push, shake, d.padLook[i], i === d.selected ? d.stepper.fill : 0);
+        d.buttons.setButton(i, push, d.lock.opened ? 0 : 1 + 0.15 * (i === d.selected ? 1 : 0) + 0.2 * d.flash[i], shake, camYaw - padAngle(i));
       }
       d.model.commit();
       d.buttons.commit();
@@ -865,7 +869,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       d.treasure = false;
       d.treasureT = 0;
       d.starFly = 0;
-      d.lastPad = -1;
+      d.stepper.reset();
       d.padPush.fill(0);
       d.padShake.fill(0);
       relight(d);

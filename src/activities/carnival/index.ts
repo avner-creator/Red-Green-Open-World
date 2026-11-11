@@ -390,6 +390,7 @@ export function createCarnival(ctx: GameContext): Carnival {
           if (presses.length >= MASH.presses) {
             presses.length = 0;
             rr.fumble(MASH.stun);
+            ctx.events.emit('player:dizzy', { source: 'carnival', game: a.id, seconds: MASH.stun });
           }
         }
         if (rr.stunned > 0) {

@@ -96,6 +96,8 @@ const S: Record<UiIconName, string> = {
   // Turn the hero on the stage (curved arrows).
   turnL: '<path class="o" d="M19 15a7.500 5 0 0 1-14.500-1"/><path class="w" d="M19 15a7.500 5 0 0 1-14.500-1"/><path d="M1 15.500l3.300-6.200 4 5.400z"/><ellipse class="l" cx="12" cy="10" rx="3" ry="5"/>',
   turnR: '<path class="o" d="M5 15a7.500 5 0 0 0 14.500-1"/><path class="w" d="M5 15a7.500 5 0 0 0 14.500-1"/><path d="M23 15.500l-3.300-6.200-4 5.400z"/><ellipse class="l" cx="12" cy="10" rx="3" ry="5"/>',
+  // A shoe sole stepping down onto a round floor tile (chest symbol tiles: "step on one").
+  step: '<ellipse cx="12" cy="19.300" rx="10.800" ry="3.700"/><ellipse class="k" cx="12" cy="19.300" rx="6.200" ry="1.700"/><path d="M13 1.500c2.600 0 4 2.300 3.600 5.400-.3 2.600-1.500 4.200-1.500 6.200 0 1.400-1 2.400-2.400 2.400s-2.500-1.100-2.500-2.600c0-2.100-1.100-3.700-1.100-6.400C9.100 3.500 10.400 1.500 13 1.500z"/><path class="l" d="M5.500 9.500v3M3.500 11.500l2 2.300 2-2.300M20 9.500v3M18 11.500l2 2.300 2-2.300"/>',
   heart: '<path d="M12 21.500C4 15.500 1.500 11.500 1.500 8a5.200 5.200 0 0 1 10.500-1.500A5.200 5.200 0 0 1 22.500 8c0 3.500-2.500 7.500-10.500 13.500z"/>',
 };
 

@@ -8,7 +8,7 @@ import type { IconName, ShopItem } from '../types';
 import { h } from './dom';
 import { icon } from './icons';
 
-/** id → picture URL (null = the item has none). Survives screen openings. */
+/** id → picture URL (null = the item has none, or its preview threw). Survives screen openings. */
 const cache = new Map<string, string | null>();
 
 /** Call the item's preview once (try/catch) and remember the result. */
@@ -16,17 +16,21 @@ export function previewUrl(it: ShopItem | undefined): string | null {
   if (!it) return null;
   const hit = cache.get(it.id);
   if (hit !== undefined) return hit;
-  let url: string | null = null;
-  if (it.preview) {
-    try {
-      const v = it.preview();
-      url = typeof v === 'string' && v.length > 0 ? v : null;
-    } catch {
-      url = null;
-    }
+  if (!it.preview) {
+    cache.set(it.id, null);
+    return null;
   }
-  cache.set(it.id, url);
-  return url;
+  try {
+    const v = it.preview();
+    const url = typeof v === 'string' && v.length > 0 ? v : null;
+    // "No picture right now" (previews switched off, no GL context yet) is not remembered: a screen
+    // opened later asks again. Remembering it hid every picture for the rest of the session (QA5 M4).
+    if (url) cache.set(it.id, url);
+    return url;
+  } catch {
+    cache.set(it.id, null);
+    return null;
+  }
 }
 
 /** True when a picture may exist but has not been asked for yet. */

@@ -101,6 +101,12 @@ export interface ChibiDef {
   readonly aim?: readonly { readonly bone: string; readonly child: string; readonly dir: readonly [number, number, number]; readonly w?: number }[];
   /** Calm-pose extra local rotations (radians, XYZ Euler), e.g. a head tilt. */
   readonly tilt?: Readonly<Record<string, readonly [number, number, number]>>;
+  /**
+   * Lower these bones (every frame, after the mixer) by this fraction of their rest height above
+   * their parent: for rigs whose feet hang on IK bones outside the leg chain, scaling the legs
+   * alone leaves the feet where they were (long legs); sinking the spine root shortens them.
+   */
+  readonly sink?: Readonly<Record<string, number>>;
   /** Parts to tuck away: vertices of `material` skinned to `bone` (e.g. teeth). */
   readonly hide?: readonly { readonly material: string; readonly bone: string }[];
   /** Flat material recolours by material name (untextured models). */
@@ -320,13 +326,14 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Hop', loop: true },
     attach: astroAttach(1.58, 0.15, 1.45, 0.45),
-    chibi: astroChibi('#ffd84a', '#ffb366'),
+    // The helmet collar reaches 35% up the head-skinned part: tuck all of it away (QA5: a grey sliver stayed).
+    chibi: astroChibi('#ffd84a', '#ffb366', 1.4, undefined, 0.42),
     price: 0,
     signature: 'superBounce',
     freePowers: ['bounceBall', 'doubleJump'],
     emoteName: 'hop',
     cardColors: ['#e9f7d4', '#1f3a1c'],
-    face: { bone: 'Head', eyeAt: [0.25, 1.49, 0.27], eyeR: 0.12, eyeYaw: 0.32, eyePitch: 0.05, irisSize: 0.8, lid: '#3f9a2c', iris: '#3a2414', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
+    face: { bone: 'Head', eyeAt: [0.235, 1.5, 0.34], eyeR: 0.175, eyeYaw: 0.3, eyePitch: 0, irisSize: 0.7, lid: '#3f9a2c', iris: '#3a2414', irisLight: '#a8743c', blushAt: [0.25, 1.36, 0.3], blushR: 0.05, blushYaw: 0.7 },
   }),
   hero({
     id: 'panda',
@@ -403,7 +410,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     anims: ASTRO_ANIMS,
     emote: { clip: 'Spin', loop: true },
     attach: astroAttach(1.7, 0.08, 1.5, 0.3),
-    chibi: astroChibi('#fff1a8', '#e0609a', 1.4, undefined, 0.2),
+    // The collar ring sits below her thin neck (35% of the head-skinned part).
+    chibi: astroChibi('#fff1a8', '#e0609a', 1.4, undefined, 0.36),
     price: 15,
     signature: 'doubleJump',
     freePowers: ['glide', 'rainbowSlide'],
@@ -473,8 +481,8 @@ export const CHARACTERS: readonly CharacterDef[] = [
     freePowers: ['rainbowSlide', 'doubleJump'],
     emoteName: 'dance',
     cardColors: ['#ffe2c8', '#4a1f08'],
-    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c', mouthAt: [0, 0.95, 1.26], mouthW: 0.05, brow: 1.15 },
-    chibi: { ...pawsChibi(1.35, 0.62, 0.8), materials: { Grey: '#7a4a32' } },
+    face: { bone: 'Head', inIdle: true, eyeAt: [0.14, 1.2, 1.16], eyeR: 0.09, eyeYaw: 0.45, lid: '#f07a32', iris: '#2a160c', mouthAt: [0, 0.88, 1.24], mouthW: 0.05, brow: 1.15 },
+    chibi: { ...pawsChibi(1.35, 0.62, 0.8), materials: { Grey: '#7a4a32' }, sink: { Back: 0.27 } },
     springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
     smooth: true,
   }),
@@ -499,7 +507,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     emoteName: 'dance',
     cardColors: ['#fbe6f6', '#3e1d36'],
     face: { bone: 'Head', inIdle: true, eyeAt: [0.105, 1.84, 0.83], eyeR: 0.072, eyeYaw: 0.35, lid: '#fff4fb', iris: '#2a160c', mouthAt: [0, 1.68, 0.9], mouthW: 0.045 },
-    chibi: { ...pawsChibi(1.35, 0.62, 0.6), materials: { Muzzle: '#6e4a5e' } },
+    chibi: { ...pawsChibi(1.35, 0.62, 0.6), materials: { Muzzle: '#6e4a5e' }, sink: { Back: 0.3 } },
     springs: ['Tail1', 'Ear1.L', 'Ear1.R'],
     smooth: true,
   }),

@@ -243,8 +243,8 @@ export interface VaultModel {
   setStar(spin: number, y: number, scale: number): void;
   /** Pose the treasure star anywhere (door-local x, y, z): it flies out to the hero. */
   setStarAt(x: number, y: number, z: number, spin: number, scale: number): void;
-  /** Pose floor pad `i`'s cap: push-in depth (m), sideways shake (m) and look. */
-  setPad(i: number, push: number, shake: number, look: PadLook): void;
+  /** Pose floor pad `i`'s cap: push-in depth (m), sideways shake (m), look and dwell disc fill (0 hides it). */
+  setPad(i: number, push: number, shake: number, look: PadLook, fill?: number): void;
   /** Upload what changed this frame. */
   commit(): void;
   dispose(): void;
@@ -483,7 +483,10 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material, p
       PAD_LOOK.idle.surf,
     ),
   );
-  const all = [merge(fixed), merge(door), ...lamps, star, ...caps];
+  // Dwell discs (one per pad, posed on its cap): a dark disc grows from the middle while a step is
+  // being counted. Dark on the cream cap: reads by brightness in both eyes.
+  const discs = pads.map(() => surface(new THREE.CylinderGeometry(1, 1, 0.02, 32), 0x1c2340, { rough: 0.8, metal: 0 }));
+  const all = [merge(fixed), merge(door), ...lamps, star, ...caps, ...discs];
   const batch = new PartBatch(all);
   for (const g of [...fixed, ...door, ...all]) g.dispose();
   const mesh = new THREE.Mesh(batch.geometry, material);
@@ -516,10 +519,12 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material, p
     setStarAt(x, y, z, spin, scale) {
       batch.setMatrix(5, m.compose(p.set(x, y, z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
     },
-    setPad(i, push, shake, look) {
+    setPad(i, push, shake, look, fill = 0) {
       const c = padAt[i];
       if (!c) return;
       batch.setMatrix(6 + i, m.makeTranslation(shake, -push, 0));
+      const r = fill > 0 ? (V.padBaseR - 0.2) * Math.min(1, 0.15 + 0.85 * fill) : 0;
+      batch.setMatrix(6 + pads.length + i, m.compose(p.set(c.x + shake, c.y + 0.02 + V.padCapH + 0.012 - push, c.z), q.identity(), sc.set(r, 1, r)));
       if (padLook[i] !== look) {
         padLook[i] = look;
         batch.setColor(6 + i, PAD_LOOK[look].color);
@@ -530,6 +535,7 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material, p
     dispose: () => batch.dispose(),
   };
   model.setStar(0, STAR_Y, 1);
+  for (let i = 0; i < pads.length; i++) model.setPad(i, 0, 0, 'idle', 0);
   model.commit();
   return model;
 }

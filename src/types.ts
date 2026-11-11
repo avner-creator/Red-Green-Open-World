@@ -181,6 +181,11 @@ export interface GameEvents {
   'player:land': { speed: number };
   'player:flop': Record<string, never>;
   'player:respawn': Record<string, never>;
+  /**
+   * The hero got dizzy from mashing (a burst of presses during a carnival round): a short comic stun.
+   * `game` is the booth id, `seconds` the stun. For guide hints such as "slow and steady".
+   */
+  'player:dizzy': { source: 'carnival'; game: string; seconds: number };
   /** Glasses play: something only the weak eye (or both eyes together) could do was hit or missed. */
   'glasses:result': { mechanic: string; kind: GlassesKind; tier: GlassesTier; hit: boolean };
   /** The "Auto challenge" staircase moved or was reset. */
@@ -508,7 +513,9 @@ export type IconName =
   | 'bungee' | 'trampoline' | 'rocket' | 'hat' | 'cape' | 'glasses' | 'paint' | 'exit'
   | 'hand' | 'clock' | 'flop' | 'eye' | 'check'
   | 'megaGem' | 'combo' | 'shop' | 'ticket' | 'mission' | 'trail' | 'emote' | 'backpack' | 'character' | 'jackpot' | 'wallet'
-  | 'tent' | 'plane' | 'dragon' | 'cone' | 'flag' | 'bubble';
+  | 'tent' | 'plane' | 'dragon' | 'cone' | 'flag' | 'bubble'
+  /** A foot stepping onto a floor tile ("step on a tile"). */
+  | 'step';
 
 export interface Interactable {
   id: string;
