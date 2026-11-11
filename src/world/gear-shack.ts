@@ -469,6 +469,7 @@ export function createGearShackLive(mats: Materials, h: HeightFn): GearShackLive
     const n = pinGeo.attributes.position.count;
     pinGeo.setAttribute('aWave', new THREE.BufferAttribute(new Float32Array(n), 1));
     pins = new THREE.InstancedMesh(pinGeo, pinMat, wheels.length);
+    pins.userData.cameraIgnore = true; // spinning pinwheels
     pins.castShadow = true;
     group.add(pins);
   }

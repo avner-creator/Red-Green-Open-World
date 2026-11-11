@@ -404,6 +404,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         const near = d.length();
         const inner = firstHit(pivot, d.normalize(), near);
         const insideCrown = occluders.inside(camera.position, 0);
+        if (inner) hits.push(`inner:${inner.object.name || inner.object.type}@${inner.distance.toFixed(2)}`);
         return { blocked: blocked / pts.length, headHidden, inside: !!inner || insideCrown, insideCrown, near, hits };
       },
     };

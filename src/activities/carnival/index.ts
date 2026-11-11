@@ -207,6 +207,7 @@ export function createCarnival(ctx: GameContext): Carnival {
   const rowMat = kitMaterial();
   const rowMesh = new THREE.Mesh(row.kit.build(), rowMat);
   rowMesh.name = 'carnival-booths';
+  rowMesh.userData.cameraOccluder = true; // static: the chase camera stops at awnings and walls
   rowMesh.castShadow = false;
   rowMesh.receiveShadow = true;
   root.add(rowMesh);

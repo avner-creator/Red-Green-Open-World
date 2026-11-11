@@ -165,6 +165,13 @@ export function create(env: WeaveEnv): WeavePart {
 
     // Box colliders and the three identical prompts.
     const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    // The board (and its legs) is solid: the hero cannot walk into it and the chase camera stops
+    // at it instead of sitting inside it.
+    {
+      const top = yc + D.frame / 2;
+      const w = f.toWorld(x0 + 0.08, zc);
+      colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, baseY + top / 2, w.z), new THREE.Vector3(0.09, top / 2, D.frame / 2), rot));
+    }
     D.boxZ.forEach((z, i) => {
       const w = f.toWorld(D.boxX, z);
       colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, baseY + D.box / 2 + 0.07, w.z), new THREE.Vector3(D.box / 2 + 0.04, D.box / 2 + 0.07, D.box / 2 + 0.04), rot));
