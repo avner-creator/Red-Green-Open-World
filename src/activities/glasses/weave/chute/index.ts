@@ -59,6 +59,8 @@ export function create(env: WeaveEnv): WeavePart {
   let hits = 0;
   let misses = 0;
   let lastHoop: Outcome = null;
+  /** Test only: pin the gem to a world point (mirror check moves the hoop, not the gem). */
+  let gemPin: P3 | null = null;
   const chest = new THREE.Vector3();
   const prevChest = new THREE.Vector3();
   const vel = new THREE.Vector3();
@@ -181,7 +183,8 @@ export function create(env: WeaveEnv): WeavePart {
       hoop.setFade(hoopArmed ? 1 : hoopFade);
       const hp = withChallenge(hoopTier, env.challenge());
       const o = gemOffset(theta, R, orbitDir);
-      gem.position.set(hoopCenter.x + o.x, hoopCenter.y + 0.15, hoopCenter.z + o.z);
+      if (gemPin) gem.position.set(gemPin.x, gemPin.y + 0.15, gemPin.z);
+      else gem.position.set(hoopCenter.x + o.x, hoopCenter.y + 0.15, hoopCenter.z + o.z);
       gem.rotation.y = time * 1.4;
       let s = HOOP.gemScale * Math.max(0.7, hp.size);
       if (gemPop >= 0) {
@@ -254,6 +257,7 @@ export function create(env: WeaveEnv): WeavePart {
     kind: env.kind,
     reset() {
       deactivate();
+      gemPin = null;
       lastPhase = 'idle';
       ringTier = 1;
       hoopTier = 1;
@@ -348,6 +352,10 @@ export function create(env: WeaveEnv): WeavePart {
       if (typeof params.theta === 'number') theta = params.theta;
       if (typeof params.gemInside === 'boolean') theta = thetaFor(params.gemInside);
       if (typeof params.orbitDir === 'number') orbitDir = params.orbitDir;
+      if ('keepGemAt' in params) {
+        const k = params.keepGemAt as P3 | null;
+        gemPin = k && typeof k.x === 'number' ? { x: k.x, y: k.y, z: k.z } : null;
+      }
       const at = params.hoop as P3 | undefined;
       const ahead = params.hoopAhead;
       if ((at && typeof at.x === 'number') || typeof ahead === 'number') {

@@ -25,7 +25,7 @@ export const CHUTE = {
   perfectAt: 0.8,
   /** Ring look (metres): target ring round the hero, closing ring's start, line width. */
   ringRadius: 1.9,
-  ringStart: 5.2,
+  ringStart: 4.4,
   ringThickness: 0.34,
   /** Flash after a hit (on the weak layer): seconds. */
   flashSeconds: 0.9,
