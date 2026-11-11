@@ -81,6 +81,7 @@ test.describe('character select', () => {
     await settle(page, 'frog');
     await expect(page.getByTestId('csel-name')).toHaveText('HOPPER');
     await expect(page.getByTestId('csel-skill')).toHaveAttribute('data-skill', 'superBounce');
+    await expect(page.getByTestId('csel-wardrobe')).toBeVisible();
     await save(page, 'select-frog');
 
     // Browse with the keyboard (the focused chip is the selected one).
@@ -178,13 +179,15 @@ test.describe('character select', () => {
   });
 
   test('every hero offers 3+ free super powers; picking a new one is saved and works in play', async () => {
-    await page.evaluate(() => window.__rg!.ctx.session.toTitle());
+    // A fresh boot (the wipe at the end of the last test leaves menus mid-transition).
+    await page.reload();
+    await page.waitForFunction(() => window.__rg?.ready === true, undefined, { timeout: 90_000 });
+    await page.evaluate(() => window.__rg!.freeze(true));
     await step(page, 5);
     await page.getByTestId('title-hero').click();
-    await page.getByTestId('csel-frog').click();
     await settle(page, 'frog');
     // Wardrobe mount point is there for the dress-up system.
-    await expect(page.getByTestId('csel-wardrobe')).toBeVisible();
+    await expect(page.getByTestId('csel-wardrobe')).toBeAttached();
     const free = page.locator('[data-testid="csel-powers"] [data-state="free"]');
     expect(await free.count()).toBeGreaterThanOrEqual(3);
     await expect(page.getByTestId('csel-power-superBounce')).toHaveAttribute('aria-pressed', 'true');
