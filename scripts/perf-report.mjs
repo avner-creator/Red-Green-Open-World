@@ -153,6 +153,8 @@ try {
           airstrip: () => at(-12, 20, -12, 46),
           race: () => lookAt(A.raceStart, A.spawn.position, 12),
           icecream: () => lookAt(A.iceCream, A.spawn.position, 12),
+          // Plaza side of the Gear Shack (its gift board, the plaza chest and posts in view).
+          shack: () => lookAt(A.gearShack, A.spawn.position, 10),
           vault: () => {
             const d = window.__rgSecrets?.info().doors[0];
             if (d) lookAt({ position: { x: d.x, z: d.z } }, { x: d.x + Math.sin(d.yaw) * 20, z: d.z + Math.cos(d.yaw) * 20 }, 12);
