@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { patch, U } from '../materials';
+import type { Quality } from '../../types';
 
 export interface OuterLiveDefs {
   waterfall: THREE.BufferGeometry;
@@ -17,6 +18,8 @@ export interface OuterLiveDefs {
 export interface OuterLive {
   group: THREE.Group;
   update(t: number): void;
+  /** Low: skip the beam's draw while it is too faint to notice (golden hour). */
+  setQuality(q: Quality): void;
 }
 
 function waterMat(key: string, flow: string): THREE.MeshStandardMaterial {
@@ -173,9 +176,14 @@ export function createOuterLive(d: OuterLiveDefs): OuterLive {
   buoys.computeBoundingSphere();
 
   let last = -1;
+  let low = false;
   return {
     group,
+    setQuality(q) {
+      low = q === 'low';
+    },
     update(t) {
+      beam.visible = !low || U.glow.value > 0.15;
       beam.rotation.y = t * 0.45;
       wheel.rotation.z = -t * 1.6;
       // Buoys only need a refresh a few times a second.

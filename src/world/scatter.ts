@@ -421,7 +421,7 @@ export function buildScatter(
   group.name = 'scatter';
   const all = { low: 1, medium: 1, high: 1 };
   const inf = { low: 1e9, medium: 1e9, high: 1e9 };
-  const treeLod = { low: 32, medium: 62, high: 100 };
+  const treeLod = { low: 14, medium: 62, high: 100 };
   // Bushes and rocks on Low draw only their light mesh (one draw each instead of a near/far pair).
   const defs: SpeciesDef[] = [
     { name: 'oak', near: oakGeo(false), far: oakGeo(true), mat: mats.foliage, shadow: true, density: { low: 0.75, medium: 1, high: 1 }, lod: treeLod, max: inf, size: 4 },

@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import type { Quality } from '../types';
 import { STATIC_MAX_DIST } from './batch';
+import { clusterSimplify } from './simplify';
 
 /** Size classes by world bounding radius (m), the same as the static batcher's. */
 const CLASS_R = [0.3, 0.6, 1.5, 4] as const;
@@ -20,13 +21,43 @@ const CLASS_R = [0.3, 0.6, 1.5, 4] as const;
 const SKIP_ROOT = /^(world|player|pip|skill-|Vision\.)/;
 /**
  * Draw distance per size class. Medium/High: the static props' distances. Low trims every class and
- * also drops whole attraction shells (r ≥ 4 m) beyond 220 m, where the haze already softens them.
+ * also drops whole attraction shells (r ≥ 4 m) beyond 150 m, where the haze already softens them.
  */
 const MAX_DIST: Record<Quality, readonly number[]> = {
-  low: [220, 110, 70, 40, 28],
+  low: [150, 50, 40, 26, 18],
   medium: STATIC_MAX_DIST.medium,
   high: STATIC_MAX_DIST.high,
 };
+/**
+ * Big, heavy static meshes (attraction shells: booths, parlour, balloon envelope, arenas) swap to a
+ * vertex-clustered stand-in (`simplify.ts`) beyond `STAND_IN_DIST` metres (Low and Medium; High
+ * never). Up close they are the original mesh, so the close-up look never changes.
+ */
+const STAND_IN = { minTris: 2000, minR: 2.5, cells: 28 } as const;
+const STAND_IN_DIST: Record<Quality, number> = { low: 22, medium: 70, high: Infinity };
+/** Stand-ins per source geometry (shared geometries share their stand-in); null = not worth one. */
+const standIns = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry | null>();
+
+/** Can this mesh get a stand-in? Plain static meshes only (no skinning, morphs, dynamic attributes). */
+function standInOk(o: THREE.Object3D): boolean {
+  const m = o as THREE.Mesh;
+  if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh || Array.isArray(m.material)) return false;
+  const g = m.geometry;
+  if (g.morphAttributes.position || g.groups.length > 1) return false;
+  if (Object.values(g.attributes).some((a) => (a as THREE.BufferAttribute).usage !== undefined && (a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage)) return false;
+  const tris = g.index ? g.index.count / 3 : g.attributes.position.count / 3;
+  return tris >= STAND_IN.minTris;
+}
+
+function standInFor(g: THREE.BufferGeometry, r: number): THREE.BufferGeometry | null {
+  let s = standIns.get(g);
+  if (s === undefined) {
+    s = clusterSimplify(g, (2 * r) / STAND_IN.cells);
+    standIns.set(g, s);
+  }
+  return s;
+}
+
 /** Re-scan the scene for new objects this often (frames). */
 const RESCAN = 90;
 
@@ -43,6 +74,9 @@ interface Entry {
    * size class still comes from their own geometry.
    */
   site: Site | null;
+  /** Low stand-in: eligible, and the original geometry while the stand-in is shown. */
+  standIn: boolean;
+  original: THREE.BufferGeometry | null;
 }
 
 interface Site {
@@ -98,7 +132,7 @@ function collect(root: THREE.Object3D, seen: Set<THREE.Object3D>): void {
       let e = entries.get(o);
       if (!e) {
         const s = sphereOf(o);
-        if (s && Number.isFinite(s.radius)) entries.set(o, (e = { obj: o, mask: o.layers.mask, hidden: false, sphere: s, site: null }));
+        if (s && Number.isFinite(s.radius)) entries.set(o, (e = { obj: o, mask: o.layers.mask, hidden: false, sphere: s, site: null, standIn: o.frustumCulled && standInOk(o), original: null }));
       }
       if (e && o.frustumCulled === false) loose.push(e);
       else if (e && o.visible) {
@@ -110,6 +144,15 @@ function collect(root: THREE.Object3D, seen: Set<THREE.Object3D>): void {
   };
   walk(root);
   if (!loose.length) return;
+  if (_box.isEmpty()) {
+    // Only loose meshes (e.g. a root of instanced crowds): place them by their instances' bounds.
+    for (const e of loose) {
+      const inst = e.obj as THREE.InstancedMesh;
+      if (!inst.isInstancedMesh || inst.count === 0) continue;
+      inst.computeBoundingSphere();
+      if (inst.boundingSphere && Number.isFinite(inst.boundingSphere.radius)) _box.union(_sp.copy(inst.boundingSphere).applyMatrix4(inst.matrixWorld).getBoundingBox(_sb));
+    }
+  }
   if (_box.isEmpty()) {
     // No bounds to place them by: never hide them.
     for (const e of loose) {
@@ -123,8 +166,15 @@ function collect(root: THREE.Object3D, seen: Set<THREE.Object3D>): void {
   for (const e of loose) e.site = site;
 }
 
+function swapBack(e: Entry): void {
+  if (!e.original) return;
+  (e.obj as THREE.Mesh).geometry = e.original;
+  e.original = null;
+}
+
 let frame = RESCAN;
 const lastCam = new THREE.Vector3(1e9, 0, 0);
+let lastQuality: Quality | null = null;
 const cam = new THREE.Vector3();
 const c = new THREE.Vector3();
 
@@ -145,6 +195,7 @@ export function updateFarLod(scene: THREE.Scene, camera: THREE.Camera, quality: 
     for (const [o, e] of entries) {
       if (seen.has(o)) continue;
       if (e.hidden) o.layers.mask = e.mask;
+      swapBack(e);
       entries.delete(o);
     }
   }
@@ -152,6 +203,10 @@ export function updateFarLod(scene: THREE.Scene, camera: THREE.Camera, quality: 
   if (!force && cam.distanceToSquared(lastCam) < 1 && frame % 15 !== 0) return;
   lastCam.copy(cam);
   const maxD = MAX_DIST[quality];
+  if (quality !== lastQuality) {
+    lastQuality = quality;
+    for (const e of entries.values()) swapBack(e);
+  }
   for (const e of entries.values()) {
     const o = e.obj;
     const r = e.sphere.radius * o.matrixWorld.getMaxScaleOnAxis();
@@ -160,6 +215,17 @@ export function updateFarLod(scene: THREE.Scene, camera: THREE.Camera, quality: 
     let d: number;
     if (e.site) d = c.copy(e.site.center).applyMatrix4(e.site.root.matrixWorld).distanceTo(cam) - e.site.r;
     else d = c.copy(e.sphere.center).applyMatrix4(o.matrixWorld).distanceTo(cam) - r;
+    const sd = STAND_IN_DIST[quality];
+    if (e.standIn && sd < Infinity) {
+      const mesh = o as THREE.Mesh;
+      if (d > sd && r >= STAND_IN.minR && !e.original) {
+        const low = standInFor(mesh.geometry, e.sphere.radius);
+        if (low) {
+          e.original = mesh.geometry;
+          mesh.geometry = low;
+        } else e.standIn = false;
+      } else if (d < sd - 5) swapBack(e);
+    }
     const far = d > maxD[cls];
     if (far === e.hidden) continue;
     if (far) {
