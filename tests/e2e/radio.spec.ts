@@ -15,6 +15,7 @@ test('radio: M cycles three different stations, chip shows, survives reload', as
   expect(audioRequests).toEqual([]);
 
   await startGame(page);
+  await page.evaluate(() => window.__rg?.step(1 / 60, 3, false)); // let the UI see the phase
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('data-station', 'auto');
 
