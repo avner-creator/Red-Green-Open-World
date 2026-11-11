@@ -18,6 +18,15 @@ import { STATIC_MAX_DIST } from './batch';
 const CLASS_R = [0.3, 0.6, 1.5, 4] as const;
 /** Top-level objects never touched. */
 const SKIP_ROOT = /^(world|player|pip|skill-|Vision\.)/;
+/**
+ * Draw distance per size class. Medium/High: the static props' distances. Low trims every class and
+ * also drops whole attraction shells (r ≥ 4 m) beyond 220 m, where the haze already softens them.
+ */
+const MAX_DIST: Record<Quality, readonly number[]> = {
+  low: [220, 110, 70, 40, 28],
+  medium: STATIC_MAX_DIST.medium,
+  high: STATIC_MAX_DIST.high,
+};
 /** Re-scan the scene for new objects this often (frames). */
 const RESCAN = 90;
 
@@ -138,7 +147,7 @@ export function updateFarLod(scene: THREE.Scene, camera: THREE.Camera, quality: 
   // Moving things (rival buggies, the dragon) need a refresh too, but a few frames late is fine.
   if (!force && cam.distanceToSquared(lastCam) < 1 && frame % 15 !== 0) return;
   lastCam.copy(cam);
-  const maxD = STATIC_MAX_DIST[quality];
+  const maxD = MAX_DIST[quality];
   for (const e of entries.values()) {
     const o = e.obj;
     const r = e.sphere.radius * o.matrixWorld.getMaxScaleOnAxis();
