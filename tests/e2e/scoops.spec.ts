@@ -104,10 +104,16 @@ test('a full round: build, find the secret, chomp, get an effect, back in walk m
   const jar = s.build!.secretJar;
   expect(jar).toBeGreaterThanOrEqual(0);
   expect(await page.evaluate(() => window.__rgScoops!.secretWorld())).not.toBeNull();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    window.__rg!.ctx.events.on('glasses:result', (e) => seen.push(`${e.mechanic}:${e.hit}`));
+    (window as unknown as { __scGlasses: string[] }).__scGlasses = seen;
+  });
   await selectTile(s.tiles.findIndex((t) => t.kind === 'jar' && t.index === jar));
   await press({ jumpPressed: true }, 4);
   s = await info();
   expect(s.build!.secret).toBe(true);
+  expect(await page.evaluate(() => (window as unknown as { __scGlasses: string[] }).__scGlasses.slice())).toEqual(['scoopsSecret:true']);
   expect(s.build!.toppings).toEqual(['pickle']);
   // Eat (E), watch the chomp, hop back out.
   await press({ usePressed: true }, 10);

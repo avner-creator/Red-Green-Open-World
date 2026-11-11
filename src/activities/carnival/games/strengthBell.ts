@@ -311,6 +311,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
       ctx.audio.play('star', { volume: i === 0 ? 0.9 : 0.5, pitch: 2.4 });
       ctx.audio.play('bigBoing', { volume: i === 0 ? 0.5 : 0.25, pitch: 1.6 });
       if (i === 0) {
+        ctx.events.emit('glasses:result', { mechanic: 'bellSweet', kind: 'timeIt', tier: 2, hit: true });
         fx.burst(world, 50);
         r.keeperCheer(true);
         r.playerAct('cheer', 1.1);
@@ -321,6 +322,7 @@ export function createStrengthBell(env: GameEnv): BoothGame {
     } else {
       ctx.audio.play('tick', { volume: 0.4, pitch: 0.8 + tierOf(tw.power) * 0.15 });
       if (i === 0 && tierOf(tw.power) >= 4) r.keeperCheer();
+      if (i === 0) ctx.events.emit('glasses:result', { mechanic: 'bellSweet', kind: 'timeIt', tier: 2, hit: false });
     }
   };
 

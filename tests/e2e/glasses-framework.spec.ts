@@ -66,9 +66,11 @@ test('the sites are the fixed table: on land, nothing standing on them, off anch
   });
   console.log(sites.map((s) => `${s.id} (${s.x}, ${s.y.toFixed(1)}, ${s.z}) yaw ${s.yaw} near ${s.near}`).join('\n'));
   for (const r of world.rows) expect(r.land, `${r.id} on land`).toBe(true);
+  // `valid` = the startup probe found no collider, trunk or building on the site (before its own
+  // props); `problem` says what blocks it. Re-site it with `__rgGlasses.search` (see sites.ts).
+  const blocked = sites.filter((s) => !s.valid).map((s) => `${s.id} at (${s.x}, ${s.z}): ${s.problem ?? '?'}`);
+  expect(blocked, `fixed glasses sites blocked by the world:\n${blocked.join('\n')}`).toEqual([]);
   for (const s of sites) {
-    // `valid` = the startup probe found no collider, trunk or building on the site (before its own props).
-    expect(s.valid, `${s.id}: nothing stands on the site`).toBe(true);
     for (const a of world.anchors) {
       expect(Math.hypot(s.x - a.x, s.z - a.z), `${s.id} vs anchor ${a.name}`).toBeGreaterThanOrEqual(a.r + s.radius);
       if (a.t) expect(Math.hypot(s.x - a.t.x, s.z - a.t.z), `${s.id} vs ${a.name} target`).toBeGreaterThanOrEqual(a.t.r + s.radius);
@@ -152,6 +154,47 @@ test('proof helpers: channel isolation, answer blindness, on throwaway layer obj
   };
   await expectAnswerBlindWithoutWeakEye(page, { setA: place(-1.5), setB: place(1.5), label: 'test answer' });
   await page.evaluate(() => window.__rgVision!.removeTestObjects());
+});
+
+test('the weave boots with its six parts, all idle (zero draws) away from their attractions', async () => {
+  const w = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const world = ctx.world;
+    const weave = window.__rgGlasses!.weave!;
+    // Stand on land far from every attraction anchor (Gear Shack, trampoline, race, balloon…) and
+    // from every spot of the `fakes` part; skill ready, no combo, not riding.
+    const fakeSpots = ((weave.debug('fakes').spots ?? []) as { x: number; z: number }[]).map((s) => ({ x: s.x, z: s.z, r: 35 }));
+    const keepClear = [...Object.values(world.anchors).map((a) => ({ x: a.position.x, z: a.position.z, r: a.radius + 40 })), ...fakeSpots];
+    let spot: { x: number; z: number } | null = null;
+    for (let ring = 20; ring <= 200 && !spot; ring += 10) {
+      for (let k = 0; k < 36 && !spot; k++) {
+        const a = (k / 36) * Math.PI * 2;
+        const x = Math.sin(a) * ring;
+        const z = Math.cos(a) * ring;
+        if (!world.isLand(x, z) || world.heightAt(x, z) < world.waterLevel + 1) continue;
+        if (keepClear.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue;
+        spot = { x, z };
+      }
+    }
+    if (spot) rg.teleport(spot.x, world.heightAt(spot.x, spot.z) + 0.1, spot.z);
+    rg.step(1 / 60, 240, false); // land, let any combo / skill hold run out
+    rg.step(1 / 60, 2, false);
+    return {
+      spot,
+      mode: ctx.player.mode,
+      ready: ctx.player.skill.ready,
+      combo: ctx.economy.combo.multiplier,
+      parts: weave.ids().map((id) => ({ id, draws: weave.draws(id), debug: weave.debug(id) })),
+    };
+  });
+  expect(w.spot, 'a free spot').not.toBeNull();
+  expect(w).toMatchObject({ mode: 'walk', ready: true, combo: 1 });
+  expect(w.parts.map((p) => p.id)).toEqual(['bounce', 'chute', 'hero', 'boost', 'fakes', 'shack']);
+  for (const p of w.parts) {
+    expect(p.draws, `${p.id} draws`).toBe(0);
+    expect(p.debug, `${p.id} debug`).toBeTruthy();
+  }
 });
 
 test('no errors', async () => {

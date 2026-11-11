@@ -79,10 +79,10 @@ export const BOARD_SLOTS: readonly (readonly [number, number])[] = [
  * header for how they were chosen and checked.
  */
 export const FIXED_SITES: readonly FixedSite[] = [
-  { id: 'glowflies', x: -40.7, z: 73.2, yaw: 2.58, slot: 1, near: 'spawn', playRadius: 9 },
-  { id: 'oddone', x: -47.4, z: -2.2, yaw: 1.34, slot: 1, near: 'spawn' },
+  { id: 'glowflies', x: -68.8, z: 18.8, yaw: 0.7, slot: 1, near: 'ranch', playRadius: 9 },
+  { id: 'oddone', x: -36.5, z: 3, yaw: 0.46, slot: 0, near: 'spawn' },
   { id: 'lineup', x: 71.7, z: -89.5, yaw: -0.63, slot: 0, near: 'bungee' },
-  { id: 'toys', x: -50, z: 13, yaw: 1.63, slot: 0, near: 'spawn' },
+  { id: 'toys', x: -30.5, z: 69.7, yaw: 1.57, slot: 0, near: 'airstrip' },
   { id: 'gates', x: 48, z: 104, yaw: -2.67, slot: 0, near: 'balloon' },
   { id: 'dotsigns', x: 64, z: 8, yaw: -1.56, slot: 1, near: 'launchPads' },
 ];

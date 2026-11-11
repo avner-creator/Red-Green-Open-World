@@ -310,6 +310,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         sfx('jump', 0.8);
         break;
       case 'land':
+        if (ev.kind === 'tile' || ev.kind === 'stone') ctx.events.emit('glasses:result', { mechanic: 'foamSecret', kind: 'find', tier: ev.kind === 'tile' ? 2 : 1, hit: true });
         if (ev.speed > 2) {
           const soft = ev.kind === 'float' || ev.kind === 'plank' || ev.kind === 'block';
           sfx(soft ? 'boing' : 'land', Math.min(1, 0.4 + ev.speed / 10), soft ? 1.2 : 1);

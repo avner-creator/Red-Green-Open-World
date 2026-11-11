@@ -254,6 +254,8 @@ test('friendly dragon: feed a treat, ride, treasure at speed, glide home, land o
     rg.step(1 / 60, 1, false);
     rg.inject(null);
     const phases: string[] = [sky.dragon.phase];
+    const glasses: string[] = [];
+    const offGlasses = ctx.events.on('glasses:result', (e) => glasses.push(`${e.mechanic}:${e.hit}`));
     let treasureTest: { before: number; after: number } | null = null;
     let maxAgl = 0;
     const dt = 1 / 30;
@@ -280,10 +282,12 @@ test('friendly dragon: feed a treat, ride, treasure at speed, glide home, land o
       if (phases[phases.length - 1] !== sky.dragon.phase) phases.push(sky.dragon.phase);
     }
     rg.step(1 / 60, 20, false);
+    offGlasses();
     const p = ctx.player.position;
     return {
       focus,
       phases,
+      glasses,
       treasureTest,
       maxAgl,
       befriended: sky.dragon.befriended,
@@ -300,6 +304,7 @@ test('friendly dragon: feed a treat, ride, treasure at speed, glide home, land o
   expect(r.focus).toBe('sky-dragon');
   expect(r.phases).toEqual(['feed', 'mount', 'launch', 'tour', 'return', 'land', 'dismount', 'idle']);
   expect(r.treasureTest!.after).toBeGreaterThan(r.treasureTest!.before);
+  expect(r.glasses).toContain('dragonTreasure:true');
   expect(r.maxAgl).toBeGreaterThan(12);
   expect(r.befriended).toBe(true);
   expect(r.last).not.toBeNull();

@@ -311,6 +311,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
     cloudsPopped++;
     weakSparks.burst(c.x, c.y, c.z, 16, 9, 0.9, 0.5);
     ctx.audio.play('boing', { pitch: 1.6, volume: 0.8 });
+    ctx.events.emit('glasses:result', { mechanic: 'dragonGolden', kind: 'find', tier: 1, hit: true });
     payPrize(ctx, 2, 'gem');
     hud.pop('cloud', '+2');
     roar();
@@ -363,6 +364,7 @@ export function createDragonRide(ctx: GameContext, hud: SkyHud): DragonRide {
         const p = treasureSpots[i];
         weakSparks.burst(p.x, p.y, p.z, 10, 7, 0.6, 0.45);
         ctx.audio.play('gem', { pitch: 1 + Math.min(0.8, treasure * 0.04) });
+        ctx.events.emit('glasses:result', { mechanic: 'dragonTreasure', kind: 'follow', tier: 1, hit: true });
         payPrize(ctx, 1, 'gem');
       }
     }

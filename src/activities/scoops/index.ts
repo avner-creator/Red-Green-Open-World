@@ -359,6 +359,7 @@ export function createScoops(ctx: GameContext): Scoops {
         jarAnim[res.index].wobble = 1;
         secret.onCone(coneView.topWorld(secretTop));
         ctx.audio.play('key', { pitch: 1.2 });
+        ctx.events.emit('glasses:result', { mechanic: 'scoopsSecret', kind: 'read', tier: 1, hit: true });
         friends.react('cheer');
         break;
       case 'jarWrong':
@@ -366,6 +367,7 @@ export function createScoops(ctx: GameContext): Scoops {
         jarAnim[res.index].wobble = 1;
         ctx.audio.play('bump', { pitch: 1.4, volume: 0.6 });
         ctx.audio.play('tick', { pitch: 0.8 });
+        ctx.events.emit('glasses:result', { mechanic: 'scoopsSecret', kind: 'read', tier: 1, hit: false });
         placeSecret();
         break;
       case 'stage':

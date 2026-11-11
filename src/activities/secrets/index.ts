@@ -301,6 +301,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     ctx.audio.play('fanfare');
     ctx.audio.play('star', { pitch: 1.2 });
     ctx.cameraRig.shake(0.15);
+    ctx.events.emit('glasses:result', { mechanic: 'secretPath', kind: 'follow', tier: 2, hit: true });
   }
 
   function updatePaths(dt: number, playing: boolean): void {
@@ -472,10 +473,12 @@ export function createSecrets(ctx: GameContext): Secrets {
     if (r === 'correct') {
       ctx.audio.play('star', { pitch: 0.9 + 0.2 * d.lock.progress, volume: 0.8 });
       ctx.audio.play('click');
+      ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 1, hit: true });
     } else if (r === 'wrong') {
       d.wobble = 1;
       ctx.audio.play('click');
       ctx.audio.play('boing', { pitch: 0.7, volume: 0.6 });
+      ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 1, hit: false });
     } else if (r === 'opened') {
       d.openT = 0.001;
       removeCollider(d.doorCollider);
@@ -483,6 +486,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       ctx.audio.play('chest');
       ctx.audio.play('fanfare');
       ctx.cameraRig.shake(0.25);
+      ctx.events.emit('glasses:result', { mechanic: 'vaultDoor', kind: 'lineUp', tier: 3, hit: true });
     }
     setLamps(d);
   }

@@ -231,6 +231,7 @@ export function createDuckPond(env: GameEnv): BoothGame {
         points += LUCKY_POINTS;
         env.toWorld(p.set(list[i].x, waterY + 0.25, list[i].z));
         fx.weakPop(p, 0.3, 12);
+        ctx.events.emit('glasses:result', { mechanic: 'luckyDuck', kind: 'find', tier: 1, hit: true });
         // The luck moves to another duck (a new hunt for the weak eye).
         d.lucky = false;
         const free = ducks.map((q, j) => (q.state === 'swim' && !q.lucky ? j : -1)).filter((j) => j >= 0);
