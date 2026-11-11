@@ -6,7 +6,7 @@ export const LINEUP = {
    * Start pad = aim pad, site-local (x right, z towards the approach); bubbles float towards −Z.
    * `radius` is the kit pad's radius (the hero counts as on it within radius + 0.2).
    */
-  pad: { x: 0, z: -1.0, radius: 1.1 },
+  pad: { x: 0, z: 1.8, radius: 1.1 },
   bubble: {
     /** Bubble slots (tier 3 shows two at once, tiers 1–2 one). */
     slots: 2,
@@ -32,7 +32,9 @@ export const LINEUP = {
     boothSideMax: 20,
     distances: [6.5, 8.5, 10.5],
     heights: [1.8, 2.4, 3.0, 3.6],
-    screen: { x0: 0.24, x1: 0.76, y0: 0.12, y1: 0.4 },
+    screen: { x0: 0.24, x1: 0.76, y0: 0.18, y1: 0.42 },
+    /** Width of the screen strip on the booth's side kept for the play prompt (no bubbles there). */
+    promptSide: 0.15,
     /** Free space needed behind a bubble along the sightline (no wall/tree right behind it). */
     behind: 5,
     /** Bubbles keep this far apart, as seen from the pad (degrees). */
@@ -75,7 +77,7 @@ export const LINEUP_RULES: RoundRules = {
  */
 export function lineupBooth(side: -1 | 1): BoothSpec {
   const mx = 3.4 * side;
-  const mz = -3.0;
+  const mz = LINEUP.pad.z - 2.0;
   const camZ = LINEUP.pad.z + LINEUP.cameraBack;
   return {
     marquee: { x: mx, z: mz, yaw: Math.atan2(LINEUP.pad.x - mx, camZ - mz) },

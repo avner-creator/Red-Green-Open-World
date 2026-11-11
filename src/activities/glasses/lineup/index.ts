@@ -31,7 +31,7 @@ import type { V3 } from './aim';
 import { LINEUP, LINEUP_RULES, lineupBooth } from './constants';
 import { LINEUP_DEMO } from './demo';
 import { LineupGame } from './game';
-import { chooseLineupLayout, lineupPrompt, LINEUP_LOOK } from './layout';
+import { bubbleBand, chooseLineupLayout, lineupPrompt, LINEUP_LOOK } from './layout';
 import { createBubbles, createHoop } from './visuals';
 
 const DEG = Math.PI / 180;
@@ -141,6 +141,7 @@ export function create(env: MechanicEnv): Mechanic {
 
   function findSpots(): THREE.Vector3[] {
     const out: THREE.Vector3[] = [];
+    const band = bubbleBand(side);
     const S = LINEUP.spots;
     const dir = new THREE.Vector3();
     for (const d of S.distances) {
@@ -154,7 +155,7 @@ export function create(env: MechanicEnv): Mechanic {
           // Well inside the default picture from the pad (16:9 and 4:3), above the hero.
           if (!padCams.every((c) => {
             const q = screenPoint(p, c);
-            return !!q && q.x >= S.screen.x0 && q.x <= S.screen.x1 && q.y >= S.screen.y0 && q.y <= S.screen.y1;
+            return !!q && q.x >= band.x0 && q.x <= band.x1 && q.y >= band.y0 && q.y <= band.y1;
           })) continue;
           // Nothing (the booth, a tree) between the pad camera and the bubble.
           dir.subVectors(p, padCams[0].position);
@@ -377,6 +378,22 @@ export function create(env: MechanicEnv): Mechanic {
         bubbles: game.bubbles.map((b, i) => ({ state: b.state, age: b.age, tier: b.tier, pos: [slot[i].pos.x, slot[i].pos.y, slot[i].pos.z], radius: slot[i].radius })),
         ring: [ringPos.x, ringPos.y, ringPos.z],
         ringRadius,
+        // Where the live bubbles and the ring are in the picture (0..1, y down; r = radius / height).
+        screen: (() => {
+          const cam = ctx.camera;
+          cam.updateMatrixWorld();
+          const proj = (p: THREE.Vector3, r: number): { x: number; y: number; r: number } | null => {
+            const v = p.clone().project(cam);
+            if (v.z > 1) return null;
+            const d = p.distanceTo(cam.position);
+            return { x: v.x * 0.5 + 0.5, y: 0.5 - v.y * 0.5, r: r / (2 * d * Math.tan(THREE.MathUtils.degToRad((cam as THREE.PerspectiveCamera).fov / 2))) };
+          };
+          return {
+            bubbles: game.bubbles.map((b, i) => (b.state === 'live' || b.state === 'in' ? proj(slot[i].pos, slot[i].radius) : null)),
+            ring: proj(ringPos, ringRadius),
+          };
+        })(),
+        promptFits: promptPick.fits,
         inside: inside(),
         presses: game.presses,
         pops: game.pops,

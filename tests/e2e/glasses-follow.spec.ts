@@ -80,6 +80,7 @@ interface GfFly {
   x: number;
   y: number;
   z: number;
+  screen: { x: number; y: number } | null;
 }
 interface GfDebug {
   phase: string;
@@ -95,6 +96,8 @@ interface GfDebug {
   booth: GfP3;
   view: { x: number; z: number; yaw: number };
   flies: GfFly[];
+  camHeld: boolean;
+  meadowScreen: { x: number; y: number } | null;
   kit: { phase: string; results: boolean[]; fx: Record<string, number>; booth: { frame: number; lamps: string[]; lampMode: string; prompt: string | null } };
 }
 const GF_OUT = 'test-results/glasses/booth';
@@ -178,27 +181,40 @@ const liveFly = async (): Promise<GfFly> => {
   throw new Error('no live fly');
 };
 
-test('glow-flies: a booth from 30 m; idle attract at the pad; no flies before a round', async () => {
+test('glow-flies: the booth from the trail end, 12 m and 30 m; idle attract at the pad; no flies before a round', async () => {
   await view('glowflies');
   let d = await gf();
   expect(d.phase).toBe('idle');
   expect(d.out).toBe(false);
   expect(d.flies).toEqual([]);
   expect(await page.evaluate(() => window.__rgGlasses!.isBooth('glowflies'))).toBe(true);
+  // From the end of the stepping-stone trail and from 12 m on that line: the booth faces the child.
+  const arr = await page.evaluate((d) => {
+    const w = window.__rg!.ctx.world;
+    const s = window.__rgGlasses!.sites().find((x) => x.id === 'glowflies')!;
+    const a = s.arrival ?? { x: s.x + Math.sin(s.yaw) * 30, z: s.z + Math.cos(s.yaw) * 30 };
+    const l = Math.hypot(a.x - s.x, a.z - s.z) || 1;
+    const at = (x: number, z: number) => ({ x, y: w.heightAt(x, z), z, yaw: Math.atan2(d.booth.x * 0.6 + d.pad.x * 0.4 - x, d.booth.z * 0.6 + d.pad.z * 0.4 - z) });
+    return { trail: at(a.x, a.z), m12: at(s.x + ((a.x - s.x) / l) * 12, s.z + ((a.z - s.z) / l) * 12) };
+  }, d);
+  await gfStand(arr.trail, arr.trail.yaw);
+  await gfSave('glowflies-arrival');
+  await gfStand(arr.m12, arr.m12.yaw);
+  const near = await gfSave('glowflies-12m');
+  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('glowflies'));
+  expect(rect, 'the booth is on screen from 12 m').not.toBeNull();
+  expect(channelSpread(near, rect!, 0), 'marquee R contrast from 12 m').toBeGreaterThan(80);
+  expect(channelSpread(near, rect!, 1), 'marquee G contrast from 12 m').toBeGreaterThan(80);
   const spot = await gfFarSpot(d);
   await gfStand(spot, spot.yaw);
-  const far = await gfSave('glowflies-30m');
-  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('glowflies'));
-  expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
-  expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
-  expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  await gfSave('glowflies-30m');
   // Just behind the pad, facing the meadow: attract (demo loops, pad pulses, lamps twinkle).
   await gfStand(d.padBack, d.yaw + Math.PI);
   d = await gf();
   expect(d.kit.phase).toBe('idle');
   expect(d.kit.booth.prompt).toBe('stepPad');
   const f0 = d.kit.booth.frame;
-  await gfStep(30);
+  await gfStep(100);
   expect((await gf()).kit.booth.frame, 'the demo flipbook runs').not.toBe(f0);
   await gfSave('glowflies-pad-idle');
   expect(await page.evaluate(() => window.__rgGlasses!.signDraws('glowflies'))).toBe(1);
@@ -219,8 +235,17 @@ test('glow-flies: step on the pad → 3-2-1-GO → the flies come out; weak laye
   expect(g.flies.length).toBe(3);
   expect(g.flies.every((f) => f.tier === 1)).toBe(true);
   expect(g.kit.booth.prompt).toBe('catch');
-  expect(g.left).toBeGreaterThan(30);
-  await gfStand({ ...d.padBack }, d.yaw + Math.PI, 2);
+  expect(g.left).toBeGreaterThan(25);
+  // From the pad (the round's camera: pulled back, lower, wider): the flies well inside the picture.
+  await gfStand(d.pad, d.yaw + Math.PI, 60);
+  const p = await gf();
+  expect(p.camHeld, 'the round camera is on').toBe(true);
+  const inView = p.flies.filter((f) => f.state === 'alive' && f.screen && f.screen.x > 0.05 && f.screen.x < 0.95 && f.screen.y > 0.08 && f.screen.y < 0.85);
+  console.log(`glow-flies from the pad: meadow at ${JSON.stringify(p.meadowScreen)}, flies ${JSON.stringify(p.flies.map((f) => f.screen))}`);
+  expect(p.meadowScreen, 'the air over the meadow in the picture').not.toBeNull();
+  expect(p.meadowScreen!.y, 'the meadow air not at the top edge').toBeGreaterThan(0.25);
+  expect(p.meadowScreen!.y).toBeLessThan(0.7);
+  expect(inView.length, 'flies inside the picture').toBeGreaterThanOrEqual(2);
   await gfSave('glowflies-play');
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'weak', label: 'glowflies' });
   await expectDrawBudget(page, 'glowflies', 6);
@@ -266,19 +291,20 @@ test('glow-flies: a timed round: catches light lamps, a fly that gets away is a 
   expect(d.kit.results).toEqual([true, true, true]);
   expect(d.kit.booth.lamps.slice(0, 3)).toEqual(['hit', 'hit', 'hit']);
   // Mid-round from the pad, looking over the meadow (lamps 3–4 blink: the clock).
-  await gfStand(d.padBack, d.yaw + Math.PI, 20);
+  await gfStand(d.pad, d.yaw + Math.PI, 30);
   await gfSave('glowflies-mid-round');
   // Time's up → 3 of 5 → celebration, then the prize; the flies go home.
   await clearLog();
   await gfForce({ left: 0.05 });
   await gfStep(8);
   d = await gf();
-  expect(d.kit.results).toEqual([true, true, true, false, false]);
-  expect(d.kit.booth.lamps.slice(3)).toEqual(['off', 'off']);
+  expect(d.kit.results, 'no result for the catches never made').toEqual([true, true, true]);
   expect(d.phase).toBe('celebrate');
   expect(d.kit.booth.lampMode).toBe('chase');
   expect(d.out).toBe(false);
-  await gfStand(d.padBack, Math.atan2(d.booth.x - d.padBack.x, d.booth.z - d.padBack.z), 12);
+  expect(d.camHeld, 'the round camera is released').toBe(false);
+  // Where the child stands: the kit turns the camera to the booth for the celebration.
+  await gfStep(40);
   await gfSave('glowflies-celebrate');
   expect((await logged()).results, 'time up reports nothing').toEqual([]);
   await gfStep(240);

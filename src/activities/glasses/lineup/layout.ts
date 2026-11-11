@@ -18,6 +18,15 @@ import { LINEUP, lineupBooth } from './constants';
 /** The play's focus from the pad (layout-local): the middle of the bubbles' sky. */
 export const LINEUP_LOOK = { x: 0, z: LINEUP.pad.z - 9 } as const;
 
+/**
+ * The screen box (pad camera, 0..1, y down) where bubbles may float: the spots' box, minus the
+ * booth's side of the picture, which the play prompt uses.
+ */
+export function bubbleBand(side: -1 | 1): { x0: number; x1: number; y0: number; y1: number } {
+  const S = LINEUP.spots.screen;
+  return side > 0 ? { ...S, x1: S.x1 - LINEUP.spots.promptSide } : { ...S, x0: S.x0 + LINEUP.spots.promptSide };
+}
+
 /** Frame-local footprint points of the marquee for a side (centre, poles, counter). */
 export function boothFootprint(side: -1 | 1): { x: number; z: number }[] {
   const m = lineupBooth(side).marquee;
@@ -75,21 +84,26 @@ export function lineupPrompt(side: -1 | 1, ground: (x: number, z: number) => num
   const padY = ground(P.x, P.z);
   const pad = { x: P.x, y: padY + PAD_TOP, z: P.z };
   const size = LINEUP.promptSize + 0.3;
-  const below = (p: V3): boolean =>
+  // On the booth's side of the picture, outside the band where bubbles may float (`bubbleBand`).
+  const band = bubbleBand(side);
+  const beside = (p: V3): boolean =>
     ASPECTS.every((aspect) => {
       const r = screenRect(p, size, padCamera(pad, LINEUP_LOOK, aspect));
-      return !!r && r.y0 >= LINEUP.spots.screen.y1;
+      // …and below the top-corner HUD chips (Fun Pass, timer), which reach 38 % down at 640×360.
+      return !!r && (side > 0 ? r.x0 >= band.x1 : r.x1 <= band.x0) && r.y0 >= 0.4;
     });
   const cands: V3[] = [];
-  for (const z of [P.z - 1.2, P.z - 2, P.z - 0.6, P.z - 2.8]) {
-    for (const x of [1.7, 2.1, 1.4, 2.5]) {
-      for (const h of [1.4, 1.1, 1.7, 2.0]) {
+  for (const z of [P.z - 2, P.z - 2.8, P.z - 1.2, P.z - 3.6]) {
+    for (const x of [2.5, 2.9, 2.1, 3.3, 1.7]) {
+      for (const h of [1.4, 1.7, 1.1, 2.0, 0.9]) {
         const p = { x: side * x, y: ground(side * x, z) + h, z };
-        if (below(p)) cands.push(p);
+        if (beside(p)) cands.push(p);
       }
     }
   }
-  if (!cands.length) cands.push({ x: side * 1.7, y: padY + 1.4, z: P.z - 1.2 });
+  if (!cands.length) cands.push({ x: side * 2.5, y: padY + 2.0, z: P.z - 2 });
   const popAt = { x: P.x - side * LINEUP.popSide, y: padY + LINEUP.popY, z: P.z + 0.4 };
-  return pickPromptSpot(cands, { pad, look: LINEUP_LOOK, size, keepClear: [{ p: popAt, size: 1.2 }] });
+  // Also clear of the HUD's own "Use" label, drawn where the tap interactable sits (pad + 0.9 m).
+  const useLabel = { p: { x: P.x, y: padY + 0.9, z: P.z }, size: 2.6 };
+  return pickPromptSpot(cands, { pad, look: LINEUP_LOOK, size, keepClear: [{ p: popAt, size: 1.2 }, useLabel] });
 }

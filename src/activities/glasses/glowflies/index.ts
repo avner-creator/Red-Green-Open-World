@@ -418,8 +418,17 @@ export function create(env: MechanicEnv): Mechanic {
         layoutProblems: layout.problems,
         flies: (swarm?.flies ?? []).map((f) => {
           const at = (swarm as Swarm).position(f);
-          return { slot: f.slot, tier: f.tier, state: f.state, age: f.age, life: f.life, x: at.x, y: at.y, z: at.z };
+          // Where it is in the picture (0..1, y down; null behind the camera).
+          const v = new THREE.Vector3(at.x, at.y, at.z).project(ctx.camera);
+          const screen = v.z > 1 ? null : { x: v.x * 0.5 + 0.5, y: 0.5 - v.y * 0.5 };
+          return { slot: f.slot, tier: f.tier, state: f.state, age: f.age, life: f.life, x: at.x, y: at.y, z: at.z, screen };
         }),
+        /** The middle of the meadow at fly height in the picture (0..1, y down). */
+        meadowScreen: (() => {
+          const w = siteToWorld(layout, 0, 0);
+          const v = new THREE.Vector3(w.x, env.groundAt(w.x, w.z) + (FLIES.minHeight + FLIES.maxHeight) / 2, w.z).project(ctx.camera);
+          return v.z > 1 ? null : { x: v.x * 0.5 + 0.5, y: 0.5 - v.y * 0.5 };
+        })(),
       };
     },
     force(params) {

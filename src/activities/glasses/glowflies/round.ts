@@ -113,10 +113,19 @@ export const FLY_PROMPT_SIZE = 1.3;
  */
 export function flyPrompt(ground: (x: number, z: number) => number): { at: V3; fits: boolean } {
   const pad = { x: FLY_PAD.x, y: ground(FLY_PAD.x, FLY_PAD.z) + PAD_TOP, z: FLY_PAD.z };
+  // In front of the booth's picture board (the marquee's own frame: +z towards its front), towards
+  // the pad: never inside the booth, never over the meadow where the flies are.
+  const m = FLY_BOOTH.marquee;
+  const c = Math.cos(m.yaw);
+  const s = Math.sin(m.yaw);
   const cands: V3[] = [];
-  for (const z of [2.6, 2.0, 3.2, 1.4]) {
-    for (const x of [-2.0, -1.6, -2.4, -1.2]) {
-      for (const h of [1.8, 2.2, 1.5, 2.6]) cands.push({ x, y: ground(x, z) + h, z });
+  for (const lz of [1.0, 1.5, 0.7]) {
+    for (const lx of [0.9, 0.5, 1.3, 0.1]) {
+      for (const h of [1.9, 2.3, 1.6, 2.7]) {
+        const x = m.x + lx * c + lz * s;
+        const z = m.z - lx * s + lz * c;
+        cands.push({ x, y: ground(x, z) + h, z });
+      }
     }
   }
   return pickPromptSpot(cands, { pad, look: { x: 0, z: 0 }, size: FLY_PROMPT_SIZE + 0.3 });
