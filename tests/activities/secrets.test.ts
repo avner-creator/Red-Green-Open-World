@@ -4,7 +4,7 @@ import { PATH_RULES, STONE, checkPath, edgeGap, helixStones, minClearance, onSto
 import type { Stone } from '../../src/activities/secrets/pathLogic';
 import { DOOR_RULES, DoorLock, buttonAt, fromDoorLocal, makeSequence, toDoorLocal } from '../../src/activities/secrets/doorLogic';
 import { buildRoutes, buildVaults } from '../../src/activities/secrets/routes';
-import { ARROWS, arrowTrail, nearestOnPolylines } from '../../src/activities/secrets/arrowLogic';
+import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from '../../src/activities/secrets/arrowLogic';
 import { ANCHORS, ROADS } from '../../src/world/layout';
 import { SITES, inZone } from '../../src/world/sites';
 import { LOTS } from '../../src/world/village-data';
@@ -295,6 +295,18 @@ describe('weak-eye arrows', () => {
     expect(close.length).toBeGreaterThanOrEqual(3);
     for (const a of close) expect(a.z).toBeLessThan(2);
     expect(arrowTrail({ x: 0, z: 0 }, { x: 0, z: 0.1 })).toEqual([]);
+  });
+
+  test('alternate starts circle the target, nearest turn first, at least minLength away', () => {
+    const alts = alternateStarts({ x: 0, z: 0 }, { x: 0, z: 2 });
+    expect(alts).toHaveLength(11);
+    for (const a of alts) expect(Math.hypot(a.x, a.z - 2)).toBeCloseTo(ARROWS.minLength);
+    // First two are ±30° from the road side (south of the target), the last is straight across.
+    expect(alts[0].z).toBeLessThan(2);
+    expect(alts[1].z).toBeLessThan(2);
+    expect(alts[0].x).toBeCloseTo(-alts[1].x);
+    expect(alts[10].z).toBeCloseTo(2 + ARROWS.minLength);
+    for (const a of alts) expect(arrowTrail(a, { x: 0, z: 2 }).length).toBeGreaterThanOrEqual(3);
   });
 
   test('nearest road point', () => {

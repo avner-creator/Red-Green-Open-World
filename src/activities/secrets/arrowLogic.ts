@@ -73,3 +73,25 @@ export function arrowTrail(from: XZ, to: XZ, opts: Partial<typeof ARROWS> = {}):
   out.forEach((a, i) => (a.t = n > 1 ? i / (n - 1) : 1));
   return out;
 }
+
+/**
+ * Other road-side starts for a trail whose straight line from the road has no room (the target sits
+ * on a cliff edge, over water or right by a wall): the same target approached from directions
+ * turned ±30°, ±60° … 180° from the original, each `max(distance, minLength)` away. Nearest turn first.
+ */
+export function alternateStarts(from: XZ, to: XZ, opts: Partial<typeof ARROWS> = {}): XZ[] {
+  const o = { ...ARROWS, ...opts };
+  const dx = from.x - to.x;
+  const dz = from.z - to.z;
+  const d = Math.hypot(dx, dz);
+  const base = d > 1e-3 ? Math.atan2(dx, dz) : 0;
+  const len = Math.max(d, o.minLength);
+  const out: XZ[] = [];
+  for (let k = 1; k <= 6; k++) {
+    for (const s of k === 6 ? [1] : [1, -1]) {
+      const a = base + (s * k * Math.PI) / 6;
+      out.push({ x: to.x + Math.sin(a) * len, z: to.z + Math.cos(a) * len });
+    }
+  }
+  return out;
+}
