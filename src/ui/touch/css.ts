@@ -83,6 +83,13 @@ body,#game{touch-action:none}
 .rg.touch-on .prompt{bottom:calc(var(--u)*6 + env(safe-area-inset-bottom,0px))}
 .rg.touch-on .corner.l{left:calc(var(--u)*3 + env(safe-area-inset-left,0px))}
 .rg.touch-on .corner.r{right:calc(var(--u)*3 + env(safe-area-inset-right,0px))}
+/* QA5 m2: on short phones the wardrobe button sat on the sprint/skill stack. In touch mode it
+   stands right above the sprint button (same column), and every HUD target is >= 44 px. */
+.rg.touch-on .hud .wbtn{top:auto;width:50px;height:50px;min-width:0;min-height:0;
+  right:calc(env(safe-area-inset-right,0px) + clamp(8px,3vmin,24px) * 1.2 + (clamp(64px,19vmin,108px) - 50px) / 2);
+  bottom:calc(env(safe-area-inset-bottom,0px) + clamp(8px,3vmin,24px) * 3.6 + clamp(64px,19vmin,108px) + clamp(52px,13.5vmin,84px))}
+.rg.touch-on .hud .wbtn .wb-ic,.rg.touch-on .hud .wbtn .wb-ic .ic{font-size:30px}
+.rg.touch-on [data-testid="help"]{min-width:44px;min-height:44px}
 
 /* rotate to landscape (icon only) */
 .rg .rotate{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;
