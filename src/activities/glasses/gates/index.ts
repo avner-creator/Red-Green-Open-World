@@ -40,7 +40,7 @@ const SWATCHES = {
   panel: { diffuse: '#000000', glow: '#2e2e2e' },
   gold: { diffuse: '#f2c14e' },
   // Arch stripes: dark in BOTH R and G against the bright stone.
-  berry: { diffuse: '#6e1029' },
+  berry: { diffuse: '#5c0a24' },
   navy: { diffuse: '#18205e' },
 };
 
@@ -138,7 +138,8 @@ export function create(env: MechanicEnv): Mechanic {
   const padBase = ground(0, G.padZ);
   const apex = G.straight + G.outerHalf;
   const mid = (G.innerHalf + G.outerHalf) / 2;
-  const band = G.outerHalf - G.innerHalf + 0.07;
+  // The extruded arch is 0.1 m fatter than its outline (bevel): bands wrap round that.
+  const band = G.outerHalf - G.innerHalf + 0.2;
 
   const parts: Record<string, THREE.BufferGeometry[]> = {};
   G.archX.forEach((x, i) => {
@@ -153,11 +154,11 @@ export function create(env: MechanicEnv): Mechanic {
     for (const sx of [-1, 1]) {
       const px = x + sx * mid;
       list.push(boxGeo(0.56, 0.45 + G.sink, G.depth + 0.2, px, y0 + (0.45 - G.sink) / 2, z, U('stoneDark')));
-      [0.75, 1.25].forEach((by, k) => list.push(boxGeo(band, 0.22, G.depth + 0.08, px, y0 + by, z, U(k % 2 ? 'navy' : 'berry'))));
+      [0.62, 1.22].forEach((by, k) => list.push(boxGeo(band, 0.34, G.depth + 0.2, px, y0 + by, z, U(k % 2 ? 'navy' : 'berry'))));
     }
-    [0.2, 0.5, 0.8].forEach((f, k) => {
+    [0.12, 0.36, 0.64, 0.88].forEach((f, k) => {
       const a = Math.PI * (1 - f);
-      const b = boxGeo(band, 0.22, G.depth + 0.08, 0, 0, 0, U(k % 2 ? 'berry' : 'navy'));
+      const b = boxGeo(band, 0.3, G.depth + 0.2, 0, 0, 0, U(k % 2 ? 'navy' : 'berry'));
       b.rotateZ(a - Math.PI / 2);
       b.translate(x + Math.cos(a) * mid, y0 + G.straight + Math.sin(a) * mid, z);
       list.push(b);
@@ -325,7 +326,7 @@ export function create(env: MechanicEnv): Mechanic {
 
   // Booth spec heights are relative to the site's y: lift them onto the pad's ground.
   const lift = (p: { x: number; y: number; z: number } | undefined) => (p ? { ...p, y: p.y + padBase } : undefined);
-  const boothSpec: BoothSpec = { ...B, playPromptAt: lift(B.playPromptAt), countdown: lift(B.countdown) };
+  const boothSpec: BoothSpec = { ...B, prompt: lift(B.prompt), playPromptAt: lift(B.playPromptAt), countdown: lift(B.countdown) };
   const kit = env.booth({
     frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
     ground,
@@ -364,7 +365,7 @@ export function create(env: MechanicEnv): Mechanic {
     drawSymbols();
     // The sign goes quiet once the run is answered.
     weakRoot.visible = strongRoot.visible = false;
-    kit.report(hit, { x: G.archX[i], y: archBase[i] + G.plaqueY + 1.25, z: G.archZ + 0.4 });
+    kit.report(hit, { x: G.archX[i], y: archBase[i] + G.plaqueY + 0.95, z: G.archZ + 0.3 });
   }
 
   const m4 = new THREE.Matrix4();
@@ -484,6 +485,12 @@ export function create(env: MechanicEnv): Mechanic {
         })(),
         arches: G.archX.map((x) => ({ front: pt(x, G.archZ + 0.7), back: pt(x, G.archZ - 0.7), around: pt(x + G.outerHalf + 0.6, G.archZ - 0.7) })),
         sign: { ...pt(0, G.signZ), y: signY },
+        /** The booth's marquee (world, on the ground) and a spot 1.6 m behind the pad. */
+        booth: (() => {
+          const b = kit.booth.build.marqueeBox;
+          return pt((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2);
+        })(),
+        padBack: pt(0, G.padZ + 1.7),
       };
     },
     force(params) {

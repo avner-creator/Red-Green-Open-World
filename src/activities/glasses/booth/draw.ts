@@ -13,7 +13,7 @@ export const YEL = '#ffd23a';
 export const GREY = '#8a909a';
 export const DARK = '#3a3f49';
 /** Dark accents that are dark in BOTH R and G (stripes, flags). */
-export const BERRY = '#7a1430';
+export const BERRY = '#5c0a24';
 export const NAVY = '#1b2466';
 
 type C2 = CanvasRenderingContext2D;

@@ -16,7 +16,7 @@ export const GATES = {
   passHeight: 2.2,
   /** Symbol plaque on top of each arch (edge, centre height). */
   plaque: 1.2,
-  plaqueY: 3.75,
+  plaqueY: 4.2,
   /** Finish ribbon across each opening (bottom height above the arch's ground, height). */
   ribbonY: 1.98,
   ribbonH: 0.3,
@@ -62,16 +62,17 @@ export const GATE_BOOTH: BoothSpec = {
   marquee: { x: -5.0, z: -0.2, yaw: 0.6 },
   lamps: 3,
   pad: { x: 0, z: GATES.padZ, r: GATES.padR, walkIn: true },
+  // At rest the "step on the pad" prompt floats on the (empty) sign, right behind the pad.
+  prompt: { x: 0, y: GATES.signY, z: GATES.signZ + 0.45 },
   playPrompt: 'arch',
-  playPromptAt: { x: 1.95, y: 2.75, z: 1.5 },
   countdown: { x: 0, y: GATES.signY, z: GATES.signZ + 0.6 },
   decals: [
     // Chevrons on the ground from the pad to each arch (the middle path goes round the sign).
     ...[-1, 1].flatMap((sx) => [0.32, 0.6].map((t) => {
       const x = sx * 3.1 * t;
       const z = GATES.padZ + (GATES.archZ + 0.6 - GATES.padZ) * t;
-      return { kind: 'chevron' as const, x, z, size: 0.75, yaw: Math.atan2(-sx * 3.1, GATES.padZ - GATES.archZ - 0.6) };
+      return { kind: 'chevron' as const, x, z, size: 1.0, yaw: Math.atan2(-sx * 3.1, GATES.padZ - GATES.archZ - 0.6) };
     })),
-    { kind: 'chevron', x: 0, z: -1.45, size: 0.75, yaw: 0 },
+    { kind: 'chevron', x: 0, z: -1.45, size: 1.0, yaw: 0 },
   ],
 };

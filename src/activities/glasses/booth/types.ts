@@ -62,7 +62,10 @@ export interface BoothSpec {
   pad: { x: number; z: number; r?: number; walkIn: boolean };
   /** Where the bobbing prompt floats by default (above the pad if left out). */
   prompt?: V3;
-  /** The prompt shown during a try (e.g. 'arch': run through an arch) and where (default `prompt`). */
+  /**
+   * The prompt shown during a try (e.g. 'arch': run through an arch) and where (default: floating
+   * in front of the booth's picture board, which is the safest place: never over the play).
+   */
   playPrompt: PromptId;
   playPromptAt?: V3;
   /** Where the 3-2-1-GO digits pop up (above the marquee's picture board if left out). */

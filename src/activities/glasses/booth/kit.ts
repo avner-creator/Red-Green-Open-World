@@ -135,7 +135,7 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
     for (let i = 0; i < booth.lamps; i++) booth.setLamp(i, 'off');
     booth.setPad('attract');
     booth.showDevice(true);
-    booth.setPrompt(idlePrompt);
+    booth.setPrompt(idlePrompt, undefined, 1.3);
   }
 
   const marqueeTop = (): THREE.Vector3 => booth.mesh.localToWorld(booth.build.bannerAt.clone());
@@ -161,7 +161,9 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
         case 'try':
           setup.hooks.onTry(e.index, e.tier);
           booth.setPad('busy');
-          booth.setPrompt(spec.playPrompt, spec.playPromptAt ? new THREE.Vector3(spec.playPromptAt.x, spec.playPromptAt.y, spec.playPromptAt.z) : undefined);
+          // The play prompt floats in front of the booth's picture board (or where the spec says).
+          if (spec.playPromptAt) booth.setPrompt(spec.playPrompt, new THREE.Vector3(spec.playPromptAt.x, spec.playPromptAt.y, spec.playPromptAt.z), 1.25);
+          else booth.setPrompt(spec.playPrompt, booth.build.boardFront, 1.45);
           break;
         case 'result':
           // (handled in report(): it knows where the pop goes)

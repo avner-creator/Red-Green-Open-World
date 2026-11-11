@@ -76,6 +76,8 @@ export interface BoothGeometry {
   countdownAt: THREE.Vector3;
   /** Frame-local point just in front of the banner (celebration confetti, prize gems start here). */
   bannerAt: THREE.Vector3;
+  /** Frame-local point in front of the picture board: where the play prompt floats by default. */
+  boardFront: THREE.Vector3;
 }
 
 type Piece = { geo: THREE.BufferGeometry; name?: string; w?: number; h?: number };
@@ -242,7 +244,7 @@ export function buildBoothGeometry(spec: BoothSpec, ground: (x: number, z: numbe
   }
   // ── the prompt (billboard; starts hidden) ──
   const promptAt = new THREE.Vector3(spec.prompt?.x ?? spec.pad.x, spec.prompt ? spec.prompt.y : padY + PROMPT_Y, spec.prompt?.z ?? spec.pad.z);
-  col.quad(1.05, 1.05, M(promptAt.x, promptAt.y, promptAt.z), cellUv(KIT_CELL.burst), 'prompt');
+  col.quad(1.0, 1.0, M(promptAt.x, promptAt.y, promptAt.z), cellUv(KIT_CELL.burst), 'prompt');
   // ── ground decals ──
   for (const d of spec.decals ?? []) {
     const rect = d.kind === 'chevron' ? cellUv(KIT_CELL.chevron, 6) : footprintsUv();
@@ -305,6 +307,7 @@ export function buildBoothGeometry(spec: BoothSpec, ground: (x: number, z: numbe
     promptAt,
     countdownAt,
     bannerAt: new THREE.Vector3(0, K.bannerY, 0.4).applyMatrix4(B),
+    boardFront: new THREE.Vector3(0, K.boardY + 0.05, 0.45).applyMatrix4(B),
   };
 }
 

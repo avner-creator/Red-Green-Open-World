@@ -1,16 +1,18 @@
 /**
- * The two both-eye glasses mechanics on one shared page: half-symbol gates and dot-picture signs.
- * For each: channel isolation (all 4 lens/eye combinations), answer-blind proofs for the strong
- * eye alone AND for the weak eye alone (both eyes are needed), a full round to a hit and to a miss
- * through the test API, the draw budget and far-idle. Screenshots (full, R-only, G-only) go to
- * test-results/glasses/gates/ and test-results/glasses/dotsigns/.
+ * The two both-eye glasses mechanics on one shared page: half-symbol gates (on the booth kit) and
+ * dot-picture signs. For each: channel isolation (all 4 lens/eye combinations), answer-blind
+ * proofs for the strong eye alone AND for the weak eye alone (both eyes are needed), play through
+ * real movement / presses, the draw budget and far-idle. Gates: the booth from 30 m (R-only and
+ * G-only contrast), attract mode, step on the pad → 3-2-1-GO, a round of 3 runs (a hit and a miss),
+ * lamps, celebration, the prize paid, and a cancelled round. Screenshots (full, R-only, G-only) go
+ * to test-results/glasses/booth/ and test-results/glasses/dotsigns/.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { boot, canvasShot, channelDiff } from './helpers';
-import { channelOnly, COMBOS, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel, layerFrame, maxOf, setEye } from './glasses-helpers';
+import { channelOnly, channelSpread, COMBOS, expectAnswerBlindWithoutWeakEye, expectDrawBudget, expectLayerOnlyTouchesOwnChannel, layerFrame, maxOf, setEye } from './glasses-helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -21,8 +23,21 @@ let page: Page;
 let consoleErrors: string[] = [];
 
 type P3 = { x: number; y: number; z: number };
+interface GatesKit {
+  phase: string;
+  results: boolean[];
+  fx: Record<string, number>;
+  booth: { frame: number; lamps: string[]; lampMode: string; padMode: string; prompt: string | null };
+}
 interface GatesDebug {
   state: string;
+  phase: string;
+  halvesShown: boolean;
+  kit: GatesKit;
+  pad: P3;
+  padBack: P3;
+  far: P3 & { yaw: number };
+  booth: P3;
   tier: number;
   round: number;
   answer: number;
@@ -32,7 +47,6 @@ interface GatesDebug {
   misses: number;
   gems: number;
   yaw: number;
-  plate: P3;
   approach: P3;
   approachYaw: number;
   arches: { front: P3; back: P3; around: P3 }[];
@@ -156,30 +170,106 @@ test.afterAll(async () => {
   await page.close();
 });
 
-// ───────────────────────────── half-symbol gates ─────────────────────────────
+// ───────────────────────────── half-symbol gates (booth kit) ─────────────────────────────
 
 const A = { left: 'spiky', right: 'round' };
 const B = { left: 'spiky', right: 'square' }; // shares A's left half
 const C = { left: 'point', right: 'round' }; // shares A's right half
 const CANDS = [B, A, C];
+const BOOTH_OUT = 'booth';
 
-test('gates: on the plate, the halves fuse on the sign; each layer only touches its channel', async () => {
+/** Yaw that faces from `from` to `to`. */
+const yawTo = (from: P3, to: { x: number; z: number }): number => Math.atan2(to.x - from.x, to.z - from.z);
+/** Run through arch `i` (front → back), a few frames each side. */
+async function runThrough(d: GatesDebug, i: number): Promise<void> {
+  const facing = d.yaw + Math.PI;
+  await teleport(d.arches[i].front, facing);
+  await step(2);
+  await teleport(d.arches[i].back, facing);
+  await step(3);
+}
+const kitOf = async (): Promise<GatesKit> => (await debug<GatesDebug>('gates')).kit;
+
+/**
+ * A spot ~30 m out on the approach side with a clear line of sight to the booth (on land, not in
+ * water), facing it.
+ */
+async function farSpot(d: GatesDebug): Promise<P3 & { yaw: number }> {
+  return page.evaluate((d) => {
+    const w = window.__rg!.ctx.world;
+    const g = window.__rgGlasses!;
+    const by = w.heightAt(d.booth.x, d.booth.z) + 3.8;
+    for (const dist of [30, 28, 32, 26]) {
+      for (const off of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2]) {
+        const a = d.yaw + off;
+        const x = d.pad.x + Math.sin(a) * dist;
+        const z = d.pad.z + Math.cos(a) * dist;
+        const y = w.heightAt(x, z);
+        if (!w.isLand(x, z) || y < w.waterLevel + 0.5) continue;
+        if (g.sight({ x, y: y + 2.6, z }, { x: d.booth.x, y: by, z: d.booth.z }) !== null) continue;
+        if (g.sight({ x, y: y + 1.5, z }, { x: d.pad.x, y: d.pad.y + 1.2, z: d.pad.z }) !== null) continue;
+        const bx = d.booth.x * 0.6 + d.pad.x * 0.4;
+        const bz = d.booth.z * 0.6 + d.pad.z * 0.4;
+        return { x, y, z, yaw: Math.atan2(bx - x, bz - z) };
+      }
+    }
+    return d.far;
+  }, d);
+}
+
+test('gates: a booth from 30 m, idle attract at the pad', async () => {
   await page.evaluate(() => window.__rgGlasses!.goto('gates'));
   await step(2);
+  let d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('idle');
+  expect(d.halvesShown).toBe(false);
+  expect(await page.evaluate(() => window.__rgGlasses!.isBooth('gates'))).toBe(true);
+  // From ~30 m on the approach: the marquee reads in R-only and G-only.
+  const spot = await farSpot(d);
+  await standAt(spot, spot.yaw);
+  const far = await shots(BOOTH_OUT, 'gates-30m', true);
+  const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('gates'));
+  expect(rect, 'the booth is on screen from 30 m').not.toBeNull();
+  expect(channelSpread(far, rect!, 0), 'marquee R contrast from 30 m').toBeGreaterThan(80);
+  expect(channelSpread(far, rect!, 1), 'marquee G contrast from 30 m').toBeGreaterThan(80);
+  // Just behind the pad, facing the arches: attract mode (demo loops, pad pulses, lamps twinkle).
+  await standAt(d.padBack, d.yaw + Math.PI);
+  d = await debug<GatesDebug>('gates');
+  expect(d.kit.phase).toBe('idle');
+  expect(d.kit.booth.prompt).toBe('stepPad');
+  const f0 = d.kit.booth.frame;
+  await step(30);
+  expect((await kitOf()).booth.frame, 'the demo flipbook runs').not.toBe(f0);
+  await shots(BOOTH_OUT, 'gates-pad-idle', true);
+  // One draw call for the booth (and everything static of it) at rest.
+  expect(await page.evaluate(() => window.__rgGlasses!.signDraws('gates'))).toBe(1);
+  await expectDrawBudget(page, 'gates', 6);
+});
+
+test('gates: step on the pad → 3-2-1-GO → a run; each layer only touches its channel', async () => {
   const d = await debug<GatesDebug>('gates');
-  expect(d.state).toBe('open');
-  await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left', tier: 1 });
-  await standAt(d.plate, d.yaw + Math.PI);
-  expect(await page.evaluate(() => window.__rgGlasses!.active('gates'))).toBe(true);
-  await shots('gates', 'plate', true);
-  await standAt(d.approach, d.approachYaw);
-  await shots('gates', 'approach', true);
-  await standAt(d.plate, d.yaw + Math.PI);
+  await standAt(d.pad, d.yaw + Math.PI, 12);
+  let k = await kitOf();
+  expect(k.phase).toBe('countdown');
+  await shots(BOOTH_OUT, 'gates-countdown', true);
+  expect(k.fx.digit ?? 0).toBe(1);
+  await step(200);
+  const g = await debug<GatesDebug>('gates');
+  expect(g.phase).toBe('play');
+  expect(g.state).toBe('open');
+  expect(g.halvesShown).toBe(true);
+  k = g.kit;
+  expect(k.booth.prompt).toBe('arch');
+  await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left' });
+  await standAt(d.pad, d.yaw + Math.PI, 2);
+  await shots(BOOTH_OUT, 'gates-run', true);
   await expectLayerOnlyTouchesOwnChannel(page, { layer: 'both', label: 'gates' });
   await expectDrawBudget(page, 'gates', 6);
 });
 
-test('gates: neither eye alone can tell the answer', async () => {
+test('gates: neither eye alone can tell the answer (booth, lamps and pad identical)', async () => {
+  // The booth's animation clocks are pinned, so the demo frame, lamps and pad pulse are equal.
+  await force('gates', { pin: 0 });
   // Weak half differs (left: spiky vs point), strong half (right: round) the same → answer A vs C.
   await expectAnswerBlindWithoutWeakEye(page, {
     setA: () => force('gates', { candidates: CANDS, answer: 1, weakSide: 'left' }),
@@ -194,76 +284,94 @@ test('gates: neither eye alone can tell the answer', async () => {
   );
 });
 
-test('gates: run through the right arch → hit, wrong arch → miss, the plate starts a new round', async () => {
+test('gates: a round of 3 runs: a hit and a miss through real movement, lamps, celebration, prize', async () => {
   await events();
-  await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left', tier: 1 });
   const before = await wallet();
   let d = await debug<GatesDebug>('gates');
-  const facing = d.yaw + Math.PI;
+  expect(d.phase).toBe('play');
+  await force('gates', { candidates: CANDS, answer: 1, weakSide: 'left' });
   // Walking round the outside of an arch does not count.
+  const facing = d.yaw + Math.PI;
   await teleport(d.arches[2].front, facing);
   await step(2);
   await teleport(d.arches[2].around, facing);
   await step(2);
   expect((await debug<GatesDebug>('gates')).state).toBe('open');
-  // Through the middle arch (the answer).
-  await teleport(d.arches[1].front, facing);
-  await step(2);
-  await teleport(d.arches[1].back, facing);
-  await step(3);
+  // Run 1: through the middle arch (the answer) → ✓, lamp 0 lights.
+  await runThrough(d, 1);
   d = await debug<GatesDebug>('gates');
   expect(d.state).toBe('done');
-  expect(d.hits).toBe(1);
-  expect(d.tier).toBe(2);
+  expect(d.kit.results).toEqual([true]);
+  expect(d.kit.booth.lamps[0]).toBe('hit');
+  expect(d.kit.fx.pop).toBe(1);
+  // Turn round behind the arch: the camera looks back at it (squash, ✓, confetti).
+  await standAt(d.arches[1].back, d.yaw, 10);
+  await shots(BOOTH_OUT, 'gates-hit');
+  // The beat ends: "back to the pad".
+  await step(60);
+  d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('wait');
+  expect(d.kit.booth.prompt).toBe('backToPad');
+  expect(d.kit.booth.padMode).toBe('wait');
+  // Back on the pad → run 2 (the halves swap sides). A wrong arch → ✗, lamp 1 dim.
+  await standAt(d.pad, facing, 4);
+  d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('play');
+  expect(d.weakSide).toBe('right');
+  await runThrough(d, (d.answer + 1) % 3);
+  d = await debug<GatesDebug>('gates');
+  expect(d.kit.results).toEqual([true, false]);
+  expect(d.kit.booth.lamps.slice(0, 2)).toEqual(['hit', 'miss']);
+  await step(60);
+  // Mid-round from the pad: the booth with a ✓ and a ✗ lamp.
+  await standAt(d.padBack, facing, 30);
+  await shots(BOOTH_OUT, 'gates-mid-round', true);
+  // Run 3: back on the pad, then the right arch → 2 of 3 → celebration, then the prize.
+  await standAt(d.pad, facing, 4);
+  d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('play');
+  await runThrough(d, d.answer);
+  await step(60);
+  d = await debug<GatesDebug>('gates');
+  expect(d.phase).toBe('celebrate');
+  expect(d.kit.booth.lampMode).toBe('chase');
+  expect(d.halvesShown).toBe(false);
+  await standAt(d.padBack, yawTo(d.padBack, d.booth), 20);
+  await shots(BOOTH_OUT, 'gates-celebrate', true);
+  let ev = await events();
+  expect(ev.results).toEqual([
+    { mechanic: 'gates', kind: 'lineUp', tier: 1, hit: true },
+    { mechanic: 'gates', kind: 'lineUp', tier: 1, hit: false },
+    { mechanic: 'gates', kind: 'lineUp', tier: 1, hit: true },
+  ]);
+  expect(ev.toasts, 'no gems before the prize').toBe(0);
+  await step(240);
+  d = await debug<GatesDebug>('gates');
+  expect(['cooldown', 'idle']).toContain(d.phase);
   expect(d.gems).toBe(3);
   expect(await wallet()).toBe(before + 3);
-  // Turn round behind the arch: the camera now looks back at it (squash, confetti).
-  await standAt(d.arches[1].back, d.yaw, 16);
-  await shots('gates', 'hit');
-  let ev = await events();
-  expect(ev.results).toEqual([{ mechanic: 'gates', kind: 'lineUp', tier: 1, hit: true }]);
-  expect(ev.toasts).toBe(1);
-
-  // Back on the plate → new round with new symbols and the halves on the other sides.
-  const round = d.round;
-  await standAt(d.plate, facing, 50);
-  d = await debug<GatesDebug>('gates');
-  expect(d.round).toBe(round + 1);
-  expect(d.state).toBe('open');
-  expect(d.weakSide).toBe('right');
-  await shots('gates', 'round2');
-
-  // A wrong arch → miss, one step coarser.
-  const wrong = (d.answer + 1) % 3;
-  await teleport(d.arches[wrong].front, facing);
-  await step(2);
-  await teleport(d.arches[wrong].back, facing);
-  await step(3);
-  d = await debug<GatesDebug>('gates');
-  expect(d.misses).toBe(1);
-  expect(d.tier).toBe(1);
   ev = await events();
-  expect(ev.results).toEqual([{ mechanic: 'gates', kind: 'lineUp', tier: 2, hit: false }]);
-  expect(ev.toasts).toBe(0);
-  // The nap: back on the plate, the next sign waits 3 s.
-  await standAt(d.plate, facing, 50);
-  expect((await debug<GatesDebug>('gates')).round, 'still napping').toBe(d.round);
-  await step(150);
-  d = await debug<GatesDebug>('gates');
-  expect(d.round).toBe(round + 2);
-  expect(d.state).toBe('open');
-  // The first hit after a miss pays 1 gem.
-  const gemsBefore = d.gems;
-  const walletBefore = await wallet();
-  await teleport(d.arches[d.answer].front, facing);
-  await step(2);
-  await teleport(d.arches[d.answer].back, facing);
-  await step(3);
-  d = await debug<GatesDebug>('gates');
-  expect(d.hits).toBe(2);
-  expect(d.gems - gemsBefore).toBe(1);
-  expect(await wallet()).toBe(walletBefore + 1);
+  expect(ev.toasts).toBe(1);
+  // 2 of 3 keeps the tier; the booth goes back to attract.
+  expect(d.tier).toBe(1);
+  await step(120);
+  expect((await kitOf()).phase).toBe('idle');
+});
+
+test('gates: leaving mid-round cancels it with no misses for the runs never played', async () => {
   await events();
+  const d = await debug<GatesDebug>('gates');
+  await standAt(d.padBack, d.yaw + Math.PI, 4);
+  await standAt(d.pad, d.yaw + Math.PI, 4);
+  expect((await kitOf()).phase).toBe('countdown');
+  await step(200);
+  expect((await kitOf()).phase).toBe('play');
+  await teleport(d.far, d.far.yaw);
+  await step(3);
+  const k = await kitOf();
+  expect(k.phase).toBe('idle');
+  expect((await debug<GatesDebug>('gates')).halvesShown).toBe(false);
+  expect((await events()).results).toEqual([]);
 });
 
 // ───────────────────────────── dot-picture signs ─────────────────────────────

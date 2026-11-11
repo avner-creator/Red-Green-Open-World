@@ -54,8 +54,11 @@ export interface BoothController {
   setDevice(device: DeviceId): void;
   /** Show the device pictogram above the pad (press pads, idle only). */
   showDevice(on: boolean): void;
-  /** One prompt at a time: a bobbing pictogram at a frame-local point (default spot if left out); null hides it. */
-  setPrompt(p: PromptId | null, at?: THREE.Vector3): void;
+  /**
+   * One prompt at a time: a bobbing pictogram (1 m × `size`) at a frame-local point (the spec's
+   * default spot if left out); null hides it.
+   */
+  setPrompt(p: PromptId | null, at?: THREE.Vector3, size?: number): void;
   /** Animate (flipbook, lamps, pad pulse, bobbing billboards). `camera` = world camera position. */
   update(dt: number, camera: THREE.Vector3): void;
   /** Test hook: set every animation clock to `t` and re-apply (frames for proofs are then equal). */
@@ -114,6 +117,7 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
   let device: DeviceId = 'keyboard';
   let deviceOn = !o.spec.pad.walkIn;
   let prompt: PromptId | null = null;
+  let promptSize = 1;
   const promptAt = build.promptAt.clone();
   const deviceAt = build.padCenter.clone().add(new THREE.Vector3(0, 1.5, 0));
   const zero = new THREE.Vector3();
@@ -184,7 +188,7 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
     padLook(t);
     if (camera) {
       const bob = Math.sin(t * Math.PI * 2 * 0.9) * 0.12;
-      if (prompt) billboard(S.prompt, tmp.set(0, 0, 0).add(promptAt).add(zero.set(0, bob, 0)).clone(), camera, 1);
+      if (prompt) billboard(S.prompt, tmp.set(0, 0, 0).add(promptAt).add(zero.set(0, bob, 0)).clone(), camera, promptSize);
       else billboard(S.prompt, promptAt, camera, 0);
       if (deviceOn) billboard(S.device, deviceAt.clone().add(zero.set(0, -bob * 0.6, 0)), camera, 1);
       else billboard(S.device, deviceAt, camera, 0);
@@ -223,8 +227,9 @@ export function createBoothController(material: THREE.Material, o: BoothOptions)
     showDevice(on) {
       deviceOn = on && !o.spec.pad.walkIn;
     },
-    setPrompt(p, at) {
+    setPrompt(p, at, size = 1) {
       prompt = p;
+      promptSize = size;
       if (p) {
         setSlotUv(uv, S.prompt, cellUv(promptCell(p)));
         promptAt.copy(at ?? build.promptAt);

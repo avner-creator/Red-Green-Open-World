@@ -62,7 +62,7 @@ export const DEVICES: readonly DeviceId[] = ['keyboard', 'gamepad', 'touch'];
 /** Swatch names (cell 38, 4 × 4). Every colour pair used side by side differs in BOTH R and G. */
 export const SWATCHES = {
   cream: '#fbf4e2',
-  berry: '#7a1430',
+  berry: '#5c0a24',
   navy: '#1b2466',
   gold: '#ffcf33',
   ink: '#121419',
