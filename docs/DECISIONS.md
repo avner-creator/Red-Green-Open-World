@@ -94,3 +94,5 @@
 - Chest prompt icon is `step` (a foot on a tile), not the lock; with the key all tiles pulse and the tile E presses stands up brighter. All tiles pulse alike so the lock's shape stays strong-eye only.
 - New event `player:dizzy { source: 'carnival', game, seconds }`, emitted when mashing stuns the hero in a carnival round; for Pip's "slow and steady" hint.
 - Hero rigs whose feet hang on IK bones outside the leg chain (fox, alpaca) get chibi `sink` (lower the spine root) to shorten legs; frog/flamingo collar cut raised (0.42 / 0.36) to tuck the whole helmet ring.
+- Batch 5 pushed with Medium foam-round 4% over the triangle budget: one view, mid-round only; a blocker fix (Pip leading) should not wait for it.
+- `perf:check` is a separate npm script, not part of `verify`: it adds ~15 minutes; run it before each push that touches geometry.
