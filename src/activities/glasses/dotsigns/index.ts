@@ -445,6 +445,12 @@ export function create(env: MechanicEnv): Mechanic {
           const t = frame.toWorld(-1.5, D.signZ);
           return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
         })(),
+        /** A spot ~5 m behind the pad facing the booth and the sign (the whole booth in view). */
+        celebrateView: (() => {
+          const p = pt(D.pad.x, D.pad.z + 5);
+          const t = frame.toWorld(-2.2, -0.4);
+          return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
+        })(),
         // The approach spot the layout keeps clear (the sign seen from ~7 m).
         approach: pt(lay.view?.x ?? 0, lay.view?.z ?? D.signZ + 7),
         approachYaw: (() => {
