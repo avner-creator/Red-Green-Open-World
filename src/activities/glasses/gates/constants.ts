@@ -45,8 +45,8 @@ export const GATES = {
  */
 export const GATE_PRIZE: PrizeTable = {
   1: [0, 0, 3, 10],
-  2: [0, 0, 4, 12],
-  3: [0, 0, 5, 15],
+  2: [0, 0, 3, 12],
+  3: [0, 0, 3, 15],
 };
 
 export const GATE_RULES: RoundRules = {

@@ -64,6 +64,8 @@ export interface GlassesTestApi {
   signDraws(id: string): number;
   /** True when the site runs the booth kit. */
   isBooth(id: string): boolean;
+  /** Every object the six mini-games may draw (boards, booths, tracked objects), for draw counts. */
+  objects(): THREE.Object3D[];
   active(id: string): boolean;
   /** Screen rectangle (CSS px) of the site's board for the current camera, or null if behind it. */
   boardRect(id: string): { x0: number; y0: number; x1: number; y1: number } | null;
@@ -554,6 +556,16 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         return sign ? countDraws(sign) : 0;
       },
       isBooth: (id) => !!byId(id).kit,
+      objects() {
+        build();
+        const out: THREE.Object3D[] = [];
+        for (const e of entries) {
+          const sign = signOf(e);
+          if (sign) out.push(sign);
+          out.push(...e.objects.keys());
+        }
+        return out;
+      },
       active: (id) => byId(id).idle.active,
       search(id, start, faceTo, playRadius, wantStats) {
         const others = table.some((f) => f.id === id) ? table.filter((f) => f.id !== id) : [];

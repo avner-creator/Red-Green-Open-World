@@ -104,6 +104,60 @@ test('each mechanic stays within the draw budget', async () => {
   for (const s of sites) expect(await expectDrawBudget(page, s.id, 6)).toBeGreaterThanOrEqual(1);
 });
 
+test('every site draws its board or booth in ONE draw call', async () => {
+  for (const s of sites) expect(await page.evaluate((id) => window.__rgGlasses!.signDraws(id), s.id), `${s.id} sign draws`).toBe(1);
+  expect(await page.evaluate(() => window.__rgGlasses!.isBooth('gates'))).toBe(true);
+});
+
+/**
+ * Draw calls of the six mini-games (boards, booths and everything they track) in the perf report's
+ * spawn and Gear Shack views (low quality as in the e2e run). Pinned at what they cost before the
+ * booth kit (measured on agent/glasses-depth with the same count: 7 and 7): a booth must not
+ * add a draw call there (odd one out is only 37 m from spawn).
+ */
+const PINNED_GLASSES_DRAWS = { spawn: 7, shack: 7 };
+
+test('no extra glasses draws at spawn and at the Gear Shack', async () => {
+  const counts = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const r = ctx.renderer;
+    const A = ctx.world.anchors;
+    const mine = new Set<unknown>();
+    for (const o of window.__rgGlasses!.objects()) o.traverse((c) => mine.add(c));
+    const go = {
+      spawn: () => rg.teleport(A.spawn.position.x, ctx.world.heightAt(A.spawn.position.x, A.spawn.position.z) + 0.2, A.spawn.position.z, A.spawn.yaw),
+      shack: () => {
+        const a = A.gearShack;
+        const dx = A.spawn.position.x - a.position.x;
+        const dz = A.spawn.position.z - a.position.z;
+        const l = Math.hypot(dx, dz) || 1;
+        const x = a.position.x + (dx / l) * 10;
+        const z = a.position.z + (dz / l) * 10;
+        rg.teleport(x, ctx.world.heightAt(x, z) + 0.2, z, Math.atan2(a.position.x - x, a.position.z - z));
+      },
+    };
+    const out: Record<string, number> = {};
+    const orig = r.renderBufferDirect;
+    for (const [view, fn] of Object.entries(go)) {
+      fn();
+      rg.step(1 / 60, 90, false);
+      rg.render();
+      let n = 0;
+      r.renderBufferDirect = function (...args: Parameters<typeof orig>) {
+        if (mine.has(args[4])) n++;
+        return orig.apply(this, args);
+      };
+      rg.render();
+      r.renderBufferDirect = orig;
+      out[view] = n;
+    }
+    return out;
+  });
+  console.log(`glasses mini-game draws: spawn ${counts.spawn}, Gear Shack ${counts.shack}`);
+  expect(counts).toEqual(PINNED_GLASSES_DRAWS);
+});
+
 test('every board is visible from goto() and reads in R-only and G-only', async () => {
   // Screenshots judge the look: medium quality (shadows, AO) for these frames only.
   await page.evaluate(() => window.__rg!.ctx.settings.set({ quality: 'medium' }));

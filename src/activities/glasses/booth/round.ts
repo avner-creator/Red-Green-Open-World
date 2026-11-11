@@ -278,7 +278,7 @@ export class RoundMachine {
 
 /** Pick-one-of-three games, 5 tries, a prize from 3 hits (template for odd one out, dot signs). */
 export const PICK3_PRIZE: PrizeTable = {
-  1: [0, 0, 0, 4, 6, 10],
+  1: [0, 0, 0, 4, 6, 11],
   2: [0, 0, 0, 5, 8, 13],
-  3: [0, 0, 0, 6, 10, 16],
+  3: [0, 0, 0, 5, 9, 16],
 };
