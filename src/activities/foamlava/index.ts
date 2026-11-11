@@ -288,6 +288,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     phase = 'result';
     phaseT = 0;
     ctx.events.emit('stunt', { kind: 'foam', value: stars, stars });
+    ctx.events.emit('stamp:earned', { id: 'foamCourse' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${(Math.floor(time * 10) / 10).toFixed(1)}` });
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rg:attraction-done', { detail: { id: 'foamLava', medal, time, stars, beatFriend } }));
     sfx('fanfare');

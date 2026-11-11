@@ -200,6 +200,9 @@ test.describe('ui', () => {
       rg.ctx.session.setTotals({ gems: 20, chests: 4 });
       e.emit('chest:opened', { chestId: 'c1', outfitId: 'cape_gold' });
       e.emit('chest:opened', { chestId: 'c2', outfitId: 'glasses_star' });
+      // The chests system stamps the pass with 'stamp:earned' (twice here: the pass ignores repeats).
+      e.emit('stamp:earned', { id: 'chest' });
+      e.emit('stamp:earned', { id: 'chest' });
       e.emit('outfit:unlocked', { outfitId: 'cape_gold' });
       e.emit('outfit:unlocked', { outfitId: 'glasses_star' });
       e.emit('outfit:unlocked', { outfitId: 'ghost_unknown' });

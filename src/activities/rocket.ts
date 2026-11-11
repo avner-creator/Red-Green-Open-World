@@ -196,6 +196,7 @@ export function createRocketPads(ctx: GameContext, flight: Flight, confetti: Thr
       if (bounceNo === 0) {
         const dist = Math.hypot(info.pos.x - launchFrom0.x, info.pos.z - launchFrom0.z);
         if (!practice) ctx.events.emit('stunt', { kind: 'launch', value: dist, stars: launchStars(info.rotations, info.upright) });
+        ctx.events.emit('stamp:earned', { id: 'launchPads' });
         ctx.audio.play('bigBoing', { pitch: 0.95 });
         ctx.cameraRig.shake(0.45);
         confetti.burst(tmp.set(info.pos.x, info.pos.y + 0.8, info.pos.z), 170);

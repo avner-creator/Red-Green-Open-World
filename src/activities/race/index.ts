@@ -334,6 +334,7 @@ export function createRace(ctx: GameContext): Race {
     result = { place, stars: p.stars, gems: prize ? p.gems : 0 };
     if (prize) wallet.earn(p.gems);
     ctx.events.emit('stunt', { kind: 'race', value: place, stars: p.stars });
+    ctx.events.emit('stamp:earned', { id: 'raceStart' });
     ctx.events.emit('ui:toast', { icon: 'car', text: place === 1 ? '1st' : place === 2 ? '2nd' : '3rd' });
     phase = 'finishing';
     phaseT = 0;

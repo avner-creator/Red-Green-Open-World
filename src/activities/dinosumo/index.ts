@@ -297,6 +297,7 @@ export function createDinoSumo(ctx: GameContext): GameSystem {
     const paid = ticket.prize(gems);
     const me = round.dinos[0].points;
     ctx.events.emit('stunt', { kind: 'bumper', value: me, stars });
+    ctx.events.emit('stamp:earned', { id: 'dinoRing' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${me}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
     if (stars >= 3) confetti.burst(toWorld(0, 3, 0, tmpV), 180);

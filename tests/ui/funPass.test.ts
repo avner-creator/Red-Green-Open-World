@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRAND_PRIZE, milestones, modeStamp, nextMilestone, PASS_PRIZES, prizeFor, stuntStamp, ticketStamp } from '../../src/ui/funPassLogic';
+import { derived, EXPLICIT_STAMPS, GRAND_PRIZE, milestones, modeStamp, nextMilestone, PASS_PRIZES, prizeFor, stuntStamp, ticketStamp } from '../../src/ui/funPassLogic';
 
 describe('fun pass logic', () => {
   it('maps tickets and ride modes to attraction stamps', () => {
@@ -9,6 +9,15 @@ describe('fun pass logic', () => {
     expect(modeStamp('driving')).toBe('garage');
     expect(modeStamp('riding')).toBe('ranch');
     expect(modeStamp('walk')).toBeNull();
+  });
+
+  it('stamps with an explicit "round done" event are never derived', () => {
+    expect(EXPLICIT_STAMPS.has('chest')).toBe(true);
+    expect(derived(ticketStamp('race'))).toBeNull();
+    expect(derived(ticketStamp('rocketPad'))).toBeNull();
+    expect(derived(ticketStamp('balloon'))).toBe('balloon');
+    expect(derived(modeStamp('driving'))).toBe('garage');
+    expect(derived(null)).toBeNull();
   });
 
   it('gives a shared stunt to the nearest attraction on the card', () => {

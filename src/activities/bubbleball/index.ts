@@ -292,6 +292,7 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     const gems = matchPrize(stars, match.doubles.home);
     const paid = ticket.prize(gems);
     ctx.events.emit('stunt', { kind: 'bumper', value: home, stars });
+    ctx.events.emit('stamp:earned', { id: 'bubbleArena' });
     ctx.events.emit('ui:toast', { icon: 'check', text: `${home} – ${away}` });
     ctx.audio.play(stars >= 3 ? 'fanfare' : 'star');
     if (stars >= 3) confetti.burst(toWorld(0, 3, 0, tmpV), 200);

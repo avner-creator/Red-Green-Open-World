@@ -8,7 +8,7 @@
 import type { AnchorName, GameContext } from '../types';
 import { COMPASS_TARGETS, markerIcon } from './compass';
 import { h, retrigger } from './dom';
-import { CHEST_STAMP, milestones, modeStamp, nextMilestone, prizeFor, stuntStamp, ticketStamp } from './funPassLogic';
+import { CHEST_STAMP, EXPLICIT_STAMPS, derived, milestones, modeStamp, nextMilestone, prizeFor, stuntStamp, ticketStamp } from './funPassLogic';
 import type { StampId } from './funPassLogic';
 import { icon } from './icons';
 import { injectFunPassCss } from './funPassCss';
@@ -190,16 +190,18 @@ export function createFunPass(ctx: GameContext, hooks: FunPassHooks): FunPass {
     return a ? { x: a.position.x, z: a.position.z } : null;
   };
 
-  ctx.events.on('ticket:paid', (e) => stamp(ticketStamp(e.kind)));
+  // Attractions that report a finished round themselves.
+  ctx.events.on('stamp:earned', (e) => stamp(e.id));
+  // Fallback derivation for the rest (skips the ids above: those stamp on completion only).
+  ctx.events.on('ticket:paid', (e) => stamp(derived(ticketStamp(e.kind))));
   ctx.events.on('stunt', (e) => {
     const p = ctx.player.position;
-    stamp(stuntStamp(e.kind, { x: p.x, z: p.z }, where, (id) => onCard.has(id)));
+    stamp(derived(stuntStamp(e.kind, { x: p.x, z: p.z }, where, (id) => onCard.has(id) && !EXPLICIT_STAMPS.has(id))));
   });
-  ctx.events.on('player:mode', (e) => stamp(modeStamp(e.mode)));
+  ctx.events.on('player:mode', (e) => stamp(derived(modeStamp(e.mode))));
   ctx.events.on('glasses:result', (e) => {
-    if (e.hit) stamp(e.mechanic);
+    if (e.hit) stamp(derived(e.mechanic));
   });
-  ctx.events.on('chest:opened', () => stamp(CHEST_STAMP));
   ctx.events.on('mission:progress', () => renderChip());
   ctx.events.on('mission:completed', () => renderChip());
   ctx.events.on('session:phase', (e) => {
