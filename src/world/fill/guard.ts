@@ -45,6 +45,9 @@ export interface GuardOpts {
   onRoad?: boolean;
   /** Ignore the keepouts (paved plaza, pads): for small toys placed on purpose in a dressed area. */
   inKeepouts?: boolean;
+  /** Gap kept to gem spots (m, beyond `r`); default 2.5 solid / 1.5 not. The plaza map board passes
+   * a smaller gap: it stands beside a plaza gem without hiding it from the spawn view (QA6 m10). */
+  gemGap?: number;
 }
 
 export interface Guard {
@@ -99,7 +102,7 @@ export function makeGuard(inp: GuardInput): Guard {
     }
     if (!opts.onRoad && roadEdgeDistance(inp.roads, x, z) < r + 0.8) return 'road';
     if (solid && (distToLap(x, z) < r + 4.6 || raceCutDistance(x, z) < r + 3)) return 'race lap';
-    for (const s of inp.gemSpots) if (Math.hypot(x - s.x, z - s.z) < r + (solid ? 2.5 : 1.5)) return `gem ${s.tag}`;
+    for (const s of inp.gemSpots) if (Math.hypot(x - s.x, z - s.z) < r + (opts.gemGap ?? (solid ? 2.5 : 1.5))) return `gem ${s.tag}`;
     for (const c of inp.chestSpots) if (Math.hypot(x - c.x, z - c.z) < r + 4.5) return 'chest';
     for (const p of secretPts) if (Math.hypot(x - p.x, z - p.z) < r + p.r) return 'secret';
     if (!opts.inKeepouts) {

@@ -16,8 +16,18 @@ import { coastRadius } from '../terrain';
 import { ATTRACTIONS, GLASSES_WAY } from '../attractions';
 import { ANCHORS } from '../layout';
 
-/** Where the board stands (the main street's east corner, by the park road) and the point it faces. */
-export const MAP_BOARD = { x: 11, z: -16.5, faceX: 0, faceZ: 9 } as const;
+/**
+ * Where the board stands and the point it faces (QA6 m10): on the plaza ahead-left of spawn, facing
+ * the spawn camera, so a child sees it at once (default view, 640x360: between the HUD corners,
+ * left of the hero, below the compass bar) and can read its pictures; off the plaza chest's line.
+ */
+export const MAP_BOARD = { x: 6.6, z: 5.9, faceX: -4.5, faceZ: 10 } as const;
+/** Board face (m) and its footprint radius for the fill guard. */
+const W = 3.6;
+const H = 2.9;
+export const BOARD_R = W / 2 + 0.4;
+/** Map pictures on the board (m): big enough to read from spawn. */
+const BADGE = { attraction: 0.44, glasses: 0.34 } as const;
 
 const NAVY = 0x1b2a48;
 const LAND = 0xeee2c0;
@@ -27,9 +37,8 @@ const CREAM = 0xf4efe6;
 export function mapBoard(k: Kit, d: Decals, roads: readonly ProcessedRoad[], zones: readonly { x: number; z: number; icon: IconId }[], x: number = MAP_BOARD.x, z: number = MAP_BOARD.z): void {
   const y = k.h(x, z);
   const yaw = Math.atan2(MAP_BOARD.faceX - x, MAP_BOARD.faceZ - z);
-  const W = 4.2;
-  const H = 3.4;
-  const yc = 2.55;
+  // Low (kid height): the face spans 0.2-3.1 m, so from spawn it sits below the HUD's top bar.
+  const yc = 1.65;
   const m = T(x, y, z, yaw);
   // Frame, posts, roof.
   for (const s of [-1, 1]) {
@@ -112,9 +121,9 @@ export function mapBoard(k: Kit, d: Decals, roads: readonly ProcessedRoad[], zon
   const badge = (wx: number, wz: number, icon: IconId, size: number): void => {
     d.add(icon, toBoard(wx, wz, 0.03), size);
   };
-  for (const a of ATTRACTIONS) badge(ANCHORS[a.anchor].x, ANCHORS[a.anchor].z, a.icon, 0.34);
-  for (const g of GLASSES_WAY) badge(g.x, g.z, g.icon, 0.26);
-  for (const zn of zones) badge(zn.x, zn.z, zn.icon, 0.34);
+  for (const a of ATTRACTIONS) badge(ANCHORS[a.anchor].x, ANCHORS[a.anchor].z, a.icon, BADGE.attraction);
+  for (const g of GLASSES_WAY) badge(g.x, g.z, g.icon, BADGE.glasses);
+  for (const zn of zones) badge(zn.x, zn.z, zn.icon, BADGE.attraction);
   // You are here: a yellow ring round the board's own spot, a pin sticking out and the pin badge.
   k.b.add('paint', torusG(0.025, 32, Math.PI * 2, 0.24), 0xf2c14e, toBoard(x, z, 0.02).multiply(T(0, 0, 0, 0, 1, 1, 1, Math.PI / 2)));
   k.b.add('gloss', cylG(10), 0xf2c14e, toBoard(x, z, 0.0).multiply(T(0, 0, 0, 0, 0.035, 0.22, 0.035, Math.PI / 2)));
