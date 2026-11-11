@@ -1,8 +1,9 @@
 /**
  * Odd one out: pure round logic (no three.js, unit-tested).
  *
- * A gentle per-session staircase: every hit makes the difference finer (level + 1), every miss
- * coarser (level − 1).
+ * A gentle staircase that runs through every try of every round of a session: every hit makes the
+ * difference finer (level + 1), every miss coarser (level − 1). The try's tier (results and the
+ * round's prize) follows the level.
  *   level 0: a different shape (a circle among squares…)
  *   level 1: the same arrow pointing another way
  *   level 2: a ring whose gap is on another side
@@ -11,6 +12,8 @@
  * Every answer position gets the same set of shapes: only WHERE the odd one sits changes.
  */
 import type { GlassesTier } from '../../../types';
+import { RoundMachine } from '../booth/round';
+import type { RoundRules } from '../booth/types';
 import { ODD } from './constants';
 
 export type ShapeKind = 'square' | 'circle' | 'triangle' | 'diamond' | 'arrow' | 'ring';
@@ -69,10 +72,6 @@ export function tierForLevel(level: number): GlassesTier {
   return l <= 1 ? 1 : l <= 3 ? 2 : 3;
 }
 
-export function gemsForTier(tier: GlassesTier): number {
-  return ODD.gems[tier];
-}
-
 /** Size, gap and stroke for a level (gap and size shrink from level 3 to the floor). */
 export function detailForLevel(level: number): Detail {
   const l = clampLevel(level);
@@ -120,98 +119,89 @@ export function differs(a: ShapeSpec, b: ShapeSpec): boolean {
   return ((a.dir % 4) + 4) % 4 !== ((b.dir % 4) + 4) % 4;
 }
 
-// ───────────────────────────── the game (pure; the mechanic and the bot tests share it) ─────────────────────────────
-
-/** Nap after a miss (seconds, from when the next round appears): 5 s, 8 s from the second miss in a row. */
-export function napSeconds(missStreak: number): number {
-  return missStreak <= 0 ? 0 : missStreak === 1 ? ODD.nap.first : ODD.nap.again;
-}
+// ───────────────────────────── the staircase on the booth's rounds (pure; mechanic + bot tests) ─────────────────────────────
 
 /**
- * Gems for a hit: the tier's gems, but only 1 for the first `ODD.warmHits` hits after a miss, so
- * random pressing cannot farm gems (a player who reads the shapes rarely misses).
+ * The level a session is at; it runs through every try of every round. The tier of a try (its
+ * result and the round's prize) is `tierForLevel` of the level it was asked at: the mechanic
+ * copies it into the round machine before each report.
  */
-export function payout(tier: GlassesTier, hitsSinceMiss: number): number {
-  return hitsSinceMiss <= ODD.warmHits ? 1 : gemsForTier(tier);
-}
-
-export interface PressResult {
-  hit: boolean;
-  tier: GlassesTier;
-  gems: number;
-}
-
-export class OddOneGame {
+export class OddStaircase {
   level = 0;
   /** Fixed level (bot tests); null = the staircase. */
   lockLevel: number | null = null;
-  round: Round;
-  phase: 'ask' | 'feedback' = 'ask';
-  phaseT = 0;
-  /** Seconds the buttons still nap (counts down only while a round asks). */
-  nap = 0;
-  missStreak = 0;
-  /** Hits since the last miss (Infinity before the first miss). */
-  hitsSinceMiss = Infinity;
-  pressed = -1;
-  lastHit = false;
-  hits = 0;
-  misses = 0;
-  gems = 0;
 
-  constructor(private readonly rng: () => number) {
-    this.round = makeRound(0, rng);
+  /** The level the next try is asked at. */
+  current(): number {
+    return clampLevel(this.lockLevel ?? this.level);
   }
 
-  canPress(): boolean {
-    return this.phase === 'ask' && this.nap <= 0;
-  }
-
-  newRound(): void {
-    this.round = makeRound(this.lockLevel ?? this.level, this.rng);
-    this.phase = 'ask';
-    this.phaseT = 0;
-    this.pressed = -1;
-  }
-
-  press(i: number): PressResult | null {
-    if (!this.canPress()) return null;
-    const hit = i === this.round.answer;
-    const tier = this.round.tier;
-    this.pressed = i;
-    this.lastHit = hit;
-    this.phase = 'feedback';
-    this.phaseT = 0;
-    let gems = 0;
-    if (hit) {
-      this.hits++;
-      this.missStreak = 0;
-      this.hitsSinceMiss++;
-      gems = payout(tier, this.hitsSinceMiss);
-      this.gems += gems;
-    } else {
-      this.misses++;
-      this.missStreak++;
-      this.hitsSinceMiss = 0;
-      this.nap = napSeconds(this.missStreak);
-    }
+  /** Finer after a hit, coarser after a miss. */
+  answer(hit: boolean): void {
     this.level = nextLevel(this.level, hit);
-    return { hit, tier, gems };
-  }
-
-  step(dt: number): void {
-    this.phaseT += dt;
-    if (this.phase === 'feedback') {
-      if (this.phaseT >= ODD.feedbackSeconds) this.newRound();
-    } else this.nap = Math.max(0, this.nap - dt);
   }
 
   reset(): void {
     this.level = 0;
-    this.missStreak = 0;
-    this.hitsSinceMiss = Infinity;
-    this.hits = this.misses = this.gems = 0;
-    this.nap = 0;
-    this.newRound();
   }
 }
+
+export interface OddSimPlayer {
+  /** Probability of a right answer at a level (a random-guess bot: 1/3 everywhere). */
+  hitP: (level: number) => number;
+  /** Seconds from a try's start to the press, and from idle to the next start. */
+  tryTime: number;
+  restart: number;
+  /** Keep the staircase at this level (e.g. the top level: the bot's worst case). */
+  lockLevel?: number;
+  minutes: number;
+  seed?: number;
+}
+
+/**
+ * Gems per minute of a player at the odd one out booth: the real round machine (5 tries, a prize
+ * from 3) with the staircase setting each try's tier, exactly as the mechanic does.
+ */
+export function simulateOddOne(rules: RoundRules, p: OddSimPlayer): { gemsPerMinute: number; rounds: number; levelEnd: number } {
+  const m = new RoundMachine(rules);
+  const stairs = new OddStaircase();
+  stairs.lockLevel = p.lockLevel ?? null;
+  let a = (p.seed ?? 1) >>> 0;
+  const rng = (): number => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const dt = 1 / 20;
+  let gems = 0;
+  let sinceTry = 0;
+  let idleFor = 0;
+  for (let t = 0; t < p.minutes * 60; t += dt) {
+    if (m.phase === 'idle') {
+      idleFor += dt;
+      if (idleFor >= p.restart) {
+        m.start();
+        idleFor = 0;
+      }
+      continue;
+    }
+    if (m.phase === 'play') {
+      sinceTry += dt;
+      if (sinceTry >= p.tryTime) {
+        const level = stairs.current();
+        const hit = rng() < p.hitP(level);
+        m.tier = tierForLevel(level);
+        m.report(hit);
+        stairs.answer(hit);
+      }
+    }
+    for (const e of m.step(dt, true)) {
+      if (e.type === 'try') sinceTry = 0;
+      if (e.type === 'pay') gems += e.gems;
+    }
+  }
+  return { gemsPerMinute: gems / p.minutes, rounds: m.rounds, levelEnd: stairs.level };
+}
+
