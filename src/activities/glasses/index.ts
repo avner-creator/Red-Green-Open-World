@@ -15,6 +15,10 @@ import { ROADS } from '../../world/layout'; // read-only pure data: keeps sites 
 import { VisionLayer } from '../../types';
 import type { GameContext, GameSystem } from '../../types';
 import { createBoard, createBoardMaterial } from './board';
+import { createBoothAtlas, createBoothMaterial } from './booth';
+import type { BoothAtlas } from './booth';
+import { createBoothKit } from './booth/kit';
+import type { BoothKit } from './booth/kit';
 import { cameraSafe } from './camera';
 import type { Board } from './board';
 import { BOARD, GLASSES } from './constants';
@@ -56,6 +60,12 @@ export interface GlassesTestApi {
   reset(id: string): void;
   /** Draw calls of the mechanic's visible objects plus its board. */
   draws(id: string): number;
+  /** Draw calls of the site's board or booth mesh alone (1). */
+  signDraws(id: string): number;
+  /** True when the site runs the booth kit. */
+  isBooth(id: string): boolean;
+  /** Every object the six mini-games may draw (boards, booths, tracked objects), for draw counts. */
+  objects(): THREE.Object3D[];
   active(id: string): boolean;
   /** Screen rectangle (CSS px) of the site's board for the current camera, or null if behind it. */
   boardRect(id: string): { x0: number; y0: number; x1: number; y1: number } | null;
@@ -85,7 +95,10 @@ type SiteState = GlassesSite & { valid: boolean; problem: string | null };
 interface Entry {
   def: MechanicDef;
   site: SiteState;
-  board: Board;
+  /** The old pictogram board (null for a booth game). */
+  board: Board | null;
+  /** The booth kit (booth games). */
+  kit: BoothKit | null;
   mech: Mechanic;
   idle: FarIdle;
   /** Tracked objects and their layer. */
@@ -112,6 +125,18 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
   let built = false;
   let atlas: THREE.Texture | null = null;
   let boardMat: THREE.Material | null = null;
+  let boothAtlas: BoothAtlas | null = null;
+  let boothMat: THREE.Material | null = null;
+  /** The site's sign: its board's mesh, or its booth's mesh. */
+  const signOf = (e: Entry): THREE.Mesh | null => e.kit?.booth.mesh ?? e.board?.mesh ?? null;
+  /** Where the sign stands (world XZ) and the way it faces: the board, or the booth's marquee. */
+  const signSpot = (e: Entry): { x: number; z: number; yaw: number } => {
+    if (!e.kit) return { x: e.site.board.x, z: e.site.board.z, yaw: e.site.yaw };
+    const b = e.kit.booth.build.marqueeBox;
+    const c = e.kit.booth.mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2));
+    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(e.kit.booth.mesh.quaternion);
+    return { x: c.x, z: c.z, yaw: Math.atan2(f.x, f.z) };
+  };
   const tmp = new THREE.Vector3();
 
   /** Runtime collider probe: anything solid above the ground or across the circle. */
@@ -311,7 +336,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
   }
   const ours = (o: THREE.Object3D): boolean => {
     for (const e of entries) {
-      if (o === e.board.mesh) return true;
+      if (o === signOf(e)) return true;
       for (const t of e.objects.keys()) {
         let hit = false;
         t.traverse((c) => {
@@ -380,6 +405,8 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
     });
     atlas = createGlassesAtlas();
     boardMat = createBoardMaterial(atlas);
+    boothAtlas = createBoothAtlas();
+    boothMat = createBoothMaterial(boothAtlas.texture);
     for (const site of sites) {
       const def = MECHANICS.find((m) => m.id === site.id);
       if (!def) continue;
@@ -390,11 +417,11 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
   /** Board + mechanic for one site. */
   function makeEntry(def: MechanicDef, site: SiteState): Entry {
     if (!boardMat) throw new Error('glasses: board material missing');
-    const board = createBoard(ctx, boardMat, { x: site.board.x, y: ctx.world.heightAt(site.board.x, site.board.z), z: site.board.z, yaw: site.yaw }, def.pictos);
+    const board = def.booth ? null : createBoard(ctx, boardMat, { x: site.board.x, y: ctx.world.heightAt(site.board.x, site.board.z), z: site.board.z, yaw: site.yaw }, def.pictos);
     const objects = new Map<THREE.Object3D, VisionLayer>();
     const idle = new FarIdle();
     // The entry is completed right below; the env closes over it.
-    const entry = { def, site, board, idle, objects } as Entry;
+    const entry = { def, site, board, kit: null, idle, objects } as Entry;
     const env: MechanicEnv = {
       ctx,
       id: def.id,
@@ -403,7 +430,22 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
       rng: seededRng(hashString(def.id)),
       local: (x, z) => siteToWorld(site, x, z),
       groundAt: (x, z) => ctx.world.heightAt(x, z),
-      board: (pictos) => board.setPictos(pictos),
+      board: (pictos) => entry.board?.setPictos(pictos),
+      booth(setup) {
+        if (entry.kit) throw new Error(`glasses: ${def.id} already has a booth`);
+        if (!boothAtlas || !boothMat) throw new Error('glasses: booth atlas missing');
+        if (entry.board) {
+          entry.board.dispose();
+          entry.board = null;
+        }
+        const slot = site.index >= 0 ? site.index : Math.max(0, MECHANICS.indexOf(def));
+        boothAtlas.drawDemo(slot, setup.demo);
+        entry.kit = createBoothKit(
+          { ctx, site, add: env.add, remove: env.remove, pay: env.pay, result: env.result, material: boothMat, slot, isActive: () => idle.active },
+          setup,
+        );
+        return entry.kit;
+      },
       pay: (gems) => {
         pay(ctx, gems);
       },
@@ -464,7 +506,10 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         return entries.map(({ site: s }) => ({ id: s.id, x: s.x, y: s.y, z: s.z, yaw: s.yaw, radius: s.radius, near: s.near, valid: s.valid, problem: s.problem, board: { ...s.board } }));
       },
       goto(id) {
-        const { site } = byId(id);
+        const e0 = byId(id);
+        const spot = signSpot(e0);
+        // The board's place (the booth's marquee for a booth game) for every check below.
+        const site = { ...e0.site, board: { x: spot.x, z: spot.z }, yaw: e0.kit ? e0.site.yaw : spot.yaw };
         // Aim between the site centre and its board so both are in view.
         const aim = { x: site.x * 0.55 + site.board.x * 0.45, z: site.z * 0.55 + site.board.z * 0.45 };
         let best: { x: number; z: number } | null = null;
@@ -501,9 +546,25 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
       reset: (id) => byId(id).mech.reset(),
       draws(id) {
         const e = byId(id);
-        let n = countDraws(e.board.mesh);
+        const sign = signOf(e);
+        let n = sign ? countDraws(sign) : 0;
         for (const o of e.mech.drawObjects()) n += countDraws(o);
         return n;
+      },
+      signDraws(id) {
+        const sign = signOf(byId(id));
+        return sign ? countDraws(sign) : 0;
+      },
+      isBooth: (id) => !!byId(id).kit,
+      objects() {
+        build();
+        const out: THREE.Object3D[] = [];
+        for (const e of entries) {
+          const sign = signOf(e);
+          if (sign) out.push(sign);
+          out.push(...e.objects.keys());
+        }
+        return out;
       },
       active: (id) => byId(id).idle.active,
       search(id, start, faceTo, playRadius, wantStats) {
@@ -526,7 +587,7 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         setActive(e, false);
         e.mech.dispose();
         for (const o of e.objects.keys()) ctx.vision.remove(o);
-        e.board.dispose();
+        e.board?.dispose();
         return out;
       },
       probe(x, z, yaw, playRadius) {
@@ -549,10 +610,13 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         return sceneHitName(from, d, len - 0.3) ?? sceneHitName(from, d, len - 0.3, true);
       },
       boardRect(id) {
-        const mesh = byId(id).board.mesh;
+        const e = byId(id);
+        const mesh = signOf(e);
+        if (!mesh) return null;
         const geo = mesh.geometry;
         if (!geo.boundingBox) geo.computeBoundingBox();
-        const bb = geo.boundingBox as THREE.Box3;
+        // A booth's mesh spans the whole play; its "board" is the marquee.
+        const bb = e.kit ? e.kit.booth.build.marqueeBox : (geo.boundingBox as THREE.Box3);
         const cam = ctx.camera;
         cam.updateMatrixWorld();
         mesh.updateMatrixWorld();
@@ -593,11 +657,13 @@ export function createGlasses(ctx: GameContext, table: readonly FixedSite[] = FI
         e.mech.dispose();
         for (const o of e.objects.keys()) ctx.vision.remove(o);
         e.objects.clear();
-        e.board.dispose();
+        e.board?.dispose();
       }
       entries.length = 0;
       boardMat?.dispose();
       atlas?.dispose();
+      boothMat?.dispose();
+      boothAtlas?.dispose();
       if (ctx.testMode) delete window.__rgGlasses;
     },
   };

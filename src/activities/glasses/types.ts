@@ -29,6 +29,8 @@
  */
 import type * as THREE from 'three';
 import type { ChallengeModifiers, GameContext, GlassesKind, GlassesTier, VisionLayer } from '../../types';
+import type { BoothKit } from './booth/kit';
+import type { BoothSetup } from './booth/types';
 import type { GlassesPicto } from './pictos';
 import type { GlassesSite, XZ } from './sites';
 
@@ -64,8 +66,16 @@ export interface MechanicEnv {
   local(x: number, z: number): XZ;
   /** Terrain height under a world XZ. */
   groundAt(x: number, z: number): number;
-  /** Swap the board's pictograms (2–3; keep the same count). */
+  /** Swap the board's pictograms (2–3; keep the same count). No-op for a booth game. */
   board(pictos: readonly GlassesPicto[]): void;
+  /**
+   * Adopt the booth kit (./booth/README.md): the site's board is replaced by a game booth (marquee,
+   * demo flipbook, lamps, start pad: still ONE draw call) and rounds (3-2-1-GO, tries, lamps,
+   * celebration, prize). Call once from `create`; the mechanic's registry entry needs
+   * `booth: true` (no board is built for it). Returns the kit; forward `update`, `setActive`,
+   * `reset` and `dispose` to it and call `kit.report(hit, at)` once per try.
+   */
+  booth(setup: BoothSetup): BoothKit;
   /** Pay gems through the economy (if present) + toast + sound. */
   pay(gems: number): void;
   /** Emit `glasses:result` for this mechanic. */

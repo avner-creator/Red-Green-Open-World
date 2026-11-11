@@ -1,40 +1,29 @@
 /**
- * Half-symbol gates (kind `lineUp`). Three chunky stone arches stand across the site, each topped
- * with a big both-eye symbol. A tall sign behind the middle arch shows ONE half of the answer
- * symbol to the weak eye and the OTHER half to the strong eye, exactly registered on its dark
- * panel. Either half alone fits two arches; both eyes together fit one. Run through the matching
- * arch (a segment test against each opening, so sprinting or jumping through counts) → happy
- * squash, confetti, fanfare, gems. A wrong arch → a soft boing and a wobble. Step back on the
- * start plate for the next round (new symbols, new order, the halves swap sides).
+ * Half-symbol gates (kind `lineUp`), the booth kit's reference game (../booth/README.md).
  *
- * Draw calls: the board (1) + one merged both-eye mesh for every static part, the arches, their
- * symbols and the plate (1) + the weak half (1) + the strong half (1) + confetti while it flies (1).
+ * A game booth stands beside a glowing walk-in start pad; chevrons on the ground lead from the pad
+ * to three striped finish arches, each with a big both-eye symbol plaque and a checkered ribbon.
+ * Step on the pad (or press Use on it) → 3-2-1-GO → the sign between the pad and the arches shows
+ * ONE half of the answer symbol to the weak eye and the OTHER half to the strong eye. Either half
+ * alone fits two arches; both eyes together fit one. Run through the matching arch → ✓, a lamp
+ * lights, the arch squashes, confetti; a wrong arch → ✗, a dim lamp, a wobble. Back to the pad
+ * for the next run (3 runs a round). After 3 runs: lamps chase, fanfare, confetti, and the prize
+ * flies out (2 of 3 or better). Each run reports `glasses:result`; the tier steps per round.
+ *
+ * Draw calls: the booth (1: marquee, pad, decals, lamps, demo, prompt) + one merged both-eye mesh
+ * for the arches and the sign (1) + the weak half (1) + the strong half (1); during a round the
+ * kit's fx quads (1) and confetti (1).
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../../types';
 import type { GlassesTier } from '../../../types';
 import { createFullSymbolTexture, createHalfSymbol, TIERS, withChallenge } from '../../../vision/toolkit';
 import type { HalfSymbolBlock } from '../../../vision/toolkit';
+import type { BoothSpec } from '../booth/types';
 import type { Mechanic, MechanicEnv } from '../types';
-import { GATE_GEMS, GATES } from './constants';
-import { freshGuard, settle } from './guard';
-import type { Guard } from './guard';
-import {
-  boxGeo,
-  Confetti,
-  createAtlas,
-  createPartMesh,
-  createSiteMaterial,
-  crossesOpening,
-  flatUv,
-  nextTier,
-  pivotMatrix,
-  quadGeo,
-  remapUv,
-  siteFrame,
-  squashCurve,
-  wobbleCurve,
-} from './kit';
+import { GATE_BOOTH, GATE_RULES, GATES } from './constants';
+import { GATES_DEMO } from './demo';
+import { boxGeo, createAtlas, createPartMesh, createSiteMaterial, crossesOpening, flatUv, pivotMatrix, quadGeo, siteFrame, squashCurve, wobbleCurve } from './kit';
 import type { Opening } from './kit';
 import { chooseLayout } from './layout';
 import type { LayoutSpec } from './layout';
@@ -42,7 +31,7 @@ import { halvesFor, isGateRound, makeGateRound, otherSide } from './round';
 import type { GateRound, Side } from './round';
 
 const SWATCHES = {
-  stone: { diffuse: '#ddd5c2' },
+  stone: { diffuse: '#ece4d0' },
   stoneDark: { diffuse: '#3c414d' },
   wood: { diffuse: '#a87a4c' },
   woodDark: { diffuse: '#5e3f24' },
@@ -50,9 +39,12 @@ const SWATCHES = {
   // Dark neutral sign face: no diffuse, constant self-light (same grey in R and G whatever the sun).
   panel: { diffuse: '#000000', glow: '#2e2e2e' },
   gold: { diffuse: '#f2c14e' },
+  // Arch stripes: dark in BOTH R and G against the bright stone.
+  berry: { diffuse: '#5c0a24' },
+  navy: { diffuse: '#18205e' },
 };
 
-const PLATE_CELL = 3;
+const RIBBON_CELL = 3;
 
 /** Inverted-U arch outline (local XY, feet at y = -sink). */
 function archShape(): THREE.Shape {
@@ -70,81 +62,59 @@ function archShape(): THREE.Shape {
   return s;
 }
 
-type PlateMode = 'live' | 'ready' | 'nap';
-
-function drawPlate(g: CanvasRenderingContext2D, mode: PlateMode): void {
-  const c = 128;
-  const ready = mode === 'ready';
-  if (mode === 'nap') {
-    // A sleepy plate after a miss: dim rim, a crescent moon instead of the arrow.
-    g.fillStyle = '#2b2f38';
-    g.fillRect(0, 0, 256, 256);
-    g.fillStyle = '#8f8a7e';
-    g.beginPath();
-    g.arc(c, c, 124, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#20242c';
-    g.beginPath();
-    g.arc(c, c, 106, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#d9d2bf';
-    g.beginPath();
-    g.arc(c, c - 6, 58, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#20242c';
-    g.beginPath();
-    g.arc(c + 26, c - 26, 50, 0, Math.PI * 2);
-    g.fill();
-    return;
-  }
-  g.fillStyle = '#2b2f38';
+/** A checkered finish ribbon (both eyes: black and white). */
+function drawRibbon(g: CanvasRenderingContext2D): void {
+  g.fillStyle = '#ffffff';
   g.fillRect(0, 0, 256, 256);
-  g.fillStyle = ready ? '#ffe9a8' : '#cfc7b2';
-  g.beginPath();
-  g.arc(c, c, 124, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#20242c';
-  g.beginPath();
-  g.arc(c, c, ready ? 100 : 106, 0, Math.PI * 2);
-  g.fill();
-  // Two footprints and a big arrow towards the arches (texture up = towards the arches).
-  g.fillStyle = ready ? '#ffffff' : '#e8e1cf';
-  for (const sx of [-1, 1]) {
-    g.beginPath();
-    g.ellipse(c + sx * 26, 170, 15, 26, 0, 0, Math.PI * 2);
-    g.fill();
-    g.beginPath();
-    g.ellipse(c + sx * 26, 134, 11, 9, 0, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.beginPath();
-  g.moveTo(c, 34);
-  g.lineTo(c + 40, 82);
-  g.lineTo(c + 16, 82);
-  g.lineTo(c + 16, 112);
-  g.lineTo(c - 16, 112);
-  g.lineTo(c - 16, 82);
-  g.lineTo(c - 40, 82);
-  g.closePath();
-  g.fill();
+  g.fillStyle = '#15171c';
+  const n = 8;
+  const s = 256 / n;
+  for (let y = 0; y < 2; y++) for (let x = 0; x < n; x++) if ((x + y) % 2 === 0) g.fillRect(x * s, 64 + y * 64, s, 64);
+  g.fillStyle = '#f2c14e';
+  g.fillRect(0, 52, 256, 12);
+  g.fillRect(0, 192, 256, 12);
+}
+
+/** The plaque at rest: a big bright "?" on the dark plate (same on all three arches). */
+function drawMystery(g: CanvasRenderingContext2D): void {
+  g.fillStyle = '#15171c';
+  g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = '#f7f4ec';
+  g.lineWidth = 12;
+  g.strokeRect(14, 14, 228, 228);
+  g.fillStyle = '#ffd23a';
+  g.font = '900 170px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('?', 128, 140);
 }
 
 export function create(env: MechanicEnv): Mechanic {
   const { ctx, site } = env;
   const G = GATES;
+  const B = GATE_BOOTH;
+  const mq = B.marquee;
+  const mqPt = (lx: number, lz: number): { x: number; z: number } => ({
+    x: mq.x + lx * Math.cos(mq.yaw) + lz * Math.sin(mq.yaw),
+    z: mq.z - lx * Math.sin(mq.yaw) + lz * Math.cos(mq.yaw),
+  });
   const spec: LayoutSpec = {
-    hero: { x: 0, z: G.plateZ },
+    hero: { x: 0, z: G.padZ },
     targets: [
       ...[-1, 0, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * 0.7, z: G.signZ, y: G.signY + sy * 0.7 }))),
       ...G.archX.flatMap((x) => [{ x, z: G.archZ, y: G.plaqueY }, { x, z: G.archZ, y: G.plaqueY + 0.5 }]),
+      // The booth's lamp row.
+      ...[-0.5, 0.5].map((lx) => ({ ...mqPt(lx, 0), y: 3.2 })),
     ],
     footprint: [
       ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => ({ x: sx * (G.archX[2] + G.outerHalf), z: G.archZ + sz * 0.35 }))),
       ...G.archX.map((x) => ({ x, z: G.archZ })),
       { x: 0, z: G.signZ },
-      { x: -G.plateR, z: G.plateZ },
-      { x: G.plateR, z: G.plateZ },
-      { x: 0, z: G.plateZ + G.plateR },
+      { x: -G.padR, z: G.padZ },
+      { x: G.padR, z: G.padZ },
+      { x: 0, z: G.padZ + G.padR },
+      // The booth's poles and counter.
+      ...[-1.6, 1.6].flatMap((lx) => [0.1, -0.5].map((lz) => mqPt(lx, lz))),
     ],
     radius: site.radius + 0.4,
     canopyTargets: [-1, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * 0.8, z: G.signZ, y: G.signY + sy * 0.8 }))),
@@ -159,67 +129,73 @@ export function create(env: MechanicEnv): Mechanic {
     return env.groundAt(w.x, w.z) - site.y;
   };
 
-  // ───────────── both-eye mesh (one draw call) ─────────────
+  // ───────────── both-eye mesh: the arches and the sign (one draw call) ─────────────
   const atlas = createAtlas(SWATCHES);
   const material = createSiteMaterial(atlas);
   const U = (n: keyof typeof SWATCHES) => atlas.swatchUv(n);
-  const archBase = GATES.archX.map((x) => Math.min(ground(x - GATES.outerHalf + 0.2, GATES.archZ), ground(x + GATES.outerHalf - 0.2, GATES.archZ)));
-  const signBase = ground(0, GATES.signZ);
-  const plateBase = ground(0, GATES.plateZ);
-  const apex = GATES.straight + GATES.outerHalf;
+  const archBase = G.archX.map((x) => Math.min(ground(x - G.outerHalf + 0.2, G.archZ), ground(x + G.outerHalf - 0.2, G.archZ)));
+  const signBase = ground(0, G.signZ);
+  const padBase = ground(0, G.padZ);
+  const apex = G.straight + G.outerHalf;
+  const mid = (G.innerHalf + G.outerHalf) / 2;
+  // The extruded arch is 0.1 m fatter than its outline (bevel): bands wrap round that.
+  const band = G.outerHalf - G.innerHalf + 0.2;
 
   const parts: Record<string, THREE.BufferGeometry[]> = {};
-  GATES.archX.forEach((x, i) => {
+  G.archX.forEach((x, i) => {
     const y0 = archBase[i];
-    const z = GATES.archZ;
-    const arch = new THREE.ExtrudeGeometry(archShape(), { depth: GATES.depth, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 1, curveSegments: 18 });
-    arch.translate(x, y0, z - GATES.depth / 2);
+    const z = G.archZ;
+    const arch = new THREE.ExtrudeGeometry(archShape(), { depth: G.depth, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 1, curveSegments: 18 });
+    arch.translate(x, y0, z - G.depth / 2);
     flatUv(arch, U('stone'));
     const list: THREE.BufferGeometry[] = [arch];
-    // Dark plinths and a dark band under the curve (reads as an outline in R-only and G-only).
+    // Dark plinths, candy bands round the legs and the curve (bright stone, dark bands: reads in
+    // R-only and G-only), alternating berry / navy.
     for (const sx of [-1, 1]) {
-      const px = x + sx * (GATES.innerHalf + GATES.outerHalf) / 2;
-      list.push(boxGeo(0.56, 0.45 + GATES.sink, GATES.depth + 0.2, px, y0 + (0.45 - GATES.sink) / 2, z, U('stoneDark')));
-      list.push(boxGeo(0.5, 0.12, GATES.depth + 0.14, px, y0 + GATES.straight - 0.06, z, U('stoneDark')));
+      const px = x + sx * mid;
+      list.push(boxGeo(0.56, 0.45 + G.sink, G.depth + 0.2, px, y0 + (0.45 - G.sink) / 2, z, U('stoneDark')));
+      [0.62, 1.22].forEach((by, k) => list.push(boxGeo(band, 0.34, G.depth + 0.2, px, y0 + by, z, U(k % 2 ? 'navy' : 'berry'))));
     }
-    // Symbol plaque on top: dark frame + the symbol on both faces.
-    const py = y0 + GATES.plaqueY;
-    list.push(boxGeo(0.22, GATES.plaqueY - apex + 0.1, 0.22, x, y0 + (apex + GATES.plaqueY - GATES.plaque / 2) / 2, z, U('stoneDark')));
-    list.push(boxGeo(GATES.plaque + 0.14, GATES.plaque + 0.14, 0.16, x, py, z, U('ink')));
-    list.push(quadGeo(GATES.plaque, GATES.plaque, x, py, z + 0.085, atlas.cellUv(i)));
-    list.push(quadGeo(GATES.plaque, GATES.plaque, x, py, z - 0.085, atlas.cellUv(i), true));
+    [0.12, 0.36, 0.64, 0.88].forEach((f, k) => {
+      const a = Math.PI * (1 - f);
+      const b = boxGeo(band, 0.3, G.depth + 0.2, 0, 0, 0, U(k % 2 ? 'navy' : 'berry'));
+      b.rotateZ(a - Math.PI / 2);
+      b.translate(x + Math.cos(a) * mid, y0 + G.straight + Math.sin(a) * mid, z);
+      list.push(b);
+    });
+    // Finish ribbon across the top of the opening (both faces).
+    list.push(quadGeo(G.innerHalf * 2, G.ribbonH, x, y0 + G.ribbonY + G.ribbonH / 2, z + 0.03, atlas.cellUv(RIBBON_CELL)));
+    list.push(quadGeo(G.innerHalf * 2, G.ribbonH, x, y0 + G.ribbonY + G.ribbonH / 2, z - 0.03, atlas.cellUv(RIBBON_CELL), true));
+    // Symbol plaque on top: gold frame + the symbol on both faces.
+    const py = y0 + G.plaqueY;
+    list.push(boxGeo(0.22, G.plaqueY - apex + 0.1, 0.22, x, y0 + (apex + G.plaqueY - G.plaque / 2) / 2, z, U('stoneDark')));
+    list.push(boxGeo(G.plaque + 0.2, G.plaque + 0.2, 0.16, x, py, z, U('gold')));
+    list.push(quadGeo(G.plaque, G.plaque, x, py, z + 0.085, atlas.cellUv(i)));
+    list.push(quadGeo(G.plaque, G.plaque, x, py, z - 0.085, atlas.cellUv(i), true));
     parts[`arch${i}`] = list;
   });
-  // The sign: a lectern in front of the plate (one stout post, a wooden frame, the dark panel,
+  // The sign: a lectern in front of the pad (one stout post, a wooden frame, the dark panel,
   // a roof cap), leaning back a little so it faces the camera that looks down over the hero.
-  const signCentre = new THREE.Vector3(0, plateBase + GATES.signY, GATES.signZ);
+  const signCentre = new THREE.Vector3(0, padBase + G.signY, G.signZ);
   {
-    const z = GATES.signZ;
-    const tilted = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateX(-GATES.signTilt).translate(0, signCentre.y, z);
-    const half = GATES.signFrame / 2;
-    const postH = signCentre.y - signBase + GATES.sink;
+    const z = G.signZ;
+    const tilted = (g: THREE.BufferGeometry): THREE.BufferGeometry => g.rotateX(-G.signTilt).translate(0, signCentre.y, z);
+    const half = G.signFrame / 2;
+    const postH = signCentre.y - signBase + G.sink;
     parts.sign = [
-      boxGeo(0.3, postH, 0.3, 0, signBase - GATES.sink + postH / 2, z - 0.12, U('woodDark')),
+      boxGeo(0.3, postH, 0.3, 0, signBase - G.sink + postH / 2, z - 0.12, U('woodDark')),
       boxGeo(0.62, 0.4, 0.62, 0, signBase + 0.08, z - 0.12, U('stoneDark')),
-      tilted(boxGeo(GATES.signFrame, GATES.signFrame, 0.16, 0, 0, 0, U('wood'))),
-      tilted(boxGeo(GATES.signPanel, GATES.signPanel, 0.04, 0, 0, 0.09, U('panel'))),
-      tilted(boxGeo(GATES.signFrame + 0.3, 0.13, 0.46, 0, half + 0.065, -0.05, U('woodDark'))),
-      ...([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([cx, cy]) => tilted(boxGeo(0.11, 0.11, 0.05, cx * (half - 0.08), cy * (half - 0.08), 0.1, U('gold')))),
+      tilted(boxGeo(G.signFrame, G.signFrame, 0.16, 0, 0, 0, U('gold'))),
+      tilted(boxGeo(G.signPanel, G.signPanel, 0.04, 0, 0, 0.09, U('panel'))),
+      tilted(boxGeo(G.signFrame + 0.3, 0.13, 0.46, 0, half + 0.065, -0.05, U('woodDark'))),
     ];
-  }
-  // The start plate: a dark rim and a round face with feet and an arrow.
-  {
-    const rim = new THREE.CylinderGeometry(GATES.plateR + 0.08, GATES.plateR + 0.14, 0.3, 32).translate(0, plateBase - 0.1, GATES.plateZ);
-    flatUv(rim, U('stoneDark'));
-    const face = new THREE.CircleGeometry(GATES.plateR, 32).rotateX(-Math.PI / 2).translate(0, plateBase + 0.055, GATES.plateZ);
-    remapUv(face, atlas.cellUv(PLATE_CELL));
-    parts.plate = [rim, face];
   }
   const body = createPartMesh(parts, material, 'glasses:gates');
   body.mesh.position.set(lay.x, site.y, lay.z);
   body.mesh.rotation.y = lay.yaw;
   body.mesh.updateMatrixWorld(true);
   env.add(body.mesh, VisionLayer.Both);
+  atlas.drawCell(RIBBON_CELL, drawRibbon, 0.4);
 
   // ───────────── colliders ─────────────
   const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lay.yaw);
@@ -228,26 +204,24 @@ export function create(env: MechanicEnv): Mechanic {
     const w = frame.toWorld(lx, lz);
     colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, site.y + ly, w.z), new THREE.Vector3(hx, hy, hz), rot));
   };
-  const postHalf = (GATES.outerHalf - GATES.innerHalf) / 2;
-  GATES.archX.forEach((x, i) => {
+  const postHalf = (G.outerHalf - G.innerHalf) / 2;
+  G.archX.forEach((x, i) => {
     const y0 = archBase[i];
-    const h = GATES.straight + 0.6 + GATES.sink;
-    for (const sx of [-1, 1]) addBox(x + sx * (GATES.innerHalf + postHalf), y0 - GATES.sink + h / 2, GATES.archZ, postHalf + 0.06, h / 2, GATES.depth / 2 + 0.05);
-    // The top: from just above the opening's apex to the plaque.
-    const y1 = y0 + GATES.straight + GATES.innerHalf + 0.05;
-    const y2 = y0 + GATES.plaqueY + GATES.plaque / 2;
-    addBox(x, (y1 + y2) / 2, GATES.archZ, GATES.outerHalf, (y2 - y1) / 2, GATES.depth / 2 + 0.05);
+    const h = G.straight + 0.6 + G.sink;
+    for (const sx of [-1, 1]) addBox(x + sx * (G.innerHalf + postHalf), y0 - G.sink + h / 2, G.archZ, postHalf + 0.06, h / 2, G.depth / 2 + 0.05);
+    const y1 = y0 + G.straight + G.innerHalf + 0.05;
+    const y2 = y0 + G.plaqueY + G.plaque / 2;
+    addBox(x, (y1 + y2) / 2, G.archZ, G.outerHalf, (y2 - y1) / 2, G.depth / 2 + 0.05);
   });
-  addBox(0, (signBase - GATES.sink + signCentre.y + GATES.signFrame / 2) / 2, GATES.signZ - 0.05, GATES.signFrame / 2, (signCentre.y + GATES.signFrame / 2 - signBase + GATES.sink) / 2, 0.2);
+  addBox(0, (signBase - G.sink + signCentre.y + G.signFrame / 2) / 2, G.signZ - 0.05, G.signFrame / 2, (signCentre.y + G.signFrame / 2 - signBase + G.sink) / 2, 0.2);
 
   // ───────────── the two halves (weak layer + strong layer, exactly registered) ─────────────
-  const signPos = frame.toWorld(0, GATES.signZ);
+  const signPos = frame.toWorld(0, G.signZ);
   const signY = site.y + signCentre.y;
   const makeRoot = (): THREE.Group => {
     const g = new THREE.Group();
     g.position.set(signPos.x, signY, signPos.z);
-    // Yaw, then the sign's lean in its own frame (the same transform as the panel).
-    g.rotation.set(-GATES.signTilt, lay.yaw, 0, 'YXZ');
+    g.rotation.set(-G.signTilt, lay.yaw, 0, 'YXZ');
     return g;
   };
   const weakRoot = makeRoot();
@@ -257,7 +231,6 @@ export function create(env: MechanicEnv): Mechanic {
   // Both blocks are LEFT halves; a half on the right is the mirror image (scale.x = −1).
   const weakHalf: HalfSymbolBlock = createHalfSymbol({ shape: 'round', side: 'left', size: 1, facing: 'wall' });
   const strongHalf: HalfSymbolBlock = createHalfSymbol({ shape: 'round', side: 'left', size: 1, facing: 'wall' });
-  // 2 cm in front of the panel face (panel face at z = 0.11 in the sign's frame).
   weakHalf.object.position.z = 0.13;
   strongHalf.object.position.z = 0.13;
   weakRoot.add(weakHalf.object);
@@ -265,41 +238,27 @@ export function create(env: MechanicEnv): Mechanic {
   env.add(weakRoot, VisionLayer.WeakOnly);
   env.add(strongRoot, VisionLayer.StrongOnly);
 
-  const confetti = new Confetti(90);
-  env.add(confetti.mesh, VisionLayer.Both);
-  // Celebration randomness is local, so it never shifts the round sequence.
-  let fxSeed = 0x9e3779b9;
-  const fxRng = (): number => {
-    fxSeed = (fxSeed + 0x6d2b79f5) >>> 0;
-    let t = fxSeed;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-
   // ───────────── state ─────────────
   let round: GateRound = makeGateRound(env.rng, 'left');
-  let roundNo = 0;
-  let state: 'open' | 'done' = 'open';
+  let tries = 0;
+  /** 'idle': no question (booth idle, countdown, celebration); 'open': a run is on; 'done': answered. */
+  let state: 'idle' | 'open' | 'done' = 'idle';
   let tier: GlassesTier = 1;
-  let doneT = 0;
   let chosen = -1;
   let hits = 0;
   let misses = 0;
-  let gems = 0;
   let active = false;
   let lastResult: { tier: GlassesTier; hit: boolean; arch: number } | null = null;
-  const anim = GATES.archX.map(() => ({ squash: 1, wobble: 1 }));
+  const anim = G.archX.map(() => ({ squash: 1, wobble: 1 }));
   let prev: { x: number; y: number; z: number } | null = null;
-  let plateMode: PlateMode = 'live';
-  let guard: Guard = freshGuard();
-  /** Seconds the player must stand on the plate before the next round (the nap after a miss). */
-  let pauseNeeded = 0;
-  let plateT = 0;
 
-  const openings: Opening[] = GATES.archX.map((cx) => ({ cx, z: GATES.archZ, halfWidth: GATES.innerHalf - 0.05, height: GATES.passHeight }));
+  const openings: Opening[] = G.archX.map((cx) => ({ cx, z: G.archZ, halfWidth: G.innerHalf - 0.05, height: G.passHeight }));
 
   function drawSymbols(): void {
+    if (state === 'idle') {
+      for (let i = 0; i < 3; i++) atlas.drawCell(i, drawMystery, 0.4);
+      return;
+    }
     round.candidates.forEach((sym, i) => {
       const tex = createFullSymbolTexture(sym, 256);
       const dim = state === 'done' && i !== round.answer;
@@ -320,18 +279,12 @@ export function create(env: MechanicEnv): Mechanic {
     });
   }
 
-  function drawPlateCell(mode: PlateMode): void {
-    plateMode = mode;
-    atlas.drawCell(PLATE_CELL, (g) => drawPlate(g, mode), mode === 'ready' ? 0.55 : 0.3);
-  }
-
   function applyHalves(): void {
     const h = halvesFor(round);
     weakHalf.setShape(h.weak);
     strongHalf.setShape(h.strong);
     const p = withChallenge(tier, env.challenge());
-    const size = GATES.halfSize * p.size;
-    // Mirror the half that sits on the right of the axis.
+    const size = G.halfSize * p.size;
     weakRoot.scale.set(round.weakSide === 'right' ? -size : size, size, 1);
     strongRoot.scale.set(otherSide(round.weakSide) === 'right' ? -size : size, size, 1);
     weakHalf.set({ level: p.level, opacity: p.opacity });
@@ -340,21 +293,27 @@ export function create(env: MechanicEnv): Mechanic {
     strongRoot.updateMatrixWorld(true);
   }
 
+  /** Show the current round (a run is on). */
   function applyRound(): void {
     state = 'open';
     chosen = -1;
-    doneT = 0;
     drawSymbols();
-    drawPlateCell('live');
     weakRoot.visible = strongRoot.visible = true;
     applyHalves();
   }
 
   function newRound(): void {
-    const side: Side = roundNo === 0 ? 'left' : otherSide(round.weakSide);
+    const side: Side = tries === 0 ? 'left' : otherSide(round.weakSide);
     round = makeGateRound(env.rng, side);
-    roundNo++;
+    tries++;
     applyRound();
+  }
+
+  function goIdle(): void {
+    state = 'idle';
+    chosen = -1;
+    weakRoot.visible = strongRoot.visible = false;
+    drawSymbols();
   }
 
   function clearAnims(): void {
@@ -365,52 +324,64 @@ export function create(env: MechanicEnv): Mechanic {
     }
   }
 
+  // Booth spec heights are relative to the site's y: lift them onto the pad's ground.
+  const lift = (p: { x: number; y: number; z: number } | undefined) => (p ? { ...p, y: p.y + padBase } : undefined);
+  const boothSpec: BoothSpec = { ...B, prompt: lift(B.prompt), playPromptAt: lift(B.playPromptAt), countdown: lift(B.countdown) };
+  const kit = env.booth({
+    frame: { x: lay.x, z: lay.z, yaw: lay.yaw },
+    ground,
+    spec: boothSpec,
+    demo: GATES_DEMO,
+    rules: GATE_RULES,
+    hooks: {
+      onTry(_i, t) {
+        tier = t;
+        newRound();
+      },
+      onIdle() {
+        goIdle();
+      },
+    },
+    waitPromptAt: () => {
+      // After a run the child stands beyond the arch, facing away: the "back to the pad" prompt
+      // floats ahead of them, over the arch they just ran through (the answer is already given).
+      const x = chosen >= 0 ? G.archX[chosen] : 0;
+      return { x, y: archBase[Math.max(0, chosen)] + 2.6, z: G.archZ - 2.4 };
+    },
+  });
+
   function choose(i: number): void {
     const hit = i === round.answer;
-    const t = tier;
     chosen = i;
     state = 'done';
-    doneT = 0;
-    lastResult = { tier: t, hit, arch: i };
-    const settled = settle(guard, hit, GATE_GEMS[t], GATES.missPause);
-    guard = settled.guard;
-    pauseNeeded = settled.nap;
-    plateT = 0;
-    const top = frame.toWorld(GATES.archX[i], GATES.archZ);
+    lastResult = { tier, hit, arch: i };
     if (hit) {
       hits++;
       anim[i].squash = 0;
-      const paid = settled.gems;
-      gems += paid;
-      env.pay(paid);
-      ctx.audio.play('fanfare');
-      confetti.burst(top.x, site.y + archBase[i] + GATES.plaqueY, top.z, fxRng, 60, 5.5);
     } else {
       misses++;
       anim[i].wobble = 0;
-      ctx.audio.play('boing', { volume: 0.55, pitch: 0.8 });
     }
-    env.result(t, hit);
-    tier = nextTier(t, hit);
     drawSymbols();
-    drawPlateCell(hit ? 'ready' : 'nap');
-    // After a miss the sign goes quiet until the nap on the plate is over.
-    if (!hit) weakRoot.visible = strongRoot.visible = false;
+    // The sign goes quiet once the run is answered.
+    weakRoot.visible = strongRoot.visible = false;
+    // The ✓ / ✗ pops in the middle of the opening the child just ran through (seen from either side).
+    kit.report(hit, { x: G.archX[i], y: archBase[i] + 1.45, z: G.archZ });
   }
 
   const m4 = new THREE.Matrix4();
   function animate(dt: number): void {
     anim.forEach((a, i) => {
       if (a.squash >= 1 && a.wobble >= 1) return;
-      a.squash = Math.min(1, a.squash + dt / GATES.squash);
-      a.wobble = Math.min(1, a.wobble + dt / GATES.wobble);
+      a.squash = Math.min(1, a.squash + dt / G.squash);
+      a.wobble = Math.min(1, a.wobble + dt / G.wobble);
       if (a.squash >= 1 && a.wobble >= 1) {
         body.setPart(`arch${i}`, null);
         return;
       }
       const s = squashCurve(a.squash);
       const roll = wobbleCurve(a.wobble);
-      body.setPart(`arch${i}`, pivotMatrix(GATES.archX[i], archBase[i], GATES.archZ, s.sxz, s.sy, s.sxz, roll, 0, m4));
+      body.setPart(`arch${i}`, pivotMatrix(G.archX[i], archBase[i], G.archZ, s.sxz, s.sy, s.sxz, roll, 0, m4));
     });
   }
 
@@ -420,23 +391,15 @@ export function create(env: MechanicEnv): Mechanic {
     return { x: l.x, y: p.y - site.y, z: l.z };
   }
 
-  function onPlate(p: { x: number; y: number; z: number }): boolean {
-    return Math.hypot(p.x, p.z - GATES.plateZ) < GATES.plateR + 0.15 && Math.abs(p.y - plateBase) < 0.8;
-  }
-
   function reset(): void {
     tier = 1;
-    guard = freshGuard();
-    pauseNeeded = 0;
     hits = 0;
     misses = 0;
-    gems = 0;
-    roundNo = 0;
+    tries = 0;
     lastResult = null;
     prev = null;
-    confetti.clear();
     clearAnims();
-    newRound();
+    kit.reset();
   }
 
   reset();
@@ -448,42 +411,34 @@ export function create(env: MechanicEnv): Mechanic {
     setActive(on) {
       active = on;
       prev = null;
-      if (!on) {
-        confetti.clear();
-        clearAnims();
-      }
+      if (!on) clearAnims();
+      kit.setActive(on);
     },
     update(dt) {
+      kit.update(dt);
       animate(dt);
-      confetti.update(dt);
       const cur = localPlayer();
-      if (state === 'open' && prev && ctx.player.mode === 'walk') {
+      if (state === 'open' && kit.phase() === 'play' && prev && ctx.player.mode === 'walk') {
         for (let i = 0; i < openings.length; i++) {
-          const o = openings[i];
           const g = archBase[i];
-          if (crossesOpening({ x: prev.x, y: prev.y - g, z: prev.z }, { x: cur.x, y: cur.y - g, z: cur.z }, o)) {
+          if (crossesOpening({ x: prev.x, y: prev.y - g, z: prev.z }, { x: cur.x, y: cur.y - g, z: cur.z }, openings[i])) {
             choose(i);
             break;
           }
         }
-      } else if (state === 'done') {
-        doneT += dt;
-        const on = onPlate(cur);
-        if (on) plateT += dt;
-        if (doneT >= GATES.rearm && on && plateT >= pauseNeeded) newRound();
       }
       prev = cur;
     },
     dispose() {
       for (const c of colliders) ctx.physics.removeCollider(c);
       colliders.length = 0;
-      for (const o of [body.mesh, weakRoot, strongRoot, confetti.mesh]) env.remove(o);
+      kit.dispose();
+      for (const o of [body.mesh, weakRoot, strongRoot]) env.remove(o);
       body.dispose();
       material.dispose();
       atlas.dispose();
       weakHalf.dispose();
       strongHalf.dispose();
-      confetti.dispose();
     },
     debug() {
       const h = halvesFor(round);
@@ -491,54 +446,65 @@ export function create(env: MechanicEnv): Mechanic {
         const w = frame.toWorld(lx, lz);
         return { x: w.x, y: env.groundAt(w.x, w.z), z: w.z };
       };
+      const k = kit.debug();
       return {
         active,
         state,
-        tier,
-        round: roundNo,
+        phase: kit.phase(),
+        tier: kit.tier(),
+        runTier: tier,
+        round: tries,
         answer: round.answer,
         candidates: round.candidates.map((c) => ({ ...c })),
         weakSide: round.weakSide,
         weakHalf: h.weak,
         strongHalf: h.strong,
+        halvesShown: weakRoot.visible,
         chosen,
         hits,
         misses,
-        gems,
+        gems: kit.round.totalGems,
         lastResult,
-        plateMode,
-        guard: { ...guard },
-        pauseNeeded,
-        plateT,
-        confetti: confetti.live,
-        gemsPerTier: { ...GATE_GEMS },
+        kit: k,
         tierPreset: { ...TIERS[tier] },
         yaw: lay.yaw,
         layout: { shift: lay.shift, turn: lay.turn, problems: lay.problems, notes: lay.notes, ms: lay.ms },
-        plate: pt(0, GATES.plateZ),
-        // The approach spot the layout keeps clear (the sign seen from ~7 m).
-        approach: pt(lay.view?.x ?? 0, lay.view?.z ?? GATES.signZ + 7),
+        pad: pt(0, G.padZ),
+        // Kept for older callers: the pad is where the plate was.
+        plate: pt(0, G.padZ),
+        approach: pt(lay.view?.x ?? 0, lay.view?.z ?? G.signZ + 7),
         approachYaw: (() => {
-          const a = frame.toWorld(lay.view?.x ?? 0, lay.view?.z ?? GATES.signZ + 7);
-          const t = frame.toWorld(0, GATES.signZ);
+          const a = frame.toWorld(lay.view?.x ?? 0, lay.view?.z ?? G.signZ + 7);
+          const t = frame.toWorld(0, G.signZ);
           return Math.atan2(t.x - a.x, t.z - a.z);
         })(),
-        // Points just in front of / behind each opening (world), for tests.
-        arches: GATES.archX.map((x) => ({ front: pt(x, GATES.archZ + 0.7), back: pt(x, GATES.archZ - 0.7), around: pt(x + GATES.outerHalf + 0.6, GATES.archZ - 0.7) })),
-        sign: { ...pt(0, GATES.signZ), y: signY },
+        /** A spot ~30 m out on the approach, facing the booth and the arches. */
+        far: (() => {
+          const p = pt(0, G.padZ + 28);
+          const t = frame.toWorld(-1.5, G.signZ);
+          return { ...p, yaw: Math.atan2(t.x - p.x, t.z - p.z) };
+        })(),
+        arches: G.archX.map((x) => ({ front: pt(x, G.archZ + 0.7), back: pt(x, G.archZ - 0.7), around: pt(x + G.outerHalf + 0.6, G.archZ - 0.7) })),
+        sign: { ...pt(0, G.signZ), y: signY },
+        /** The booth's marquee (world, on the ground) and a spot 2.8 m behind the pad. */
+        booth: (() => {
+          const b = kit.booth.build.marqueeBox;
+          return pt((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2);
+        })(),
+        padBack: pt(0, G.padZ + 2.8),
       };
     },
     force(params) {
-      if (typeof params.tier === 'number') tier = Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier;
+      if (params.play) kit.forcePlay(typeof params.tier === 'number' ? (Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier) : undefined);
+      else if (typeof params.tier === 'number') tier = Math.min(3, Math.max(1, Math.round(params.tier))) as GlassesTier;
+      if (params.start) kit.start();
+      if (typeof params.pin === 'number') kit.pin(params.pin);
       const r = { candidates: params.candidates ?? round.candidates, answer: params.answer ?? round.answer, weakSide: params.weakSide ?? round.weakSide };
       if (isGateRound(r)) round = { candidates: r.candidates.map((c) => ({ ...c })), answer: r.answer, weakSide: r.weakSide };
-      if (params.newRound) {
-        newRound();
-        return;
+      if (params.candidates !== undefined || params.answer !== undefined || params.weakSide !== undefined) {
+        clearAnims();
+        if (state !== 'idle') applyRound();
       }
-      clearAnims();
-      confetti.clear();
-      applyRound();
     },
     drawObjects: () => env.tracked(),
   };
