@@ -2,7 +2,9 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'test-results', 'playwright-report', 'public'] },
+  // QA round drivers (scripts/qa4, qa4c, qa5): step snippets run inside a driver with injected
+  // globals (page, H, log) and page code; they are throwaway QA tooling, not linted.
+  { ignores: ['dist', 'node_modules', 'test-results', 'playwright-report', 'public', 'scripts/qa4/**', 'scripts/qa4c/**', 'scripts/qa5/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
