@@ -1,22 +1,22 @@
 /**
  * Glow-fly rounds on the booth kit (pure; the mechanic and the unit-test simulation share it).
  *
- * A round is TIMED: after 3-2-1-GO the flies come out and the child has `FLY_ROUND.time` seconds
- * to catch `tries` (= 5) of them; each catch is one try of the kit's round (a bright lamp). The
- * round machine counts tries, so catches are queued and reported one per frame while it is in
- * `play` (the beat between tries is 0). When the time runs out the tries never played end
- * QUIETLY: no lamp, no `glasses:result` (nothing is reported for flies the child never came
+ * A round is TIMED (the kit's `RoundRules.time`): after 3-2-1-GO the flies come out and the child
+ * has `FLY_ROUND.time` seconds to catch `tries` (= 5) of them; every catch lights the next lamp.
+ * When the time runs out the round ends QUIETLY with the catches so far: no lamp and no
+ * `glasses:result` for the catches never made (nothing is reported for flies the child never came
  * near). The prize needs 3 catches.
  */
-import type { RoundMachine } from '../booth/round';
-import type { BoothSpec, PrizeTable, RoundRules } from '../booth/types';
+import { MARQUEE, PAD_TOP } from '../booth/geometry';
+import type { BoothSpec, PrizeTable, RoundRules, V3 } from '../booth/types';
+import { pickPromptSpot } from '../booth/view';
 
 export const FLY_ROUND = {
   /**
    * Seconds to catch 5 flies (from GO). With 3 flies in the air, high enough to need a jump, a
    * blind lawn-mower reaches 3 catches in < 15 % of rounds, a seeing child in > 90 %.
    */
-  time: 35,
+  time: 30,
   /** The last seconds tick (sound) and the unlit lamps blink faster and faster. */
   hurry: 10,
   /** Blink rate of the unlit lamps: Hz at the start of the round and at the end. */
@@ -40,8 +40,8 @@ export const FLY_RULES: RoundRules = {
   minHits: 3,
   prize: FLY_PRIZE,
   between: 'next',
-  // Catches come as fast as the child runs: no beat between tries (one frame).
-  beat: 0,
+  // One timed play phase: every catch lights the next lamp; the round ends at 5 or when time is up.
+  time: FLY_ROUND.time,
   // Up after all 5, down below 3 (the kit's defaults, spelled out).
   upAt: 5,
   downBelow: 3,
@@ -55,18 +55,6 @@ export function blinkOn(left: number, elapsed: number): boolean {
   // Integrated phase of a linearly-rising rate is awkward for a pure function; a phase built
   // from `elapsed` × the current rate is fine for a blink.
   return Math.sin(elapsed * hz * Math.PI * 2) > -0.2;
-}
-
-/**
- * The time is up: end the round with the catches so far. The tries never played are closed on
- * the machine directly (no lamp, no result event); its next step celebrates or says "aww".
- */
-export function endTimedRound(m: RoundMachine): void {
-  while (m.phase === 'play' && m.results.length < m.rules.tries) {
-    m.report(false);
-    // beat 0: one step opens the next try at once (its event is not needed: the round is over).
-    if (m.results.length < m.rules.tries) m.step(0);
-  }
 }
 
 /** The patch's layout frame: the hero's start pad at the meadow's edge on the approach side. */
@@ -99,4 +87,46 @@ export function flyBoothFootprint(): { x: number; z: number }[] {
 /** The marquee's centre (layout-local): flies keep `FLIES.boothClear` from it. */
 export function flyBoothCentre(): { x: number; z: number } {
   return flyBoothFootprint()[0];
+}
+
+/** Layout-local points that must be in clear view from where children arrive: lamps, banner, board, pad. */
+export function flyArrivalTargets(): { x: number; z: number; y: number }[] {
+  const m = FLY_BOOTH.marquee;
+  const c = Math.cos(m.yaw);
+  const s = Math.sin(m.yaw);
+  const mq = (lx: number, lz: number): { x: number; z: number } => ({ x: m.x + lx * c + lz * s, z: m.z - lx * s + lz * c });
+  return [
+    { ...mq(0, 0.2), y: MARQUEE.lampY },
+    { ...mq(0, 0.2), y: MARQUEE.bannerY },
+    { ...mq(0.8, 0.2), y: MARQUEE.boardY },
+    { x: FLY_PAD.x, z: FLY_PAD.z, y: 0.5 },
+  ];
+}
+
+/** Edge of the play prompt ("catch!") (m). */
+export const FLY_PROMPT_SIZE = 1.3;
+
+/**
+ * Where the play prompt floats: beside the booth, between it and the pad, in the pad camera's
+ * central safe area and off the hero (`booth/view.ts`). `ground(x, z)`: ground height under a
+ * layout-local point relative to the site's y. Never depends on the flies.
+ */
+export function flyPrompt(ground: (x: number, z: number) => number): { at: V3; fits: boolean } {
+  const pad = { x: FLY_PAD.x, y: ground(FLY_PAD.x, FLY_PAD.z) + PAD_TOP, z: FLY_PAD.z };
+  // In front of the booth's picture board (the marquee's own frame: +z towards its front), towards
+  // the pad: never inside the booth, never over the meadow where the flies are.
+  const m = FLY_BOOTH.marquee;
+  const c = Math.cos(m.yaw);
+  const s = Math.sin(m.yaw);
+  const cands: V3[] = [];
+  for (const lz of [1.0, 1.5, 0.7]) {
+    for (const lx of [0.9, 0.5, 1.3, 0.1]) {
+      for (const h of [1.9, 2.3, 1.6, 2.7]) {
+        const x = m.x + lx * c + lz * s;
+        const z = m.z - lx * s + lz * c;
+        cands.push({ x, y: ground(x, z) + h, z });
+      }
+    }
+  }
+  return pickPromptSpot(cands, { pad, look: { x: 0, z: 0 }, size: FLY_PROMPT_SIZE + 0.3 });
 }
