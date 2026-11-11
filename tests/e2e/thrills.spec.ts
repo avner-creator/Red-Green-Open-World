@@ -593,6 +593,39 @@ test('sprinting onto the mat and letting go stays on the mat until the bounce se
   expect(r.mode).toBe('walk');
 });
 
+test('walking at the trampoline from any side (no jump) climbs the step rings onto the bed', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const a = ctx.world.anchors.trampoline;
+    const out: { dir: number; bounced: boolean; t: number }[] = [];
+    for (let k = 0; k < 8; k++) {
+      const ang = a.yaw + (k / 8) * Math.PI * 2;
+      const x = a.position.x + Math.sin(ang) * 15;
+      const z = a.position.z + Math.cos(ang) * 15;
+      rg.teleport(x, ctx.world.heightAt(x, z) + 0.2, z, ang + Math.PI);
+      rg.step(1 / 60, 20, false);
+      rg.inject({ moveY: 1 });
+      let bounced = false;
+      let t = 0;
+      for (let i = 0; i < 60 * 5 && !bounced; i++) {
+        rg.step(1 / 60, 1, false);
+        t = i / 60;
+        if (ctx.player.mode === 'external') bounced = true;
+      }
+      rg.inject(null);
+      out.push({ dir: k, bounced, t: Number(t.toFixed(2)) });
+      // Let the bounce settle before the next approach.
+      for (let i = 0; i < 60 * 15 && ctx.player.mode !== 'walk'; i++) rg.step(1 / 60, 1, false);
+    }
+    return out;
+  });
+  for (const d of r) {
+    expect(d.bounced, `side ${d.dir}`).toBe(true);
+    expect(d.t, `side ${d.dir}`).toBeLessThan(2.5); // ~6 m of walking, no stalls at the kerbs
+  }
+});
+
 test('bounce-pad chain ends on the trampoline', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;

@@ -141,21 +141,21 @@ export function createTrampoline(ctx: GameContext, flight: Flight, confetti: Thr
     frameParts.push(finish(legGeo.clone().translate(Math.cos(a) * (R + 0.45), MAT.top / 2, Math.sin(a) * (R + 0.45)), { color: 0x4a505c, rough: 0.7, metal: 0 }));
   }
 
-  // Frame collider (covers mat + rim) and two steps at the front (+Z of the anchor).
+  // Frame collider (covers mat + rim) and two low step rings all the way round: walking in from
+  // any side climbs 3 x 0.33 m kerbs (under the controller's autostep) straight onto the bed.
+  // The rings reach below the ground so they never float where the terrain dips.
   const colliders = [
     ctx.physics.addStaticCylinder(new THREE.Vector3(cx, groundY + MAT.top / 2, cz), MAT.top / 2, R + MAT.rimTube * 2),
   ];
-  const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), anchor.yaw);
-  const front = new THREE.Vector3(Math.sin(anchor.yaw), 0, Math.cos(anchor.yaw));
+  const sink = 0.6;
   for (let k = 0; k < 2; k++) {
-    const h = MAT.stepRise * (2 - k); // inner step is taller
-    const dist = R + MAT.rimTube * 2 + 0.5 + k * 1;
-    const half = new THREE.Vector3(1.8, h / 2, 0.5);
-    const geo = new THREE.BoxGeometry(half.x * 2, h, half.z * 2);
+    const h = MAT.stepRise * (2 - k); // inner ring is taller
+    const radius = R + MAT.rimTube * 2 + MAT.stepDepth * (k + 1);
+    const geo = new THREE.CylinderGeometry(radius, radius, h + sink, 64, 1, false);
     disposables.push(geo);
-    frameParts.push(finish(geo.clone().translate(0, h / 2, dist), { color: 0xe8e8e8, rough: 0.8, metal: 0 }));
-    const center = new THREE.Vector3(cx, groundY + h / 2, cz).addScaledVector(front, dist);
-    colliders.push(ctx.physics.addStaticBox(center, half, yawQ));
+    // Light outer ring, mid-grey inner ring: the two kerbs differ in brightness in R and G alone.
+    frameParts.push(finish(geo.clone().translate(0, (h - sink) / 2, 0), { color: k ? 0xeeeeee : 0x9aa0aa, rough: 0.8, metal: 0 }));
+    colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(cx, groundY + (h - sink) / 2, cz), (h + sink) / 2, radius));
   }
   const frame = new THREE.Mesh(mergeFinished(frameParts), frameMat);
   frame.castShadow = true;
