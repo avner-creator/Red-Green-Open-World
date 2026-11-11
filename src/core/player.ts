@@ -47,6 +47,8 @@ function storedCharacterId(ctx: GameContext): CharacterId | null {
   }
 }
 
+const QUIET_AFTER_PLAY = 1.5;
+
 export interface PlayerInternal {
   api: PlayerApi;
   update(dt: number): void;
@@ -197,6 +199,8 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   let dashOnGround = true;
   /** Visual-only skill pose timers (spring flip after a super-bounce). */
   let springFlipT = -1;
+  /** Seconds since the session (re)started: character swaps landing then are quiet (no poof). */
+  let sincePlay = 99;
   let emoting = false;
   /** Stream C: the gear system's shop-emote handler (see `PlayerApi.setEmoteHandler`). */
   let emoteHandler: (() => boolean) | null = null;
@@ -341,8 +345,10 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
       stopSkill();
       skills.setSkill(def.skill, cid === 'flamingo');
       emoting = false;
-      if (changed) {
-        // Poof: elastic scale pop + a sparkle burst around the body.
+      // Poof: elastic scale pop + a sparkle burst around the body. A pick that lands as the session
+      // starts is quiet, and Play clears bursts still in flight: cream shards over the hero in the
+      // first frames after Play read as a glitch (QA round 3 #9).
+      if (changed && sincePlay > QUIET_AFTER_PLAY) {
         fx.pop();
         if (object.visible) {
           tmpV.copy(position).setY(position.y + 0.9);
@@ -485,6 +491,10 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
 
   // A new session starts from the spawn point again.
   ctx.events.on('session:phase', (e) => {
+    if (e.phase === 'playing' && e.previous === 'title') {
+      sincePlay = 0;
+      sfx.clear();
+    }
     if (e.phase === 'title' || (e.phase === 'playing' && e.previous === 'title')) {
       safeSpot.copy(spawn.position);
       safeYaw = spawn.yaw;
@@ -897,6 +907,7 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   }
 
   function update(dt: number): void {
+    sincePlay += dt;
     const input = ctx.input.state;
     if (mods.length) tickMods(dt);
     if (external) {
