@@ -8,6 +8,7 @@ import type { CameraApi, GameContext } from '../types';
 import { clamp, orbitOffset, resolveArm, steerOverrideYaw } from './camera-math';
 import { createCameraCutout } from './camera-cutout';
 import { createCameraOccluders } from './camera-occluders';
+import { createHeroFade, distToBody, heroFadeAmount } from './camera-hero-fade';
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
@@ -57,6 +58,8 @@ const ARM = {
   softRadius: 0.55,
   /** Soft hits closer than this are contacts at the start, not obstacles ahead (m). */
   softIgnoreBelow: 1.2,
+  /** The fat probe pulls the arm in at most this far ahead of the hard limit (m). */
+  softLead: 1.5,
   /** Closest the camera gets to the pivot (m). */
   hardMin: 0.25,
   easeIn: 7,
@@ -71,13 +74,25 @@ const ARM = {
   groundClearance: 0.3,
   /** A tree crown (render-only, see-through when close) shortens the arm to no less than this (m). */
   crownFloor: 1.7,
+  /**
+   * On foot, an arm still shorter than this after the lift (scenery right behind the hero, too tall
+   * to look over) swings round to the clearer side (QA6 M2), and swings back no further than needed.
+   */
+  swingBelow: 1.7,
+  /** A swing side counts as clear from this arm length (m; or 90% of the wanted length). */
+  swingGood: 3.5,
+  /** Physics posts slimmer than this (horizontal half-size, m) never pull the camera in. */
+  slimPost: 0.16,
 } as const;
+
+/** Swing candidates for the on-foot arm (yaw offsets in ± pairs, smallest first, then 180°). */
+const SWINGS = [1, 2, 3, 4, 5].flatMap((i) => [(i * Math.PI) / 6, (-i * Math.PI) / 6]).concat(Math.PI);
 
 /** Test-mode hook (`window.__rgCamera`, only with `?test=1`). */
 export interface CameraDebug {
   /** Set the orbit yaw/pitch as if the player had looked there (no auto-align for a while). */
   setView(yaw: number, pitch?: number): void;
-  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number } };
+  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean };
   /**
    * Check the current view against the rendered scene (three.js raycasts against the real render
    * meshes, independent of the occluder proxies): `blocked` = fraction of rays from the camera to
@@ -131,8 +146,11 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   /** Scripted-camera unblock: next scan countdown and the clear yaw being swung to (or null). */
   let scanT = 0;
   let swingTo: number | null = null;
+  /** The on-foot swing heads for a clearly longer side (the lift then stays off). */
+  let swingGood = false;
   const cutout = createCameraCutout();
   const occluders = createCameraOccluders(ctx.scene, (m) => cutout.patch(m.material));
+  const heroFade = createHeroFade();
   const heroMid = new THREE.Vector3();
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
@@ -144,9 +162,40 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   const seeDir = new THREE.Vector3();
   let lastHit: { phys: number | null; occ: number | null; collider: number } = { phys: null, occ: null, collider: -1 };
 
+  /**
+   * Physics colliders the arm may stop at: not slim upright posts (a sign pole, a lamp post, a
+   * board's leg). Those hide at most a sliver of the hero and would otherwise snap the camera into
+   * the hero's head as they pass behind them.
+   */
+  const notSlim = (c: InstanceType<typeof R.Collider>): boolean => {
+    const t = c.shapeType();
+    if (t === R.ShapeType.Cylinder || t === R.ShapeType.Capsule || t === R.ShapeType.Cone) {
+      const q = c.rotation();
+      // Upright only (a log lying down is not a post).
+      const upright = 1 - 2 * (q.x * q.x + q.z * q.z) > 0.9;
+      return !(upright && c.radius() < ARM.slimPost);
+    }
+    if (t === R.ShapeType.Cuboid) {
+      const h = c.halfExtents();
+      if (!h) return true;
+      const q = c.rotation();
+      // World AABB half-size along x and z of the rotated box.
+      const m00 = 1 - 2 * (q.y * q.y + q.z * q.z);
+      const m01 = 2 * (q.x * q.y - q.w * q.z);
+      const m02 = 2 * (q.x * q.z + q.w * q.y);
+      const m20 = 2 * (q.x * q.z - q.w * q.y);
+      const m21 = 2 * (q.y * q.z + q.w * q.x);
+      const m22 = 1 - 2 * (q.x * q.x + q.y * q.y);
+      const ex = Math.abs(m00) * h.x + Math.abs(m01) * h.y + Math.abs(m02) * h.z;
+      const ez = Math.abs(m20) * h.x + Math.abs(m21) * h.y + Math.abs(m22) * h.z;
+      return !(ex < ARM.slimPost && ez < ARM.slimPost && h.y > Math.max(h.x, h.z));
+    }
+    return true;
+  };
+
   /** Distance from `origin` along unit `d` a sphere can travel before touching anything, or null. */
   function clearAlong(origin: THREE.Vector3, d: THREE.Vector3, max: number, radius: number, ball: InstanceType<typeof R.Ball>): number | null {
-    const hit = ctx.physics.world.castShape(origin, IDQ, d, ball, 0, max, false, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS);
+    const hit = ctx.physics.world.castShape(origin, IDQ, d, ball, 0, max, false, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, notSlim);
     let best = hit ? hit.time_of_impact : null;
     // Chase cams (buggy at speed) keep to physics colliders: roadside crowns flicking past would
     // snap the arm in and out and break the drive's smoothness.
@@ -293,25 +342,70 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     occluders.update(pivot, dt);
     const reach = wantDistance + 0.2;
     let liftTarget = 0;
+    const scripted = !!override && override.yawOffset === undefined;
+    // On foot (no override), scenery right behind the hero (a kiosk wall, a tall board: QA6 M2)
+    // swings the arm round to the nearest clearly longer side: a clear side view beats a steep
+    // look down at the top of the hero's head. Scanned before the lift, which it then replaces.
+    const footSwing = phase !== 'title' && !chase && !override;
+    if (footSwing) {
+      scanT -= dt;
+      if (scanT <= 0) {
+        scanT = 0.15;
+        const keep = yaw;
+        const need = Math.min(ARM.swingBelow, wantDistance * 0.5);
+        const here = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+        // A swing under way runs to its end (it only stops early once the arm is all but clear).
+        if (here >= wantDistance * 0.9 || (swingTo === null && here >= need)) {
+          swingTo = null;
+          swingGood = false;
+        } else if (swingTo === null) {
+          const good = Math.min(wantDistance * 0.9, Math.max(ARM.swingGood, here * 1.5 + 0.5));
+          // The smallest swing (± pair: the longer side) that is clearly longer; else the longest.
+          let pick: number | null = null;
+          let pickD = -1;
+          let any: number | null = null;
+          let anyD = here + 0.5;
+          for (let i = 0; i < SWINGS.length && pick === null; i += 2) {
+            for (let k = i; k < Math.min(i + 2, SWINGS.length); k++) {
+              yaw = keep + SWINGS[k];
+              const d = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+              if (d >= good && d > pickD) {
+                pick = yaw;
+                pickD = d;
+              }
+              if (d > anyD) {
+                any = yaw;
+                anyD = d;
+              }
+            }
+          }
+          swingTo = pick ?? any;
+          swingGood = pick !== null;
+        }
+        yaw = keep;
+      }
+    }
     // Chase framing is the vehicle's own; the swing over/under is for the hero on foot or riding.
     if (phase !== 'title' && !chase) {
       const base = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard);
       const baseD = base === null ? wantDistance : base;
       if (baseD < Math.min(ARM.liftWhenShorter, wantDistance * 0.5)) {
-        // Blocked right behind the hero: swing over (or under) it if that gives a clearly longer view.
-        let bestD = baseD;
-        for (const dp of [ARM.liftUp, CAM.maxPitch - pitch, ARM.liftDown]) {
-          const p = clamp(pitch + dp, CAM.minPitch, CAM.maxPitch);
-          if (Math.abs(p - pitch) < 0.05) continue;
-          const h = clearAlong(pivot, armDir(p, probeDir), reach, ARM.hardRadius, ballHard);
-          const d = h === null ? wantDistance : h;
-          if (d > bestD * 1.4 + 0.4) {
-            bestD = d;
-            liftTarget = p - pitch;
+        if (!(footSwing && swingTo !== null && swingGood)) {
+          // Blocked right behind the hero: swing over (or under) it if that gives a clearly longer view.
+          let bestD = baseD;
+          for (const dp of [ARM.liftUp, CAM.maxPitch - pitch, ARM.liftDown]) {
+            const p = clamp(pitch + dp, CAM.minPitch, CAM.maxPitch);
+            if (Math.abs(p - pitch) < 0.05) continue;
+            const h = clearAlong(pivot, armDir(p, probeDir), reach, ARM.hardRadius, ballHard);
+            const d = h === null ? wantDistance : h;
+            if (d > bestD * 1.4 + 0.4) {
+              bestD = d;
+              liftTarget = p - pitch;
+            }
           }
+          // Keep the current swing while it is still needed (no flip-flopping between frames).
+          if (liftTarget === 0 && Math.abs(lift) > 0.02) liftTarget = lift;
         }
-        // Keep the current swing while it is still needed (no flip-flopping between frames).
-        if (liftTarget === 0 && Math.abs(lift) > 0.02) liftTarget = lift;
       } else if (bodyHidden(armDir(pitch, probeDir), Math.min(wantDistance, baseD))) {
         // A planter, counter or bush between the camera and the hero's body: look over it.
         liftTarget = Math.min(ARM.seeOver, CAM.maxPitch - pitch);
@@ -320,7 +414,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     // Scripted cameras (celebrations, results, countdowns: an override without a fixed yaw) may
     // not end in a bush, a sign or the hero's head (QA5 m5/m9): when the arm is cut short, swing
     // round to the clearest of 8 directions instead of sitting at the obstacle.
-    if (phase !== 'title' && !chase && override && override.yawOffset === undefined) {
+    if (phase !== 'title' && !chase && scripted) {
       scanT -= dt;
       if (scanT <= 0) {
         scanT = 0.25;
@@ -341,8 +435,12 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
           yaw = keep;
         }
       }
-      if (swingTo !== null) yaw += angleDelta(yaw, swingTo) * damp(4, dt);
-    } else swingTo = null;
+    } else if (!footSwing) swingTo = null;
+    // The player's own look input always wins over a swing.
+    if (swingTo !== null && Math.abs(input.lookX) < 1e-5) {
+      yaw += angleDelta(yaw, swingTo) * damp(scripted ? 4 : 8, dt);
+      if (!scripted && Math.abs(angleDelta(yaw, swingTo)) < 0.03) swingTo = null;
+    }
     lift += (liftTarget - lift) * damp(ARM.liftRate, dt);
     armDir(clamp(pitch + lift, CAM.minPitch, CAM.maxPitch), dir);
     const hardHit = clearAlong(pivot, dir, reach, ARM.hardRadius, ballHard);
@@ -350,7 +448,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     const hard = hardHit === null ? null : Math.max(ARM.hardMin, hardHit - 0.04);
     // The fat probe starts touching anything within its radius of the head (a wall beside the
     // hero): it only anticipates obstacles further out and never pulls the arm in closer than that.
-    const soft = softHit === null || softHit < ARM.softIgnoreBelow ? null : softHit;
+    // It only leads the hard limit by `softLead`: a wall grazing the fat probe alongside a clear arm
+    // (the hero's back to a long wall, arm swung along it: QA6 M2) must not hold the camera at 1.5 m.
+    const soft = softHit === null || softHit < ARM.softIgnoreBelow ? null : Math.max(softHit, (hard ?? wantDistance) - ARM.softLead);
     distance = resolveArm(distance, wantDistance, hard, soft, ARM.easeIn, CAM.easeOutRate, dt);
     camera.position.copy(pivot).addScaledVector(dir, distance);
     const ground = ctx.world.heightAt(camera.position.x, camera.position.z) + ARM.groundClearance;
@@ -367,6 +467,11 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     camera.lookAt(lookAt);
     heroMid.copy(ctx.player.position).setY(ctx.player.position.y + CAM.pivotHeight * 0.55);
     cutout.update(camera.position, heroMid, phase !== 'title');
+    // Last resort: still pinned within reach of the hero's body → dither the hero away rather than
+    // render the inside of their head (QA6 M2). Riding in a vehicle never fades the hero.
+    const pp = ctx.player.position;
+    const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + PLAYER.height - 0.2, PLAYER.radius * 0.8);
+    heroFade.update(ctx.player.object, phase !== 'title' && !chase ? heroFadeAmount(body) : 0);
 
     if (trauma > 0) {
       shakeTime += dt;
@@ -421,7 +526,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         if (pt !== undefined) pitch = clamp(pt, CAM.minPitch, CAM.maxPitch);
         sinceLook = 0;
       },
-      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit }),
+      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null }),
       probe() {
         // Instanced meshes cache their bounds; the scatter refills instances every view change.
         ctx.scene.traverse((o) => {

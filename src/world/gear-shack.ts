@@ -438,6 +438,22 @@ export function createGearShackLive(mats: Materials, h: HeightFn): GearShackLive
   group.position.set(a.x, h(a.x, a.z), a.z);
   group.rotation.y = a.yaw;
 
+  // Camera occluders for the thin parts with no collider and no shadow proxy (the awning overhang
+  // and the marquee badge): never rendered, only baked by the camera (camera-occluders.ts), so the
+  // camera stops in front of them instead of ending up inside the cloth (QA6 M2).
+  const occGeo = mergeGeometries([
+    new THREE.BoxGeometry(4.16, 1.05, 2.97).translate(0, 2.575, 0.235),
+    new THREE.BoxGeometry(2.0, 2.15, 0.4).translate(0, 4.075, -0.55),
+  ]);
+  if (occGeo) {
+    const occ = new THREE.Mesh(occGeo, mats.get('matte'));
+    occ.name = 'gearShack:camera-occluder';
+    occ.visible = false;
+    occ.castShadow = false;
+    occ.userData.cameraOccluder = true;
+    group.add(occ);
+  }
+
   const gem = new THREE.Mesh(gemGeometry(), mats.get('gloss'));
   const gemBase = new THREE.Vector3(-Math.sin(0.07) * 1.5, 4.0 + Math.cos(0.07) * 1.5, -0.55);
   gem.position.copy(gemBase);
