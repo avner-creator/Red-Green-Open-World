@@ -2,10 +2,11 @@
  * Pip's UI: the speech bubble, HUD callouts (ring + wobbling arrow around an element) and the round
  * "Pip" button. Created by `src/buddy/index.ts`; everything lives inside `ctx.uiRoot`.
  *
- * The bubble is ONE element docked above the Pip button (which wags while he talks): its place is
- * worked out once when a line starts (off the hero and the HUD, inside the safe area) and kept for
- * the whole line, so it never jumps, flickers or follows the 3D puppy around. It moves only if a
- * HUD piece appears under it (checked twice a second) or the window is resized.
+ * The bubble is ONE element: its place is worked out ONCE when a line starts (over Pip when he is
+ * on screen, else docked above the Pip button; off the hero and the HUD, inside the safe area) and
+ * kept for the whole line, so it never jumps, flickers or follows the 3D puppy around. Only the
+ * tail swings (eased) towards Pip. It moves mid-line only when the window is resized. (QA round 5,
+ * m1: a mid-line "covered → re-place" step moved it 340–509 px when the hero walked under it.)
  * Modes (`bubbleMode`): 'compact' = pictograms + button only (Pip's voice says the words),
  * 'full' = pictograms + text (voice off or unavailable), 'none' = no bubble (praise while voiced).
  */
@@ -42,10 +43,6 @@ export interface BuddyUi {
 const ARROW =
   '<svg viewBox="0 0 60 40" aria-hidden="true"><path d="M2 20 L26 2 L26 12 L58 12 L58 28 L26 28 L26 38 Z" fill="#ffd93b" stroke="#000" stroke-width="4.5" stroke-linejoin="round"/><path d="M8 20 L24 8" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8"/></svg>';
 
-/** Seconds between "is the bubble covered?" checks. */
-const CHECK_EVERY = 0.25;
-/** The bubble moves only after its spot has been covered this long (then it eases). */
-export const OCCLUDED_MOVE = 0.5;
 
 export function createBuddyUi(root: HTMLElement): BuddyUi {
   injectBuddyCss();
@@ -68,12 +65,6 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   let revealed = -1;
   let heroBox: Rect | null = null;
   let pipAt: { x: number; y: number; on?: boolean } | null = null;
-  /** Seconds until the next "is the bubble covered now?" check. */
-  let recheck = 0;
-  /** Seconds the bubble has been badly placed in a row (moves only after OCCLUDED_MOVE). */
-  let occludedT = 0;
-  /** The bubble moves at most once per line (then it stays, even if covered again). */
-  let movedThisLine = false;
   /** Bubble's left edge and the tail x (eased towards Pip each frame). */
   let boxX = 0;
   let tailX = 0;
@@ -119,8 +110,7 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
 
   /**
    * Choose the bubble's spot: above Pip's head when he is on screen, else docked above the Pip
-   * button; off the hero and the HUD. Called when a line starts, on resize, and when the spot has
-   * been covered for OCCLUDED_MOVE seconds (then it eases over ~200 ms) — never per frame.
+   * button; off the hero and the HUD. Called when a line starts and on resize — never per frame.
    */
   const place = (ease = false): void => {
     if (!active || mode === 'none') return;
@@ -138,16 +128,8 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
     bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
   };
 
-  /** Is the bubble now badly placed: over the hero or over a HUD piece that appeared later? */
-  const covered = (): boolean => {
-    const host = root.getBoundingClientRect();
-    const r = bubble.getBoundingClientRect();
-    const me = { x: r.left - host.left, y: r.top - host.top, w: r.width, h: r.height };
-    const hit = (a: Rect): boolean => me.x < a.x + a.w && me.x + me.w > a.x && me.y < a.y + a.h && me.y + me.h > a.y;
-    return (!!heroBox && hit(heroBox)) || hudRects(host).some(hit);
-  };
   const onResize = (): void => {
-    place(false);
+    place(true);
   };
   window.addEventListener('resize', onResize);
 
@@ -250,9 +232,6 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
       bubble.classList.toggle('compact', mode === 'compact');
       bubble.classList.toggle('story', a.line.priority >= PRIORITY.story);
       place(false);
-      recheck = CHECK_EVERY;
-      occludedT = 0;
-      movedThisLine = false;
       bubble.classList.add('on');
       retrigger(bubble, 'pop');
     },
@@ -277,15 +256,6 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
           const want = Math.max(r, Math.min(w - r, pip.x - boxX));
           tailX += (want - tailX) * Math.min(1, dt * 10);
           bubble.style.setProperty('--tx', `${Math.round(tailX)}px`);
-        }
-        if (!movedThisLine && (recheck -= dt) <= 0) {
-          recheck = CHECK_EVERY;
-          occludedT = covered() ? occludedT + CHECK_EVERY : 0;
-          if (occludedT > OCCLUDED_MOVE) {
-            occludedT = 0;
-            movedThisLine = true;
-            place(true);
-          }
         }
       }
       placeCallout();

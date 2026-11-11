@@ -33,13 +33,24 @@ export function classifyRide(ctx: GameContext, kind: ExternalKind, canopy: THREE
 
 const seatCache = new WeakMap<THREE.Object3D, { parent: THREE.Object3D; local: THREE.Vector3 }>();
 
+/**
+ * Pip's size on a ride, relative to on foot. He rides small and low, IN FRONT of the hero (the
+ * chase camera is behind): never between the camera and the hero (QA round 5, M2: in the buggy's
+ * back seat he hid the driver from the chase camera).
+ */
+export const RIDE_SCALE = { car: 0.72, horse: 0.62, seat: 0.7 } as const;
+/** Sky rides (plane, dragon): Pip sinks this far into the back seat they publish (m). */
+export const SEAT_DROP = 0.35;
+
 /** Pip's spot on a vehicle (world space) and the vehicle's heading. */
 export function vehicleSpot(v: VehicleApi, out: THREE.Vector3): number {
   let s = seatCache.get(v.object);
   if (!s) {
     const seat = v.object.getObjectByName('buggy-seat');
-    if (v.kind === 'car' && seat?.parent) s = { parent: seat.parent, local: new THREE.Vector3(0, 0.83, -1.12) };
-    else s = { parent: v.object, local: new THREE.Vector3(0, 1.32, -0.55) };
+    // Buggy: on the hood, in front of the driver (body space; the seat is at z −0.24).
+    if (v.kind === 'car' && seat?.parent) s = { parent: seat.parent, local: new THREE.Vector3(0, 0.12, 1.12) };
+    // Horse: on the neck, in front of the rider (saddle at about y 1.6, z −0.06).
+    else s = { parent: v.object, local: new THREE.Vector3(0, 1.5, 0.62) };
     seatCache.set(v.object, s);
   }
   s.parent.updateWorldMatrix(true, false);

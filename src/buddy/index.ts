@@ -28,7 +28,7 @@ import { DialogueQueue, PRIORITY, bubbleMode } from './dialogue';
 import type { ActiveLine } from './dialogue';
 import { currentGoal } from './goals';
 import { buildPip } from './model';
-import { classifyRide, externalKind, vehicleSpot } from './rides';
+import { RIDE_SCALE, SEAT_DROP, classifyRide, externalKind, vehicleSpot } from './rides';
 import type { ExternalKind } from './rides';
 import { EXPLAIN } from './script';
 import type { HowToTopic, KeyNames } from './script';
@@ -120,12 +120,20 @@ export interface BuddyTestApi {
   director(): { step: string; introT: number; playT: number };
   line(): string | null;
   ride(): RideView;
+  /** Pip's current drawn scale (smaller on rides). */
+  scale(): number;
   /** Every line Pip started saying, in order (text + id). */
   history(): { text: string; id: string }[];
   /** What Pip's voice was asked to say, in order (clip id + text + clip/speech). */
   voice(): VoiceRequest[];
   /** Leading state: where Pip leads (attraction id) and the hop state. */
-  lead(): { to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[] };
+  lead(): {
+    to: string | null; dest: [number, number] | null; state: string | null; rescues: number; guiding: boolean; done: string[];
+    /** Why the lead last re-planned or changed target (watchdog), re-plans of this lead, hop-frees, unreachable places. */
+    why: string | null; replans: number; frees: number; freedAt: [number, number] | null; unreachable: string[];
+    /** The attraction the hero stands at now. */
+    at: string | null;
+  };
   /** Same as pressing T / tapping Pip: Pip says what to do next (a bubble, deterministically). */
   ask(): void;
 }
@@ -164,28 +172,101 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let t = 0;
   const rayO = new THREE.Vector3();
   const rayD = new THREE.Vector3();
-  /** A hop is fine when it ends on land and nothing (a wall, a fence, a shop) is in the way. */
-  const walkable = (from: V2, to: V2): boolean => {
+  /**
+   * A hop is fine when it ends on land and nothing (a wall, a fence, a shop) is in the way: rays
+   * at knee and chest height (a low rail fence stops the hero but not a chest-high ray; QA round 5).
+   */
+  const walkable = (from: V2, to: V2, endSlack = 2.5): boolean => {
     if (!ctx.world.isLand(to.x, to.z)) return false;
     const d = Math.hypot(to.x - from.x, to.z - from.z);
     if (d < 1) return true;
     const ux = (to.x - from.x) / d;
     const uz = (to.z - from.z) / d;
-    const y0 = ctx.world.heightAt(from.x, from.z) + 1;
-    const y1 = ctx.world.heightAt(to.x, to.z) + 1;
-    rayO.set(from.x + ux * 0.7, y0 + ((y1 - y0) * 0.7) / d, from.z + uz * 0.7);
-    rayD.set(to.x - rayO.x, y1 - rayO.y, to.z - rayO.z);
-    const len = rayD.length();
-    rayD.divideScalar(len || 1);
-    try {
-      const hit = ctx.physics.raycast(rayO, rayD, len);
-      return !hit || hit.distance > len - 2.5;
-    } catch {
-      return true;
+    const g0 = ctx.world.heightAt(from.x, from.z);
+    const g1 = ctx.world.heightAt(to.x, to.z);
+    for (const up of [0.45, 1]) {
+      const y0 = g0 + up;
+      const y1 = g1 + up;
+      // Start right at `from` (the hero may stand against the fence; rays skip the player).
+      rayO.set(from.x + ux * 0.15, y0 + ((y1 - y0) * 0.15) / d, from.z + uz * 0.15);
+      rayD.set(to.x - rayO.x, y1 - rayO.y, to.z - rayO.z);
+      const len = rayD.length();
+      rayD.divideScalar(len || 1);
+      try {
+        const hit = ctx.physics.raycast(rayO, rayD, len);
+        if (hit && hit.distance <= len - endSlack) return false;
+      } catch {
+        return true;
+      }
     }
+    return true;
   };
-  const leader = new Leader(walkable);
+  // Planning round fences: strictly nothing in between, and not up or down a steep step.
+  const clearRun = (from: V2, to: V2): boolean =>
+    Math.abs(ctx.world.heightAt(to.x, to.z) - ctx.world.heightAt(from.x, from.z)) < 1.2 && walkable(from, to, 0.05);
+  const leader = new Leader(walkable, clearRun);
+
+  /**
+   * Nearest free spot to stand (QA round 5, M1: stuck on the Scoops counter): on land above the
+   * water, on the bare ground (nothing on top of it), not steep, and no collider within 2 m
+   * (a physics shape query). Rings outwards from the hero; on each ring the side towards `toward`
+   * first. Null when nothing is free within 14 m.
+   */
+  const freeSpot = (toward: V2): { x: number; y: number; z: number } | null => {
+    const h = ctx.player.position;
+    const R = ctx.physics.rapier;
+    let shape: InstanceType<typeof R.Cylinder> | null = null;
+    try {
+      shape = new R.Cylinder(0.9, 2);
+    } catch {
+      shape = null;
+    }
+    const rot = { x: 0, y: 0, z: 0, w: 1 };
+    const crowded = (x: number, y: number, z: number): boolean => {
+      if (!shape) return false;
+      try {
+        const hit = ctx.physics.world.intersectionWithShape({ x, y: y + 1.1, z }, rot, shape, undefined, undefined, undefined, undefined, (c) => {
+          if (c.isSensor() || c.shapeType() === R.ShapeType.HeightField) return false;
+          const b = c.parent();
+          return !b || b.isFixed();
+        });
+        return !!hit;
+      } catch {
+        return false;
+      }
+    };
+    const base = Math.atan2(toward.x - h.x, toward.z - h.z);
+    const N = 16;
+    for (const r of [2.5, 3.5, 5, 6.5, 8, 10, 12, 14]) {
+      for (let i = 0; i < N; i++) {
+        // 0, +1, -1, +2, -2 … steps round from the way out.
+        const k = i === 0 ? 0 : Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+        const a = base + (k * Math.PI * 2) / N;
+        const x = h.x + Math.sin(a) * r;
+        const z = h.z + Math.cos(a) * r;
+        if (!ctx.world.isLand(x, z)) continue;
+        const gy = ctx.world.heightAt(x, z);
+        if (gy < ctx.world.waterLevel + 0.2) continue;
+        if (Math.abs(ctx.world.heightAt(x + 0.8, z) - ctx.world.heightAt(x - 0.8, z)) > 0.7) continue;
+        if (Math.abs(ctx.world.heightAt(x, z + 0.8) - ctx.world.heightAt(x, z - 0.8)) > 0.7) continue;
+        let top = gy;
+        try {
+          raycaster.origin.set(x, gy + 8, z);
+          const hit = ctx.physics.raycast(raycaster.origin, raycaster.dir, 12);
+          if (hit) top = hit.point.y;
+        } catch {
+          /* physics not ready */
+        }
+        if (Math.abs(top - gy) > 0.35) continue; // something stands there (a counter, a roof)
+        if (crowded(x, gy, z)) continue;
+        return { x, y: gy, z };
+      }
+    }
+    return null;
+  };
   let leadOut: LeadOut | null = null;
+  /** Where the last hop-free put the hero (tests). */
+  let freedAt: V2 | null = null;
   /** Seconds left of the stuck-at-a-fence camera help. */
   let assistT = 0;
   let assistOn = false;
@@ -206,6 +287,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let attached = false;
   /** In a sky ride's back seat (`player.object.userData.pipSeat`). */
   let seated = false;
+  /** Pip's size on the current ride (1 on foot): small on the buggy, horse and sky rides. */
+  let rideScale = 1;
   let extKind: ExternalKind = 'other';
   let prevMode = ctx.player.mode;
   let prevHeroVy = 0;
@@ -315,11 +398,22 @@ export function createBuddy(ctx: GameContext): GameSystem {
     hop(toward) {
       const p = ctx.player;
       if (p.mode !== 'walk') return;
-      const dx = toward.x - p.position.x;
-      const dz = toward.z - p.position.z;
-      const d = Math.hypot(dx, dz) || 1;
-      // About 5 m towards the way out, 1.8 m high: over a low fence, a comic boing.
-      p.launch(new THREE.Vector3((dx / d) * 6, 9, (dz / d) * 6));
+      const spot = freeSpot(toward);
+      if (spot) {
+        // Two rescues did not free the hero: pop them onto the nearest free ground, facing Pip,
+        // with a little hop (a comic boing). Pip pops in beside them.
+        const yawToPip = Math.atan2(pos.x - spot.x, pos.z - spot.z);
+        p.teleport(new THREE.Vector3(spot.x, spot.y + 0.4, spot.z), yawToPip);
+        p.launch(new THREE.Vector3(0, 4.5, 0));
+        freedAt = { x: spot.x, z: spot.z };
+        placeNearHero();
+      } else {
+        const dx = toward.x - p.position.x;
+        const dz = toward.z - p.position.z;
+        const d = Math.hypot(dx, dz) || 1;
+        // Nothing free nearby: about 5 m towards the way out, 1.8 m high, over a low fence.
+        p.launch(new THREE.Vector3((dx / d) * 6, 9, (dz / d) * 6));
+      }
       voice.bark('yip');
       cheerT = Math.max(cheerT, 1);
     },
@@ -452,6 +546,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       director.onFlop();
       voice.bark('whine');
     }),
+    on('player:dizzy', () => director.onDizzy()),
     on('player:skill', () => {
       director.onSkill();
       voice.bark('yip');
@@ -540,6 +635,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
     if (seat) {
       seat.updateWorldMatrix(true, false);
       pos.setFromMatrixPosition(seat.matrixWorld);
+      pos.y -= SEAT_DROP; // low in the back seat: only his head pokes out
+      rideScale = RIDE_SCALE.seat;
       const e = seat.matrixWorld.elements;
       yaw = Math.atan2(e[8]!, e[10]!);
       inp.pose = 'sit';
@@ -555,11 +652,13 @@ export function createBuddy(ctx: GameContext): GameSystem {
       return true;
     }
     ride = classifyRide(ctx, extKind, canopy);
+    rideScale = 1;
     let pose: Pose | null = null;
     switch (ride) {
       case 'vehicle': {
         if (!p.vehicle) break;
         yaw = vehicleSpot(p.vehicle, pos);
+        rideScale = p.vehicle.kind === 'car' ? RIDE_SCALE.car : RIDE_SCALE.horse;
         pose = 'ride';
         inp.wind = Math.min(1, Math.abs(p.vehicle.speed) / 10);
         inp.look = null;
@@ -646,6 +745,11 @@ export function createBuddy(ctx: GameContext): GameSystem {
     const dHero = Math.hypot(pos.x - h.x, pos.z - h.z);
     leadOut = leader.active && p.mode === 'walk' ? leader.update(dt, { x: pos.x, z: pos.z }, h) : null;
     if (leadOut?.state === 'arrived') leadOut = null;
+    if (leader.gaveUp) {
+      // Watchdog: this place cannot be reached; the director picks the next-nearest one.
+      director.leadFailed(leader.why ?? 'unreachable');
+      leadOut = null;
+    }
     // Talking but off screen (not leading): come back into view so the bubble sits on Pip.
     if (queue.current && !pipOnScreen && !leadOut) offscreenT += dt;
     else offscreenT = 0;
@@ -674,7 +778,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
       target = { x: pos.x, z: pos.z };
       maxSpeed = 0;
       pose = p.position.y - groundAt(pos.x, pos.z, pos.y + 1) > 8 ? 'cower' : 'sit';
-    } else if (onTramp && ta) {
+    } else if (onTramp && ta && !leadOut) {
+      // (Never while leading on: the hero on the trampoline rim follows Pip, so Pip must go. B1.)
       const d = Math.hypot(pos.x - ta.position.x, pos.z - ta.position.z) || 1;
       const r = TRAMPOLINE_MAT + 0.9;
       target = { x: ta.position.x + ((pos.x - ta.position.x) / d) * r, z: ta.position.z + ((pos.z - ta.position.z) / d) * r };
@@ -856,10 +961,24 @@ export function createBuddy(ctx: GameContext): GameSystem {
       director: () => ({ step: director.step, introT: director.introT, playT: director.playT }),
       line: () => queue.current?.line.text ?? null,
       ride: () => ride,
+      scale: () => model.object.scale.x,
       history: () => history.slice(),
       ask: () => ask(),
       voice: () => voice.requests.slice(),
-      lead: () => ({ to: director.leadTo, dest: leader.dest ? [leader.dest.x, leader.dest.z] : null, state: leadOut?.state ?? null, rescues: director.rescues, guiding: director.isGuiding, done: [...director.done] }),
+      lead: () => ({
+        to: director.leadTo,
+        dest: leader.dest ? [leader.dest.x, leader.dest.z] : null,
+        state: leadOut?.state ?? null,
+        rescues: director.rescues,
+        guiding: director.isGuiding,
+        done: [...director.done],
+        why: director.why ?? leader.why,
+        replans: leader.replans,
+        frees: director.frees,
+        freedAt: freedAt ? [freedAt.x, freedAt.z] : null,
+        unreachable: [...director.unreachable],
+        at: nearAttraction(),
+      }),
     };
   }
 
@@ -904,6 +1023,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
           remaining: ctx.session.state.remaining,
           hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
           busy: queue.busy,
+          inGame: ctx.player.mode === 'external',
         };
         director.update(dt, view);
         queue.update(dt);
@@ -923,7 +1043,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       model.object.position.copy(pos);
       model.object.rotation.set(0, yaw, 0);
       const s = popT < 1 ? 0.4 + 0.6 * (1 - Math.pow(1 - popT, 3)) + Math.sin(popT * Math.PI) * 0.15 : 1;
-      model.object.scale.setScalar(s * PIP_SCALE);
+      model.object.scale.setScalar(s * PIP_SCALE * rideScale);
       model.object.updateMatrixWorld(true);
       anim.update(dt, inp);
 
