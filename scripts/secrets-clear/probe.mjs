@@ -1,0 +1,11 @@
+import { open } from './lib.mjs';
+const t = await open('probe');
+await t.start();
+const s = await t.page.evaluate(() => window.__rgSecrets.info());
+console.log(JSON.stringify(s.paths.map((p) => ({ id: p.id, start: p.start, n: p.stones.length, first: p.stones[0], ped: p.pedestal }))));
+console.log(JSON.stringify(s.doors.map((d) => ({ id: d.id, x: d.x, y: d.y, z: d.z, yaw: d.yaw, seq: d.sequence }))));
+console.log(JSON.stringify(s.trails));
+const c = await t.page.evaluate(() => window.__rgChests.info().map((c) => ({ id: c.id, p: c.position, yaw: c.yaw, sym: c.symbol, key: c.key })));
+console.log(JSON.stringify(c));
+console.log(JSON.stringify(await t.pos()));
+await t.close();

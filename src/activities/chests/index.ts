@@ -10,6 +10,11 @@
  *    symbol opens the chest from ANY direction; a wrong one wobbles, giggles and sinks for 2 s (no
  *    penalty). Without the key the buttons just boing.
  *  - Opening gives an outfit (hat, cape, glasses, buggy paint), equips it and pops confetti.
+ *
+ * Wordless clarity (both eyes, never a key's exact spot): a key pictogram badge floats over a locked
+ * chest; a dotted trail leads out to a dotted circle where the key is (somewhere inside, never at the
+ * centre); once found, the key bobs over the hero's head, a key chip shows in the HUD and the badge
+ * turns into key → chest; picking up and opening flash a one-second "what is it for" pictogram.
  */
 import * as THREE from 'three';
 import { VisionLayer } from '../../types';
@@ -20,11 +25,17 @@ import { buildChest, CHEST } from './chestModel';
 import type { ChestModel } from './chestModel';
 import { buildKey, buildSymbolHint } from './lockModel';
 import type { KeyModel, SymbolHintModel } from './lockModel';
-import { buildBadge, buildButtons, buildTrail, chestTrail } from './ringModel';
-import type { Badge, Trail } from './ringModel';
-import { ApproachHints, CHEST_RULES, ChestLock, Loadout, RING, buttonWorld, keyCandidates, nearestButton, pickKeySpot, ringButtons, rightSymbol, sideDirection } from './logic';
+import { buildButtons, buildTrail, chestTrail } from './ringModel';
+import type { Trail } from './ringModel';
+import { ApproachHints, CHEST_RULES, ChestLock, Loadout, RING, buttonWorld, keyArea, keyCandidates, nearestButton, pickKeySpot, ringButtons, rightSymbol, sideDirection } from './logic';
+import { buildPictoBadge } from './badge';
+import type { BadgeState, PictoBadge } from './badge';
+import { HintDots, buildCarriedKey } from './hintModel';
+import type { CarriedKey } from './hintModel';
+import { createChestHud } from './hud';
+import type { UiIconName } from '../../ui/icons';
 import { OUTFITS, outfitForChest } from './outfits';
-import { addFarRoot } from '../../world/far-lod';
+import { addFarRoot, keepNear } from '../../world/far-lod';
 
 export { OUTFITS } from './outfits';
 export { chestTrail, setChestTrailEnabled } from './ringModel';
@@ -43,6 +54,12 @@ export interface ChestInfo {
   open: boolean;
   /** Where the key model is drawn right now (follows the player while carried). */
   keyNow: [number, number, number];
+  /** Both-eye hints: the pictogram badge over the chest, the dotted area hint, the carried key. */
+  badge: BadgeState | null;
+  dots: { count: number; shown: boolean };
+  /** Centre and radius of the dotted "look here" circle (the key is inside, never at the centre). */
+  area: [number, number, number];
+  carriedKeyVisible: boolean;
 }
 
 /** Test hook (`window.__rgChests`, only with `?test=1`). */
@@ -52,6 +69,8 @@ export interface ChestsTestApi {
   sidePoint(i: number, side: number, dist?: number): [number, number];
   /** Hide or show the floating keys (and their trails). */
   setKeyVisible(visible: boolean): void;
+  /** The HUD key chip is showing / the pictogram card that is showing (e.g. `key>chest`). */
+  hud(): { keyChip: boolean; picto: string };
 }
 
 /** What a guide character needs to know: the chest the player is near (if any) and how it is going. */
@@ -101,7 +120,13 @@ interface Entry {
   model: ChestModel;
   hint: SymbolHintModel;
   lockRoot: THREE.Group;
-  badge: Badge;
+  badge: PictoBadge;
+  badgeState: BadgeState | null;
+  carried: CarriedKey;
+  area: { x: number; z: number; r: number };
+  dotRun: number;
+  /** 0..1 chest squash-and-pop when it opens. */
+  pop: number;
   trail: Trail;
   hints: ApproachHints;
   buttons: BtnState[];
@@ -126,6 +151,7 @@ const easeOutBack = (t: number): number => {
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
+const DOWN = new THREE.Vector3(0, -1, 0);
 
 export function createChests(ctx: GameContext): Chests {
   const spots = ctx.world.chestSpots;
@@ -134,6 +160,12 @@ export function createChests(ctx: GameContext): Chests {
 
   const confetti = new Confetti();
   ctx.scene.add(confetti.group);
+  const hud = createChestHud(ctx.uiRoot);
+  const dots = new HintDots(n * 40);
+  // Hint objects keep their own draw distance (shown within 40-45 m), so the world LOD leaves them be.
+  keepNear(dots.mesh);
+  ctx.scene.add(dots.mesh);
+  const camRight = new THREE.Vector3();
   const loadout = new Loadout();
   let time = 0;
   let placedAll = false;
@@ -180,8 +212,11 @@ export function createChests(ctx: GameContext): Chests {
     trail.mesh.visible = false;
     ctx.vision.add(trail.mesh, VisionLayer.WeakOnly);
 
-    const badge = buildBadge();
-    ctx.scene.add(badge.group);
+    const badge = buildPictoBadge();
+    keepNear(badge.sprite);
+    ctx.scene.add(badge.sprite);
+    const carried = buildCarriedKey();
+    ctx.scene.add(carried.group);
 
     const buttons: BtnState[] = ring.map((b) => {
       const w = buttonWorld(spot.position.x, spot.position.z, spot.yaw, b.angle);
@@ -205,6 +240,11 @@ export function createChests(ctx: GameContext): Chests {
       hint,
       lockRoot,
       badge,
+      badgeState: null,
+      carried,
+      area: { x: spot.position.x, z: spot.position.z, r: 0 },
+      dotRun: -1,
+      pop: 0,
       trail,
       hints: new ApproachHints(),
       buttons,
@@ -289,6 +329,20 @@ export function createChests(ctx: GameContext): Chests {
         const to = Math.max(from + 1.5, len - 1.1);
         e.trail.layOut(c.x + (dx / len) * from, c.z + (dz / len) * from, c.x + (dx / len) * to, c.z + (dz / len) * to, (x, z) => ctx.world.heightAt(x, z));
       }
+      {
+        // Both-eye area hint: dotted trail + circle; the key is inside, never at the centre.
+        const a = keyArea(e.index, c.x, c.z, e.keyHome.x, e.keyHome.z);
+        e.area = { x: a.x, z: a.z, r: a.r };
+        e.dotRun = dots.add(a, (x, z) => {
+          if (!ctx.world.isLand(x, z)) return null;
+          const gy = ctx.world.heightAt(x, z);
+          if (gy < ctx.world.waterLevel + 0.05) return null;
+          // The walkable surface (paving sits on the terrain); skip dots under roofs and on props.
+          const hit = ctx.physics.raycast(tmp.set(x, gy + 6, z), DOWN, 9);
+          if (hit && hit.point.y > gy + 0.45) return null;
+          return hit ? Math.max(gy, hit.point.y) + 0.02 : gy;
+        });
+      }
       e.placed = true;
       e.keyModel.group.visible = e.lock.key === 'ground';
     }
@@ -333,14 +387,18 @@ export function createChests(ctx: GameContext): Chests {
     e.openedFor = 0;
     e.lockRoot.visible = false;
     e.model.treasure.visible = false;
+    e.pop = 0.001;
     ctx.events.emit('chest:opened', { chestId: e.id, outfitId: e.outfitId });
     ctx.events.emit('stamp:earned', { id: 'chest' });
     equip(e.outfitId);
     ctx.audio.play('chest');
     ctx.audio.play('star', { pitch: 1.1 });
-    ctx.cameraRig.shake(0.18);
+    ctx.audio.play('fanfare', { volume: 0.7 });
+    ctx.cameraRig.shake(0.24);
     tmp.set(e.spot.position.x, e.spot.position.y + 1.0, e.spot.position.z);
-    confetti.burst(tmp);
+    confetti.burst(tmp, 170);
+    const def = OUTFITS.find((o) => o.id === e.outfitId);
+    hud.flash({ icon: 'chest', yellow: false }, [{ icon: (def?.icon ?? 'hat') as UiIconName, yellow: true }]);
   }
 
   /**
@@ -370,7 +428,13 @@ export function createChests(ctx: GameContext): Chests {
       e.wobble = 0;
       e.lockRoot.visible = true;
       e.hints.reset();
-      e.badge.group.visible = false;
+      e.badge.set(null);
+      e.badgeState = null;
+      e.carried.group.visible = false;
+      e.carried.group.scale.setScalar(1);
+      e.model.group.scale.setScalar(1);
+      e.pop = 0;
+      if (e.dotRun >= 0) dots.set(e.dotRun, false, 0);
       e.model.keyFill.visible = false;
       for (const b of e.buttons) {
         b.on = false;
@@ -387,6 +451,7 @@ export function createChests(ctx: GameContext): Chests {
       e.keyModel.group.scale.setScalar(1);
     }
     havePrev = false;
+    hud.setKeys(0);
     ctx.session.setTotals({ chests: n });
   }
 
@@ -423,22 +488,34 @@ export function createChests(ctx: GameContext): Chests {
           ctx.events.emit('ui:toast', { icon: 'key' });
           ctx.audio.play('key');
           e.keyPos.copy(kg.position);
+          // Found: the key is no secret any more. It bobs over the hero for both eyes.
+          kg.visible = false;
+          e.carried.group.position.copy(kg.position);
+          e.carried.group.visible = true;
+          hud.flash({ icon: 'key' }, [{ icon: 'chest' }]);
         }
       } else if (e.lock.key === 'carried') {
+        // Over the hero's head, bobbing and turning (side by side when there are several).
         const slot = carried.indexOf(e);
-        const a = time * 2.3 + (slot * Math.PI * 2) / Math.max(1, carried.length);
-        tmp.set(Math.cos(a) * 0.9, 1.6 + Math.sin(time * 3 + slot) * 0.07, Math.sin(a) * 0.9);
-        kg.position.sub(lastPlayer).lerp(tmp, 1 - Math.exp(-10 * dt)).add(ctx.player.position);
-        kg.scale.setScalar(0.34);
-        e.keyModel.body.rotation.y = time * 3;
-        e.keyModel.body.rotation.z = 0;
+        const cg = e.carried.group;
+        const side = (slot - (carried.length - 1) / 2) * 0.75;
+        tmp.set(side, 2.35 + Math.sin(time * 3.2 + slot) * 0.12, 0);
+        cg.position.sub(lastPlayer).lerp(tmp, 1 - Math.exp(-10 * dt)).add(ctx.player.position);
+        cg.rotation.set(0, time * 2.2 + slot, Math.sin(time * 2.6 + slot) * 0.2);
+        cg.scale.setScalar(0.62);
+        cg.visible = true;
+        kg.position.copy(cg.position);
       } else if (e.lock.key === 'used' && e.keyFly > 0 && e.keyFly < 1) {
-        // Fly into the chest and shrink away.
+        // Fly into the chest's lock and shrink away.
         e.keyFly = Math.min(1, e.keyFly + dt / 0.45);
+        const cg = e.carried.group;
         tmp.set(e.spot.position.x, e.spot.position.y + 0.5, e.spot.position.z);
-        kg.position.lerp(tmp, 1 - Math.exp(-14 * dt));
-        kg.scale.setScalar(0.34 * (1 - e.keyFly));
-        if (e.keyFly >= 1) kg.visible = false;
+        cg.position.lerp(tmp, 1 - Math.exp(-14 * dt));
+        cg.scale.setScalar(0.62 * (1 - e.keyFly));
+        cg.rotation.y += dt * 12;
+        kg.position.copy(cg.position);
+        kg.visible = false;
+        if (e.keyFly >= 1) cg.visible = false;
       }
 
       // Strong-eye symbol: floats over the chest and turns to face the camera.
@@ -452,12 +529,28 @@ export function createChests(ctx: GameContext): Chests {
       const hint = playing ? e.hints.update(dist, e.lock.hasKey, e.lock.opened) : null;
       if (hint === 'find-key') ctx.events.emit('ui:toast', { icon: 'key', text: 'Find the key!' });
       else if (hint === 'step-shape') ctx.events.emit('ui:toast', { icon: 'lock', text: 'Step on the right shape!' });
-      const showBadge = e.hints.isNear && !e.lock.hasKey && !e.lock.opened;
-      e.badge.group.visible = showBadge;
-      if (showBadge) {
-        e.badge.group.position.set(e.spot.position.x, e.spot.position.y + 1.5 + Math.sin(time * 2.6 + e.index) * 0.06, e.spot.position.z);
-        e.badge.group.rotation.y = Math.atan2(ctx.camera.position.x - e.spot.position.x, ctx.camera.position.z - e.spot.position.z);
+      // Pictogram badge over the chest (both eyes, from 40 m): key + "?" until found, then key → chest.
+      const badge: BadgeState | null = !playing || e.lock.opened || dist > 40 ? null : e.lock.hasKey ? 'use' : e.lock.key === 'ground' ? 'find' : null;
+      if (badge !== e.badgeState) {
+        e.badge.set(badge);
+        e.badgeState = badge;
       }
+      if (badge) {
+        // Beside the floating (strong-eye) symbol, on the camera's right, so the two never overlap.
+        camRight.setFromMatrixColumn(ctx.camera.matrixWorld, 0).setY(0);
+        if (camRight.lengthSq() < 1e-6) camRight.set(1, 0, 0);
+        camRight.normalize();
+        const k = 1.25 + Math.min(1, dist / 30) * 0.9; // a bit bigger far away
+        e.badge.sprite.scale.setScalar(k * (1 + 0.06 * Math.sin(time * 4 + e.index)));
+        e.badge.sprite.position.set(
+          e.spot.position.x + camRight.x * 1.95,
+          e.spot.position.y + 2.35 + Math.sin(time * 2.6 + e.index) * 0.08,
+          e.spot.position.z + camRight.z * 1.95,
+        );
+      }
+
+      // Dotted "look over there" area hint (both eyes): only while the key is still out there.
+      if (e.dotRun >= 0) dots.set(e.dotRun, playing && e.placed && e.lock.key === 'ground' && !e.lock.opened && dist < 45, time + e.index * 0.37);
 
       // Weak-eye arrow trail: chest toward key, only while the key is still out there.
       const showTrail = chestTrail.enabled && keysShown && e.placed && e.lock.key === 'ground' && !e.lock.opened;
@@ -493,6 +586,14 @@ export function createChests(ctx: GameContext): Chests {
       const w = e.wobble * e.wobble;
       const wob = Math.sin(time * 42) * 0.05 * w;
       e.model.group.rotation.z = wob;
+      if (e.pop > 0 && e.pop < 1) {
+        // Squash, then a big springy pop as it opens.
+        e.pop = Math.min(1, e.pop + dt / 0.9);
+        const p = e.pop;
+        const sq = p < 0.18 ? -0.18 * Math.sin((p / 0.18) * Math.PI * 0.5) : 0.22 * Math.sin(((p - 0.18) / 0.82) * Math.PI * 2.5) * (1 - p);
+        e.model.group.scale.set(1 - sq * 0.5, 1 + sq, 1 - sq * 0.5);
+        if (e.pop >= 1) e.model.group.scale.setScalar(1);
+      }
       if (e.lock.opened) {
         e.openedFor += dt;
         e.openT = Math.min(1, e.openT + dt / 0.75);
@@ -512,6 +613,7 @@ export function createChests(ctx: GameContext): Chests {
     prev.copy(cur);
     havePrev = true;
     lastPlayer.copy(ctx.player.position);
+    hud.setKeys(playing ? carried.length : 0);
     buttonSet.flush();
     confetti.update(dt);
   }
@@ -533,7 +635,12 @@ export function createChests(ctx: GameContext): Chests {
           keyState: e.lock.key,
           open: e.lock.opened,
           keyNow: [e.keyModel.group.position.x, e.keyModel.group.position.y, e.keyModel.group.position.z],
+          badge: e.badgeState,
+          dots: dots.runInfo(e.dotRun),
+          area: [e.area.x, e.area.z, e.area.r] as [number, number, number],
+          carriedKeyVisible: e.carried.group.visible,
         })),
+      hud: () => ({ keyChip: (ctx.uiRoot.querySelector('.ch-key.on') ?? null) !== null, picto: hud.showing }),
       sidePoint(i, side, dist = 5) {
         const e = entries[i];
         const d = sideDirection(side);
@@ -565,8 +672,10 @@ export function createChests(ctx: GameContext): Chests {
         e.hint.dispose();
         ctx.vision.remove(e.trail.mesh);
         e.trail.dispose();
-        ctx.scene.remove(e.badge.group);
+        ctx.scene.remove(e.badge.sprite);
         e.badge.dispose();
+        ctx.scene.remove(e.carried.group);
+        e.carried.dispose();
         e.keyModel.dispose();
         if (e.collider) {
           const c = ctx.physics.world.getCollider(e.collider.handle);
@@ -575,6 +684,9 @@ export function createChests(ctx: GameContext): Chests {
       }
       for (const m of buttonSet.meshes) ctx.scene.remove(m);
       buttonSet.dispose();
+      ctx.scene.remove(dots.mesh);
+      dots.dispose();
+      hud.dispose();
       hintSource = null;
       ctx.scene.remove(confetti.group);
       confetti.dispose();

@@ -220,6 +220,63 @@ export function pickKeySpot(cands: readonly KeyCandidate[], accept: (c: KeyCandi
   return null;
 }
 
+// ───────────────────────────── Both-eye key area hint ─────────────────────────────
+
+export const AREA = {
+  /** Radius of the dotted "search here" circle, metres. */
+  radius: 3.2,
+  /** The circle's centre is this far from the key, so the key is never at its centre. */
+  offset: 2.0,
+  /** The offset turns at most this far (radians) from the chest → key direction (keeps the circle off the chest's buttons). */
+  maxTurn: 1.2,
+  /** Dots on the circle and the spacing of the trail dots, metres. */
+  ringDots: 16,
+  trailGap: 0.9,
+} as const;
+
+export interface KeyArea {
+  /** Centre of the dotted circle (the key lies inside it, never at its centre). */
+  x: number;
+  z: number;
+  r: number;
+  /** Dots from the chest's button ring out to the circle's edge. */
+  trail: { x: number; z: number }[];
+  /** Dots on the circle. */
+  ring: { x: number; z: number }[];
+}
+
+/**
+ * The both-eye hint for where to look for chest `index`'s key: a short dotted trail from the chest
+ * that ends in a dotted circle. The key (weak-eye only) is somewhere inside the circle but never at
+ * its centre, so the strong eye learns only the area, never the spot. Deterministic per chest.
+ */
+export function keyArea(index: number, cx: number, cz: number, kx: number, kz: number): KeyArea {
+  const base = Math.atan2(kx - cx, kz - cz);
+  const turn = ((hash32(index * 977 + 41) % 1000) / 1000 - 0.5) * 2 * AREA.maxTurn;
+  const a = base + turn;
+  const x = kx + Math.sin(a) * AREA.offset;
+  const z = kz + Math.cos(a) * AREA.offset;
+  const dx = x - cx;
+  const dz = z - cz;
+  const d = Math.hypot(dx, dz) || 1;
+  const ux = dx / d;
+  const uz = dz / d;
+  const from = RING.radius + 1.2;
+  const to = d - AREA.radius;
+  const trail: { x: number; z: number }[] = [];
+  const n = Math.max(0, Math.floor((to - from) / AREA.trailGap));
+  for (let i = 0; i <= n; i++) {
+    const t = from + i * AREA.trailGap;
+    if (t > to) break;
+    trail.push({ x: cx + ux * t, z: cz + uz * t });
+  }
+  const ring = Array.from({ length: AREA.ringDots }, (_, i) => {
+    const b = (i / AREA.ringDots) * Math.PI * 2;
+    return { x: x + Math.sin(b) * AREA.radius, z: z + Math.cos(b) * AREA.radius };
+  });
+  return { x, z, r: AREA.radius, trail, ring };
+}
+
 // ───────────────────────────── Outfits ─────────────────────────────
 
 export interface EquipResult {
