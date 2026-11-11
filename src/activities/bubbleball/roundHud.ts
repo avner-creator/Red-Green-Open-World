@@ -6,9 +6,15 @@
  */
 
 export type TeamIcon = 'light' | 'dark' | 'dino' | 'crown';
-export type ActionIcon = 'hop' | 'tail';
+export type ActionIcon = 'hop' | 'tail' | 'kick' | 'charge';
 
-const ICONS: Record<TeamIcon | ActionIcon | 'ball' | 'again' | 'leave' | 'gem' | 'splash', string> = {
+const ICONS: Record<TeamIcon | ActionIcon | 'ball' | 'again' | 'leave' | 'gem' | 'splash' | 'trophy' | 'smile', string> = {
+  // Dash kick: a bubble lunging at a ball, with speed lines.
+  kick: '<path d="M1.5 8h5M1 12h4.5M1.5 16h5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="10.5" cy="12" r="5.5" fill="#fff3a0" stroke="#000" stroke-width="1.6"/><circle cx="19" cy="13" r="3.6" fill="#fff" stroke="#000" stroke-width="1.6"/><path d="M19 11.2l1.5 1.1-.6 1.8h-1.8l-.6-1.8z" fill="#000"/>',
+  // Belly charge: a round dino belly lunging forward with speed lines.
+  charge: '<path d="M1.5 8h4.5M1 12h4M1.5 16h4.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><ellipse cx="13.5" cy="13" rx="7.5" ry="7" fill="#fff3a0" stroke="#000" stroke-width="1.6"/><ellipse cx="15" cy="15" rx="4" ry="3.6" fill="#fff" stroke="#000" stroke-width="1.2"/><circle cx="17" cy="9" r="1.2" fill="#000"/><path d="M20.5 6.5l2 -2M21.5 9l2.2 -.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
+  trophy: '<path d="M7 3h10v5a5 5 0 0 1-10 0z" fill="#fff3a0" stroke="#000" stroke-width="1.6"/><path d="M7 5H3.5a3.5 3.5 0 0 0 4 4.2M17 5h3.5a3.5 3.5 0 0 1-4 4.2" fill="none" stroke="#000" stroke-width="1.6"/><path d="M10.5 13h3v4h-3z" fill="#fff" stroke="#000" stroke-width="1.4"/><path d="M7 21h10v-3H7z" fill="#fff3a0" stroke="#000" stroke-width="1.6"/>',
+  smile: '<circle cx="12" cy="12" r="9.5" fill="#fff3a0" stroke="#000" stroke-width="1.8"/><circle cx="8.8" cy="9.8" r="1.4" fill="#000"/><circle cx="15.2" cy="9.8" r="1.4" fill="#000"/><path d="M7 14c2.5 3.5 7.5 3.5 10 0" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/>',
   // A bright bubble with a shine (home team).
   light: '<circle cx="12" cy="12" r="9.5" fill="#fff3a0" stroke="#000" stroke-width="2"/><path d="M7 8.5a6 6 0 0 1 4-3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="13.5" r="3" fill="#000"/>',
   // A dark bubble with a white outline (away team).
@@ -59,6 +65,10 @@ const CSS = `
 .rg-bump .chip.on{opacity:1}
 .rg-bump .chip .ico{width:10vmin;height:10vmin;border-radius:50%;background:#0d1130;border:.6vmin solid #fff;display:grid;place-items:center;box-shadow:0 .7vmin 0 #000}
 .rg-bump .chip .ico svg{width:74%;height:74%}
+.rg-bump .chip.cool{opacity:.45}
+.rg-bump .chip.on:not(.cool) .ico{animation:rg-bump-ready 1.1s ease-in-out infinite alternate}
+.rg-bump .mood svg{width:16vmin;height:16vmin;filter:drop-shadow(0 .8vmin 0 #000)}
+.rg-bump .result.on .mood svg{animation:rg-bump-star .6s cubic-bezier(.2,1.8,.4,1) both}
 .rg-bump .key{height:7vmin;min-width:7vmin;padding:0 1.6vmin;border-radius:1.6vmin;background:linear-gradient(180deg,#ffe97a,#ffd93b 55%,#f2b400);
   border:.55vmin solid #000;box-shadow:0 0 0 .4vmin #fff,0 1vmin 0 .4vmin #000;display:grid;place-items:center;font-size:4.2vmin;color:#15110a}
 .rg-bump .key.wide{min-width:19vmin}
@@ -81,6 +91,7 @@ const CSS = `
 @keyframes rg-bump-splash{0%{opacity:0;transform:translate(-50%,-50%) scale(.3) rotate(-12deg)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.15) rotate(4deg)}30%{transform:translate(-50%,-50%) scale(1) rotate(0)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-60%) scale(1)}}
 @keyframes rg-bump-star{from{transform:scale(0) rotate(-40deg)}to{transform:scale(1) rotate(0)}}
 @keyframes rg-bump-pulse{to{transform:scale(1.25)}}
+@keyframes rg-bump-ready{to{transform:scale(1.12)}}
 `;
 
 export interface ScoreSide {
@@ -95,8 +106,8 @@ export interface RoundHud {
   count(n: number, goIcon: TeamIcon | 'ball'): void;
   /** Big score splash: an icon and "+n" (n ≤ 0 hides the number). */
   splash(icon: keyof typeof ICONS, plus: number): void;
-  /** The action-key chip (null hides it). */
-  chip(action: ActionIcon | null, gamepad: boolean): void;
+  /** The action-key chip (null hides it); `cooling` dims it while the move recharges. */
+  chip(action: ActionIcon | null, gamepad: boolean, cooling?: boolean): void;
   result(stars: number, gems: number, device: 'keyboard' | 'gamepad' | 'touch'): void;
   hideResult(): void;
   hide(): void;
@@ -122,7 +133,7 @@ export function createRoundHud(root: HTMLElement, testId: string): RoundHud {
     '<div class="team r"><span class="num">0</span><span class="ti"></span></div></div>' +
     '<div class="count"></div><div class="splash"></div>' +
     '<div class="chip"><div class="ico"></div><div class="key wide"><div class="bar"></div></div></div>' +
-    `<div class="result" data-testid="${testId}-result"><div class="stars">${STAR}${STAR}${STAR}</div>` +
+    `<div class="result" data-testid="${testId}-result"><div class="mood"></div><div class="stars">${STAR}${STAR}${STAR}</div>` +
     `<div class="prize">${svg('gem')}<span>+0</span></div>` +
     `<div class="row"><div class="opt">${svg('again')}<div class="key k-again">E</div></div><div class="opt">${svg('leave')}<div class="key k-leave">R</div></div></div></div>`;
   root.appendChild(el);
@@ -143,6 +154,7 @@ export function createRoundHud(root: HTMLElement, testId: string): RoundHud {
   const chipKey = q<HTMLElement>('.chip .key');
   const result = q<HTMLElement>('.result');
   const stars = Array.from(el.querySelectorAll('.stars svg'));
+  const mood = q<HTMLElement>('.mood');
   const prize = q<HTMLElement>('.prize span');
   const kAgain = q<HTMLElement>('.k-again');
   const kLeave = q<HTMLElement>('.k-leave');
@@ -186,7 +198,8 @@ export function createRoundHud(root: HTMLElement, testId: string): RoundHud {
       splashEl.innerHTML = svg(icon) + (plus > 0 ? `<b>+${plus}</b>` : '');
       restart(splashEl, 'pop');
     },
-    chip(action, gamepad) {
+    chip(action, gamepad, cooling = false) {
+      chipEl.classList.toggle('cool', cooling);
       const key = `${action}:${gamepad}`;
       if (key === shownChip) return;
       shownChip = key;
@@ -197,6 +210,8 @@ export function createRoundHud(root: HTMLElement, testId: string): RoundHud {
       chipKey.innerHTML = gamepad ? 'A' : '<div class="bar"></div>';
     },
     result(n, gems, device) {
+      // A trophy for a win, a big smile otherwise (everybody had fun).
+      mood.innerHTML = svg(n >= 3 ? 'trophy' : 'smile');
       stars.forEach((s, i) => s.classList.toggle('got', i < n));
       prize.textContent = `+${gems}`;
       kAgain.textContent = device === 'gamepad' ? 'X' : 'E';
