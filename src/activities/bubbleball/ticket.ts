@@ -16,18 +16,34 @@ export interface Ticket {
   dispose(): void;
   /** The outcome of the last `pay()`. */
   readonly last: TicketOutcome;
+  /** True when the last `pay()` started a practice round (no prize). */
+  readonly practice: boolean;
+  /**
+   * Everything the wallet gained since the last `pay()` (the prize plus any mission, Fun Pass or
+   * glasses bonus paid during the round), so the result card shows exactly what the wallet got.
+   */
+  gained(): number;
 }
 
 export function createTicket(ctx: GameContext, kind: TicketKind): Ticket {
   let last: TicketOutcome = 'free';
+  let start = 0;
+  const wallet = (): number => (ctx as Partial<GameContext>).profile?.wallet ?? 0;
   return {
     get last() {
       return last;
+    },
+    get practice() {
+      return last === 'practice';
+    },
+    gained() {
+      return Math.max(0, wallet() - start);
     },
     pay() {
       const economy = (ctx as Partial<GameContext>).economy;
       last = economy ? economy.rideTicket(kind) : 'free';
       if (last === 'practice') ctx.audio.play('click', { pitch: 0.7 });
+      start = wallet();
       return true;
     },
     prize(gems) {
@@ -38,6 +54,7 @@ export function createTicket(ctx: GameContext, kind: TicketKind): Ticket {
     },
     reset() {
       last = 'free';
+      start = wallet();
     },
     dispose() {
       /* nothing held */
