@@ -1,0 +1,66 @@
+interactables gearShack@13,19,2 balloon@84,11,64 silly-boop@8,10,86 bubbleball@28,17,47 bubbleball-ball@35,19,58 dinosumo@16,17,49 carnival-balloonPop@23,20,-30 carnival-ringToss@23,20,-36 carnival-duckPond@23,20,-42 carnival-strengthBell@23,20,-48 carnival-glowDodge@23,20,-54 foam-lava@-26,19,-14 sky-plane@-12,20,41 sky-dragon@-34,34,-130 workshop@30,19,19 race-booth@33,20,3 chest0-key@7,19,-8 chest0-lock@7,19,-8 chest1-key@-58,16,63 chest1-lock@-58,16,63 chest2-key@-51,25,-141 chest2-lock@-51,25,-141 chest3-key@-95,2,-4 chest3-lock@-95,2,-4 chest4-key@102,10,74 chest4-lock@102,10,74 chest5-key@28,9,106 chest5-lock@28,9,106 vault-cliff@109,8,23 vault-village@9,19,25 scoops-counter@22,20,-1 bungee@-6,35,-106 bungee-winch@-15,2,-105 glasses-booth-0@-65,17,22 glasses-booth-1@-36,19,1 glasses-oddone-0@-39,20,-0 glasses-oddone-1@-37,20,-2 glasses-oddone-2@-35,20,-2 glasses-booth-2@71,33,-90 glasses-lineup-pad@71,33,-90 glasses-booth-3@-29,21,67 glasses-booth-4@47,8,103 glasses-booth-5@62,19,9 glasses-dotsigns-0@64,19,6 glasses-dotsigns-1@64,19,8 glasses-dotsigns-2@64,19,10 glasses-weave-shack-0@15,19,-1 glasses-weave-shack-1@16,19,-1 glasses-weave-shack-2@17,19,-0
+plane [ -12, 19.78, 41 ] dragon [ -34, 34.0452766418457, -130 ]
+  shot test-results/qa8b/sky/000-plane-approach.png
+to plane {"reached":false,"stuck":true,"pos":[-11.00990024213894,18.02000149104096,40.259961328751615]} walk pos=-11.0,18.0,40.3 gems=0 wallet=0 prompt=E pip=
+  shot test-results/qa8b/sky/001-plane-at.png
+[plane] t=0.0 phase board score 0 external pos=-11.0,18.2,40.3 gems=0 wallet=0 prompt= pip=
+  shot test-results/qa8b/sky/002-plane-board-t0.png
+[plane] t=0.6 phase countdown score 0 external pos=-12.0,19.2,40.5 gems=0 wallet=0 prompt= pip=
+[plane] t=3.6 phase takeoff score 0 external pos=-12.0,19.2,40.5 gems=0 wallet=0 prompt= pip=
+  shot test-results/qa8b/sky/003-plane-takeoff-t4.png
+[plane] t=7.0 phase race score 0 external pos=21.5,23.3,114.7 gems=0 wallet=0 prompt= pip=
+  shot test-results/qa8b/sky/004-plane-race-t8.png
+  shot test-results/qa8b/sky/005-plane-race-t12.png
+  shot test-results/qa8b/sky/006-plane-race-t16.png
+  shot test-results/qa8b/sky/007-plane-race-t20.png
+  shot test-results/qa8b/sky/008-plane-race-t24.png
+  shot test-results/qa8b/sky/009-plane-race-t28.png
+  shot test-results/qa8b/sky/010-plane-race-t32.png
+  shot test-results/qa8b/sky/011-plane-race-t36.png
+  shot test-results/qa8b/sky/012-plane-race-t40.png
+  shot test-results/qa8b/sky/013-plane-race-t44.png
+[plane] t=46.9 phase landing score 5 external pos=-65.0,50.1,80.6 gems=0 wallet=6 prompt= pip=
+  shot test-results/qa8b/sky/014-plane-landing-t48.png
+[plane] t=50.9 phase rollout score 5 external pos=-12.0,19.2,31.5 gems=0 wallet=6 prompt= pip=
+  shot test-results/qa8b/sky/015-plane-rollout-t52.png
+[plane] t=52.5 phase idle score 5 walk pos=-6.4,18.0,41.0 gems=0 wallet=8 prompt= pip=
+[plane] wall 104 s; result {"score":5,"place":3,"stars":0,"prize":8,"scores":[{"id":"you","score":5},{"id":"friend0","score":21},{"id":"friend1","score":10}]} wallet 0->8 walk pos=-6.4,18.0,41.0 gems=0 wallet=8 prompt= pip=
+  shot test-results/qa8b/sky/016-plane-after.png
+[plane] UI ["+8"]
+[plane] before R race external pos=80.8,19.0,133.6 gems=0 wallet=10 prompt= pip=
+[plane] after R idle walk pos=-6.4,18.0,41.0 gems=0 wallet=10 prompt= pip=
+  shot test-results/qa8b/sky/017-plane-after-R.png
+  shot test-results/qa8b/sky/018-roost-sign.png
+roost path -26 -137.5 {"reached":true,"stuck":false,"pos":[-25.67752113148663,30.973333390339395,-137.16126951950173]}
+  shot test-results/qa8b/sky/019-roost-path--26.png
+roost path -26.3 -129.5 {"reached":true,"stuck":false,"pos":[-26.723483171799217,31.562043036011165,-130.09410146626215]}
+  shot test-results/qa8b/sky/020-roost-path--26.3.png
+roost path -29.6 -125.2 {"reached":true,"stuck":false,"pos":[-29.082876439691518,31.56537464426292,-125.50313428791742]}
+  shot test-results/qa8b/sky/021-roost-path--29.6.png
+to dragon {"reached":false,"stuck":false,"pos":[-35.98042919068166,31.565626583197137,-132.34615944627694]} walk pos=-36.0,31.6,-132.3 gems=0 wallet=10 prompt=E pip=
+  shot test-results/qa8b/sky/022-dragon-at.png
+[dragon] t=0.0 phase feed external pos=-32.7,31.5,-125.1 gems=0 wallet=10 prompt= pip=
+  shot test-results/qa8b/sky/023-dragon-feed-t0.png
+[dragon] t=2.4 phase mount external pos=-32.7,31.8,-125.1 gems=0 wallet=10 prompt= pip=
+[dragon] t=3.1 phase launch external pos=-34.0,34.6,-130.2 gems=0 wallet=10 prompt= pip=
+  shot test-results/qa8b/sky/024-dragon-launch-t4.png
+[dragon] t=4.9 phase tour external pos=-29.9,46.6,-114.2 gems=0 wallet=10 prompt= pip=
+  shot test-results/qa8b/sky/025-dragon-tour-t8.png
+  shot test-results/qa8b/sky/026-dragon-tour-t12.png
+  shot test-results/qa8b/sky/027-dragon-tour-t16.png
+  shot test-results/qa8b/sky/028-dragon-tour-t20.png
+  shot test-results/qa8b/sky/029-dragon-tour-t24.png
+  shot test-results/qa8b/sky/030-dragon-tour-t28.png
+  shot test-results/qa8b/sky/031-dragon-tour-t32.png
+  shot test-results/qa8b/sky/032-dragon-tour-t36.png
+  shot test-results/qa8b/sky/033-dragon-tour-t40.png
+  shot test-results/qa8b/sky/034-dragon-tour-t44.png
+[dragon] t=44.8 phase return external pos=18.7,41.3,79.8 gems=0 wallet=10 prompt= pip=
+  shot test-results/qa8b/sky/035-dragon-return-t48.png
+  shot test-results/qa8b/sky/036-dragon-return-t52.png
+[dragon] t=52.7 phase land external pos=-34.0,34.6,-130.1 gems=0 wallet=10 prompt= pip=
+[dragon] t=53.6 phase dismount external pos=-34.0,34.6,-130.1 gems=0 wallet=10 prompt= pip=
+[dragon] t=54.3 phase idle walk pos=-32.7,31.6,-125.1 gems=0 wallet=13 prompt=E pip=
+[dragon] tour {"treasure":0,"clouds":2,"stars":0,"points":2,"friend":11,"place":2,"prize":3} wallet 10->13 walk pos=-32.7,31.6,-125.1 gems=0 wallet=13 prompt=E pip=
+  shot test-results/qa8b/sky/037-dragon-after.png
+CONSOLE ERRORS: [] RG ERRORS: []

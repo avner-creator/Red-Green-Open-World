@@ -116,6 +116,8 @@ try {
         mx = (dx * -fz + dz * fx) / d;
       }
       if (st.prompt && st.mode === 'walk' && (process.env.QA_E === '1' || st.act === 'use') && Math.random() < 0.15) use = true;
+      // QA8: in a vehicle, obey Pip's use cue ("hop out, this way")
+      if (st.mode !== 'walk' && st.act === 'use' && Math.random() < 0.3) use = true;
     } else if (gt < follow + 20) my = 1;
     if (!phone) {
       const want = new Set();
@@ -126,6 +128,7 @@ try {
       if (jump) want.add('Space');
       await setKeys(want);
       if (use) await kb.press('KeyE');
+      if (use && st.mode !== 'walk') console.log('HOPOUT', gt);
     } else {
       // Left thumb on the stick zone (lower-left quarter), drag 50 px in the wanted direction.
       const sx = vp.width * 0.16;

@@ -1,0 +1,1 @@
+await page.evaluate(() => window.__rg.setEye({ leftLens: 'green', weakEye: 'left' })); globalThis.QA_ID='dotsigns'; globalThis.QA_TAG='-gR-wL'; globalThis.QA_RETURN=true; globalThis.__waitShot=0; log(await H.chan());

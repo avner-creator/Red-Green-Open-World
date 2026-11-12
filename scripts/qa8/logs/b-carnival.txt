@@ -1,0 +1,94 @@
+site {"x":21,"z":-42,"yaw":-1.5707963267948966,"radius":17,"fromAnchor":true,"y":18} booths [["balloonPop",true,[22.4,18.4,-30]],["ringToss",true,[22.4,18.4,-36]],["duckPond",true,[22.4,18.4,-42]],["strengthBell",true,[22.4,18.4,-48]],["glowDodge",true,[22.4,18.4,-54]]]
+  shot test-results/qa8b/carnival/000-approach.png
+through arch {
+  reached: true,
+  stuck: false,
+  pos: [ 21.00054577770163, 18.397786971025926, -28.884763417276233 ]
+} walk pos=21.0,18.4,-28.9 gems=0 wallet=0 prompt=E pip=
+  shot test-results/qa8b/carnival/001-in-arch.png
+[balloonPop] walk to stand {"reached":true,"stuck":false,"pos":[22.278299478275606,18.399679186831055,-30.10674338552603]} walk pos=22.3,18.4,-30.1 gems=0 wallet=0 prompt=E pip=
+  shot test-results/qa8b/carnival/002-balloonPop-stand.png
+[balloonPop] after E active=balloonPop phase=count wallet 0->0 []
+  shot test-results/qa8b/carnival/003-balloonPop-t0.png
+  shot test-results/qa8b/carnival/004-balloonPop-t4.png
+  shot test-results/qa8b/carnival/005-balloonPop-t8.png
+  shot test-results/qa8b/carnival/006-balloonPop-t12.png
+  shot test-results/qa8b/carnival/007-balloonPop-t16.png
+  shot test-results/qa8b/carnival/008-balloonPop-t20.png
+  shot test-results/qa8b/carnival/009-balloonPop-t24.png
+  shot test-results/qa8b/carnival/010-balloonPop-t28.png
+  shot test-results/qa8b/carnival/011-balloonPop-t32.png
+[balloonPop] round ended 32.7 s phase=result scores=[9,9,7] result={"place":1,"stars":1,"gems":3,"won":true} plush=1 wallet=3
+  shot test-results/qa8b/carnival/012-balloonPop-result.png
+[balloonPop] UI []
+[balloonPop] after R active=null walk pos=22.1,18.4,-30.0 gems=0 wallet=3 prompt=E pip=
+[ringToss] walk to stand {"reached":true,"stuck":false,"pos":[22.10000229837364,18.38911188829923,-35.538336248168264]} walk pos=22.1,18.4,-35.5 gems=0 wallet=3 prompt=E pip=
+  shot test-results/qa8b/carnival/013-ringToss-stand.png
+[ringToss] after E active=ringToss phase=count wallet 3->3 []
+  shot test-results/qa8b/carnival/014-ringToss-t0.png
+  shot test-results/qa8b/carnival/015-ringToss-t4.png
+  shot test-results/qa8b/carnival/016-ringToss-t8.png
+  shot test-results/qa8b/carnival/017-ringToss-t12.png
+  shot test-results/qa8b/carnival/018-ringToss-t16.png
+  shot test-results/qa8b/carnival/019-ringToss-t20.png
+  shot test-results/qa8b/carnival/020-ringToss-t24.png
+  shot test-results/qa8b/carnival/021-ringToss-t28.png
+  shot test-results/qa8b/carnival/022-ringToss-t32.png
+  shot test-results/qa8b/carnival/023-ringToss-t36.png
+[ringToss] round ended 37.7 s phase=result scores=[14,3,5] result={"place":1,"stars":2,"gems":4,"won":true} plush=2 wallet=13
+  shot test-results/qa8b/carnival/024-ringToss-result.png
+[ringToss] UI []
+[ringToss] after R active=null walk pos=22.1,18.4,-36.0 gems=0 wallet=13 prompt=E pip=
+[duckPond] walk to stand {"reached":true,"stuck":false,"pos":[22.10000056210425,18.390210170534264,-41.538336695276065]} walk pos=22.1,18.4,-41.5 gems=0 wallet=13 prompt=E pip=
+  shot test-results/qa8b/carnival/025-duckPond-stand.png
+[duckPond] after E active=duckPond phase=count wallet 13->13 []
+  shot test-results/qa8b/carnival/026-duckPond-t0.png
+  shot test-results/qa8b/carnival/027-duckPond-t4.png
+  shot test-results/qa8b/carnival/028-duckPond-t8.png
+  shot test-results/qa8b/carnival/029-duckPond-t12.png
+  shot test-results/qa8b/carnival/030-duckPond-t16.png
+  shot test-results/qa8b/carnival/031-duckPond-t20.png
+  shot test-results/qa8b/carnival/032-duckPond-t24.png
+  shot test-results/qa8b/carnival/033-duckPond-t28.png
+  shot test-results/qa8b/carnival/034-duckPond-t32.png
+[duckPond] round ended 32.7 s phase=result scores=[18,12,12] result={"place":1,"stars":2,"gems":4,"won":true} plush=3 wallet=17
+  shot test-results/qa8b/carnival/035-duckPond-result.png
+[duckPond] UI []
+[duckPond] after R active=null walk pos=22.1,18.4,-42.0 gems=0 wallet=17 prompt=E pip=
+[strengthBell] walk to stand {"reached":true,"stuck":false,"pos":[22.349966379208286,18.389910329041303,-47.57542645862519]} walk pos=22.3,18.4,-47.6 gems=0 wallet=17 prompt=E pip=
+  shot test-results/qa8b/carnival/036-strengthBell-stand.png
+[strengthBell] after E active=strengthBell phase=count wallet 17->17 []
+  shot test-results/qa8b/carnival/037-strengthBell-t0.png
+  shot test-results/qa8b/carnival/038-strengthBell-t4.png
+  shot test-results/qa8b/carnival/039-strengthBell-t8.png
+  shot test-results/qa8b/carnival/040-strengthBell-t12.png
+[strengthBell] round ended 12.3 s phase=result scores=[8,10,7] result={"place":2,"stars":1,"gems":1,"won":false} plush=3 wallet=18
+  shot test-results/qa8b/carnival/041-strengthBell-result.png
+[strengthBell] UI []
+[strengthBell] after R active=null walk pos=22.1,18.4,-48.0 gems=0 wallet=18 prompt=E pip=
+[glowDodge] walk to stand {"reached":true,"stuck":false,"pos":[22.100001425098277,18.389230257797752,-53.48999862367131]} walk pos=22.1,18.4,-53.5 gems=0 wallet=18 prompt=E pip=
+  shot test-results/qa8b/carnival/042-glowDodge-stand.png
+[glowDodge] after E active=glowDodge phase=count wallet 18->18 []
+  shot test-results/qa8b/carnival/043-glowDodge-t0.png
+  shot test-results/qa8b/carnival/044-glowDodge-t4.png
+  shot test-results/qa8b/carnival/045-glowDodge-t8.png
+  shot test-results/qa8b/carnival/046-glowDodge-t12.png
+  shot test-results/qa8b/carnival/047-glowDodge-t16.png
+  shot test-results/qa8b/carnival/048-glowDodge-t20.png
+  shot test-results/qa8b/carnival/049-glowDodge-t24.png
+  shot test-results/qa8b/carnival/050-glowDodge-t28.png
+  shot test-results/qa8b/carnival/051-glowDodge-t32.png
+[glowDodge] round ended 32.7 s phase=result scores=[12,8,7] result={"place":1,"stars":2,"gems":4,"won":true} plush=4 wallet=22
+  shot test-results/qa8b/carnival/052-glowDodge-result.png
+[glowDodge] UI []
+[glowDodge] after R active=null walk pos=22.1,18.4,-54.0 gems=0 wallet=22 prompt=E pip=
+wallet emptied 0
+[zero-gem] after E {"site":{"x":21,"z":-42,"yaw":-1.5707963267948966,"radius":17,"fromAnchor":true,"y":18},"booths":[{"id":"balloonPop","playable":true,"stand":[22.400000000000002,18.38,-30],"yaw":1.5707963267948966},{" []
+  shot test-results/qa8b/carnival/053-zero-gem-E.png
+  shot test-results/qa8b/carnival/054-zero-gem-E-1s.png
+[paid-balloonPop] walk to stand {"reached":true,"stuck":false,"pos":[22.400000000000002,18.38,-30]} external pos=22.4,18.4,-30.0 gems=0 wallet=5 prompt= pip=
+  shot test-results/qa8b/carnival/055-paid-balloonPop-stand.png
+[paid-balloonPop] after E active=balloonPop phase=count wallet 5->5 []
+  shot test-results/qa8b/carnival/056-paid-balloonPop-t0.png
+  shot test-results/qa8b/carnival/057-paid-balloonPop-t4.png
+  shot test-results/qa8b/carnival/058-paid-balloonPop-t8.png

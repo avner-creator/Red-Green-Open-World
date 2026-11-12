@@ -1,0 +1,118 @@
+booth [ 16, 17.399999618530273, 49 ]
+  shot test-results/qa8b/dino/000-approach-10m.png
+to booth {
+  reached: true,
+  stuck: false,
+  pos: [ 16.000064261974952, 16.419999888509484, 47.788539155608305 ]
+} walk pos=16.0,16.4,47.8 gems=0 wallet=0 prompt=E pip=
+  shot test-results/qa8b/dino/001-at-booth.png
+into ring idle {
+  reached: false,
+  stuck: true,
+  pos: [ 16.000541731935236, 16.42008493573209, 48.92997727126203 ]
+} walk pos=16.0,16.4,48.9 gems=0 wallet=0 prompt=E pip=
+  shot test-results/qa8b/dino/002-ring-idle.png
+out far side {
+  reached: false,
+  stuck: true,
+  pos: [ 16.00168998925298, 16.42008162128815, 48.92996845289497 ]
+} walk pos=16.0,16.4,48.9 gems=0 wallet=0 prompt=E pip=
+[active] at booth walk pos=16.0,16.4,47.9 gems=0 wallet=0 prompt=E pip=
+[active] after E phase=loading wallet 0 -> 0
+  shot test-results/qa8b/dino/003-active-t0.png
+[active] t=0.2 points 0,0,0,0 clock 75.0 me 0.0,-2.4 states ok/ok/ok/ok
+  shot test-results/qa8b/dino/004-active-t3.png
+  shot test-results/qa8b/dino/005-active-t6.png
+  shot test-results/qa8b/dino/006-active-t9.png
+  shot test-results/qa8b/dino/007-active-t12.png
+  shot test-results/qa8b/dino/008-active-t15.png
+[active] t=17.1 points 1,0,0,0 clock 61.0 me 2.3,-2.0 states ok/rolling/ok/ok
+  shot test-results/qa8b/dino/009-active-t18.png
+  shot test-results/qa8b/dino/010-active-t21.png
+  shot test-results/qa8b/dino/011-active-t24.png
+  shot test-results/qa8b/dino/012-active-t27.png
+  shot test-results/qa8b/dino/013-active-t30.png
+  shot test-results/qa8b/dino/014-active-t33.png
+  shot test-results/qa8b/dino/015-active-t36.png
+  shot test-results/qa8b/dino/016-active-t39.png
+  shot test-results/qa8b/dino/017-active-t42.png
+[active] t=43.9 points 1,0,0,1 clock 39.2 me 2.8,-3.6 states rolling/ok/ok/ok
+  shot test-results/qa8b/dino/018-active-t45.png
+  shot test-results/qa8b/dino/019-active-t48.png
+  shot test-results/qa8b/dino/020-active-t51.png
+  shot test-results/qa8b/dino/021-active-t54.png
+  shot test-results/qa8b/dino/022-active-t57.png
+  shot test-results/qa8b/dino/023-active-t60.png
+  shot test-results/qa8b/dino/024-active-t63.png
+  shot test-results/qa8b/dino/025-active-t66.png
+  shot test-results/qa8b/dino/026-active-t69.png
+  shot test-results/qa8b/dino/027-active-t72.png
+  shot test-results/qa8b/dino/028-active-t75.png
+  shot test-results/qa8b/dino/029-active-t78.png
+  shot test-results/qa8b/dino/030-active-t81.png
+  shot test-results/qa8b/dino/031-active-t84.png
+  shot test-results/qa8b/dino/032-active-t87.png
+[active] t=87.8 points 2,0,0,1 clock 0.1 me -2.6,1.6 states ok/rolling/ok/ok
+  shot test-results/qa8b/dino/033-active-t90.png
+  shot test-results/qa8b/dino/034-active-t93.png
+[active] ended after 95.5 s (play 92.4 s) phase=result charge-chunks 725 wallet 13
+  shot test-results/qa8b/dino/035-active-result.png
+[active] UI text []
+  shot test-results/qa8b/dino/036-active-result-2s.png
+[active] after R idle walk pos=16.0,16.4,47.7 gems=0 wallet=13 prompt=E pip=
+  shot test-results/qa8b/dino/037-active-left.png
+[passive] at booth walk pos=16.0,16.4,47.9 gems=0 wallet=23 prompt=E pip=
+[passive] after E phase=round wallet 23 -> 20
+[passive] t=0.1 points 0,0,0,0 clock 75.0 me 0.0,-2.4 states ok/ok/ok/ok
+  shot test-results/qa8b/dino/038-passive-t0.png
+  shot test-results/qa8b/dino/039-passive-t3.png
+  shot test-results/qa8b/dino/040-passive-t6.png
+  shot test-results/qa8b/dino/041-passive-t9.png
+  shot test-results/qa8b/dino/042-passive-t12.png
+  shot test-results/qa8b/dino/043-passive-t15.png
+[passive] t=15.7 points 0,0,1,0 clock 62.4 me 1.1,-4.4 states rolling/ok/ok/ok
+  shot test-results/qa8b/dino/044-passive-t18.png
+  shot test-results/qa8b/dino/045-passive-t21.png
+  shot test-results/qa8b/dino/046-passive-t24.png
+[passive] t=26.8 points 0,0,1,1 clock 56.3 me -0.7,-4.4 states rolling/ok/ok/ok
+  shot test-results/qa8b/dino/047-passive-t27.png
+  shot test-results/qa8b/dino/048-passive-t30.png
+  shot test-results/qa8b/dino/049-passive-t33.png
+  shot test-results/qa8b/dino/050-passive-t36.png
+[passive] t=37.0 points 0,1,1,1 clock 51.1 me 1.4,-4.3 states rolling/ok/ok/ok
+  shot test-results/qa8b/dino/051-passive-t39.png
+  shot test-results/qa8b/dino/052-passive-t42.png
+  shot test-results/qa8b/dino/053-passive-t45.png
+  shot test-results/qa8b/dino/054-passive-t48.png
+  shot test-results/qa8b/dino/055-passive-t51.png
+  shot test-results/qa8b/dino/056-passive-t54.png
+  shot test-results/qa8b/dino/057-passive-t57.png
+  shot test-results/qa8b/dino/058-passive-t60.png
+  shot test-results/qa8b/dino/059-passive-t63.png
+[passive] t=63.9 points 0,1,1,2 clock 29.1 me -0.8,-4.2 states ok/rolling/ok/ok
+  shot test-results/qa8b/dino/060-passive-t66.png
+  shot test-results/qa8b/dino/061-passive-t69.png
+  shot test-results/qa8b/dino/062-passive-t72.png
+  shot test-results/qa8b/dino/063-passive-t75.png
+  shot test-results/qa8b/dino/064-passive-t78.png
+  shot test-results/qa8b/dino/065-passive-t81.png
+  shot test-results/qa8b/dino/066-passive-t84.png
+  shot test-results/qa8b/dino/067-passive-t87.png
+[passive] t=89.2 points 0,1,1,3 clock 8.8 me 1.1,-2.8 states ok/ok/rolling/ok
+  shot test-results/qa8b/dino/068-passive-t90.png
+  shot test-results/qa8b/dino/069-passive-t93.png
+[passive] ended after 95.7 s (play 92.7 s) phase=result charge-chunks 0 wallet 22
+  shot test-results/qa8b/dino/070-passive-result.png
+[passive] UI text []
+  shot test-results/qa8b/dino/071-passive-result-2s.png
+[passive] after R idle walk pos=16.0,16.4,47.7 gems=0 wallet=22 prompt=E pip=
+  shot test-results/qa8b/dino/072-passive-left.png
+[exitR] at booth walk pos=16.0,16.4,47.9 gems=0 wallet=22 prompt=E pip=
+[exitR] after E phase=round wallet 22 -> 19
+[exitR] t=0.1 points 0,0,0,0 clock 75.0 me 0.0,-2.4 states ok/ok/ok/ok
+  shot test-results/qa8b/dino/073-exitR-t0.png
+  shot test-results/qa8b/dino/074-exitR-t3.png
+  shot test-results/qa8b/dino/075-exitR-t6.png
+[exitR] R mid-round: phase=idle walk pos=12.6,16.4,51.0 gems=0 wallet=19 prompt= pip=
+  shot test-results/qa8b/dino/076-exitR-after-R.png
+CONSOLE ERRORS: [] RG ERRORS: []
