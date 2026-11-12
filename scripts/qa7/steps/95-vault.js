@@ -18,7 +18,7 @@ const img = PNG.sync.read(png);
 for (const [c, nm] of [[0, 'R'], [1, 'G']]) {
   const o = new PNG({ width: img.width, height: img.height });
   for (let i = 0; i < img.data.length; i += 4) { const v = img.data[i + c]; o.data[i] = o.data[i + 1] = o.data[i + 2] = v; o.data[i + 3] = 255; }
-  writeFileSync('test-results/qa5/drv/v/00-door.' + nm + '.png', PNG.sync.write(o));
+  writeFileSync('test-results/qa7/drv/v/00-door.' + nm + '.png', PNG.sync.write(o));
 }
 // wrong step: a pad that is not sequence[0]
 const wrong = [0, 1, 2, 3].find((i) => d.padLooks?.[i] !== undefined ? i !== d.sequence[0] && d.padLooks[i] !== d.sequence[0] : i !== d.sequence[0]);

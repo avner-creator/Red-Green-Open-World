@@ -2,7 +2,7 @@
 // WeakOnly layer and re-render the same frozen frame: count changed pixels per channel (strong channel must be 0).
 const { PNG } = await import('pngjs');
 const { writeFileSync, mkdirSync } = await import('node:fs');
-mkdirSync('test-results/qa5/drv/gl', { recursive: true });
+mkdirSync('test-results/qa7/drv/gl', { recursive: true });
 const eye = await page.evaluate(() => JSON.stringify(window.__rg.ctx.settings.get?.() ?? {}));
 log('eye settings', eye.slice(0, 200));
 await page.keyboard.press('KeyR');
@@ -23,9 +23,9 @@ for (const id of sites) {
   const here = (await H.s()).p;
   const dbg = await page.evaluate((id) => { try { return JSON.stringify(window.__rgGlasses.debug(id)).slice(0, 300); } catch (e) { return String(e); } }, id);
   const a = await grab();
-  writeFileSync(`test-results/qa5/drv/gl/${id}.png`, PNG.sync.write(a));
-  chan(a, 0, `test-results/qa5/drv/gl/${id}.R.png`);
-  chan(a, 1, `test-results/qa5/drv/gl/${id}.G.png`);
+  writeFileSync(`test-results/qa7/drv/gl/${id}.png`, PNG.sync.write(a));
+  chan(a, 0, `test-results/qa7/drv/gl/${id}.R.png`);
+  chan(a, 1, `test-results/qa7/drv/gl/${id}.G.png`);
   await page.evaluate(() => { window.__rg.setLayerVisible(1, false); window.__rg.render(); });
   const b = await grab();
   await page.evaluate(() => { window.__rg.setLayerVisible(1, true); window.__rg.render(); });
@@ -34,7 +34,7 @@ for (const id of sites) {
   res.push({ id, here, changedPx_RGB: d, dbg });
   const o = new PNG({ width: a.width, height: a.height });
   for (let i = 0; i < a.data.length; i += 4) { for (let c = 0; c < 3; c++) o.data[i + c] = Math.abs(a.data[i + c] - b.data[i + c]) > 2 ? 255 : 0; o.data[i + 3] = 255; }
-  writeFileSync(`test-results/qa5/drv/gl/${id}.diff.png`, PNG.sync.write(o));
+  writeFileSync(`test-results/qa7/drv/gl/${id}.diff.png`, PNG.sync.write(o));
 }
 for (const r of res) log(JSON.stringify(r));
 log('VisionLayer enum check', await page.evaluate(() => JSON.stringify(window.__rg.layerObjects().slice(0, 3))));

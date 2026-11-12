@@ -3,7 +3,7 @@
 // is in the target window vs never, and log results.
 const { PNG } = await import('pngjs');
 const { writeFileSync, mkdirSync } = await import('node:fs');
-mkdirSync('test-results/qa5/drv/wv', { recursive: true });
+mkdirSync('test-results/qa7/drv/wv', { recursive: true });
 const W = (id) => page.evaluate((id) => window.__rgGlasses.weave.debug(id), id);
 log('weave ids', await page.evaluate(() => window.__rgGlasses.weave.ids()));
 if ((await H.s()).mode !== 'walk') { await page.keyboard.press('KeyR'); await st(60, false); }
@@ -24,14 +24,14 @@ log('debug samples', seen.slice(0, 6).join('\n'));
 await page.evaluate(() => window.__rg.render());
 const grab = async () => PNG.sync.read(await page.screenshot());
 const a = await grab();
-writeFileSync('test-results/qa5/drv/wv/bounce.png', PNG.sync.write(a));
+writeFileSync('test-results/qa7/drv/wv/bounce.png', PNG.sync.write(a));
 await page.evaluate(() => { window.__rg.setLayerVisible(1, false); window.__rg.render(); });
 const b = await grab();
 await page.evaluate(() => { window.__rg.setLayerVisible(1, true); window.__rg.render(); });
 const dd = [0, 0, 0];
 const o = new PNG({ width: a.width, height: a.height });
 for (let i = 0; i < a.data.length; i += 4) { for (let c = 0; c < 3; c++) { const x = Math.abs(a.data[i + c] - b.data[i + c]) > 2; if (x) dd[c]++; o.data[i + c] = x ? 255 : 0; } o.data[i + 3] = 255; }
-writeFileSync('test-results/qa5/drv/wv/bounce.diff.png', PNG.sync.write(o));
+writeFileSync('test-results/qa7/drv/wv/bounce.diff.png', PNG.sync.write(o));
 log('ring found', got, 'changed px RGB', dd, JSON.stringify(await W('bounce')).slice(0, 300));
 // keep bouncing 30 s pressing Space every landing (child), log weave results
 const res = [];

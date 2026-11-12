@@ -9,8 +9,8 @@ await st(20, false);
 await page.evaluate(() => window.__rg.render());
 const grab = async () => PNG.sync.read(await page.screenshot());
 const a = await grab();
-writeFileSync('test-results/qa5/drv/wv/bounce-ring.png', PNG.sync.write(a));
-for (const [c, n] of [[0, 'R'], [1, 'G']]) { const o = new PNG({ width: a.width, height: a.height }); for (let i = 0; i < a.data.length; i += 4) { const v = a.data[i + c]; o.data[i] = o.data[i + 1] = o.data[i + 2] = v; o.data[i + 3] = 255; } writeFileSync(`test-results/qa5/drv/wv/bounce-ring.${n}.png`, PNG.sync.write(o)); }
+writeFileSync('test-results/qa7/drv/wv/bounce-ring.png', PNG.sync.write(a));
+for (const [c, n] of [[0, 'R'], [1, 'G']]) { const o = new PNG({ width: a.width, height: a.height }); for (let i = 0; i < a.data.length; i += 4) { const v = a.data[i + c]; o.data[i] = o.data[i + 1] = o.data[i + 2] = v; o.data[i + 3] = 255; } writeFileSync(`test-results/qa7/drv/wv/bounce-ring.${n}.png`, PNG.sync.write(o)); }
 await page.evaluate(() => { window.__rg.setLayerVisible(1, false); window.__rg.render(); });
 const b = await grab();
 await page.evaluate(() => { window.__rg.setLayerVisible(1, true); window.__rg.render(); });
