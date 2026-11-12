@@ -301,12 +301,62 @@ function glassesBeacon(k: Kit, g: GlassesWay): BeaconDef {
   return beaconStake(k, { anchor: g.id, icon: g.icon, balloon: g.balloon, beacon: g.beacon });
 }
 
+/** One stepping-stone trail: the stone centres in walking order (road end first, site end last). */
+export interface StoneTrail {
+  id: string;
+  stones: { x: number; z: number }[];
+}
+
 /**
- * Stepping-stone trail from the nearest road edge to the edge of a glasses site: flat stones in a
- * gentle zig-zag, flush with the ground (no colliders). Returns the stone spots (scatter keepouts).
+ * Where a trail goes, per site, when the site's centre is the wrong goal (QA8 m13: the dot-signs
+ * booth turned to face the plaza, so the trail from the park path ended at the back of its sign).
+ * It leaves the road nearest the first `via` point, bends at each `via` point (round the booth's
+ * side, clear of the pedestals and the marquee) and ends at `to`: in front of the start pad, at
+ * the booth's lead spot (`glasses:dotsigns:lead`). Site-local (x right, z towards the approach) so
+ * a site move carries it along. Checked live by tests/e2e/ui-trails.spec.ts: every trail ends
+ * within 3 m of, and with a clear straight walk to, its attraction's start point.
  */
-function steppingStones(k: Kit, roads: readonly ProcessedRoad[], g: GlassesWay): Keepout[] {
-  // Nearest point on any road centreline, then the edge point towards the site.
+const TRAIL_ROUTE: Readonly<Record<string, { via: readonly (readonly [number, number])[]; to: readonly [number, number] }>> = {
+  // From the park path behind the booth, round its pad side (the marquee stands on the other one).
+  dotsigns: { via: [[4.6, -5.6], [4.6, 6.2]], to: [1.1, 6.2] },
+};
+
+/**
+ * Each booth's start pad (site-local, from the live layout: `__rgGlasses.boothPadView`). A trail
+ * that stops at the site's rim goes on straight towards it and ends PAD_STOP short of its centre
+ * (QA8 m13: the rim was 3.6–7.5 m from the pad; the e2e test wants ≤ 3 m and a clear walk).
+ */
+const TRAIL_PAD: Readonly<Record<string, readonly [number, number]>> = {
+  glowflies: [0.97, 4.9],
+  oddone: [1.7, -1.8],
+  lineup: [-0.45, 0.29],
+  toys: [2.25, 1.14],
+  gates: [0.84, 1.4],
+};
+const PAD_STOP = 1.8;
+
+/** Extend a trail ending at the site rim towards its start pad (stopping PAD_STOP short). */
+function toPad(g: GlassesWay, stones: { x: number; z: number }[]): { x: number; z: number }[] {
+  const pad = TRAIL_PAD[g.id];
+  const last = stones[stones.length - 1];
+  if (!pad || !last) return stones;
+  const p = siteToWorld(g, pad[0], pad[1]);
+  const d = Math.hypot(last.x - p.x, last.z - p.z);
+  if (d <= PAD_STOP + 0.6) return stones;
+  const stop = { x: p.x + ((last.x - p.x) / d) * PAD_STOP, z: p.z + ((last.z - p.z) / d) * PAD_STOP };
+  const leg = Math.hypot(stop.x - last.x, stop.z - last.z);
+  return [...stones, ...stonePoints(last.x, last.z, stop.x, stop.z, Math.min(1.15, leg), leg, stones.length)];
+}
+
+/** Site-local (x right, z towards the approach) to world, for a glasses site. */
+function siteToWorld(g: GlassesWay, lx: number, lz: number): { x: number; z: number } {
+  const c = Math.cos(g.yaw);
+  const s = Math.sin(g.yaw);
+  return { x: g.x + lx * c + lz * s, z: g.z - lx * s + lz * c };
+}
+
+/** Nearest point on any road centreline to (x, z), its distance and that road's width. */
+function nearestRoadPoint(roads: readonly ProcessedRoad[], x: number, z: number): { d: number; x: number; z: number; w: number } {
   let best = { d: Infinity, x: 0, z: 0, w: 0 };
   for (const r of roads) {
     for (let i = 0; i < r.pts.length - 1; i++) {
@@ -314,14 +364,14 @@ function steppingStones(k: Kit, roads: readonly ProcessedRoad[], g: GlassesWay):
       const b = r.pts[i + 1];
       const dx = b.x - a.x;
       const dz = b.z - a.z;
-      const t = Math.max(0, Math.min(1, ((g.x - a.x) * dx + (g.z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)));
       const px = a.x + dx * t;
       const pz = a.z + dz * t;
-      const d = Math.hypot(g.x - px, g.z - pz);
+      const d = Math.hypot(x - px, z - pz);
       if (d < best.d) best = { d, x: px, z: pz, w: r.def.width };
     }
   }
-  return layStones(k, best.x, best.z, g.x, g.z, best.w / 2 + 0.7, best.d - g.r + 0.4);
+  return best;
 }
 
 /**
@@ -333,41 +383,76 @@ const EXTRA_STONE_PATHS: readonly { id: string; from: readonly [number, number] 
   { id: 'gates', from: [46, 82] },
 ];
 
-function extraStonePaths(k: Kit, roads: readonly ProcessedRoad[]): Keepout[] {
-  const out: Keepout[] = [];
+/** First distance along (f + s·u) that is at least 0.7 m off every road edge. */
+function offRoad(roads: readonly ProcessedRoad[], fx: number, fz: number, ux: number, uz: number, d: number): number {
+  let s0 = 0;
+  while (s0 < d && roadEdgeDistance(roads, fx + ux * s0, fz + uz * s0) < 0.7) s0 += 0.25;
+  return s0;
+}
+
+/**
+ * Every stepping-stone trail (pure: no geometry): from the nearest road edge to the edge of each
+ * glasses site with a trail (or via TRAIL_END to the front of its start pad), plus the extra paths.
+ */
+export function stoneTrails(roads: readonly ProcessedRoad[]): StoneTrail[] {
+  const out: StoneTrail[] = [];
+  for (const g of GLASSES_WAY) {
+    if (!g.trail) continue;
+    const route = TRAIL_ROUTE[g.id];
+    if (route) {
+      // From the nearest road edge to the first bend, then straight legs bend to bend to the end.
+      const pts = [...route.via, route.to].map(([lx, lz]) => siteToWorld(g, lx, lz));
+      const r = nearestRoadPoint(roads, pts[0].x, pts[0].z);
+      const d0 = Math.hypot(pts[0].x - r.x, pts[0].z - r.z) || 1;
+      const stones = stonePoints(r.x, r.z, pts[0].x, pts[0].z, offRoad(roads, r.x, r.z, (pts[0].x - r.x) / d0, (pts[0].z - r.z) / d0, d0), d0);
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        // (The bend's stone is the last of the leg before: this leg starts one stride on.)
+        stones.push(...stonePoints(a.x, a.z, b.x, b.z, 1.15, Math.hypot(b.x - a.x, b.z - a.z), stones.length));
+      }
+      out.push({ id: g.id, stones });
+      continue;
+    }
+    const best = nearestRoadPoint(roads, g.x, g.z);
+    out.push({ id: g.id, stones: toPad(g, stonePoints(best.x, best.z, g.x, g.z, best.w / 2 + 0.7, best.d - g.r + 0.4)) });
+  }
   for (const p of EXTRA_STONE_PATHS) {
     const g = GLASSES_WAY.find((q) => q.id === p.id);
     if (!g) continue;
     const [fx, fz] = p.from;
     // Start just past the road edge, stop at the pad's rim.
     const d = Math.hypot(g.x - fx, g.z - fz);
-    const ux = (g.x - fx) / d;
-    const uz = (g.z - fz) / d;
-    let s0 = 0;
-    while (s0 < d && roadEdgeDistance(roads, fx + ux * s0, fz + uz * s0) < 0.7) s0 += 0.25;
-    out.push(...layStones(k, fx, fz, g.x, g.z, s0, d - g.r + 0.4));
+    const s0 = offRoad(roads, fx, fz, (g.x - fx) / d, (g.z - fz) / d, d);
+    out.push({ id: `${p.id}:extra`, stones: toPad(g, stonePoints(fx, fz, g.x, g.z, s0, d - g.r + 0.4)) });
   }
   return out;
 }
 
-/** Flat stones from (fx, fz) towards (tx, tz), between distances s0 and s1, in a gentle zig-zag. */
-function layStones(k: Kit, fx: number, fz: number, tx: number, tz: number, s0: number, s1: number): Keepout[] {
-  const best = { x: fx, z: fz, d: Math.hypot(tx - fx, tz - fz) };
-  const g = { x: tx, z: tz };
-  const ux = (g.x - best.x) / best.d;
-  const uz = (g.z - best.z) / best.d;
-  const out: Keepout[] = [];
+/** Stone centres from (fx, fz) towards (tx, tz), between distances s0 and s1, in a gentle zig-zag. */
+function stonePoints(fx: number, fz: number, tx: number, tz: number, s0: number, s1: number, phase = 0): { x: number; z: number }[] {
+  const d = Math.hypot(tx - fx, tz - fz) || 1;
+  const ux = (tx - fx) / d;
+  const uz = (tz - fz) / d;
+  const out: { x: number; z: number }[] = [];
   const n = Math.max(2, Math.round((s1 - s0) / 1.15));
   for (let i = 0; i <= n; i++) {
     const s = s0 + ((s1 - s0) * i) / n;
-    const side = (i % 2 ? 1 : -1) * 0.28;
-    const x = best.x + ux * s - uz * side;
-    const z = best.z + uz * s + ux * side;
+    const side = ((i + phase) % 2 ? 1 : -1) * 0.28;
+    out.push({ x: fx + ux * s - uz * side, z: fz + uz * s + ux * side });
+  }
+  return out;
+}
+
+/** Flat stones, flush with the ground (no colliders), at the trail's spots. Returns scatter keepouts. */
+function layStones(k: Kit, stones: readonly { x: number; z: number }[]): Keepout[] {
+  const out: Keepout[] = [];
+  stones.forEach(({ x, z }, i) => {
     const y = k.h(x, z);
     const rr = 0.36 + ((i * 37) % 7) * 0.012;
     k.b.add('matte', cylG(10), i % 3 ? C.stone : 0xbcb29f, T(x, y - 0.05, z, i * 1.3, rr * 1.15, 0.1, rr), { aoY: y, aoH: 0.12, ao: 0.25 });
     out.push({ x, z, r: 0.8, mown: true });
-  }
+  });
   return out;
 }
 
@@ -540,9 +625,8 @@ export function buildWayfinding(k: Kit, roads: readonly ProcessedRoad[], blocked
     beacons.push(glassesBeacon(k, g));
     placed.push({ kind: 'beacon', name: g.id, x: g.beacon.x, z: g.beacon.z, r: 0.75 });
     keepouts.push({ x: g.beacon.x, z: g.beacon.z, r: 2.2 }, { x: g.x, z: g.z, r: g.r + 2.5 });
-    if (g.trail) keepouts.push(...steppingStones(k, roads, g));
   }
-  keepouts.push(...extraStonePaths(k, roads));
+  for (const tr of stoneTrails(roads)) keepouts.push(...layStones(k, tr.stones));
   // Toys: a tall flag at the trail head shows over the ground crest towards the booth.
   tallPennant(k, TOYS_FLAG.x, TOYS_FLAG.z, 6.5, 0x24476a, Math.atan2(-30.5 - TOYS_FLAG.x, 69.7 - TOYS_FLAG.z));
   placed.push({ kind: 'post', name: 'toys flag', x: TOYS_FLAG.x, z: TOYS_FLAG.z, r: 0.3 });

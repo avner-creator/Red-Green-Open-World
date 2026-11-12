@@ -11,6 +11,16 @@
  * reads on the sea and on the land in both channels); a yellow "you are here" dot with a dark ring;
  * the face starts higher, and no badge sits in the low middle of the face, where the hero stands
  * between the camera and the board up close.
+ *
+ * QA8 m6: the spawn camera's eye is ~3.5 m above the plaza, so anything that high sits on the
+ * horizon line, right under the HUD's compass bar (at 640x360 its bottom is at ~56 px), however
+ * far the board stands; and up close the hero's head and ears covered the low middle. The plaza
+ * has no room for a wider board, so the face now starts at the paving and ends at 3.04 m (≥ 62 px
+ * from spawn), with the badges in a 3 + 3 + 2 grid ordered as on the map (farthest ahead on top,
+ * each row left to right as seen from the board): the bottom row's two sit at the face's edges,
+ * its middle is free ("you are here": the reader, at the bottom of a forward-up map).
+ * tests/e2e/ui-wayfinding.spec.ts measures the real screen: the live spawn camera with the HUD on,
+ * and (pixel diff, hero shown / hidden) the hero standing 4.5 m in front.
  */
 import * as THREE from 'three';
 import { M, T } from '../batch';
@@ -35,27 +45,33 @@ import type { AnchorName } from '../../types';
 export const MAP_BOARD = { x: 8.25, z: 3.75, faceX: -4.5, faceZ: 10 } as const;
 /** Board face (m) and its footprint radius for the fill guard. */
 const W = 3.34;
-const H = 3.3;
+const H = 3.04;
 /** Footprint radius: the face's half-width plus the posts. */
 export const BOARD_R = W / 2 + 0.33;
 export const MAP_FACE = { w: W, h: H } as const;
 /** Face bottom above the ground (m): the low middle is where the hero stands in front of it. */
-const FACE_BOTTOM = 0.2;
-/** Face centre height (m). Its top (3.5 m) stays under the HUD's compass bar from spawn (640x360). */
+const FACE_BOTTOM = 0;
+/** Face centre height (m). Its top (3.05 m) stays below the spawn camera's eye line (~3.5 m). */
 const YC = FACE_BOTTOM + H / 2;
 /** Badge (decal) size and its cream ring (m). */
-export const MAP_BADGE = 1.06;
+export const MAP_BADGE = 0.96;
 export const MAP_RING = MAP_BADGE / 2 + 0.04;
 const RING = MAP_RING;
-/** Margin from the face edge to a badge (m). */
-const EDGE = 0;
 /**
  * The low middle of the face (board-local, m from the centre; y up): where a hero standing in front
- * hides the board up close (4.5 m away the hero covers it up to ~1.1 m). No badge centre goes there,
- * so at most the lower half of a badge can hide behind the hero; the "you are here" dot is above it.
+ * hides the board up close (4.5 m away the hero's head and ears cover it up to ~0.7–1.0 m). No
+ * badge centre goes there; the "you are here" dot does (it is the reader: unimportant to see).
  */
 export const MAP_HERO_ZONE = { halfW: 0.75, top: 1.05 - YC } as const;
-const HERO_ZONE = MAP_HERO_ZONE;
+/** Badge grid: column and row spacing (board-local m; rims may touch, badges never overlap). */
+const COL = 0.98;
+const ROW = 0.98;
+/** Top row centre: its rims' tops at the face top (3.04 m above the ground). */
+const ROW_TOP = H / 2 - RING - 0.04;
+/** Badges per row, top to bottom: the bottom row has its middle free (the hero stands there). */
+const ROWS = [3, 3, 2] as const;
+/** The bottom row's two badges sit at the face edges (u), as far from the hero as they fit. */
+const EDGE_COL = W / 2 - RING;
 
 /** The main attractions on the map (QA7 m6: 8–10, big; the far bungee and dragon roost have their own signs). */
 export const MAP_ICONS: readonly { anchor: AnchorName; icon: IconId }[] = [
@@ -88,9 +104,9 @@ export interface BoardLayout {
 }
 
 /**
- * Pure layout (no geometry): each main attraction at its map spot, then pushed apart until no two
- * badges overlap, none leaves the face, none covers the "you are here" dot and none sits in the
- * hero zone. Deterministic.
+ * Pure layout (no geometry): the main attractions in two rows of four, ordered as on the map (the
+ * four farthest ahead on the top row; each row left to right as seen from the board), "you are
+ * here" in the low middle. Deterministic.
  */
 export function boardLayout(x: number = MAP_BOARD.x, z: number = MAP_BOARD.z): BoardLayout {
   const yaw = Math.atan2(MAP_BOARD.faceX - x, MAP_BOARD.faceZ - z);
@@ -99,49 +115,20 @@ export function boardLayout(x: number = MAP_BOARD.x, z: number = MAP_BOARD.z): B
   const fwd = { x: -Math.sin(yaw), z: -Math.cos(yaw) };
   const rgt = { x: Math.cos(yaw), z: -Math.sin(yaw) };
   const uv = (wx: number, wz: number): { u: number; v: number } => ({ u: (wx * rgt.x + wz * rgt.z) * sc, v: (wx * fwd.x + wz * fwd.z) * sc });
-  const here = uv(x, z);
-  const icons = MAP_ICONS.map((m) => ({ ...m, ...uv(ANCHORS[m.anchor].x, ANCHORS[m.anchor].z) }));
-  const half = RING;
-  const gap = RING * 2 - 0.06;
-  const hereR = 0.22 + half;
-  const umax = W / 2 - half - EDGE;
-  const vmax = H / 2 - half - EDGE;
-  for (let it = 0; it < 400; it++) {
-    for (let i = 0; i < icons.length; i++) {
-      const a = icons[i];
-      for (let j = i + 1; j < icons.length; j++) {
-        const b = icons[j];
-        const du = b.u - a.u;
-        const dv = b.v - a.v;
-        const d = Math.hypot(du, dv) || 1e-3;
-        if (d < gap) {
-          const k = (gap - d) / 2 / d;
-          a.u -= du * k;
-          a.v -= dv * k;
-          b.u += du * k;
-          b.v += dv * k;
-        }
-      }
-      // Off the "you are here" dot.
-      const hu = a.u - here.u;
-      const hv = a.v - here.v;
-      const hd = Math.hypot(hu, hv) || 1e-3;
-      if (hd < hereR) {
-        a.u = here.u + (hu / hd) * hereR;
-        a.v = here.v + (hv / hd) * hereR;
-      }
-      // Centre out of the hero zone (sideways or up, the shorter way), inside the face.
-      if (Math.abs(a.u) < HERO_ZONE.halfW && a.v < HERO_ZONE.top) {
-        const side = a.u >= 0 ? 1 : -1;
-        const out = HERO_ZONE.halfW - Math.abs(a.u);
-        const up = HERO_ZONE.top - a.v;
-        if (out < up) a.u = side * HERO_ZONE.halfW;
-        else a.v = HERO_ZONE.top;
-      }
-      a.u = Math.max(-umax, Math.min(umax, a.u));
-      a.v = Math.max(-vmax, Math.min(vmax, a.v));
-    }
-  }
+  const onMap = MAP_ICONS.map((m) => ({ ...m, ...uv(ANCHORS[m.anchor].x, ANCHORS[m.anchor].z) }));
+  // Farthest ahead on the top row; each row left to right as seen from the board.
+  const byV = [...onMap].sort((a, b) => b.v - a.v);
+  const icons: BoardLayout['icons'] = [];
+  let k = 0;
+  ROWS.forEach((n, ri) => {
+    const row = byV.slice(k, k + n).sort((a, b) => a.u - b.u);
+    k += n;
+    // Three across: left, middle, right. Two (the bottom row): left and right, the middle free.
+    const cols = n === 3 ? [-1, 0, 1] : [-EDGE_COL / COL, EDGE_COL / COL];
+    row.forEach((m, ci) => icons.push({ anchor: m.anchor, icon: m.icon, u: cols[ci] * COL, v: ROW_TOP - ri * ROW }));
+  });
+  // "You are here" in the free bottom middle: the reader, at the bottom of a forward-up map.
+  const here = { u: 0, v: ROW_TOP - 2 * ROW };
   return { yaw, sc, yc: YC, icons, here };
 }
 

@@ -23,7 +23,7 @@ import type { Goal } from './goals';
 import type { BuddyStore } from './store';
 import type { EconId, HowToTopic, KeyNames, PoolId, ScriptLine, TipId } from './script';
 import {
-  CHEST, CHUTE, COUNT, DIZZY, DIZZY_GAP, DRIVE_CUE, ECON, FOLLOW_AGAIN, GLASSES_WAIT, GLASSES_WAIT_GAP, HOP_OUT, HOWTO, INTRO, POOLS, RESCUE, RETURNING,
+  CHEST, CHUTE, CLOSE_MENU, COUNT, DIZZY, DIZZY_GAP, DRIVE_CUE, ECON, FOLLOW_AGAIN, GLASSES_WAIT, GLASSES_WAIT_GAP, HOP_OUT, HOWTO, INTRO, POOLS, RESCUE, RETURNING,
   STORY, STORY_GLASSES_BEAT, SUNSET, TIPS, follow, line, needGems, skillTip, suggest,
 } from './script';
 import { MEGA_GAP, Memory, ShuffleBag, UNSOLICITED_GAP } from './pools';
@@ -87,6 +87,12 @@ export const PARK_CUE = 8;
 export const PARK_CUE2 = 24;
 /** Still parked: "hop out, it's this way!" (the use key), then a lead on foot. */
 export const PARK_HOP = 40;
+/**
+ * Later rounds of the parked cycle (QA8 M2: after two "hop out"s Pip fell silent for 68–117 s): the
+ * same three cues again (drive, a place, hop out), one per call gap with the back-off, but never more
+ * than this many seconds apart, so a child sitting still is never left alone for more than ~45 s.
+ */
+export const PARK_GAP_MAX = 36;
 /** Driving this long since the last suggestion: the race or a place to drive to (at the invitation rate). */
 export const DRIVE_SUGGEST = 20;
 /** A suggestion while driving counts as ignored when the hero has not got there in this long. */
@@ -100,6 +106,22 @@ const INVITE_BREATH = 5;
 /** The "last minute" beat: once, when this many seconds are left (and more than LAST_MINUTE_MIN). */
 export const LAST_MINUTE = 60;
 const LAST_MINUTE_MIN = 20;
+/**
+ * QA8 M2: the intro never blocks. A child who wanders this long (s) during the story (moving, far from
+ * every attraction and getting farther) is not listening: the story yields to normal guidance.
+ */
+export const STORY_WANDER = 8;
+/**
+ * QA8 m12: a non-pause menu (buggy workshop, wardrobe / shop) open with no input this long (s) gets one
+ * gentle "close it" cue (close key + a ring round the close button), again every OVERLAY_REPEAT.
+ */
+export const OVERLAY_CUE = 12;
+export const OVERLAY_REPEAT = 40;
+/** The close button Pip rings, per menu. */
+const OVERLAY_CLOSE: Record<'workshop' | 'wardrobe', string> = {
+  workshop: '[data-testid="ws-card-exit"]',
+  wardrobe: '[data-testid="wardrobe-close"]',
+};
 /** Kinds of fun (Pip prefers a kind the child has not tried yet). */
 export const KIND: Record<Attraction, 'bounce' | 'sky' | 'drive' | 'game' | 'glasses' | 'shop'> = {
   trampoline: 'bounce', bouncePads: 'bounce', launchPads: 'sky', balloon: 'sky', bungee: 'sky', airstrip: 'sky', dragonRoost: 'sky',
@@ -169,6 +191,14 @@ export interface DirectorView {
   chute?: boolean;
   /** The vehicle the hero sits in (ride 'vehicle'): buggy or pony. `heroSpeed` is its speed. */
   vehicle?: 'car' | 'horse' | null;
+  /**
+   * A non-pause menu is open over play (QA8 m12): the buggy workshop or the wardrobe / shop. Pip
+   * says nothing else then; after OVERLAY_CUE s with no input, how to close it. (The pause menu and
+   * the grown-up settings are never passed here: Pip does not talk over them.)
+   */
+  overlay?: 'workshop' | 'wardrobe' | null;
+  /** Any input this frame (key, mouse, pad, touch). */
+  input?: boolean;
 }
 
 export interface LeadOptions {
@@ -291,7 +321,13 @@ export class Director {
   private parkT = 0;
   private driveT = 0;
   private parkCues = 0;
+  /** Later parked rounds: the earliest time for the next cue. */
+  private parkNextAt = 0;
   private inVehicle = false;
+  /** Menu open (QA8 m12): seconds with no input, and the time to the next "close it" cue. */
+  private overlayNow: 'workshop' | 'wardrobe' | null = null;
+  private overlayIdle = 0;
+  private overlayWait = 0;
   /** Where Pip leads once the hero hops out of the vehicle (offered while in it). */
   private hopTo: Attraction | null = null;
   private lastGlassesWait = -99;
@@ -355,7 +391,11 @@ export class Director {
     this.parkT = 0;
     this.driveT = 0;
     this.parkCues = 0;
+    this.parkNextAt = 0;
     this.inVehicle = false;
+    this.overlayNow = null;
+    this.overlayIdle = 0;
+    this.overlayWait = 0;
     this.hopTo = null;
     this.lastGlassesWait = -99;
     this.lastMinuteDone = false;
@@ -619,6 +659,17 @@ export class Director {
   // ───────────── frame ─────────────
 
   update(dt: number, v: DirectorView): void {
+    if (v.overlay) {
+      this.overlayUpdate(dt, v);
+      return;
+    }
+    if (this.overlayNow) {
+      // Closed: guidance resumes where it was (nothing built up while the menu was open).
+      this.overlayNow = null;
+      this.idleT = 0;
+      this.stillT = 0;
+      this.sinceProgress = 0;
+    }
     this.playT += dt;
     this.sinceProgress += dt;
     this.fed = false;
@@ -660,6 +711,14 @@ export class Director {
       // Walked away: an unfinished how-to of the old place is dropped.
       this.chain = this.chain.filter((c) => c.topic === null || c.topic === topic);
       this.topicNow = topic;
+    }
+
+    // The story yields to whatever the child started (before its next line is fed).
+    this.yieldIntro(v);
+    // A lead put off (a game, a ride, a vehicle, a yielded story): back on foot, it starts now.
+    if (this.pendingLead && !this.quiet && v.onFoot && v.ride === 'none' && this.step === 'done' && this.guiding) {
+      this.pendingLead = false;
+      this.nextLead();
     }
 
     // Feed the next line of a story / how-to once Pip is free.
@@ -755,6 +814,69 @@ export class Director {
         this.say(line(pick, PRIORITY.idle, 'idle'));
       }
     }
+  }
+
+  // ───────────── menus open over play (QA8 m12) ─────────────
+
+  /** A menu is open: no other line; after OVERLAY_CUE s with no input, how to close it (then rarely). */
+  private overlayUpdate(dt: number, v: DirectorView): void {
+    const kind = v.overlay!;
+    if (this.overlayNow !== kind) {
+      this.overlayNow = kind;
+      this.overlayIdle = 0;
+      this.overlayWait = 0;
+      // A menu during the story: the story yields (it is not told to a closed menu).
+      if (this.step === 'story' || this.step === 'follow') this.yieldNow('menu');
+      // A how-to or reaction still queued is for the world, not the menu.
+      this.chain = [];
+    }
+    this.overlayIdle = v.input ? 0 : this.overlayIdle + dt;
+    this.overlayWait = Math.max(0, this.overlayWait - dt);
+    if (this.overlayIdle < OVERLAY_CUE || this.overlayWait > 0 || v.busy) return;
+    this.overlayWait = OVERLAY_REPEAT;
+    this.say({ ...line(CLOSE_MENU(OVERLAY_CLOSE[kind]), PRIORITY.tip, 'menu:close'), ttl: 4, valid: () => this.overlayNow === kind });
+  }
+
+  // ───────────── the intro never blocks (QA8 M2) ─────────────
+
+  /**
+   * During the story (or its "follow me to the trampoline"): a child who gets into a vehicle, starts an
+   * attraction or a ride, or wanders off is busy with something else. The story yields: the clip
+   * being said finishes, the rest is dropped, and normal guidance takes over (vehicle cues, the next
+   * lead after the game, a call to a place near the child). True if it yielded this frame.
+   */
+  private yieldIntro(v: DirectorView): boolean {
+    if (this.step !== 'story' && this.step !== 'follow') return false;
+    const atFirst = v.nearAttraction === FIRST_ATTRACTION;
+    let why: string | null = null;
+    if (v.ride === 'vehicle') why = 'vehicle';
+    else if (this.quiet) why = 'game';
+    else if (v.ride !== 'none' && !atFirst) why = 'ride';
+    else if (this.step === 'story' && this.wanderT > STORY_WANDER) why = 'wander';
+    if (!why) return false;
+    this.yieldNow(why);
+    if (why === 'wander' && v.onFoot && !this.leadTo) this.leadNear(v);
+    return true;
+  }
+
+  private yieldNow(why: string): void {
+    this.chain = this.chain.filter((c) => c.topic !== null);
+    this.leaveIntro();
+    this.why = `intro yielded: ${why}`;
+    // The story's "follow me" is not the child's to ignore any more; the tour goes on after.
+    if (this.leadTo === FIRST_ATTRACTION && this.leadKind === 'tour') this.stopLead();
+    if (this.offer?.kind === 'lead') this.offer = null;
+    if (this.guiding) this.pendingLead = true;
+  }
+
+  /** A tour call to the fun place nearest the child (Pip runs over first). */
+  private leadNear(v: DirectorView): void {
+    this.pendingLead = false;
+    const to = this.nearestPlace(v.hero, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && !this.unreachable.has(p));
+    if (!to || !this.callTo(to, 'tour', { fetch: true })) return;
+    this.lastHint = this.playT;
+    this.sink.bark('bark');
+    this.say({ ...line(follow(to), PRIORITY.tip, 'guide:follow'), valid: () => this.leadTo === to });
   }
 
   // ───────────── intro ─────────────
@@ -1157,6 +1279,7 @@ export class Director {
     if (v.heroSpeed > DRIVING_SPEED) {
       this.parkT = 0;
       this.parkCues = 0;
+      this.parkNextAt = 0;
       this.driveT += dt;
     } else this.parkT += dt;
   }
@@ -1167,33 +1290,37 @@ export class Director {
    * now and then the race or a place to drive to. Every cue counts in the one cap policy.
    */
   private vehicleGuide(v: DirectorView): boolean {
-    if (v.ride !== 'vehicle' || this.ignoredRun >= MAX_IGNORED || this.playT - this.lastHint < INVITE_BREATH) return false;
+    if (v.ride !== 'vehicle' || this.playT - this.lastHint < INVITE_BREATH) return false;
     const kind = v.vehicle ?? 'car';
     if (this.parkT > 0) {
-      if (this.parkCues === 0 && this.parkT >= PARK_CUE) {
-        this.parkCues = 1;
+      // First round on a fixed schedule (PARK_CUE, PARK_CUE2, PARK_HOP); later rounds the same three
+      // cues again, one per call gap with the back-off, at most PARK_GAP_MAX apart (QA8 M2: a light
+      // cycle while parked, never silent for long, never a burst).
+      const first = this.parkCues < 3;
+      const due = first
+        ? this.parkT >= [PARK_CUE, PARK_CUE2, PARK_HOP][this.parkCues] && (this.parkCues < 2 || !this.offer)
+        : !this.offer && this.playT >= this.parkNextAt;
+      if (!due) return false;
+      const step = this.parkCues % 3;
+      this.parkCues++;
+      if (step === 0) {
         this.cue(null, 'drive', { ...line(DRIVE_CUE(kind), PRIORITY.tip, 'vehicle:drive'), valid: () => this.parkT > 0 });
-        return true;
-      }
-      if (this.parkCues === 1 && this.parkT >= PARK_CUE2) {
-        this.parkCues = 2;
+      } else if (step === 1) {
         const to = this.driveTarget(v, kind);
         if (!to) return false;
         this.hopTo = to;
         this.cue(to, 'drive', { ...line({ ...suggest(to), action: 'move' }, PRIORITY.tip, 'vehicle:suggest'), valid: () => this.parkT > 0 });
-        return true;
-      }
-      // "Hop out!" at PARK_HOP; again (to somewhere else) only as the cap policy allows.
-      if (this.parkCues >= 2 && this.parkT >= PARK_HOP && !this.offer && (this.parkCues === 2 || this.canOffer())) {
-        this.parkCues = 3;
+      } else {
         const to = (this.hopTo && !this.declined.has(this.hopTo) ? this.hopTo : null) ?? this.nextPlace(v);
         if (!to) return false;
         this.hopTo = to;
         this.cue(to, 'hop', { ...line(HOP_OUT(to), PRIORITY.tip, 'vehicle:hop'), valid: () => this.parkT > 0 });
-        return true;
       }
-      return false;
+      const back = INVITE_BACKOFF[Math.min(Math.max(this.ignoredRun, 1), INVITE_BACKOFF.length) - 1];
+      this.parkNextAt = this.playT + Math.min(PARK_GAP_MAX, Math.max(INVITE_GAP, back));
+      return true;
     }
+    if (this.ignoredRun >= MAX_IGNORED) return false;
     if (this.driveT >= DRIVE_SUGGEST && !this.offer && this.canOffer()) {
       const to = this.driveTarget(v, kind);
       this.driveT = 0;

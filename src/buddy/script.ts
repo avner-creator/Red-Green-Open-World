@@ -307,6 +307,13 @@ export const GLASSES_WAIT_GAP = 30;
 export const DRIVE_CUE = (vehicle: 'car' | 'horse'): ScriptLine => ({ text: 'Zoom!', icon: vehicle === 'car' ? 'wCar' : 'horse', action: 'move', mood: 'excited', hold: 1.4 });
 export const HOP_OUT = (a: Attraction): ScriptLine => ({ text: "Let's go! It's this way!", icon: 'paw', action: 'use', extra: ATTRACTIONS[a].icon, mood: 'excited', hold: 1.6 });
 
+/**
+ * A non-pause menu (buggy workshop, wardrobe / shop) has stood open with no input for a while
+ * (QA8 m12): one gentle reminder how to close it (the close key / button, and a ring round the
+ * menu's own close button). `callout` = that button's selector.
+ */
+export const CLOSE_MENU = (callout?: string): ScriptLine => ({ text: "All done? Close it and let's play!", icon: 'close', action: 'close', mood: 'curious', hold: 2, ...(callout ? { callout } : {}) });
+
 export const needGems = (n: number): ScriptLine => ({ text: `Need ${n} more gems!`, icon: 'gem', extra: 'ticket', mood: 'worried' });
 
 export const suggest = (a: Attraction): ScriptLine => ({ text: `Try the ${ATTRACTIONS[a].name}!`, icon: ATTRACTIONS[a].icon, extra: 'target', mood: 'curious' });

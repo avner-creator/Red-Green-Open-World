@@ -33,6 +33,11 @@ export interface BuddyUi {
    */
   update(dt: number, reveal: number, pip: { x: number; y: number; on?: boolean } | null, hero: Rect | null): void;
   setDevice(device: 'keyboard' | 'gamepad' | 'touch'): void;
+  /**
+   * A menu is open over play (QA8 m12): the bubble and its callout show over it (also while play is
+   * paused under the wardrobe), the bubble placed beside the callout's button, not over it.
+   */
+  setOverlay(on: boolean): void;
   /** HUD element under the last mouse position, if Pip can explain it. */
   hovered(): HudKey | null;
   onAsk(fn: () => void): void;
@@ -70,6 +75,7 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
   let tailX = 0;
   let callout: string | null = null;
   let device: 'keyboard' | 'gamepad' | 'touch' | null = null;
+  let overlay = false;
   /** Draw the action glyph (key cap / pad button / touch gesture) for the current device. */
   const drawAction = (): void => {
     clear(act);
@@ -117,8 +123,15 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
     const host = root.getBoundingClientRect();
     const b = button.getBoundingClientRect();
     const u = Math.max(5, Math.min(22, Math.min(host.width, host.height) * 0.01));
-    const anchor = pipAt && pipAt.on !== false ? pipAt : { x: b.left - host.left + b.width / 2, y: b.top - host.top };
-    const p = placeBubble(anchor, bubble.offsetWidth, bubble.offsetHeight, bounds(), heroBox, u * 3.4, hudRects(host));
+    let anchor = pipAt && pipAt.on !== false ? pipAt : { x: b.left - host.left + b.width / 2, y: b.top - host.top };
+    const avoid = hudRects(host);
+    // Over a menu: beside the button the callout rings (never on it), not over Pip in the world.
+    const target = overlay && callout ? root.querySelector<HTMLElement>(callout)?.getBoundingClientRect() : null;
+    if (target && target.width > 1) {
+      anchor = { x: target.left - host.left + target.width / 2, y: target.bottom - host.top };
+      avoid.push({ x: target.left - host.left, y: target.top - host.top, w: target.width, h: target.height });
+    }
+    const p = placeBubble(anchor, bubble.offsetWidth, bubble.offsetHeight, bounds(), overlay ? null : heroBox, u * 3.4, avoid);
     bubble.classList.toggle('ease', ease);
     bubble.style.left = `${Math.round(p.x)}px`;
     bubble.style.top = `${Math.round(p.y)}px`;
@@ -259,6 +272,11 @@ export function createBuddyUi(root: HTMLElement): BuddyUi {
         }
       }
       placeCallout();
+    },
+    setOverlay(on) {
+      if (on === overlay) return;
+      overlay = on;
+      for (const el of [bubble, ring, arrow]) el.classList.toggle('over', on);
     },
     setDevice(d) {
       if (d === device) return;
