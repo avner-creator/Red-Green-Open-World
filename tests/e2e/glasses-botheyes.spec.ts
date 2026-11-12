@@ -581,7 +581,10 @@ test('dot signs: a booth from 30 m, attract at the pad, Use on the pad → 3-2-1
   await step(200);
   d = await dots();
   expect([d.phase, d.state, d.dotsShown]).toEqual(['play', 'open', true]);
-  expect(d.kit.booth.prompt).toBe('button');
+  // On the pad E answers nothing, so no E bubble (QA8 m3); at a pedestal it shows.
+  expect(d.kit.booth.prompt).toBeNull();
+  await standAt(d.stand[2], d.yaw + Math.PI, 3);
+  expect((await dots()).kit.booth.prompt).toBe('button');
 });
 
 test('dot signs: the picture and the buttons; each layer only touches its channel', async () => {
@@ -747,12 +750,62 @@ test('dot signs: a straight walk to the pad from the plaza side, the lead point 
   const gap = { x: (d.stand[0].x + d.stand[1].x) / 2 + sx * 0.6, y: d.stand[0].y, z: (d.stand[0].z + d.stand[1].z) / 2 + sz * 0.6 };
   await standAt(gap, d.yaw + Math.PI, 3);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).not.toMatch(/glasses-dotsigns/);
-  // In front of the middle pedestal but walking along the row: no button.
+  expect((await dots()).kit.booth.prompt, 'no E bubble where E does nothing').toBeNull();
+  // In front of the middle pedestal, sideways (walked along the row): that one, with its bubble
+  // (QA8 m3); turned away from it: none.
   await standAt(d.stand[1], d.yaw + Math.PI / 2, 3);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).toBe('glasses-dotsigns-1');
+  expect((await dots()).kit.booth.prompt).toBe('button');
+  await standAt(d.stand[1], d.yaw, 3);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).not.toMatch(/glasses-dotsigns/);
+  expect((await dots()).kit.booth.prompt).toBeNull();
   // At the right pedestal, facing it: that one.
   await standAt(d.stand[2], d.yaw + Math.PI, 3);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).toBe('glasses-dotsigns-2');
+  expect((await dots()).misses).toBe(misses0);
+  // Walk along the row from the left pedestal to the right one (real stick input): no sticking
+  // on the middle pedestal, and each pedestal offers E as the hero passes it.
+  const row = await page.evaluate(
+    ({ a, b }) => {
+      const rg = window.__rg!;
+      const ctx = rg.ctx;
+      rg.teleport(a.x, ctx.world.heightAt(a.x, a.z) + 0.1, a.z, Math.atan2(b.x - a.x, b.z - a.z));
+      rg.step(1 / 60, 20, false);
+      const f = ctx.camera.position.clone();
+      const seen = new Set<string>();
+      let t = 0;
+      let still = 0;
+      let maxStill = 0;
+      let last = ctx.player.position.clone();
+      for (; t < 8; t += 1 / 60) {
+        const p = ctx.player.position;
+        if (Math.hypot(b.x - p.x, b.z - p.z) < 0.4) break;
+        const dx = b.x - p.x;
+        const dz = b.z - p.z;
+        const dg = Math.hypot(dx, dz);
+        ctx.camera.getWorldDirection(f);
+        const yaw = Math.atan2(f.x, f.z);
+        const s = Math.sin(yaw);
+        const c = Math.cos(yaw);
+        rg.inject({ moveY: (s * dx + c * dz) / dg, moveX: (-c * dx + s * dz) / dg });
+        rg.step(1 / 60, 1, false);
+        const id = ctx.interactions.focused?.id;
+        if (id) seen.add(id);
+        if (p.distanceTo(last) < 0.02) still += 1 / 60;
+        else still = 0;
+        maxStill = Math.max(maxStill, still);
+        last = p.clone();
+      }
+      rg.inject(null);
+      rg.step(1 / 60, 2, false);
+      return { t: +t.toFixed(2), maxStill: +maxStill.toFixed(2), seen: [...seen].filter((s) => s.startsWith('glasses-dotsigns')).sort() };
+    },
+    { a: d.stand[0], b: d.stand[2] },
+  );
+  console.log('dot signs row walk', JSON.stringify(row));
+  expect(row.t, 'left to right pedestal').toBeLessThan(2.5);
+  expect(row.maxStill).toBeLessThan(0.3);
+  expect(row.seen).toEqual(['glasses-dotsigns-0', 'glasses-dotsigns-1', 'glasses-dotsigns-2']);
   expect((await dots()).misses).toBe(misses0);
 });
 
