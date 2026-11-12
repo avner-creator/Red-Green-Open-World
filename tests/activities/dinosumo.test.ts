@@ -108,6 +108,20 @@ function run(s: SumoState, frames: number, input: SumoInput, seed = 1, until?: (
   return all;
 }
 
+describe('Dino Sumo round length (QA8 m8)', () => {
+  it('a whole round (3-2-1, bouts, cheers, end) takes about a minute whoever plays', () => {
+    for (const [seed, who] of [[1, kid], [2, clumsy], [3, () => still]] as const) {
+      const s = createSumo();
+      const rand = rng(seed);
+      const out: SumoEvent[] = [];
+      let t = 0;
+      for (; t < 200 && s.phase !== 'over'; t += 1 / 60) stepSumo(s, 1 / 60, { rand, input: who(s, t) }, out);
+      expect(s.phase).toBe('over');
+      expect(t, 'seed ' + seed).toBeLessThanOrEqual(62);
+    }
+  });
+});
+
 describe('Dino Sumo', () => {
   it('ring, stars, prizes and the rubber band', () => {
     expect(isOut(0, RING.r - 0.1)).toBe(false);

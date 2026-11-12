@@ -28,10 +28,11 @@ import type { Body, Contact } from '../bubbleball/bodies';
 export const RING = { r: 4.4, mat: 5.7 } as const;
 export const DINO = { r: 0.72, m: 1.5, playerM: 1.6, bounce: 0.5, drag: 3.0, h: 2 } as const;
 /**
- * 90-second clock (it only runs while a bout is live); best of 5 = first to `target` points.
- * `pointPause`: the cheer/replay after a ring-out; `hop`: everybody hops back to their spot.
+ * Round clock: it runs through the bouts and the cheer/hop pauses between them, so a whole round
+ * (3-2-1, clock, end) is about a minute (QA8 m8: 75 s of live play made 92 s rounds). Best of 5 =
+ * first to `target` points. `pointPause`: the cheer after a ring-out; `hop`: everybody hops back.
  */
-export const SUMO = { seconds: 75, countdown: 3, endPause: 2.6, target: 3, pointPause: 2.4, hop: 1.0 } as const;
+export const SUMO = { seconds: 54, countdown: 3, endPause: 2.6, target: 3, pointPause: 2.4, hop: 1.0 } as const;
 export const MOVE = { speed: 3.9, sprint: 4.9, accel: 12 } as const;
 export const AI = { speed: 3.5, accel: 10, think: [0.22, 0.5] as const } as const;
 /**
@@ -395,6 +396,7 @@ function stepOnce(s: SumoState, dt: number, o: SumoStepOptions, out: SumoEvent[]
     return;
   }
   if (s.phase === 'point') {
+    s.clock = Math.max(0, s.clock - dt);
     stepPhysics(s, dt, o, out, false);
     if (s.phaseT >= SUMO.pointPause) {
       if (s.dinos.some((d) => d.points >= SUMO.target) || s.clock <= 0) {
@@ -417,6 +419,7 @@ function stepOnce(s: SumoState, dt: number, o: SumoStepOptions, out: SumoEvent[]
     return;
   }
   if (s.phase === 'hop') {
+    s.clock = Math.max(0, s.clock - dt);
     const k = Math.min(1, s.phaseT / SUMO.hop);
     const e = k * k * (3 - 2 * k);
     s.dinos.forEach((d) => {
@@ -428,6 +431,11 @@ function stepOnce(s: SumoState, dt: number, o: SumoStepOptions, out: SumoEvent[]
       b.vz = (d.hopZ - d.tz) / SUMO.hop;
       d.yaw = Math.atan2(-b.x, -b.z);
     });
+    if (k >= 1 && s.clock <= 0) {
+      s.phase = 'end';
+      s.phaseT = 0;
+      return;
+    }
     if (k >= 1) {
       resetForBout(s);
       s.phase = 'play';

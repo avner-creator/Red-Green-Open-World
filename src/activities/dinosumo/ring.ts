@@ -13,7 +13,9 @@ import { RING } from './sumo';
 export const SET = {
   deck: 6.0,
   postR: 5.45,
-  ropeY: 3.7,
+  /** Rope height: high enough that the ropes, pennants and balloon strings stay above the game
+   *  camera's view of the pile (QA8 m8: they hid the hero). */
+  ropeY: 5.6,
   booth: { x: 0, z: -8.6 },
 } as const;
 
