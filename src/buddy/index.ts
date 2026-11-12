@@ -525,12 +525,24 @@ export function createBuddy(ctx: GameContext): GameSystem {
     return p;
   };
 
+  /** Where the buggy is now (null without one). */
+  const buggy = (): V2 | null => {
+    const car = ctx.vehicles?.all.find((v) => v.kind === 'car');
+    return car ? { x: car.position.x, z: car.position.z } : null;
+  };
+
   /** Where a lead to `a` goes before validation (the Gear Shack: in front of its counter). */
   const rawAnchor = (name: Attraction): V2 | null => {
     const a = anchorOf(name);
     if (!a) return null;
     const booth = boothLead(name);
     if (booth) return booth;
+    // "Try the buggy!": the buggy wherever it is parked (QA8 m2 moved it off the garage), not the
+    // garage building; arrival is judged at the buggy too (`attractionPos`).
+    if (name === 'garage') {
+      const car = buggy();
+      if (car) return car;
+    }
     if (name === 'gearShack') {
       const f = forward(a.yaw);
       return { x: a.position.x + f.x * 2.8, z: a.position.z + f.z * 2.8 };
@@ -540,8 +552,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
 
   const attractionPos = (a: Attraction): V2 | null => {
     if (a === 'garage') {
-      const car = ctx.vehicles?.all.find((v) => v.kind === 'car');
-      if (car) return { x: car.position.x, z: car.position.z };
+      const car = buggy();
+      if (car) return car;
     }
     const an = anchorOf(a);
     return an ? { x: an.position.x, z: an.position.z } : null;
@@ -646,6 +658,12 @@ export function createBuddy(ctx: GameContext): GameSystem {
       const a = anchorOf(name);
       if (!a) return null;
       const v = dests.get(name);
+      // The buggy driven off since the check: lead to where it stands now (the static checks do not
+      // see the buggy itself, and wherever it stopped a child can walk up to it).
+      if (name === 'garage') {
+        const car = buggy();
+        if (car && (!v || Math.hypot(v.raw.x - car.x, v.raw.z - car.z) > 3)) return car;
+      }
       // A booth that published its start spot after the check (or moved it): that spot, as published.
       const booth = boothLead(name);
       if (booth && (!v || Math.hypot(v.raw.x - booth.x, v.raw.z - booth.z) > 0.25)) return booth;

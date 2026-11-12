@@ -49,8 +49,13 @@ export const DOTSIGNS = {
   pad: { x: 1.1, z: 3.65, r: 0.85 },
   /** Clear walkway along the front of the pedestals (m): nothing solid or raised there (QA8 m3). */
   walkway: 1.2,
-  /** Pip's lead spot: this far out from the pad on the approach (`glasses:dotsigns:lead`). */
-  leadOut: 3.5,
+  /**
+   * Pip's lead spot: this far out from the pad on the approach (`glasses:dotsigns:lead`), at site
+   * z 6.2 where the stepping-stone trail ends (world/wayfinding.ts TRAIL_ROUTE `to`): the pad moved
+   * back 0.6 m for the walkway, so the spot keeps its place (inside Pip's 7 m arrival circle) and
+   * the trail end, the lead spot and a straight 2.55 m walk to the pad agree.
+   */
+  leadOut: 2.55,
   flourish: 1.0,
   press: 0.6,
   wobble: 0.8,
