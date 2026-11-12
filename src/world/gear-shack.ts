@@ -455,7 +455,9 @@ export function buildGearShack(k: Kit): Keepout[] {
       nx = -nx;
       nz = -nz;
     }
-    const t = 0.15;
+    // Half thickness: the short back edge behind the gift boxes is thick (inward) so its centre
+    // stays off the Scoops terrace's footprint (tests/world/sites.test.ts); the rest are thin.
+    const t = i === 2 ? 0.8 : 0.15;
     const mx = (ax + bx) / 2 - nx * t;
     const mz = (az + bz) / 2 - nz * t;
     // Outer faces meet exactly at the corners (no bump sticks out of the hull).
