@@ -46,17 +46,10 @@ export const SHACK_BUCKET = { x: 2.25, z: 0.35, r: 0.34 } as const;
 export const SHACK_SIDE_FILL: readonly (readonly [number, number, number, number, number])[] = [
   [SHACK_ROCKET.x - SHACK_ROCKET.r, -SHACK.hx, SHACK.zBack, SHACK_ROCKET.z, SHACK.height],
   [SHACK.hx, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK.zBack, SHACK_BUCKET.z, SHACK.height],
-  // Behind the right half: the crate (corners down to local z -2.25) in one block (crate + paint
-  // can high) whose faces line up with the kiosk's own; a wedge (below) closes it to the bucket side.
-  [0.7, SHACK.hx, -2.25, SHACK.zBack, 1.6],
 ];
 export const SHACK_WEDGES: readonly (readonly [number, number, number, number, number])[] = [
   [SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z, -SHACK.hx, SHACK.zFront, SHACK.height],
   [SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z, SHACK.hx, SHACK.zFront, SHACK.height],
-  // Back wall into the block behind the crate: no notch at its corner.
-  [0.3, SHACK.zBack, 0.7, -2.25, 1.6],
-  // Block to the bucket side's back corner (clear of the spawn run lane, tests/world/spawn-lane).
-  [SHACK.hx, -2.25, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK.zBack, 1.6],
 ];
 
 /**
