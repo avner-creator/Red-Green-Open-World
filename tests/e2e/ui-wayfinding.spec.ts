@@ -137,6 +137,7 @@ test.describe('ui wayfinding', () => {
   // row under the compass bar. Measured here on the real screen: the live spawn camera after PLAY,
   // the HUD on, at 640×360. Every badge (its cream ring) is big enough and clear of every HUD piece.
   test('map board from the spawn camera: badges big enough and clear of the HUD (640×360)', async ({ page }) => {
+    test.setTimeout(600_000);
     const lay = boardLayout(MAP_BOARD.x, MAP_BOARD.z);
     const badges = lay.icons.map((a) => ({ name: a.anchor, u: a.u, v: a.v }));
     const { consoleErrors } = await boot(page);
@@ -197,47 +198,124 @@ test.describe('ui wayfinding', () => {
       expect(o.box.x0 >= 0 && o.box.x1 <= res.W && o.box.y0 >= 0 && o.box.y1 <= res.H, summary).toBe(true);
     }
 
-    // Up close (QA8 m6: the hero covered the bottom-middle badge): the hero 4.5 m in front of the
-    // board, facing it, the camera settled. The same frame with the hero hidden: no badge centre
-    // changes (nothing of the hero is drawn over it).
-    const centres = await page.evaluate(
-      ({ badges, yaw, yc, bx, bz }) => {
-        const rg = window.__rg!;
-        const hx = bx + Math.sin(yaw) * 4.5;
-        const hz = bz + Math.cos(yaw) * 4.5;
-        rg.teleport(hx, rg.ctx.world.heightAt(hx, hz) + 0.2, hz, Math.atan2(bx - hx, bz - hz));
-        rg.step(1 / 60, 120, true);
-        const cam = rg.ctx.camera;
-        cam.updateMatrixWorld(true);
-        const V = cam.position.constructor as new (x?: number, y?: number, z?: number) => import('three').Vector3;
-        const W = rg.ctx.canvas.width;
-        const H = rg.ctx.canvas.height;
-        const g = rg.ctx.world.heightAt(bx, bz);
-        return badges.map((b) => {
-          const n = new V(bx + Math.cos(yaw) * b.u, g + yc + b.v, bz - Math.sin(yaw) * b.u).project(cam);
-          return { name: b.name, x: Math.round(((n.x + 1) / 2) * W), y: Math.round(((1 - n.y) / 2) * H) };
-        });
-      },
-      { badges, yaw: lay.yaw, yc: lay.yc, bx: MAP_BOARD.x, bz: MAP_BOARD.z },
-    );
-    const withHero = await canvasShot(page);
-    await page.evaluate(() => {
-      window.__rg!.ctx.player.setVisible(false);
-      window.__rg!.render();
+    // Up close (QA8 m6: the hero covered the bottom-row badges; no layout clears every hero and hat):
+    // the hero 4.5 m in front of the board, facing it, still. The board reading view (camera-read.ts)
+    // eases the camera up to look over the hero's head. Frog, panda and rex, bare and in antlers and
+    // a sombrero, 8 frozen frames across 20 s of idle each: the same frame with the hero hidden
+    // changes no badge (≤ 5 px in its ring box), and every badge is ≥ 20 px tall and clear of the HUD.
+    // The badges are measured where the board really stands (the plaza fill may nudge it off
+    // MAP_BOARD: it registers itself as a reading spot, its face centre 0.1 m out from the board).
+    const real = await page.evaluate(() => {
+      const s = window.__rgCamera!.state().spots.find((p) => p.id === 'mapboard')!;
+      return { x: s.x - s.nx * 0.1, z: s.z - s.nz * 0.1 };
     });
-    const without = await canvasShot(page);
-    await page.evaluate(() => window.__rg!.ctx.player.setVisible(true));
-    const covered = centres.filter((c) => {
-      let changed = 0;
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
-          const i = ((c.y + dy) * withHero.width + (c.x + dx)) * 4;
-          if (Math.abs(withHero.data[i] - without.data[i]) + Math.abs(withHero.data[i + 1] - without.data[i + 1]) > 24) changed++;
+    const rlay = boardLayout(real.x, real.z);
+    const rbadges = rlay.icons.map((a) => ({ name: a.anchor, u: a.u, v: a.v }));
+    const looks: [string, string | null][] = [];
+    for (const hero of ['frog', 'panda', 'rex']) for (const hat of [null, 'hat-antlers', 'hat-sombrero']) looks.push([hero, hat]);
+    const fails: string[] = [];
+    for (const [hero, hat] of looks) {
+      const ok = await page.evaluate(
+        async ({ hero, hat, yaw, bx, bz }) => {
+          const rg = window.__rg!;
+          const ctx = rg.ctx;
+          await ctx.player.setCharacter(hero as 'frog');
+          if (hat) {
+            ctx.profile.unlock(hat, 'shop');
+            ctx.economy.equip(ctx.economy.item(hat)!.slot, hat);
+          } else ctx.economy.equip('head', null);
+          const hx = bx + Math.sin(yaw) * 4.5;
+          const hz = bz + Math.cos(yaw) * 4.5;
+          rg.teleport(hx, rg.ctx.world.heightAt(hx, hz) + 0.2, hz, Math.atan2(bx - hx, bz - hz));
+          rg.step(1 / 60, 120, false);
+          const st = window.__rgCamera!.state();
+          return { reading: st.reading, active: st.readingActive };
+        },
+        { hero, hat, yaw: lay.yaw, bx: MAP_BOARD.x, bz: MAP_BOARD.z },
+      );
+      expect(ok.active && ok.reading === 1, `${hero} ${hat}: reading view ${JSON.stringify(ok)}`).toBe(true);
+      for (let f = 0; f < 8; f++) {
+        const frame = await page.evaluate(
+          ({ badges, yaw, yc, bx, bz, ring, half, first }) => {
+            const rg = window.__rg!;
+            if (!first) rg.step(1 / 60, 150, false);
+            rg.render();
+            const cam = rg.ctx.camera;
+            cam.updateMatrixWorld(true);
+            const V = cam.position.constructor as new (x?: number, y?: number, z?: number) => import('three').Vector3;
+            const W = rg.ctx.canvas.width;
+            const H = rg.ctx.canvas.height;
+            const CW = rg.ctx.canvas.clientWidth;
+            const CH = rg.ctx.canvas.clientHeight;
+            const g = rg.ctx.world.heightAt(bx, bz);
+            const px = (u: number, v: number, w: number, h: number): { x: number; y: number } => {
+              const n = new V(bx + Math.cos(yaw) * u, g + yc + v, bz - Math.sin(yaw) * u).project(cam);
+              return { x: ((n.x + 1) / 2) * w, y: ((1 - n.y) / 2) * h };
+            };
+            const host = rg.ctx.uiRoot.getBoundingClientRect();
+            const hud = [...rg.ctx.uiRoot.querySelectorAll<HTMLElement>('[data-testid]')]
+              .filter((e) => {
+                const r = e.getBoundingClientRect();
+                const id = e.dataset.testid ?? '';
+                if (/^(pip-bubble|pip-callout|prompt|world-)/.test(id) || e.closest('.screen')) return false;
+                const cs = getComputedStyle(e);
+                // Shown all the way up (a hidden activity HUD's children are not on screen).
+                const shown = e.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+                return shown && r.width > 2 && r.height > 2 && r.width < CW * 0.9 && r.height < CH * 0.9 && cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
+              })
+              .map((e) => {
+                const r = e.getBoundingClientRect();
+                return { id: e.dataset.testid ?? '', x0: r.left - host.left, y0: r.top - host.top, x1: r.right - host.left, y1: r.bottom - host.top };
+              });
+            const boxOf = (b: { u: number; v: number }, w: number, h: number): { x0: number; y0: number; x1: number; y1: number } => {
+              const pts = [px(b.u - ring, b.v, w, h), px(b.u + ring, b.v, w, h), px(b.u, b.v + ring, w, h), px(b.u, b.v - ring, w, h)];
+              return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), y1: Math.max(...pts.map((p) => p.y)) };
+            };
+            return {
+              W,
+              H,
+              out: badges.map((b) => {
+                const css = boxOf(b, CW, CH);
+                return {
+                  name: b.name,
+                  tall: px(b.u, b.v - half, CW, CH).y - px(b.u, b.v + half, CW, CH).y,
+                  box: boxOf(b, W, H),
+                  inView: css.x0 >= 0 && css.x1 <= CW && css.y0 >= 0 && css.y1 <= CH,
+                  under: hud.filter((h) => css.x0 < h.x1 && css.x1 > h.x0 && css.y0 < h.y1 && css.y1 > h.y0).map((h) => `${h.id} [${[h.x0, h.y0, h.x1, h.y1].map(Math.round)}] badge [${[css.x0, css.y0, css.x1, css.y1].map(Math.round)}]`),
+                };
+              }),
+            };
+          },
+          { badges: rbadges, yaw: rlay.yaw, yc: rlay.yc, bx: real.x, bz: real.z, ring: MAP_RING + 0.04, half: MAP_BADGE / 2, first: f === 0 },
+        );
+        if (f === 0 && hat === 'hat-sombrero') await page.screenshot({ path: `test-results/mapboard-reading-${hero}.png` });
+        const withHero = await canvasShot(page);
+        await page.evaluate(() => {
+          window.__rg!.ctx.player.setVisible(false);
+          window.__rg!.render();
+        });
+        const without = await canvasShot(page);
+        await page.evaluate(() => window.__rg!.ctx.player.setVisible(true));
+        for (const o of frame.out) {
+          let changed = 0;
+          const x0 = Math.max(0, Math.floor(o.box.x0));
+          const x1 = Math.min(frame.W - 1, Math.ceil(o.box.x1));
+          const y0 = Math.max(0, Math.floor(o.box.y0));
+          const y1 = Math.min(frame.H - 1, Math.ceil(o.box.y1));
+          for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+              const i = (y * withHero.width + x) * 4;
+              if (Math.abs(withHero.data[i] - without.data[i]) + Math.abs(withHero.data[i + 1] - without.data[i + 1]) > 24) changed++;
+            }
+          }
+          const tag = `${hero} ${hat ?? 'bare'} frame ${f} ${o.name}`;
+          if (changed > 5) fails.push(`${tag}: ${changed} px changed`);
+          if (o.tall < 20) fails.push(`${tag}: ${o.tall.toFixed(1)} px tall`);
+          if (!o.inView || o.under.length) fails.push(`${tag}: off screen or under ${o.under.join(',')}`);
         }
       }
-      return changed > 5;
-    });
-    expect(covered.map((c) => c.name), JSON.stringify(centres)).toEqual([]);
+    }
+    expect(fails).toEqual([]);
     expect(consoleErrors).toEqual([]);
   });
 });
