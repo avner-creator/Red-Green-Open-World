@@ -36,6 +36,9 @@ import { createFoamUi } from './ui';
 export const DEFAULT_SITE = { x: -25.5, z: -18.5, yaw: Math.PI, mirror: true } as const;
 
 const COUNTDOWN = 3;
+/** Result camera: distance, height, and the turns from "straight back from over the pit" it tries. */
+const RESULT_CAM = { distance: 5.2, height: 1.9, turns: [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6] } as const;
+
 /** Seconds the result card stays before leaving on its own. */
 const RESULT_TIMEOUT = 14;
 /** Course work only happens while the hero is this close to the course centre (m). */
@@ -86,6 +89,8 @@ export interface FoamLavaTestApi {
   props(): { id: string; x: number; z: number; r: number; bottom: number; top: number }[];
   /** Walk-in start pad: world centre and fill 0..1. */
   pad(): { at: [number, number, number]; fill: number };
+  /** During a run: put the hero at course (x, z) on the finish deck and finish now (result camera checks). */
+  finishAt(x: number, z: number): void;
 }
 
 declare global {
@@ -347,6 +352,38 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     pad.disarm();
   }
 
+  /**
+   * The result camera's yaw offset: straight back from over the pit (π) unless something solid
+   * (an arch pillar, a blower) stands on the arm from the hero to the camera; then the nearest
+   * clear turn either side. Three parallel probes (centre and both sides of the camera's width).
+   */
+  function clearResultOffset(): number {
+    const pl = ctx.player;
+    const from = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const side = new THREE.Vector3();
+    const to = new THREE.Vector3();
+    const len = Math.hypot(RESULT_CAM.distance, RESULT_CAM.height);
+    for (const turn of RESULT_CAM.turns) {
+      const look = pl.yaw + Math.PI + turn;
+      // The camera sits behind its look direction, up by `height`.
+      to.set(pl.position.x - Math.sin(look) * RESULT_CAM.distance, pl.position.y + 1.45 + RESULT_CAM.height * 0.6, pl.position.z - Math.cos(look) * RESULT_CAM.distance);
+      side.set(Math.cos(look), 0, -Math.sin(look)).multiplyScalar(0.35);
+      let clear = true;
+      for (const k of [0, 1, -1]) {
+        from.set(pl.position.x, pl.position.y + 1.45, pl.position.z).addScaledVector(side, k);
+        dir.copy(to).addScaledVector(side, k).sub(from);
+        const d = dir.length();
+        if (ctx.physics.raycast(from, dir.normalize(), Math.min(d, len) + 0.4)) {
+          clear = false;
+          break;
+        }
+      }
+      if (clear) return Math.PI + turn;
+    }
+    return Math.PI;
+  }
+
   /** Result card. `capped`: the round cap ended it (a ribbon and a gem for trying, never a fail). */
   function finishRun(time: number, capped = false): void {
     const medal = capped ? 'ribbon' : medalFor(time);
@@ -372,10 +409,12 @@ export function createFoamLava(ctx: GameContext): GameSystem {
     if (!confetti.group.parent) ctx.scene.add(confetti.group);
     confetti.burst(burstAt, 140);
     confettiT = 4;
-    // Face the pit and take the bow: the camera looks back at the hero from over the foam (always
-    // open space, whatever stands behind the finish deck).
+    // Face the pit and take the bow: the camera looks back at the hero from over the foam (open
+    // space). QA r7 m13: near the start arch the arm ran into a pillar, so the first clear
+    // direction around "straight from the pit" is used.
     sim.yaw = 0;
-    ctx.cameraRig.setOverride({ distance: 5.2, height: 1.9, yawOffset: Math.PI });
+    heroWorld();
+    ctx.cameraRig.setOverride({ distance: RESULT_CAM.distance, height: RESULT_CAM.height, yawOffset: clearResultOffset() });
     ui.jumpHint(null, false);
     ui.leave(null);
     // The card shows what the wallet really gained (prize + any stamp/mission bonus it set off).
@@ -669,6 +708,13 @@ export function createFoamLava(ctx: GameContext): GameSystem {
           return { id: p.id, x: w.x, z: w.z, r, bottom: oy + Math.max(-1.2, p.bottom), top: oy + p.top };
         }),
       pad: () => ({ at: padAt.toArray() as [number, number, number], fill: pad.progress }),
+      finishAt: (x, z) => {
+        if (phase !== 'run') return;
+        sim.p.x = x;
+        sim.p.z = z;
+        heroWorld();
+        finishRun(30);
+      },
     };
   }
 

@@ -150,6 +150,45 @@ test('countdown camera stands well outside the hero', async () => {
   await page.evaluate(() => window.__rg!.step(1 / 60, 20, false));
 });
 
+test('result card camera: clear of the start-arch pillars wherever the hero finishes (QA r7 m13)', async () => {
+  const rows = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = window.__rgFoam!;
+    const ctx = rg.ctx;
+    const pillars = f.props().filter((p) => p.id.startsWith('arch'));
+    const out: { at: number[]; dist: number; pillar: number; blocked: boolean; phase: string }[] = [];
+    // Spots across the finish deck, the ones by the arch pillar first.
+    for (const [x, z] of [[-5.1, 1.5], [-5.1, 0.6], [-4.4, 1.8], [-1.6, 1.6], [-3.3, -0.5], [-5.0, -2.6]]) {
+      const [bx, by, bz] = f.booth();
+      rg.teleport(bx, by - 1.15, bz);
+      rg.step(1 / 60, 5, false);
+      f.start();
+      for (let i = 0; i < 400 && f.phase() !== 'run'; i++) rg.step(1 / 60, 1, false);
+      f.finishAt(x, z);
+      rg.step(1 / 60, 90, false);
+      const cam = ctx.camera.position;
+      const head = ctx.player.position.clone();
+      head.y += 1.45;
+      const pillar = Math.min(...pillars.map((p) => Math.hypot(cam.x - p.x, cam.z - p.z) - p.r));
+      const dir = head.clone().sub(cam);
+      const hit = ctx.physics.raycast(cam.clone(), dir.clone().normalize(), dir.length() - 0.5);
+      out.push({ at: [x, z], dist: cam.distanceTo(head), pillar, blocked: !!hit, phase: f.phase() });
+      rg.inject({ respawnPressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 20, false);
+    }
+    return out;
+  });
+  console.log('foam result camera', JSON.stringify(rows));
+  for (const r of rows) {
+    expect(r.phase, JSON.stringify(r)).toBe('result');
+    expect(r.dist, JSON.stringify(r)).toBeGreaterThan(3.5);
+    expect(r.pillar, JSON.stringify(r)).toBeGreaterThan(0.3);
+    expect(r.blocked, JSON.stringify(r)).toBe(false);
+  }
+});
+
 test('no errors', () => {
   expect(consoleErrors).toEqual([]);
 });
