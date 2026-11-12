@@ -211,7 +211,8 @@ export function createBalloonPop(env: GameEnv): BoothGame {
     id: 'balloonPop',
     duration: 30,
     thresholds: [12, 26],
-    camera: { distance: 3.1, height: 0.7, fov: 62, lookAhead: 0 },
+    // Up over the hero's head (QA8 m7: the hero's and the rivals' heads hid the balloon wall).
+    camera: { distance: 3.1, height: 2.35, fov: 66, lookAhead: 0 },
     aimLimits: { yaw: 0.6, pitchMin: -0.15, pitchMax: 0.55 },
     how: ['aim', 'throw'],
     idle(dt) {
