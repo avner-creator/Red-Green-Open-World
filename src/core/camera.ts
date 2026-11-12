@@ -391,7 +391,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     wantDistance = baseWant;
     extraHeight += ((override?.height ?? baseHeight) - CAMERA.height - extraHeight) * k;
     lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : run * CAM.sprintLookAhead)) - lookAhead) * k;
-    // The board reading view zooms in until the board fills about half the screen height.
+    // The board reading view zooms in until the board fills about a third of the screen height.
     const fovTarget = (override?.fov ?? baseFov) + (readFov - (override?.fov ?? baseFov)) * readW;
     fovKick *= Math.exp(-10 * dt);
     if (Math.abs(fovKick) < 0.01) fovKick = 0;
