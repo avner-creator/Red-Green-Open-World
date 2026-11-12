@@ -1,0 +1,8 @@
+frog walk {"d":0.31,"minCam":6.06,"maxStill":0,"p":[3.8,18,5.8]} reading [0,0.02,0.3,0.7,0.98,1,1,1]
+frog after touch look [0.34,0.03,0,0,0,0]
+rex walk {"d":0.31,"minCam":7.02,"maxStill":0,"p":[3.8,18,5.8]} reading [0,0.02,0.3,0.7,0.98,1,1,1]
+rex after touch look [0.34,0.03,0,0,0,0]
+phone errors 0 []
+mouse: before look 1
+mouse: after look [0.34,0.03,0,0,0,0]
+mouse errors 0 []

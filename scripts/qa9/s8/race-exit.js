@@ -1,0 +1,1 @@
+if (['podium','result'].includes(await page.evaluate(() => window.__rgRace.state().phase))) { await page.evaluate(() => window.__rgRace.exit()); await st(120, false); } log((await H.s()).mode);

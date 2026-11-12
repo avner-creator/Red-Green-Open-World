@@ -1,0 +1,39 @@
+HERO/EYE [
+  'frog',
+  '{"leftLens":"red","weakEye":"left","weakStrength":1,"crosstalkLimit":1,"strongContrast":1}'
+]
+SAT 20 walk
+PHASE 299.75 ended
+PHASE 300 ended
+END UI ["bubbleball-hud-result:+0+0ER","dinosumo-hud-result:+0+0ER","scoops-result:","end-stars:","end-earned:+11","end-wallet:1","end-combo:×1","end-econ:353","end-missions:353","end-mission:3","end-mission:5","end-mission:3","end-jackpot:","end-unlocked:","end-funpass:1/25510152560","end-hero:","end-wardrobe:"]
+LINE {"t":0.25,"id":"intro:welcome","text":"Hi, I'm Pip! Welcome to Carnival Island, a giant fun park!","icon":"pip","act":"move","cls":"pipb compact story on pop","pos":[0,18,9],"mode":"walk","lead":null,"leadState":null,"rescues":0,"done":"","step":"story"}
+LINE {"t":3.25,"id":"story:1","text":"Rides and games everywhere! Fly a balloon, bounce, race and play!","icon":"tent","act":"look","cls":"pipb compact story on pop","pos":[0,18,9],"mode":"walk","lead":null,"leadState":null,"rescues":0,"done":"","step":"story"}
+LINE {"t":6.75,"id":"story:2","text":"Sparkly gems hide all over. Your magic glasses find them!","icon":"glasses","act":"","cls":"pipb compact story on pop","pos":[0,18,9],"mode":"walk","lead":null,"leadState":null,"rescues":0,"done":"","step":"story"}
+LINE {"t":10,"id":"story:3","text":"Gems buy rides, goofy hats and cool gear!","icon":"gem","act":"","cls":"pipb compact story on pop","pos":[0,18,9],"mode":"walk","lead":null,"leadState":null,"rescues":0,"done":"","step":"story"}
+LINE {"t":12.5,"id":"story:4","text":"Each new ride earns a stamp. Full Fun Pass, giant prize!","icon":"mission","act":"","cls":"pipb compact story on pop","pos":[0,18,9],"mode":"walk","lead":null,"leadState":null,"rescues":0,"done":"","step":"story"}
+LINE {"t":15.5,"id":"story:5","text":"Let's fill it before sunset! Follow me to the first one!","icon":"paw","act":"move","cls":"pipb compact story on pop","pos":[0,18,9],"mode":"walk","lead":"trampoline","leadState":"run","rescues":0,"done":"","step":"story"}
+LINE {"t":19,"id":"econ:gift","text":"A present for you! A silly duck hat!","icon":"hat","act":"","cls":"pipb compact on pop","pos":[12.2,18,-4.9],"mode":"walk","lead":"trampoline","leadState":"run","rescues":0,"done":"","step":"story"}
+LINE {"t":24,"id":"econ:gem","text":"A gem! Gems are money for rides, hats and gear!","icon":"gem","act":"","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":30.5,"id":"econ:key","text":"You found a key! Bring it back to its chest!","icon":"key","act":"","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":37,"id":"howto:garage:0","text":"Hop in the buggy and drive! Bumps are bouncy and fun!","icon":"wCar","act":"use","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":44,"id":"howto:garage:1","text":"The tool cart gives your buggy silly new parts!","icon":"gear","act":"use","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":50.25,"id":"vehicle:drive","text":"Zoom!","icon":"wCar","act":"move","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":51.75,"id":"vehicle:suggest","text":"Try the buggy race!","icon":"flag","act":"move","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":63.75,"id":"vehicle:hop","text":"Let's go! It's this way!","icon":"paw","act":"use","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":138.75,"id":"vehicle:drive","text":"Zoom!","icon":"wCar","act":"move","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":153.75,"id":"tip:timer","text":"When the sun sets, the park closes!","icon":"sun","act":"","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":168.75,"id":"tip:skill","text":"Your hero has a super power! Try it!","icon":"bolt","act":"skill","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":198.75,"id":"tip:help","text":"Lost? This button shows all the controls!","icon":"question","act":"","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":213.75,"id":"vehicle:suggest","text":"Try the magic odd-one-out!","icon":"glasses","act":"move","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":228.75,"id":"tip:pip","text":"Need help? Use my button, and I explain things!","icon":"pip","act":"","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":269.75,"id":"sunset","text":"Hurry! Sunset is coming!","icon":"sun","act":"","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+LINE {"t":288.75,"id":"vehicle:hop","text":"Let's go! It's this way!","icon":"paw","act":"use","cls":"pipb compact on pop","pos":[-18.7,18.4,8.2],"mode":"driving","lead":null,"leadState":null,"rescues":0,"done":"garage","step":"done"}
+RECORDER COUNTS {"hide":18,"show":17,"replace":4,"jump":10}
+JUMPS [[37017,"howto:garage:0",-37,-31],[63767,"vehicle:hop",-53,-29],[138767,"vehicle:drive",-59,-41],[153767,"tip:timer",-13,-29],[168767,"tip:skill",-13,-29],[198767,"tip:help",-16,-29],[213767,"vehicle:suggest",-78,-41],[228767,"tip:pip",-16,-29],[269767,"sunset",-16,-29],[288767,"vehicle:hop",-13,-29]]
+OVERLAPS []
+VOICE ["hi-im-pip-welcome-to-carnival-island-a-giant-fun-park:clip","rides-and-games-everywhere-fly-a-balloon-bounce-race-and-play:clip","sparkly-gems-hide-all-over-your-magic-glasses-find-them:clip","gems-buy-rides-goofy-hats-and-cool-gear:clip","each-new-ride-earns-a-stamp-full-fun-pass-giant-prize:clip","lets-fill-it-before-sunset-follow-me-to-the-first-one:clip","a-present-for-you-a-silly-duck-hat:clip","a-gem-gems-are-money-for-rides-hats-and-gear:clip","you-found-a-key-bring-it-back-to-its-chest:clip","hop-in-the-buggy-and-drive-bumps-are-bouncy-and-fun:clip","the-tool-cart-gives-your-buggy-silly-new-parts:clip","zoom:clip","try-the-buggy-race:clip","lets-go-its-this-way:clip","zoom:clip","when-the-sun-sets-the-park-closes:clip","your-hero-has-a-super-power-try-it:clip","lost-this-button-shows-all-the-controls:clip","try-the-magic-odd-one-out:clip","need-help-use-my-button-and-i-explain-things:clip","hurry-sunset-is-coming:clip","lets-go-its-this-way:clip"]
+NO CLIP []
+PAUSELOG []
+GIFT AT 17.25
+final {"s":{"phase":"ended","remaining":0,"total":300,"gems":1,"gemsTotal":86,"chests":0,"chestsTotal":6,"stars":0,"bestStunts":{},"outfits":[],"earned":1,"bestCombo":1,"megaGems":0,"missionsDone":0,"spent":0,"playerPosition":[-18.711222374768063,18.415556177950457,8.21515041526108],"playerMode":"driving"},"lead":{"to":null,"dest":null,"state":null,"rescues":0,"guiding":false,"done":["garage"],"why":"intro yielded: vehicle","replans":0,"frees":0,"freedAt":null,"unreachable":[],"at":"garage"},"wallet":null}
+errors 0 []
