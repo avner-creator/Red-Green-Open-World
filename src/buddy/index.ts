@@ -37,6 +37,7 @@ import type { HowToTopic, KeyNames } from './script';
 import { topicOfPrompt } from './topics';
 import { sniffSpot } from './sniff';
 import { Leader, planPath } from './guide';
+import { terrainClear, terrainRoute, type TerrainProbe } from './route';
 import type { LeadOut } from './guide';
 import { FOLLOW, angleDelta, arrive, catchUpSpeed, followSlot, forward, keepClear, right, shouldTeleport, teleportSpot, turnTowards, yawTo } from './steer';
 import type { V2 } from './steer';
@@ -270,8 +271,25 @@ export function createBuddy(ctx: GameContext): GameSystem {
    * ring 14 m out). A blocked anchor moves to the nearest reachable spot within the place's visit
    * radius. Every lead goes to `dests` (both-eye places only).
    */
-  interface DestCheck { raw: V2; dest: V2; moved: boolean; ok: boolean }
+  interface DestCheck { raw: V2; dest: V2; moved: boolean; ok: boolean; route?: number }
   const dests = new Map<Attraction, DestCheck>();
+  const probe: TerrainProbe = { heightAt: (x, z) => ctx.world.heightAt(x, z), isLand: (x, z) => ctx.world.isLand(x, z), waterLevel: ctx.world.waterLevel };
+  /** Where every lead destination must be walkable from (QA7 m14): the plaza, at spawn. */
+  const plaza = (): V2 => {
+    const s = ctx.world.anchors.spawn;
+    return s ? { x: s.position.x, z: s.position.z } : { x: 0, z: 0 };
+  };
+  /**
+   * A cliff in the straight way to a lead's destination (QA7 m14: the dragon roost's plateau): the
+   * corners of the terrain route there (the destination itself, an anchor, is not included).
+   */
+  const viaFor = (target: V2 | null): V2[] | null => {
+    if (!target) return null;
+    const h = hero();
+    return terrainClear(h, target, probe) ? null : (terrainRoute(h, target, probe)?.slice(0, -1) ?? null);
+  };
+  /** Terrain route corners from the plaza (null = no walkable way: a cliff top, an island). */
+  const fromPlaza = (c: V2): V2[] | null => terrainRoute(plaza(), c, probe);
   const reachable = (c: V2): boolean => {
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * Math.PI * 2;
@@ -296,11 +314,21 @@ export function createBuddy(ctx: GameContext): GameSystem {
       }
     }
     const cands = scored.sort((a2, b2) => a2.s - b2.s).map((c) => c.p);
+    // A clear spot that can be got to locally AND walked to from the plaza over the terrain (a
+    // spot on top of a cliff next to the place is not: QA7 m14).
+    let local: V2 | null = null;
+    // (A place on a deck or bridge above the ground: the terrain cannot tell; as before.)
+    const an = anchorOf(a);
+    const deck = !!an && an.position.y - ctx.world.heightAt(raw.x, raw.z) > 2;
     for (const c of cands) {
       if (!ctx.world.isLand(c.x, c.z) || !roomy(c) || !reachable(c)) continue;
-      return { raw, dest: c, moved: c !== raw, ok: true };
+      local ??= c;
+      if (deck) return { raw, dest: c, moved: c !== raw, ok: true };
+      const r = fromPlaza(c);
+      if (!r) continue;
+      return { raw, dest: c, moved: c !== raw, ok: true, route: r.length };
     }
-    return { raw, dest: raw, moved: false, ok: false };
+    return { raw, dest: local ?? raw, moved: !!local && local !== raw, ok: false };
   };
   /**
    * Seconds until the check runs (−1 = done): half a second into play, once the attraction sites
@@ -309,12 +337,15 @@ export function createBuddy(ctx: GameContext): GameSystem {
   let validateIn = -1;
   const validateDests = (): void => {
     validateIn = -1;
-    if (dests.size) return;
-    for (const a of availableAttractions()) {
-      if (a === 'trampoline') continue; // the mat edge facing the hero (computed per lead)
-      const raw = rawAnchor(a);
-      if (raw) dests.set(a, validateDest(a, raw));
+    if (!dests.size) {
+      for (const a of availableAttractions()) {
+        if (a === 'trampoline') continue; // the mat edge facing the hero (computed per lead)
+        const raw = rawAnchor(a);
+        if (raw) dests.set(a, validateDest(a, raw));
+      }
     }
+    // No walkable way from the plaza: Pip never leads there (every session).
+    for (const [a, c] of dests) if (!c.ok) director.unreachable.add(a);
   };
 
   /**
@@ -468,10 +499,38 @@ export function createBuddy(ctx: GameContext): GameSystem {
     return list.filter((a) => !!anchorOf(a));
   };
 
+  /**
+   * A glasses booth may publish where children should stand to start (in front of its start pad):
+   * a `lead` point on its site anchor, or a scene object named `glasses:<id>:lead`. Pip's
+   * destination then follows the booth wherever its layout puts it (QA7 M3: the dot-signs pad was
+   * behind the booth from Pip's fixed point). Looked up at most every 2 s.
+   */
+  const boothLeads = new Map<Attraction, { at: number; p: V2 | null }>();
+  const leadV = new THREE.Vector3();
+  const boothLead = (name: Attraction): V2 | null => {
+    if (!(GLASSES_ATTRACTIONS as readonly string[]).includes(name)) return null;
+    const c = boothLeads.get(name);
+    if (c && t - c.at < 2 && t >= c.at) return c.p;
+    let p: V2 | null = null;
+    const lead = (anchorOf(name) as (Anchor & { lead?: { x: number; z: number } }) | undefined)?.lead;
+    if (lead) p = { x: lead.x, z: lead.z };
+    else {
+      const o = ctx.scene.getObjectByName(`glasses:${name}:lead`);
+      if (o) {
+        o.getWorldPosition(leadV);
+        p = { x: leadV.x, z: leadV.z };
+      }
+    }
+    boothLeads.set(name, { at: t, p });
+    return p;
+  };
+
   /** Where a lead to `a` goes before validation (the Gear Shack: in front of its counter). */
   const rawAnchor = (name: Attraction): V2 | null => {
     const a = anchorOf(name);
     if (!a) return null;
+    const booth = boothLead(name);
+    if (booth) return booth;
     if (name === 'gearShack') {
       const f = forward(a.yaw);
       return { x: a.position.x + f.x * 2.8, z: a.position.z + f.z * 2.8 };
@@ -531,7 +590,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       queue.say(l);
     },
     lead(target, opts) {
-      leader.set(target, opts?.radius ?? 6, opts?.fetch ?? false);
+      leader.set(target, opts?.radius ?? 6, opts?.fetch ?? false, viaFor(target));
       if (!target) leadOut = null;
       assistT = target && opts?.assist ? 6 : 0;
     },
@@ -587,6 +646,9 @@ export function createBuddy(ctx: GameContext): GameSystem {
       const a = anchorOf(name);
       if (!a) return null;
       const v = dests.get(name);
+      // A booth that published its start spot after the check (or moved it): that spot, as published.
+      const booth = boothLead(name);
+      if (booth && (!v || Math.hypot(v.raw.x - booth.x, v.raw.z - booth.z) > 0.25)) return booth;
       if (v) return { ...v.dest };
       if (name === 'trampoline') {
         const h = hero();

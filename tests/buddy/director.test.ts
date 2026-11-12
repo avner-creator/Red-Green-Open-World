@@ -6,7 +6,7 @@ import { REPEAT_SECONDS, ShuffleBag, UNSOLICITED_GAP } from '../../src/buddy/poo
 import type { DirectorSink, DirectorView, LeadOptions } from '../../src/buddy/director';
 import type { Attraction } from '../../src/buddy/types';
 import { createBuddyStore } from '../../src/buddy/store';
-import { CHEST, HOWTO, INTRO, POOLS, RETURNING, STORY } from '../../src/buddy/script';
+import { CHEST, GLASSES_WAIT_GAP, HOWTO, INTRO, POOLS, RETURNING, STORY } from '../../src/buddy/script';
 import type { V2 } from '../../src/buddy/steer';
 
 function setup() {
@@ -488,6 +488,18 @@ describe('Director: magic-glasses games', () => {
     tick(d, INVITE_PATIENCE + 1, view({ heroSpeed: 0 }));
     expect(leads.at(-1)).toBeNull();
     expect(said.filter((l) => l.id === 'invite')).toHaveLength(1);
+  });
+  it('"Back to the pad!" when a booth waits for the hero, at most once per GLASSES_WAIT_GAP', () => {
+    const { d, said } = setupG();
+    d.begin(false);
+    d.onGlassesWait();
+    tick(d, 5);
+    d.onGlassesWait();
+    expect(said.filter((l) => l.id === 'glasses:wait').map((l) => l.text)).toEqual(['Back to the pad!']);
+    tick(d, GLASSES_WAIT_GAP);
+    d.onGlassesWait();
+    expect(said.filter((l) => l.id === 'glasses:wait')).toHaveLength(2);
+    expect(said.find((l) => l.id === 'glasses:wait')?.action).toBe('move');
   });
   it('cheers a glasses hit', () => {
     const { d, said } = setupG();
