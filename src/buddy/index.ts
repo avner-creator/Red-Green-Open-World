@@ -304,8 +304,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
     ctx.world.isLand(to.x, to.z) && Math.abs(ctx.world.heightAt(to.x, to.z) - ctx.world.heightAt(from.x, from.z)) < 1.2;
   /** Planning: a leg with PATH_BODY.margin of room round the hero's body all the way. */
   const clearWide = (from: V2, to: V2): boolean => steppable(from, to) && sweepClear(from, to, PATH_BODY.margin) && clearRun(from, to);
-  /** The first leg (from where the hero stands, maybe right by a wall): the follow margin. */
-  const clearNear = (from: V2, to: V2): boolean => steppable(from, to) && clearRun(from, to) && sweepClear(from, to, PATH_BODY.followMargin);
+  /** The first leg (from where the hero stands, maybe right by a wall) and the last (into the place): the hero's bare body. */
+  const clearNear = (from: V2, to: V2): boolean => steppable(from, to) && clearRun(from, to);
   /** A child walking straight from the hero to Pip's spot gets there. */
   const followable = (h: V2, s: V2): boolean => steppable(h, s) && sweepClear(h, s, PATH_BODY.followMargin);
   const leader = new Leader(walkable, clearWide, followable, clearNear);
@@ -1299,7 +1299,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       route: () => leader.route?.map((p) => [p.x, p.z] as [number, number]) ?? null,
       plan: (x, z, name) => {
         const d = sink.anchor(name as Attraction);
-        return d ? (planPath({ x, z }, d, clearWide, 2.5, 900, { reach: LEAD.reach, clearStart: clearNear })?.map((p) => [p.x, p.z] as [number, number]) ?? null) : null;
+        return d ? (planPath({ x, z }, d, clearWide, 2.5, 900, { reach: LEAD.reach, clearStart: clearNear, clearEnd: clearNear })?.map((p) => [p.x, p.z] as [number, number]) ?? null) : null;
       },
       voice: () => voice.requests.slice(),
       lead: () => ({

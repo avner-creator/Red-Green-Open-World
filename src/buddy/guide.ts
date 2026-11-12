@@ -77,6 +77,11 @@ export interface PlanOpts {
    * planning margin, and must still be able to walk away from it.
    */
   clearStart?: (a: V2, b: V2) => boolean;
+  /**
+   * The last leg into `dest` may use this (looser) check: a place's spot may stand closer to its
+   * counter or shed than the planning margin (it was validated with the hero's bare body).
+   */
+  clearEnd?: (a: V2, b: V2) => boolean;
 }
 
 /** The point `reach` metres short of `dest` on the line from `p` (or `dest` itself when that close). */
@@ -86,34 +91,43 @@ function approach(p: V2, dest: V2, reach: number): V2 {
   return toward(p, dest, d - reach);
 }
 
+/** Cells the search goes on for an exact way in after finding a stop-short one. */
+const FALLBACK_EXPAND = 150;
+
 export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, step = 2.5, maxExpand = 900, opts: PlanOpts = {}): V2[] | null {
   const reach = opts.reach ?? 0;
   const startClear = opts.clearStart ?? clear;
-  /** `p` (a grid point, or `from`) sees the destination: straight to it, or to `reach` short of it. */
-  const sees = (p: V2, start: boolean): V2 | null => {
+  /**
+   * `p` (a grid point, or `from`) sees the destination: straight to it (exact), or, right by the
+   * place, to `reach` short of it (a fallback: the search goes on a little for an exact way in).
+   */
+  const sees = (p: V2, start: boolean): { pt: V2; exact: boolean } | null => {
     const c = start ? startClear : clear;
-    if (c(p, dest)) return { x: dest.x, z: dest.z };
-    if (reach > 0) {
+    if (c(p, dest) || opts.clearEnd?.(p, dest)) return { pt: { x: dest.x, z: dest.z }, exact: true };
+    if (reach > 0 && dist(p, dest) <= reach + step) {
       const a = approach(p, dest, reach);
-      if (dist(a, p) < 0.05 || c(p, a)) return a;
+      if (dist(a, p) < 0.05 || c(p, a)) return { pt: a, exact: false };
     }
     return null;
   };
   const tail = (p: V2, seen: V2): V2[] => (dist(seen, dest) < 1e-6 || dist(seen, p) < 0.05 ? [] : [seen]);
+  interface Node { i: number; j: number; g: number; f: number; parent: Node | null }
+  const root: Node = { i: 0, j: 0, g: 0, f: dist(from, dest), parent: null };
   const seen0 = sees(from, true);
-  if (seen0) return [...tail(from, seen0), { x: dest.x, z: dest.z }];
+  if (seen0?.exact) return [{ x: dest.x, z: dest.z }];
+  let end: Node | null = null;
+  let endSeen: V2 | null = null;
+  /** A stop-short way, kept while the search looks on (FALLBACK_EXPAND more cells) for an exact one. */
+  let fallback: { n: Node; pt: V2; at: number } | null = seen0 ? { n: root, pt: seen0.pt, at: 0 } : null;
   const key = (i: number, j: number): string => `${i},${j}`;
   const at = (i: number, j: number): V2 => ({ x: from.x + i * step, z: from.z + j * step });
   const h = (p: V2): number => dist(p, dest);
-  interface Node { i: number; j: number; g: number; f: number; parent: Node | null }
-  const open: Node[] = [{ i: 0, j: 0, g: 0, f: h(from), parent: null }];
+  const open: Node[] = [root];
   const best = new Map<string, number>([[key(0, 0), 0]]);
   const closed = new Set<string>();
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
   let expanded = 0;
-  let end: Node | null = null;
-  let endSeen: V2 | null = null;
-  while (open.length && expanded < maxExpand) {
+  while (open.length && expanded < maxExpand && !(fallback && expanded - fallback.at > FALLBACK_EXPAND)) {
     let bi = 0;
     for (let k = 1; k < open.length; k++) if (open[k].f < open[bi].f) bi = k;
     const n = open.splice(bi, 1)[0];
@@ -124,11 +138,13 @@ export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, s
     const p = at(n.i, n.j);
     const start = !n.parent;
     if (!start && dist(p, dest) < step * 4 + reach) {
-      endSeen = sees(p, false);
-      if (endSeen) {
+      const s = sees(p, false);
+      if (s?.exact) {
         end = n;
+        endSeen = s.pt;
         break;
       }
+      if (s && !fallback) fallback = { n, pt: s.pt, at: expanded };
     }
     for (const [di, dj] of dirs) {
       const i = n.i + di;
@@ -142,6 +158,10 @@ export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, s
       best.set(k, g);
       open.push({ i, j, g, f: g + h(q), parent: n });
     }
+  }
+  if (!end && fallback) {
+    end = fallback.n;
+    endSeen = fallback.pt;
   }
   if (!end || !endSeen) return null;
   const endP = at(end.i, end.j);
@@ -210,14 +230,14 @@ export class Leader {
    * round the hero's body, used to plan a way round fences (`planPath`); without it Pip goes
    * straight with small detours. `follow(hero, spot)` (optional): a child walking in a straight
    * line from `hero` to `spot` gets there (the hero's body swept along it). Pip only runs on to a
-   * spot the hero can follow him to. `clearStart`: the planner's looser check for the first leg
-   * (the hero may stand closer to a wall than the margin).
+   * spot the hero can follow him to. `loose`: the planner's check (no margin) for the first leg (the
+   * hero may stand closer to a wall than the margin) and the last one (into the place).
    */
   constructor(
     private readonly walkable: (from: V2, to: V2) => boolean = () => true,
     private readonly clear: ((from: V2, to: V2) => boolean) | null = null,
     private readonly follow: ((hero: V2, spot: V2) => boolean) | null = null,
-    private readonly clearStart: ((from: V2, to: V2) => boolean) | null = null,
+    private readonly loose: ((from: V2, to: V2) => boolean) | null = null,
   ) {}
 
   /** The planned way, if any (debug / tests). */
@@ -238,7 +258,7 @@ export class Leader {
       return;
     }
     this.path = this.clear
-      ? planPath(from, dest, this.clear, 2.5, 900, { reach: LEAD.reach, clearStart: this.clearStart ?? undefined })
+      ? planPath(from, dest, this.clear, 2.5, 900, { reach: LEAD.reach, clearStart: this.loose ?? undefined, clearEnd: this.loose ?? undefined })
       : null;
   }
 
