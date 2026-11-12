@@ -486,6 +486,23 @@ export function create(env: MechanicEnv): Mechanic {
     return ctx.interactions.add(target);
   });
 
+  /**
+   * The E bubble (the device's Use button) shows only while E will answer a button: over the
+   * pedestal the hero stands at, beside its button (never over the picture). Elsewhere, none
+   * (QA8 m3: it floated over a pedestal while E did nothing).
+   */
+  const bubbleAt = D.buttonX.map((x) => new THREE.Vector3(x + (x > 0 ? -0.62 : 0.62), btnY + 0.32, btnZ + 0.2));
+  function placeBubble(): void {
+    if (kit.phase() !== 'play') return;
+    const b = state === 'open' && active ? heroButton() : -1;
+    const now = kit.booth.prompt();
+    if (b < 0) {
+      if (now.id !== null) kit.booth.setPrompt(null);
+      return;
+    }
+    if (now.id !== 'button' || now.at.distanceToSquared(bubbleAt[b]) > 1e-4) kit.booth.setPrompt('button', bubbleAt[b], 0.55);
+  }
+
   function reset(): void {
     tier = 1;
     hits = 0;
@@ -510,6 +527,7 @@ export function create(env: MechanicEnv): Mechanic {
     },
     update(dt) {
       kit.update(dt);
+      placeBubble();
       animate(dt);
     },
     dispose() {

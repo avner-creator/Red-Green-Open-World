@@ -41,6 +41,9 @@ const CSS = `
   filter:drop-shadow(0 1vmin 0 #000)}
 .rg-boop-count.on{display:block;animation:rg-boop-in .5s ease-out}
 .rg-boop-count svg{width:30vmin;height:30vmin;fill:#ffd93b;stroke:#000;stroke-width:1.2;stroke-linejoin:round;paint-order:stroke fill}
+.rg-boop-count.go{top:18%}
+.rg-boop-count.go svg{width:14vmin;height:14vmin}
+.rg-boop-count.go.on{animation:rg-boop-go .6s ease-out forwards}
 .rg-boop-res{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);pointer-events:none;display:none;flex-direction:column;align-items:center;gap:2vmin;
   background:#10142a;border:.8vmin solid #fff;border-radius:4vmin;padding:3vmin 5vmin;filter:drop-shadow(0 1vmin 0 #000)}
 .rg-boop-res.on{display:flex;animation:rg-boop-in .45s ease-out}
@@ -53,6 +56,7 @@ const CSS = `
 .rg-boop-res .row .tube svg .a{fill:none;stroke:#ffd93b;stroke-width:2.2;stroke-linecap:round}
 .rg-boop-res .row .tube svg .e{fill:#000}.rg-boop-res .row .tube svg .m{fill:none;stroke:#000;stroke-width:1.4}
 @keyframes rg-boop-pop{0%{transform:scale(1)}40%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes rg-boop-go{0%{transform:translate(-50%,-50%) scale(.5);opacity:0}25%{transform:translate(-50%,-50%) scale(1.15);opacity:1}100%{transform:translate(-50%,-50%) scale(1.4);opacity:0}}
 @keyframes rg-boop-in{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}70%{transform:translate(-50%,-50%) scale(1.12);opacity:1}100%{transform:translate(-50%,-50%) scale(1)}}
 `;
 
@@ -97,6 +101,8 @@ export function createBoopHud(root: HTMLElement): BoopHud {
       lastCount = c;
       big.classList.remove('on');
       if (c === null) return;
+      // "Go" is a small star burst up top (QA8 m10: a big star sat over the screen centre).
+      big.classList.toggle('go', c === 'go');
       big.innerHTML = c === 'go' ? STAR : String(c);
       // Restart the pop-in animation.
       void big.offsetWidth;

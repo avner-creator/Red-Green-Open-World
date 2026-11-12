@@ -14,18 +14,17 @@ import type { GlassesTier } from '../../../../types';
 
 export const BOUNCE_RING = {
   /**
-   * Shortest fall (s) that gets a ring. 1.2 s = a 16 m bounce: the walk-on 12 m (1.04 s) has none;
-   * the first held 18 m bounce (1.28 s) does, since a child who holds Space for ~2 s and lets go
-   * only ever meets 18 m falls (QA round 7 M4: the ring never appeared at 1.5 s).
+   * Shortest fall (s) that gets a ring. 0.95 s = a 10 m bounce: medium bounces get one too (the
+   * walk-on 12 m, 1.04 s, and the decaying 10.7 m ones), not only held big bounces (QA8 m9).
    */
-  minFall: 1.2,
+  minFall: 0.95,
   /** A press this close (s) to touchdown is the ordinary landing press: never counted. */
   landingIgnore: 0.35,
   /** The perfect moment lies between these shares of the fall. */
   earliest: 0.2,
   latest: 0.8,
-  /** Half-width (s) of the hit window by tier (±90 ms at tier 1 stays humane for a child). */
-  goodHalf: { 1: 0.09, 2: 0.07, 3: 0.055 } as Readonly<Record<GlassesTier, number>>,
+  /** Half-width (s) of the hit window by tier: ±180 ms at tier 1 so an 8-year-old makes it (QA8 m9). */
+  goodHalf: { 1: 0.18, 2: 0.15, 3: 0.12 } as Readonly<Record<GlassesTier, number>>,
   /** Within this share of the half-width the hit is "perfect". */
   perfectShare: 0.45,
   /** Keep the window's end this far (s) before the ignored landing zone. */

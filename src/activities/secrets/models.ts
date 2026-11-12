@@ -234,6 +234,8 @@ export const VAULT = {
 export interface VaultModel {
   /** One mesh (name `secret-vault`), placed at the door base and rotated by the yaw. */
   mesh: THREE.Mesh;
+  /** The door leaf with its window rings (name `secret-vault-door`), a child of `mesh`. */
+  door: THREE.Mesh;
   batch: PartBatch;
   /** Move the door leaf (door-local offset from its closed pose); the window rings move with it. */
   setDoor(x: number, y: number): void;
@@ -466,7 +468,9 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material, p
     add(frame, 0x1d1b19, { rough: 0.7, metal: 0.1 });
   }
 
-  // Parts: 0 fixed, 1 door, 2..4 window rings (lamps, on the door), 5 treasure star, 6.. pad caps.
+  // Parts: 0 fixed, 1 treasure star, 2.. pad caps, then dwell discs. The door leaf and its three
+  // window rings are their own small mesh (`secret-vault-door`, a child of the vault): it slides
+  // down into the floor by its transform, so the opening is one matrix, never a skipped upload.
   const lamps = [0, 1, 2].map((i) => surface(new THREE.TorusGeometry(V.screenR + 0.06, 0.075, 8, 36).translate((i - 1) * V.screenX, V.screenY, 0.06), LAMP_OFF.color.getHex(), LAMP_OFF.surf));
   const star = surface(
     new THREE.ExtrudeGeometry(shapeOutline('star', 0.42), { depth: 0.14, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2 }).translate(0, 0, -0.07),
@@ -486,13 +490,20 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material, p
   // Dwell discs (one per pad, posed on its cap): a dark disc grows from the middle while a step is
   // being counted. Dark on the cream cap: reads by brightness in both eyes.
   const discs = pads.map(() => surface(new THREE.CylinderGeometry(1, 1, 0.02, 32), 0x1c2340, { rough: 0.8, metal: 0 }));
-  const all = [merge(fixed), merge(door), ...lamps, star, ...caps, ...discs];
+  const all = [merge(fixed), star, ...caps, ...discs];
   const batch = new PartBatch(all);
-  for (const g of [...fixed, ...door, ...all]) g.dispose();
+  const doorParts = [merge(door), ...lamps];
+  const doorBatch = new PartBatch(doorParts);
+  for (const g of [...fixed, ...door, ...all, ...doorParts]) g.dispose();
   const mesh = new THREE.Mesh(batch.geometry, material);
   mesh.name = 'secret-vault';
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  const doorMesh = new THREE.Mesh(doorBatch.geometry, material);
+  doorMesh.name = 'secret-vault-door';
+  doorMesh.castShadow = true;
+  doorMesh.receiveShadow = true;
+  mesh.add(doorMesh);
 
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -501,38 +512,47 @@ export function buildVault(seed: number, crag: Crag, material: THREE.Material, p
   const sc = new THREE.Vector3();
   const padAt = pads.map((pd) => new THREE.Vector3(pd.x, pd.y, pd.z));
   const padLook: PadLook[] = pads.map(() => 'idle');
+  const CAP0 = 2;
   const model: VaultModel = {
     mesh,
+    door: doorMesh,
     batch,
     setDoor(x, y) {
-      m.makeTranslation(x, y, 0);
-      for (const i of [1, 2, 3, 4]) batch.setMatrix(i, m);
+      doorMesh.position.set(x, y, 0);
+      // Below the floor it is gone for good: skip drawing it.
+      doorMesh.visible = y > -V.doorH;
     },
     setLamp(i, on) {
       const l = on ? LAMP_ON : LAMP_OFF;
-      batch.setColor(2 + i, l.color);
-      batch.setSurface(2 + i, l.surf);
+      doorBatch.setColor(1 + i, l.color);
+      doorBatch.setSurface(1 + i, l.surf);
     },
     setStar(spin, y, scale) {
-      batch.setMatrix(5, m.compose(p.set(0, y, TREASURE_Z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
+      batch.setMatrix(1, m.compose(p.set(0, y, TREASURE_Z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
     },
     setStarAt(x, y, z, spin, scale) {
-      batch.setMatrix(5, m.compose(p.set(x, y, z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
+      batch.setMatrix(1, m.compose(p.set(x, y, z), q.setFromAxisAngle(UPV, spin), sc.setScalar(scale)));
     },
     setPad(i, push, shake, look, fill = 0) {
       const c = padAt[i];
       if (!c) return;
-      batch.setMatrix(6 + i, m.makeTranslation(shake, -push, 0));
+      batch.setMatrix(CAP0 + i, m.makeTranslation(shake, -push, 0));
       const r = fill > 0 ? (V.padBaseR - 0.2) * Math.min(1, 0.15 + 0.85 * fill) : 0;
-      batch.setMatrix(6 + pads.length + i, m.compose(p.set(c.x + shake, c.y + 0.02 + V.padCapH + 0.012 - push, c.z), q.identity(), sc.set(r, 1, r)));
+      batch.setMatrix(CAP0 + pads.length + i, m.compose(p.set(c.x + shake, c.y + 0.02 + V.padCapH + 0.012 - push, c.z), q.identity(), sc.set(r, 1, r)));
       if (padLook[i] !== look) {
         padLook[i] = look;
-        batch.setColor(6 + i, PAD_LOOK[look].color);
-        batch.setSurface(6 + i, PAD_LOOK[look].surf);
+        batch.setColor(CAP0 + i, PAD_LOOK[look].color);
+        batch.setSurface(CAP0 + i, PAD_LOOK[look].surf);
       }
     },
-    commit: () => batch.commit(),
-    dispose: () => batch.dispose(),
+    commit: () => {
+      batch.commit();
+      doorBatch.commit();
+    },
+    dispose: () => {
+      batch.dispose();
+      doorBatch.dispose();
+    },
   };
   model.setStar(0, STAR_Y, 1);
   for (let i = 0; i < pads.length; i++) model.setPad(i, 0, 0, 'idle', 0);

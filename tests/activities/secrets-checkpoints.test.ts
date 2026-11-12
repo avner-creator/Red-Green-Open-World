@@ -3,7 +3,8 @@
  * the hero back on it, path coyote time, slightly larger stones.
  */
 import { describe, expect, it } from 'vitest';
-import { CHECKPOINT, PathProgress, STONE, checkPath, checkpointIndices, withCheckpoints } from '../../src/activities/secrets/pathLogic';
+import { CHECKPOINT, PathProgress, STONE, checkPath, checkpointIndices, edgeGap, withCheckpoints } from '../../src/activities/secrets/pathLogic';
+import { PLAYER } from '../../src/config';
 import type { Stone } from '../../src/activities/secrets/pathLogic';
 import { buildRoutes } from '../../src/activities/secrets/routes';
 import { buildTerrain, sampleHeight } from '../../src/world/terrain';
@@ -73,6 +74,84 @@ describe('a miss goes back to the last rest stone', () => {
     expect(p.checkpoint).toBe(12);
     p.reset();
     expect(p.checkpoint).toBe(-1);
+  });
+});
+
+describe('spiral paths (QA8 m4)', () => {
+  it('a miss that lands on a lower stone below the rest stone boings back onto the rest stone', () => {
+    const st = withCheckpoints(line(20));
+    const p = new PathProgress(st);
+    for (let i = 0; i <= 14; i++) p.update(dt, i, feetOn(st[i]));
+    expect(p.checkpoint).toBe(12);
+    // The miss from 14 lands on stone 5 of the turn below: back to rest stone 12.
+    expect(p.update(dt, -1, { x: st[13].x, y: st[13].y, z: 0 })).toBe(-1);
+    expect(p.update(dt, 5, feetOn(st[5]))).toBe(12);
+    expect(p.lastOn).toBe(12);
+    // Landing on a lower stone still at or above the rest stone keeps that stone (no boing).
+    for (let i = 12; i <= 15; i++) p.update(dt, i, feetOn(st[i]));
+    expect(p.update(dt, 13, feetOn(st[13]))).toBe(-1);
+    // Walking back down from the rest stone itself is a way off: no boing.
+    p.update(dt, 12, feetOn(st[12]));
+    expect(p.update(dt, 11, feetOn(st[11]))).toBe(-1);
+    expect(p.update(dt, 7, feetOn(st[7]))).toBe(-1);
+  });
+
+  it('a patient hopper who misses once in every section (landing a turn lower) still finishes every real path', () => {
+    const t = buildTerrain();
+    for (const r of buildRoutes((x, z) => sampleHeight(t, x, z))) {
+      const p = new PathProgress(r.stones);
+      const missed = new Set<number>();
+      let at = 0;
+      let jumps = 0;
+      p.update(dt, 0, feetOn(r.stones[0]));
+      while (at < r.stones.length - 1 && jumps < 120) {
+        jumps++;
+        // Two hops past each rest stone (and near the top) the hopper misses once and lands on
+        // the turn below (8 stones lower): that used to undo the rest stone (QA8 m4).
+        const key = p.checkpoint;
+        if (p.checkpoint >= 0 && at === p.checkpoint + 2 && !missed.has(key)) {
+          missed.add(key);
+          const low = Math.max(0, at - 8);
+          const back = p.update(dt, low, feetOn(r.stones[low]));
+          at = back >= 0 ? back : low;
+        } else {
+          at++;
+          p.update(dt, at, feetOn(r.stones[at]));
+        }
+      }
+      expect(at, r.id + ' reached in ' + jumps + ' jumps').toBe(r.stones.length - 1);
+      expect(missed.size, r.id).toBeGreaterThanOrEqual(2);
+      // Each miss costs only the hop that missed and the two hops back up from the rest stone.
+      expect(jumps, r.id).toBeLessThanOrEqual(r.stones.length - 1 + 3 * missed.size);
+    }
+  });
+
+  it('the hardest hop on every path is makeable with a plain walking jump', () => {
+    const t = buildTerrain();
+    const g = PLAYER.gravity;
+    const v = PLAYER.jumpSpeed;
+    for (const r of buildRoutes((x, z) => sampleHeight(t, x, z))) {
+      let worst = Infinity;
+      let worstAt = -1;
+      for (let i = 0; i + 1 < r.stones.length; i++) {
+        const a = r.stones[i];
+        const b = r.stones[i + 1];
+        const rise = b.y - a.y;
+        // Air time until the feet come back down to the next stone's top (a little landing margin).
+        const disc = v * v - 2 * g * (rise + 0.1);
+        expect(disc, `${r.id} hop ${i}: rise ${rise.toFixed(2)} m`).toBeGreaterThan(0);
+        const tAir = (v + Math.sqrt(disc)) / g;
+        // Take off from the stone's edge (coyote time covers a late press), land 0.3 m inside.
+        const need = edgeGap(a, b) + 0.3;
+        const reach = PLAYER.walkSpeed * tAir;
+        const spare = reach - need;
+        if (spare < worst) {
+          worst = spare;
+          worstAt = i;
+        }
+      }
+      expect(worst, `${r.id}: hardest hop ${worstAt}`).toBeGreaterThan(1);
+    }
   });
 });
 

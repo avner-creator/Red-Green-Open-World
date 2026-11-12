@@ -123,6 +123,8 @@ export interface SecretsTestApi {
   standPoint(door: number, button: number, dist?: number): [number, number];
   /** World x,z inside the vault chamber (by the treasure). */
   insidePoint(door: number): [number, number];
+  /** World bounds of door `door`'s leaf mesh: [minX, minY, minZ, maxX, maxY, maxZ]. */
+  doorBox(door: number): [number, number, number, number, number, number];
   /** Hide/show our own layer parts (for channel tests that isolate them from gems and keys). */
   setVisible(part: 'stones' | 'arrows' | 'sign' | 'buttons', visible: boolean): void;
 }
@@ -180,6 +182,8 @@ interface DoorRt {
   starFly: number;
   starFrom: THREE.Vector3;
   starSpin: number;
+  /** Seconds left of the "look at the door" camera after it opens (0 = not steering). */
+  camT: number;
   /** Last door pose written (x, y), to skip uploads while it rests. */
   doorPose: [number, number];
   buttonScale: Float32Array;
@@ -550,6 +554,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       starFrom: new THREE.Vector3(),
       starSpin: 0,
       doorPose: [0, 0],
+      camT: 0,
       buttonScale: new Float32Array(DOOR_RULES.buttons).fill(1),
       signScale: new Float32Array(3).fill(1),
       lock,
@@ -629,6 +634,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     } else if (r === 'opened') {
       relight(d);
       d.openT = 0.001;
+      d.camT = 2.6;
       removeCollider(d.doorCollider);
       d.doorCollider = null;
       ctx.audio.play('star', { pitch: 1.5, volume: 0.9 });
@@ -679,6 +685,15 @@ export function createSecrets(ctx: GameContext): Secrets {
       if (d.openT > 0 && d.openT < 1) {
         const before = d.openT;
         d.openT = Math.min(1, d.openT + dt / 1.5);
+        // Grinding rumble and dust sparkle along the sill while the leaf slides down (both eyes).
+        const beat = Math.floor(before * 6);
+        if (Math.floor(d.openT * 6) > beat && d.openT < 0.95) {
+          ctx.audio.play('whoosh', { pitch: 0.55 + 0.05 * beat, volume: 0.5 });
+          for (const sx of [-1.6, 0, 1.6]) {
+            const o = fromDoorLocal(def.yaw, sx, 0.35);
+            confetti.burst(tmpP.set(def.x + o.x, def.y + 0.3, def.z + o.z), 14);
+          }
+        }
         if (before < 0.45 && d.openT >= 0.45) {
           // Gold bursts out of the doorway as it clears.
           const o = fromDoorLocal(def.yaw, 0, 0.6);
@@ -686,6 +701,16 @@ export function createSecrets(ctx: GameContext): Secrets {
           ctx.audio.play('gem', { pitch: 0.9 });
           ctx.cameraRig.shake(0.2);
         }
+      }
+      // The camera turns to show the door opening and the treasure inside, then lets go.
+      if (d.camT > 0) {
+        d.camT = Math.max(0, d.camT - dt);
+        if (d.camT > 0 && ctx.player.mode === 'walk') {
+          const want = Math.atan2(def.x - pp.x, def.z - pp.z);
+          let off = want - ctx.player.yaw;
+          off = Math.atan2(Math.sin(off), Math.cos(off));
+          ctx.cameraRig.setOverride({ yawOffset: off, distance: 6.5, height: 2.4 });
+        } else ctx.cameraRig.setOverride(null);
       }
       if (d.wobble > 0) {
         d.wobble = Math.max(0, d.wobble - dt * 2.4);
@@ -723,6 +748,12 @@ export function createSecrets(ctx: GameContext): Secrets {
         if (d.padShake[i] > 0) d.padShake[i] = Math.max(0, d.padShake[i] - dt * 2.4);
       }
 
+      // The door leaf is one transform: always posed, wherever the camera is.
+      if (wob !== d.doorPose[0] || sink !== d.doorPose[1]) {
+        d.model.setDoor(wob, sink);
+        d.doorPose[0] = wob;
+        d.doorPose[1] = sink;
+      }
       // Everything below only re-poses vertices: skip it while the camera is far away.
       const camD = ctx.camera.position.distanceTo(d.cull.position);
       d.board.update(time + d.index * 1.7, camD < DRAW.vaultLayer);
@@ -730,11 +761,6 @@ export function createSecrets(ctx: GameContext): Secrets {
       // Door-local yaw toward the camera: the pad shapes turn to face it (never seen edge-on).
       const cl = toDoorLocal(def.x, def.z, def.yaw, ctx.camera.position.x, ctx.camera.position.z);
       const camYaw = Math.atan2(cl.x, cl.z);
-      if (wob !== d.doorPose[0] || sink !== d.doorPose[1]) {
-        d.model.setDoor(wob, sink);
-        d.doorPose[0] = wob;
-        d.doorPose[1] = sink;
-      }
       if (d.starFly > 0 && d.starFly < 1) {
         const f = d.starFly;
         const to = starTarget(d, tmpS);
@@ -901,6 +927,8 @@ export function createSecrets(ctx: GameContext): Secrets {
       d.treasure = false;
       d.treasureT = 0;
       d.starFly = 0;
+      if (d.camT > 0) ctx.cameraRig.setOverride(null);
+      d.camT = 0;
       d.stepper.reset();
       d.padPush.fill(0);
       d.padShake.fill(0);
@@ -1015,6 +1043,12 @@ export function createSecrets(ctx: GameContext): Secrets {
         const d = doors[door];
         const o = fromDoorLocal(d.def.yaw, 0, -1.6);
         return [d.def.x + o.x, d.def.z + o.z];
+      },
+      doorBox(door) {
+        const m = doors[door].model.door;
+        m.updateWorldMatrix(true, false);
+        const b = new THREE.Box3().setFromObject(m);
+        return [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z];
       },
       setVisible(part, visible) {
         if (part === 'stones') for (const p of paths) p.group.visible = visible;

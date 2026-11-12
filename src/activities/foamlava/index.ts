@@ -91,6 +91,8 @@ export interface FoamLavaTestApi {
   pad(): { at: [number, number, number]; fill: number };
   /** During a run: put the hero at course (x, z) on the finish deck and finish now (result camera checks). */
   finishAt(x: number, z: number): void;
+  /** Times the run guard put a hero whose input did nothing back on the course (QA8 M1). */
+  rescues(): number;
 }
 
 declare global {
@@ -322,6 +324,41 @@ export function createFoamLava(ctx: GameContext): GameSystem {
       friend.setVisible(phase !== 'idle');
     });
     sfx('click');
+  }
+
+  /**
+   * Run guard (QA8 M1): while the child pushes the stick or jumps and the hero does not get
+   * anywhere for `GUARD_DEAD` s, the off-course bubble hops them back on at their checkpoint, and
+   * the course takes the hero back if anything else had let go of it. Input is never dead longer.
+   */
+  const GUARD_DEAD = 2;
+  const guardAt = new THREE.Vector3();
+  let guardT = 0;
+  let rescues = 0;
+  function guardRun(dt: number): void {
+    if (phase !== 'run' || ctx.session.state.phase !== 'playing') {
+      guardT = 0;
+      guardAt.copy(ctx.player.position);
+      return;
+    }
+    const inp = ctx.input.state;
+    const push = Math.hypot(inp.moveX, inp.moveY) > 0.3 || inp.jump;
+    const p = ctx.player.position;
+    if (Math.hypot(p.x - guardAt.x, p.z - guardAt.z) > 0.6 || Math.abs(p.y - guardAt.y) > 0.6) {
+      guardAt.copy(p);
+      guardT = 0;
+      return;
+    }
+    if (!push) return;
+    guardT += dt;
+    if (guardT < GUARD_DEAD) return;
+    guardT = 0;
+    rescues++;
+    if (ctx.player.mode !== 'external') ctx.player.setExternalController(controller);
+    sim.respawn();
+    handle({ type: 'respawn', cp: sim.cp, hop: true });
+    heroWorld();
+    guardAt.copy(ctx.player.position);
   }
 
   function leave(teleport: boolean): void {
@@ -595,7 +632,14 @@ export function createFoamLava(ctx: GameContext): GameSystem {
           steerT = 0;
           sim.running = true;
           ctx.cameraRig.setOverride({ ...RUN_CAM });
+          // GO always starts on the deck, wherever the hero was or whatever blocked the walk in
+          // (QA8 M1: a hero left beside the deck stood frozen for the whole round).
+          sim.reset(START.hero, START.yaw);
+          sim.running = true;
+          heroWorld();
           snapCameraBehind();
+          guardAt.copy(ctx.player.position);
+          guardT = 0;
           bot = botPlan ? new Autopilot(botPlan === 'main' ? MAIN_PLAN : SHORTCUT_PLAN) : null;
         }
       } else if (phase === 'run') {
@@ -708,6 +752,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
           return { id: p.id, x: w.x, z: w.z, r, bottom: oy + Math.max(-1.2, p.bottom), top: oy + p.top };
         }),
       pad: () => ({ at: padAt.toArray() as [number, number, number], fill: pad.progress }),
+      rescues: () => rescues,
       finishAt: (x, z) => {
         if (phase !== 'run') return;
         sim.p.x = x;
@@ -725,6 +770,7 @@ export function createFoamLava(ctx: GameContext): GameSystem {
         pendingExit = false;
         exitToBooth();
       }
+      guardRun(dt);
       const near = phase !== 'idle' || ctx.player.position.distanceTo(centre) < NEAR;
       // Beard timer (also after the run ends).
       if (beardT > 0) {

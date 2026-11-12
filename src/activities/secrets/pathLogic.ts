@@ -241,6 +241,16 @@ export class PathProgress {
    * hero back on after a miss, or −1.
    */
   update(dt: number, on: number, feet: { x: number; y: number; z: number }): number {
+    // Spiral paths (QA8 m4): a miss usually lands on a lower stone of the turn below, not on the
+    // ground. Landing below the rest stone after passing it is a miss too: back onto the rest
+    // stone with a boing. (Walking down from the rest stone itself is still a way off.)
+    if (on >= 0 && this.checkpoint >= 0 && on < this.checkpoint && this.lastOn > this.checkpoint) {
+      const back = this.checkpoint;
+      this.lastOn = back;
+      this.sinceOn = 0;
+      this.coyoteUsed = false;
+      return back;
+    }
     if (on >= 0) {
       this.lastOn = on;
       this.sinceOn = 0;

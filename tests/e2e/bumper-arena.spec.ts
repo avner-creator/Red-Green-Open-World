@@ -432,7 +432,7 @@ test('Dino Sumo: the magic water balloons touch only the weak channel (all 4 com
   });
 });
 
-test('Dino Sumo: a full round (best of 5 bouts, 75 s clock) lasts 30 s or more for a child who tries, to an honest result card; E plays again (beat ring + balloons weak-only, 4 combos); R leaves', async () => {
+test('Dino Sumo: a full round (best of 5 bouts, 54 s clock) lasts 30 s or more for a child who tries, to an honest result card; E plays again (beat ring + balloons weak-only, 4 combos); R leaves', async () => {
   const r = await page.evaluate(async () => {
     const rg = window.__rg!;
     const ctx = rg.ctx;
@@ -540,7 +540,7 @@ test('Dino Sumo: a full round (best of 5 bouts, 75 s clock) lasts 30 s or more f
   );
   expect(r.focus).toBe('dinosumo');
   expect(r.phaseAfterLoad).toBe('round');
-  expect(r.startClock).toBe(75);
+  expect(r.startClock).toBe(54); // QA8 m8: about a minute per round (clock runs through the pauses)
   expect(r.ko).toBe(true);
   expect(r2.phaseEnd).toBe('result');
   expect(r2.clock).toBeGreaterThanOrEqual(0);
@@ -550,7 +550,7 @@ test('Dino Sumo: a full round (best of 5 bouts, 75 s clock) lasts 30 s or more f
   expect(r2.card).toBe(true);
   // A real contest: a scripted child who tries plays 30 s or more (QA: was over in 6.5 s).
   expect(r2.played).toBeGreaterThanOrEqual(30);
-  expect(r2.bouts).toBeGreaterThanOrEqual(3);
+  expect(r2.bouts).toBeGreaterThanOrEqual(2); // the ~1-minute round (QA8 m8) fits 2+ bouts
   // The card shows exactly what the wallet gained (prize + bonus line).
   expect(r2.cardGems).toBe(r2.walletDelta);
 
@@ -570,7 +570,7 @@ test('Dino Sumo: a full round (best of 5 bouts, 75 s clock) lasts 30 s or more f
   saveChannels(await canvasShot(page), 'e2e-sumo-round');
   // Replays cost a ticket only when the economy is present; without it the game is free.
   expect(again.phase).toBe('round');
-  expect(again.clock).toBe(75);
+  expect(again.clock).toBe(54);
   // Live round: the weak-eye beat ring round the hero and the magic balloons, all 4 combos.
   expect(await page.evaluate(() => window.__rg!.ctx.vision.channels().weak)).toBe('r');
   for (const combo of COMBOS) {

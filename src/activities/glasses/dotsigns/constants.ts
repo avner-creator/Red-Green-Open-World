@@ -28,24 +28,27 @@ export const DOTSIGNS = {
   buttonX: [-2.15, 0, 2.15] as const,
   buttonR: 0.44,
   tilt: 0.55,
-  /** Where the hero stands to press (in front of the pedestal). */
-  heroZ: 0.92 + 0.31 + 0.45,
+  /** Where the hero stands to press (in front of the pedestal, clear of its collider). */
+  heroZ: 0.92 + 0.31 + 0.55,
   /** E prompt radius around each button. */
   reach: 1.25,
   /**
-   * E answers a button only when the hero stands at its pedestal (in front of it, within this much
-   * of its centre sideways and `standDepth` of the front face) and faces it (within `faceCone` of
-   * straight at the sign).
+   * E answers a button when the hero stands at its pedestal (in front of it, within this much of
+   * its centre sideways and `standDepth` of the front face) and is not turned away from it: within
+   * `faceCone` of straight at the sign, so standing sideways (walked along the row) counts too
+   * (QA8 m3). The E bubble shows over exactly that button, and only then.
    */
   standHalf: 0.75,
-  standDepth: 1.25,
-  faceCone: 1.05,
+  standDepth: 1.35,
+  faceCone: 1.75,
   /**
    * Start pad (a press pad: stand on it and press Use), a step behind the buttons and off the
    * centre line: from its camera the hero stands between the middle and the right button, so all
    * three show beside the hero.
    */
-  pad: { x: 1.1, z: 3.05, r: 0.85 },
+  pad: { x: 1.1, z: 3.65, r: 0.85 },
+  /** Clear walkway along the front of the pedestals (m): nothing solid or raised there (QA8 m3). */
+  walkway: 1.2,
   /** Pip's lead spot: this far out from the pad on the approach (`glasses:dotsigns:lead`). */
   leadOut: 3.5,
   flourish: 1.0,
@@ -97,7 +100,7 @@ export const DOT_BOOTH: BoothSpec = {
   countdown: { x: 0, y: DOTSIGNS.signY, z: DOTSIGNS.signZ + 0.6 },
   decals: [
     // Chevrons from the pad to the two outer buttons.
-    { kind: 'chevron', x: 0.1, z: 2.3, size: 0.7, yaw: 0.9 },
-    { kind: 'chevron', x: 1.95, z: 2.3, size: 0.7, yaw: -0.5 },
+    { kind: 'chevron', x: 0.1, z: 2.9, size: 0.7, yaw: 0.9 },
+    { kind: 'chevron', x: 1.95, z: 2.9, size: 0.7, yaw: -0.5 },
   ],
 };

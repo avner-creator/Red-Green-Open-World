@@ -18,13 +18,24 @@ describe('dot signs: E answers the pedestal the hero stands at and faces (m9)', 
     });
   });
 
-  it('walking between pedestals, along them, behind them or from the pad answers nothing', () => {
+  it('standing at a pedestal sideways (walked along the row) answers it too (QA8 m3)', () => {
+    D.buttonX.forEach((x, i) => {
+      expect(standingButton(x, D.heroZ, Math.PI / 2)).toBe(i);
+      expect(standingButton(x, D.heroZ, -Math.PI / 2)).toBe(i);
+    });
+  });
+
+  it('a clear walkway along the pedestal fronts: the pad and its drum start ≥ 1.2 m out', () => {
+    const front = D.pedZ + D.pedD / 2 + 0.05; // collider front
+    const drum = D.pad.r + 0.16 + 0.12; // drum radius + bollard ring margin
+    expect(D.pad.z - drum - front).toBeGreaterThanOrEqual(D.walkway);
+    expect(D.heroZ - front).toBeGreaterThan(PLAYER.radius + 0.1);
+  });
+
+  it('walking between pedestals, turned away, behind them or from the pad answers nothing', () => {
     const gapX = (D.buttonX[0] + D.buttonX[1]) / 2;
     // In a gap between two pedestals.
     expect(standingButton(gapX, D.pedZ, AT_SIGN)).toBe(-1);
-    // In front of the middle one but walking along the row (facing ±X).
-    expect(standingButton(0, D.heroZ, Math.PI / 2)).toBe(-1);
-    expect(standingButton(0, D.heroZ, -Math.PI / 2)).toBe(-1);
     // Facing away from the sign.
     expect(standingButton(0, D.heroZ, 0)).toBe(-1);
     // Behind the pedestals (between them and the sign).

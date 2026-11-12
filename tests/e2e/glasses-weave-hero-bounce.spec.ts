@@ -151,8 +151,8 @@ const pressAgain = pressJump;
 test('bounce: idle off the trampoline; bold ring mid-fall (tier 1 and 3) only in the weak channel; its timing hidden from the strong eye', async () => {
   expect(await dbg('bounce')).toMatchObject({ active: false, tracked: 0 });
   expect(await draws('bounce')).toBe(0);
-  // Walk onto the mat holding Jump (a hold is not a press): 12 m (no ring), then 18 m with a ring.
-  // Each descent counts once (QA r7 M4: `falls` went up once per frame and no ring ever came).
+  // Walk onto the mat holding Jump (a hold is not a press): the walk-on 12 m bounce already gets a
+  // ring (QA8 m9: medium bounces too), then 18 m. Each descent counts once (QA r7 M4).
   await page.evaluate(() => {
     const rg = window.__rg!;
     const c = window.__rgThrills!.trampoline();
@@ -162,8 +162,12 @@ test('bounce: idle off the trampoline; bold ring mid-fall (tier 1 and 3) only in
   });
   let d = await stepBounceUntil('d.ring === true');
   expect(d).toMatchObject({ ring: true, falling: true, tier: 1, decided: false });
-  expect(d.fall as number).toBeGreaterThan(1.2);
-  expect(d.falls as number).toBeLessThanOrEqual(2);
+  expect(d.fall as number).toBeGreaterThan(0.95);
+  expect(d.falls as number).toBeLessThanOrEqual(1);
+  // The pictures below are of a big (held) bounce.
+  d = await stepBounceUntil('d.ring === true && d.fall > 1.2 && d.at < 0.1');
+  expect(d).toMatchObject({ ring: true, falling: true, tier: 1, decided: false });
+  expect(d.falls as number).toBeLessThanOrEqual(3);
   // Mid-fall, with the perfect moment late in the fall (the closing band still well outside).
   await force('bounce', { perfectAt: 0.8 });
   d = await stepBounceUntil('d.at >= 0.35');
@@ -391,6 +395,65 @@ test('hero: skill in a ring sparkle = hit, late = miss; a gem in a number sparkl
   await page.evaluate(() => {
     window.__rg!.ctx.player.setVisible(true);
     window.__rg!.step(1 / 60, 2, false);
+  });
+});
+
+test('hero: QA8 M4 a real Q press while the ring sparkles is a hit for every hero (never "cancelled")', async () => {
+  const ids = ['robot', 'frog', 'panda', 'bee', 'pup', 'flamingo', 'rex', 'fox', 'alpaca', 'trike'];
+  const fired: string[] = [];
+  for (const id of ids) {
+    const ok = await page.evaluate(async (cid) => {
+      const rg = window.__rg!;
+      try {
+        await rg.ctx.player.setCharacter(cid as Parameters<typeof rg.ctx.player.setCharacter>[0]);
+      } catch {
+        return false;
+      }
+      rg.ctx.player.respawn();
+      rg.step(1 / 60, 240, false);
+      return rg.ctx.player.skill.ready;
+    }, id);
+    if (!ok) continue;
+    const before = await dbg('hero');
+    // A real key: on the ground first; heroes whose power needs the air get a jump first.
+    const press = async (air: boolean): Promise<boolean> => {
+      await page.evaluate((inAir) => {
+        const rg = window.__rg!;
+        const w = window as unknown as { __skillN: number; __skillOff?: () => void };
+        w.__skillN = 0;
+        w.__skillOff = rg.ctx.events.on('player:skill', () => w.__skillN++);
+        if (inAir) {
+          rg.inject({ jump: true, jumpPressed: true });
+          rg.step(1 / 60, 1, false);
+          rg.inject(null);
+          rg.step(1 / 60, 14, false);
+        }
+      }, air);
+      // The ring sparkles (tier 1: a 1.5 s window, 0.4 s in: a real reaction).
+      await force('hero', { spark: 'skill', age: 0.4, tier: 1, nextIn: 999 });
+      await page.keyboard.down('KeyQ');
+      await page.evaluate(() => window.__rg!.step(1 / 60, 3, false));
+      await page.keyboard.up('KeyQ');
+      return page.evaluate(() => {
+        window.__rg!.step(1 / 60, 30, false);
+        const w = window as unknown as { __skillN: number; __skillOff?: () => void };
+        w.__skillOff?.();
+        return w.__skillN > 0;
+      });
+    };
+    let went = await press(false);
+    if (!went) went = await press(true);
+    const after = await dbg('hero');
+    if (!went) continue;
+    fired.push(id);
+    expect([id, (after.hits as number) - (before.hits as number), (after.cancelled as number) - (before.cancelled as number)]).toEqual([id, 1, 0]);
+  }
+  expect(fired.length).toBeGreaterThanOrEqual(3);
+  await page.evaluate(async () => {
+    const rg = window.__rg!;
+    await rg.ctx.player.setCharacter('panda');
+    rg.ctx.player.respawn();
+    rg.step(1 / 60, 30, false);
   });
 });
 
