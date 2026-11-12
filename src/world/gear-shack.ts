@@ -36,14 +36,27 @@ export const SHACK_MAT = { z: SHACK.standZ - 0.4, r: 1.22 } as const;
 /** Paint bucket by the right wall (local x, z, radius of its collider). */
 export const SHACK_BUCKET = { x: 2.25, z: 0.35, r: 0.34 } as const;
 /**
- * Slide-around wedges along the kiosk's sides (local x0, z0, x1, z1: outer faces on these lines):
- * back corner → outside of the rocket / bucket → front corner.
+ * Slide-around sides (QA7 m4). Each side post (rocket left, bucket right) gets a flat fill from the
+ * back corner out to the post (`SHACK_SIDE_FILL`: local x0, x1, z0, z1) and a wedge from the post
+ * on to the front corner (`SHACK_WEDGES`: local x0, z0, x1, z1, outer face on that line). Each side
+ * is then one flat face plus one forward-facing slope: a hero heading for the counter from the
+ * side always has a sideways component along it and slides round to the front (no notch, and no
+ * backward-tilted face that a push toward the counter could meet square on).
  */
-export const SHACK_WEDGES: readonly (readonly [number, number, number, number])[] = [
-  [-SHACK.hx, SHACK.zBack, SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z],
-  [SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z, -SHACK.hx, SHACK.zFront],
-  [SHACK.hx, SHACK.zBack, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z],
-  [SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z, SHACK.hx, SHACK.zFront],
+export const SHACK_SIDE_FILL: readonly (readonly [number, number, number, number, number])[] = [
+  [SHACK_ROCKET.x - SHACK_ROCKET.r, -SHACK.hx, SHACK.zBack, SHACK_ROCKET.z, SHACK.height],
+  [SHACK.hx, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK.zBack, SHACK_BUCKET.z, SHACK.height],
+  // Behind the right half: the crate (corners down to local z -2.25) in one block (crate + paint
+  // can high) whose faces line up with the kiosk's own; a wedge (below) closes it to the bucket side.
+  [0.7, SHACK.hx, -2.25, SHACK.zBack, 1.6],
+];
+export const SHACK_WEDGES: readonly (readonly [number, number, number, number, number])[] = [
+  [SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z, -SHACK.hx, SHACK.zFront, SHACK.height],
+  [SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z, SHACK.hx, SHACK.zFront, SHACK.height],
+  // Back wall into the block behind the crate: no notch at its corner.
+  [0.3, SHACK.zBack, 0.7, -2.25, 1.6],
+  // Block to the bucket side's back corner (clear of the spawn run lane, tests/world/spawn-lane).
+  [SHACK.hx, -2.25, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK.zBack, 1.6],
 ];
 
 /**
@@ -432,11 +445,13 @@ export function buildGearShack(k: Kit): Keepout[] {
   k.col.box(m, 0, SHACK.height / 2, (SHACK.zBack + SHACK.zFront) / 2, SHACK.hx, SHACK.height / 2, (SHACK.zFront - SHACK.zBack) / 2);
   const [rx, rz] = L(SHACK_ROCKET.x, SHACK_ROCKET.z);
   k.col.cyl(rx, y, rz, 0.95, 0.3);
-  // Slide-around wedges (QA7 m4): the rocket and the paint bucket stick out of the side walls, and
+  // Slide-around sides (QA7 m4): the rocket and the paint bucket stick out of the side walls, and
   // the notch between such a post and the wall held a hero walking along the side (8.75 s at the
-  // kiosk corner, no prompt). Thin boxes along the hull from the back corners to the post and on
-  // to the front corners make each side one convex slope the hero slides along to the counter.
-  for (const [ax, az, bx, bz] of SHACK_WEDGES) {
+  // kiosk corner, no prompt). See SHACK_SIDE_FILL / SHACK_WEDGES.
+  for (const [x0, x1, z0, z1, hh] of SHACK_SIDE_FILL) {
+    k.col.box(m, (x0 + x1) / 2, hh / 2, (z0 + z1) / 2, Math.abs(x1 - x0) / 2, hh / 2, Math.abs(z1 - z0) / 2);
+  }
+  for (const [ax, az, bx, bz, hh] of SHACK_WEDGES) {
     const dx = bx - ax;
     const dz = bz - az;
     const len = Math.hypot(dx, dz);
@@ -449,7 +464,7 @@ export function buildGearShack(k: Kit): Keepout[] {
       nz = -nz;
     }
     const t = 0.12;
-    k.col.box(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, SHACK.height / 2, 0, t, SHACK.height / 2, len / 2);
+    k.col.box(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, hh / 2, 0, t, hh / 2, len / 2);
   }
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
