@@ -295,10 +295,11 @@ export function create(env: WeaveEnv): WeavePart {
     reset,
     update(dt) {
       if (!eligible()) {
-        if (!ringOn && !numOn && !burst && !luck.spark && !luck.late) return;
+        if (!ringOn && !numOn && !burst && !luck.spark && !luck.late && !luck.gone) return;
         // Leaving walk mode: the sparkle and its late window end without a result.
         luck.spark = null;
         luck.late = null;
+        luck.gone = null;
         detachAll();
         return;
       }

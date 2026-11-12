@@ -8,6 +8,10 @@
  * window (skill fired / gem collected) is a hit; acting within `late` s after it closed is a miss;
  * anything else is no result. Acting sooner than `react` s after the sparkle started cannot be a
  * reaction to it: it spoils the window (no result), so a child who spams the skill gains nothing.
+ *
+ * Firing the skill makes it "not ready" in the same frame, and the game may notice that before it
+ * hears `player:skill` (QA8 M4). So when a helper goes away mid-sparkle the window is held for
+ * `grace` s: an act in that time still counts as acting in the window; only after it is cancelled.
  */
 import type { GlassesTier } from '../../../../types';
 
@@ -25,6 +29,8 @@ export const HERO_LUCK = {
   late: 1.5,
   /** A skill sparkle waits until the skill has been unused for this long (s). */
   calm: 3,
+  /** A sparkle whose helper went away still takes an act for this long (s) before it is cancelled. */
+  grace: 0.4,
   /** Gems for a hit. */
   gems: 2,
   /** Hits in a row to go up a tier (a miss goes down one). */
@@ -50,6 +56,8 @@ export class HeroLuck {
   spark: Spark | null = null;
   /** The window that just closed: acting on it within `left` s is a miss. */
   late: { kind: SparkKind; left: number; tier: GlassesTier } | null = null;
+  /** A sparkle whose helper just went away: an act within `left` s still counts in its window. */
+  gone: { spark: Spark; left: number } | null = null;
   /** Seconds since the skill was last fired. */
   sinceSkill = Infinity;
   /** Counters (debug / tests). */
@@ -70,6 +78,7 @@ export class HeroLuck {
     this.hitsInRow = 0;
     this.spark = null;
     this.late = null;
+    this.gone = null;
     this.sinceSkill = Infinity;
     this.nextIn = this.gap();
     this.opened = this.spoiled = this.cancelled = 0;
@@ -87,6 +96,7 @@ export class HeroLuck {
   open(kind: SparkKind, age = 0): Spark {
     this.spark = { kind, age, len: HERO_LUCK.window[this.tier], tier: this.tier };
     this.late = null;
+    this.gone = null;
     this.opened++;
     return this.spark;
   }
@@ -101,13 +111,21 @@ export class HeroLuck {
       this.late.left -= dt;
       if (this.late.left <= 0) this.late = null;
     }
+    if (this.gone) {
+      this.gone.left -= dt;
+      if (this.gone.left > 0) return null;
+      // The helper went away (vehicle, ride, combo ran out) and nobody acted: no result either way.
+      this.gone = null;
+      this.cancelled++;
+      return 'cancelled';
+    }
     const s = this.spark;
     if (s) {
       if (!showing[s.kind]) {
-        // The helper went away (vehicle, ride, combo ran out): no result either way.
+        // Held for a moment: firing the skill itself makes the ring go away (see the file comment).
         this.spark = null;
-        this.cancelled++;
-        return 'cancelled';
+        this.gone = { spark: s, left: HERO_LUCK.grace };
+        return null;
       }
       s.age += dt;
       if (s.age >= s.len) {
@@ -131,9 +149,10 @@ export class HeroLuck {
   /** The child acted: fired the skill (`'skill'`) or collected a gem (`'combo'`). */
   act(kind: SparkKind): ActResult {
     if (kind === 'skill') this.sinceSkill = 0;
-    const s = this.spark;
-    if (s && s.kind === kind) {
+    const s = this.spark && this.spark.kind === kind ? this.spark : this.gone && this.gone.spark.kind === kind ? this.gone.spark : null;
+    if (s) {
       this.spark = null;
+      this.gone = null;
       if (s.age < HERO_LUCK.react) {
         this.spoiled++;
         return null;

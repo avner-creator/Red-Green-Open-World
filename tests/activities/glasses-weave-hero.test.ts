@@ -87,12 +87,34 @@ describe('hero lucky-moment scheduler', () => {
     expect(l.spoiled).toBe(1);
   });
 
-  it('the helper going away cancels the sparkle without a result', () => {
+  it('the helper going away cancels the sparkle without a result (after a short grace)', () => {
     const l = new HeroLuck(mulberry32(7));
     l.open('skill');
     l.update(DT, SKILL_ONLY);
-    expect(l.update(DT, NONE)).toBe('cancelled');
+    let res: string | null = null;
+    for (let t = 0; t < HERO_LUCK.grace + 0.1 && res === null; t += DT) res = l.update(DT, NONE);
+    expect(res).toBe('cancelled');
+    expect(l.cancelled).toBe(1);
     expect(l.act('skill')).toBeNull();
+  });
+
+  it('QA8 M4: firing the skill during the ring sparkle is a hit even when "not ready" is seen first', () => {
+    const l = new HeroLuck(mulberry32(9));
+    l.open('skill');
+    for (let i = 0; i < 30; i++) l.update(DT, SKILL_ONLY);
+    // The skill fired: it stops being ready this frame, and the game updates the helper before
+    // it handles the `player:skill` event (one or a few frames later).
+    expect(l.update(DT, NONE)).toBeNull();
+    expect(l.update(DT, NONE)).toBeNull();
+    expect(l.act('skill')).toEqual({ grade: 'hit', kind: 'skill', tier: 1 });
+    expect(l.cancelled).toBe(0);
+    for (let i = 0; i < 60; i++) expect(l.update(DT, NONE)).toBeNull();
+    expect(l.cancelled).toBe(0);
+    // The same order straight away after the sparkle starts is still a spoiled spam press.
+    l.open('skill');
+    l.update(DT, NONE);
+    expect(l.act('skill')).toBeNull();
+    expect(l.spoiled).toBe(1);
   });
 
   it('tier rises after two hits, falls after a miss; the window shortens 1.5 / 1.0 / 0.7 s', () => {
