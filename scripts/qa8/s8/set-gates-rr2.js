@@ -1,0 +1,1 @@
+await page.evaluate(() => window.__rg.setEye({ leftLens: 'green', weakEye: 'right' })); globalThis.QA_ID='gates'; globalThis.QA_TAG='-gR-wR'; globalThis.QA_RETURN=true; globalThis.__waitShot=0; log(await H.chan());

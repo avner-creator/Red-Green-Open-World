@@ -1,0 +1,1 @@
+await page.evaluate(() => window.__rg.setEye({ leftLens: 'red', weakEye: 'left' })); log(await H.chan());
