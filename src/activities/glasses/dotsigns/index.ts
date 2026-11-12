@@ -31,7 +31,7 @@ import type { Mechanic, MechanicEnv } from '../types';
 import { DOT_BOOTH, DOT_RULES, DOT_TIERS, DOTSIGNS } from './constants';
 import { DOT_DEMO } from './demo';
 import { shapeButtonCanvas } from './picto';
-import { answerShape, isDotRound, makeDotRound } from './round';
+import { answerShape, isDotRound, makeDotRound, standingButton } from './round';
 import type { DotRound } from './round';
 
 const grey = Math.round(DOT_BOARD_GREY * 255).toString(16).padStart(2, '0');
@@ -54,6 +54,12 @@ export function create(env: MechanicEnv): Mechanic {
     x: mq.x + lx * Math.cos(mq.yaw) + lz * Math.sin(mq.yaw),
     z: mq.z - lx * Math.sin(mq.yaw) + lz * Math.cos(mq.yaw),
   });
+  // Children come from the plaza (Pip leads them along the east road): the site's own frozen
+  // heading (`FIXED_SITES`, +Z towards the approach) points there. QA r7 M3: turned to the park
+  // path's trail end instead, the pad sat behind the booth for everyone coming from the plaza.
+  // The booth, the sign's front and the pad face this point; the trail end from the park path
+  // reaches the pad round the side (round-ended colliders, gaps between the pedestals).
+  const approach = { x: site.x + Math.sin(site.yaw) * 20, z: site.z + Math.cos(site.yaw) * 20 };
   const spec: LayoutSpec = {
     // In line with the pad (between the middle and the right button): from there the default
     // camera shows all three buttons beside the hero.
@@ -81,7 +87,7 @@ export function create(env: MechanicEnv): Mechanic {
     views: [[0, 7], [-2.5, 6.6], [2.5, 6.6], [-4, 5.8], [4, 5.8]].map(([x, dz]) => ({ x, z: D.signZ + dz })),
     foreground: 1.5,
     // The booth and the sign's front face where children arrive (the end of the stepping-stone trail).
-    arrival: site.arrival,
+    arrival: approach,
     arrivalTargets: [
       { ...mqPt(0, 0.2), y: MARQUEE.lampY },
       { ...mqPt(0, 0.2), y: MARQUEE.bannerY },
@@ -89,11 +95,8 @@ export function create(env: MechanicEnv): Mechanic {
       { x: D.pad.x, z: D.pad.z, y: 0.5 },
     ],
   };
-  // The site's own heading points almost straight away from the arrival here, and the layout search
-  // only turns ±1.15 rad around it: search around the arrival's heading instead. A booth game has
-  // no pictogram board, so the board checks are moved out of the way.
-  const arrivalYaw = site.arrival ? Math.atan2(site.arrival.x - site.x, site.arrival.z - site.z) : site.yaw;
-  const searchSite = { ...site, yaw: arrivalYaw, board: { x: site.x + 5000, z: site.z } };
+  // A booth game has no pictogram board, so the board checks are moved out of the way.
+  const searchSite = { ...site, board: { x: site.x + 5000, z: site.z } };
   const lay = chooseLayout(ctx, searchSite, spec, { refreshDecor: true });
   // The sign turns to face the default camera at the play spot squarely.
   const signYaw = Math.atan2(spec.hero.x, spec.hero.z + CAM_BACK - D.signZ);
@@ -140,11 +143,12 @@ export function create(env: MechanicEnv): Mechanic {
   }
   {
     const h = D.pedH + sink;
-    parts.pedestal = [
-      boxGeo(D.pedW, h, D.pedD, 0, pedBase - sink + h / 2, D.pedZ, U('stone')),
-      boxGeo(D.pedW + 0.12, 0.1, D.pedD + 0.12, 0, pedBase + D.pedH + 0.0, D.pedZ, U('stoneDark')),
-      boxGeo(D.pedW + 0.1, 0.22, D.pedD + 0.1, 0, pedBase + 0.11, D.pedZ, U('stoneDark')),
-    ];
+    // One pedestal per button, with room to walk between them (QA r7 m9).
+    parts.pedestal = D.buttonX.flatMap((x) => [
+      boxGeo(D.pedEach, h, D.pedD, x, pedBase - sink + h / 2, D.pedZ, U('stone')),
+      boxGeo(D.pedEach + 0.12, 0.1, D.pedD + 0.12, x, pedBase + D.pedH + 0.0, D.pedZ, U('stoneDark')),
+      boxGeo(D.pedEach + 0.1, 0.22, D.pedD + 0.1, x, pedBase + 0.11, D.pedZ, U('stoneDark')),
+    ]);
   }
   D.buttonX.forEach((x, i) => {
     const rim = new THREE.CylinderGeometry(D.buttonR + 0.05, D.buttonR + 0.09, 0.16, 36);
@@ -160,6 +164,16 @@ export function create(env: MechanicEnv): Mechanic {
   body.mesh.updateMatrixWorld(true);
   env.add(body.mesh, VisionLayer.Both);
 
+  // Pip's lead spot (QA r7 M3): in front of the start pad on the approach side, a straight clear
+  // walk to the pad. An empty marker the buddy reads by name; no draw call.
+  const leadMarker = new THREE.Object3D();
+  leadMarker.name = 'glasses:dotsigns:lead';
+  {
+    const w = frame.toWorld(D.pad.x, D.pad.z + D.leadOut);
+    leadMarker.position.set(w.x, env.groundAt(w.x, w.z), w.z);
+  }
+  ctx.scene.add(leadMarker);
+
   // ───────────── colliders ─────────────
   const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lay.yaw);
   const colliders: ReturnType<typeof ctx.physics.addStaticBox>[] = [];
@@ -167,9 +181,45 @@ export function create(env: MechanicEnv): Mechanic {
     const w = frame.toWorld(lx, lz);
     colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, site.y + ly, w.z), new THREE.Vector3(hx, hy, hz), rot));
   };
-  // The sign as one solid block (no squeezing under it) and the pedestal.
-  addBox(0, (signBase - sink + signTop) / 2, D.signZ - 0.1, D.frameW / 2 + 0.05, (signTop - signBase + sink) / 2, 0.24);
-  addBox(0, pedBase - sink / 2 + D.pedH / 2, D.pedZ, D.pedW / 2 + 0.05, (D.pedH + sink) / 2, D.pedD / 2 + 0.05);
+  /**
+   * A block along local X with ROUND ends (a box between two upright cylinders): the hero slides
+   * round its corners instead of sticking on them (QA r7 M3: stuck 11–21 s at the pedestal corner).
+   */
+  const addRounded = (lx: number, ly: number, lz: number, hx: number, hy: number, hz: number): void => {
+    const core = Math.max(0.01, hx - hz);
+    addBox(lx, ly, lz, core, hy, hz);
+    for (const sx of [-1, 1]) {
+      const w = frame.toWorld(lx + sx * core, lz);
+      colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(w.x, site.y + ly, w.z), hy, hz));
+    }
+  };
+  // The sign as one solid block (no squeezing under it; turned with the sign) and the pedestals.
+  {
+    const hx = D.frameW / 2 + 0.05;
+    const hz = 0.24;
+    const hy = (signTop - signBase + sink) / 2;
+    const ly = (signBase - sink + signTop) / 2;
+    const core = hx - hz;
+    const c = new THREE.Vector3(0, 0, D.signZ - 0.1).applyMatrix4(signTurn);
+    const sRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lay.yaw + signYaw);
+    const w = frame.toWorld(c.x, c.z);
+    colliders.push(ctx.physics.addStaticBox(new THREE.Vector3(w.x, site.y + ly, w.z), new THREE.Vector3(core, hy, hz), sRot));
+    for (const sx of [-1, 1]) {
+      const e = new THREE.Vector3(sx * core, 0, D.signZ - 0.1).applyMatrix4(signTurn);
+      const we = frame.toWorld(e.x, e.z);
+      colliders.push(ctx.physics.addStaticCylinder(new THREE.Vector3(we.x, site.y + ly, we.z), hy, hz));
+    }
+  }
+  // The narrow slot between the sign and the pedestals' backs is filled (no one fits there), round
+  // the sign's ends too: from behind the sign the hero slides along one smooth rounded block to the
+  // front, never wedged between the sign's end and a pedestal.
+  {
+    // From the back of the (turned) sign to the pedestals' centre line: the sign's ends lie inside.
+    const z0 = D.signZ - 0.1 - 0.24 - 0.3;
+    const z1 = D.pedZ;
+    addRounded(0, pedBase - sink / 2 + D.pedH / 2, (z0 + z1) / 2, D.pedW / 2 + 0.05, (D.pedH + sink) / 2, (z1 - z0) / 2 + 0.05);
+  }
+  for (const x of D.buttonX) addRounded(x, pedBase - sink / 2 + D.pedH / 2, D.pedZ, D.pedEach / 2 + 0.05, (D.pedH + sink) / 2, D.pedD / 2 + 0.05);
 
   // ───────────── the dot picture (weak quad + strong quad, exactly registered) ─────────────
   const dotsAt = { lx: 0, ly: signY, lz: D.signZ + 0.11 + 0.025 };
@@ -418,13 +468,19 @@ export function create(env: MechanicEnv): Mechanic {
     const w = frame.toWorld(x, btnZ);
     return new THREE.Vector3(w.x, site.y + btnY, w.z);
   });
+  /** The button E would answer now (`standingButton` in the layout frame), or -1. */
+  const heroButton = (): number => {
+    const h = frame.toLocal(ctx.player.position.x, ctx.player.position.z);
+    return standingButton(h.x, h.z, ctx.player.yaw - lay.yaw);
+  };
   const offs = btnWorld.map((p, i) => {
     const target: Interactable = {
       id: `glasses-dotsigns-${i}`,
       position: () => p.clone(),
       radius: D.reach,
       icon: 'hand',
-      enabled: () => state === 'open' && kit.phase() === 'play' && active,
+      // Only the pedestal the hero stands at and faces (QA r7 m9): never one walked past.
+      enabled: () => state === 'open' && kit.phase() === 'play' && active && heroButton() === i,
       onUse: () => press(i),
     };
     return ctx.interactions.add(target);
@@ -460,6 +516,7 @@ export function create(env: MechanicEnv): Mechanic {
       for (const off of offs) off();
       for (const c of colliders) ctx.physics.removeCollider(c);
       colliders.length = 0;
+      leadMarker.removeFromParent();
       kit.dispose();
       for (const o of [body.mesh, weakRoot, strongRoot]) env.remove(o);
       body.dispose();
@@ -498,6 +555,8 @@ export function create(env: MechanicEnv): Mechanic {
         // The viewing spot the layout was chosen for (between the middle and the right button).
         view: pt(D.buttonX[2] / 2, D.heroZ),
         pad: pt(D.pad.x, D.pad.z),
+        /** Pip's best lead point: 3.5 m out from the pad on the approach (pad, sign and booth ahead). */
+        lead: pt(D.pad.x, D.pad.z + D.leadOut),
         /** A spot 2.6 m behind the pad (the camera then shows the pad, the sign and the booth). */
         padBack: pt(D.pad.x, D.pad.z + 2.6),
         /** A spot 7 m behind the sign (its dressed back: stripes and the magic-glasses mark). */

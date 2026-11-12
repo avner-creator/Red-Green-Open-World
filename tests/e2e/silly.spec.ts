@@ -351,6 +351,47 @@ test('Boop them all: stand on the pad, 3-2-1, bop every lit tube person → win,
   expect(r.errors).toEqual([]);
 });
 
+test('Boop them all: at "go" the camera looks at the play area, whichever way the hero stepped on (QA r7 m3)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const s = window.__rgSilly!;
+    rg.step(1 / 30, 120, false); // any earlier round back to idle
+    const pad = s.startPad();
+    const hub = s.sweeperHub();
+    // Stepped onto the pad facing straight away from the play area (towards the rail).
+    const away = Math.atan2(pad[0] - hub[0], pad[2] - hub[2]);
+    rg.teleport(pad[0], pad[1] + 0.05, pad[2], away);
+    rg.step(1 / 30, 30, false);
+    const started = s.round().phase;
+    // Through 3-2-1 to "go".
+    for (let i = 0; i < 200 && s.round().phase !== 'play'; i++) rg.step(1 / 30, 1, false);
+    rg.step(1 / 30, 3, false);
+    const cam = ctx.camera;
+    cam.updateMatrixWorld();
+    const f = cam.getWorldDirection(cam.position.clone());
+    const toHub = Math.atan2(hub[0] - cam.position.x, hub[2] - cam.position.z);
+    const look = Math.atan2(f.x, f.z);
+    const off = Math.abs(Math.atan2(Math.sin(toHub - look), Math.cos(toHub - look)));
+    // Tube people in view (in front of the camera, inside the frame).
+    let inView = 0;
+    for (const t of s.tubes()) {
+      const v = cam.position.clone().set(t[0], t[1] + 1.2, t[2]).project(cam);
+      if (v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1) inView++;
+    }
+    const phase = s.round().phase;
+    // Walk away: leaving the zone ends the round quietly.
+    rg.teleport(hub[0] + 60, ctx.world.heightAt(hub[0] + 60, hub[2]) + 0.5, hub[2], 0);
+    rg.step(1 / 30, 10, false);
+    return { started, phase, off, inView, tubes: s.tubes().length };
+  });
+  console.log('silly go camera', JSON.stringify(r));
+  expect(r.started).toBe('countdown');
+  expect(r.phase).toBe('play');
+  expect(r.off, JSON.stringify(r)).toBeLessThan(0.6);
+  expect(r.inView, JSON.stringify(r)).toBeGreaterThanOrEqual(3);
+});
+
 test('Boop them all: a round runs out of time (no bops: no stars, no prize)', async () => {
   const r = await page.evaluate(() => {
     const rg = window.__rg!;

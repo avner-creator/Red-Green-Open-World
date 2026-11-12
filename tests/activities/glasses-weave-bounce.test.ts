@@ -18,9 +18,9 @@ function gauss(rng: () => number): number {
 }
 
 describe('perfect-bounce plan', () => {
-  it('no ring for short falls (walk-on 12 m, first held 18 m); a ring from the 27 m bounce', () => {
+  it('no ring for the walk-on 12 m fall; a ring from the first held 18 m bounce (QA r7 M4)', () => {
     expect(planFall(fallOf(12), 1, 0.5)).toBeNull();
-    expect(planFall(fallOf(18), 1, 0.5)).toBeNull();
+    expect(planFall(fallOf(18), 1, 0.5)).not.toBeNull();
     expect(planFall(fallOf(27), 1, 0.5)).not.toBeNull();
     expect(planFall(fallOf(45), 3, 0.5)).not.toBeNull();
   });
@@ -170,12 +170,13 @@ describe('perfect-bounce simulation', () => {
       rows.push(`${F.toFixed(2)} s: ${v.map((x, i) => `t${i + 1} ${(x * 100).toFixed(1)} %`).join(', ')}${planFall(F, 1, 0.5) ? '' : ' (no ring)'}`);
     }
     console.info(`bounce best fixed strategy:\n${rows.join('\n')}`);
-    // 1.3 s falls get no ring; the asserted maxima (true values + < 1 point margin).
-    expect(table[1.3]).toEqual([0, 0, 0]);
+    // The asserted maxima (true values + < 1 point margin). 1.3 s (the held 18 m bounce) is the
+    // most guessable fall; still under a third at tier 1.
+    expect(table[1.3][0]).toBeLessThanOrEqual(0.32);
     expect(table[1.57][0]).toBeLessThanOrEqual(0.235);
     expect(table[2.02][0]).toBeLessThanOrEqual(0.165);
     expect(table[3][0]).toBeLessThanOrEqual(0.11);
-    for (const F of [1.57, 2.02, 3]) {
+    for (const F of [1.3, 1.57, 2.02, 3]) {
       expect(table[F][1]).toBeLessThan(table[F][0]);
       expect(table[F][2]).toBeLessThan(table[F][1]);
     }

@@ -223,6 +223,41 @@ test('the secret topping changes only the weak channel, all 4 combos', async () 
   expect((await info()).phase).toBe('idle');
 });
 
+test('E at the counter: the camera never passes through the hero (QA r7 m1)', async () => {
+  // Walked up to the counter: the hero faces the shop, the camera has settled behind.
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    const s = window.__rgScoops!.info();
+    rg.teleport(s.customer[0], s.customer[1] + 0.05, s.customer[2], s.site.yaw + Math.PI);
+    rg.step(1 / 60, 90, false);
+  });
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id)).toBe('scoops-counter');
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    rg.inject({ usePressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    let min = Infinity;
+    let at = -1;
+    for (let i = 0; i < 180; i++) {
+      rg.step(1 / 60, 1, false);
+      const head = ctx.player.position.clone();
+      head.y += 1.5;
+      const d = ctx.camera.position.distanceTo(head);
+      if (d < min) {
+        min = d;
+        at = i;
+      }
+    }
+    return { min, at, phase: window.__rgScoops!.info().phase };
+  });
+  console.log('scoops entry camera', JSON.stringify(r));
+  expect(r.phase).toBe('build');
+  expect(r.min, JSON.stringify(r)).toBeGreaterThan(1.6);
+  await press({ respawnPressed: true }, 90);
+});
+
 test('no console errors', () => {
   expect(consoleErrors).toEqual([]);
 });

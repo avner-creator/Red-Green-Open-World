@@ -287,8 +287,15 @@ export function createScoops(ctx: GameContext): Scoops {
     coneView.root.position.copy(LAYOUT.holder);
     for (const j of jarAnim) j.want = 0;
     placeSecret(true);
-    hopFrom.copy(ctx.player.position);
+    // QA r7 m1: a CUT, not a fly. The hop over the counter dragged the camera arm through the
+    // awning and into the hero's head for ~2 s. Now the hero pops straight onto the chef's step
+    // (a little hop in place) and the camera cuts to the game view at once: the teleport snaps it
+    // to look along the build camera's direction, then the build override holds it there.
     hopTo.copy(toWorld(LAYOUT.chef));
+    hopFrom.copy(hopTo);
+    ctx.cameraRig.setOverride({ ...BUILD_CAMERA });
+    ctx.player.teleport(hopTo, yaw + BUILD_CAMERA.yawOffset);
+    ctx.player.yaw = yaw;
     phase = 'enter';
     phaseT = 0;
     ctx.player.setExternalController(controller);
@@ -463,9 +470,9 @@ export function createScoops(ctx: GameContext): Scoops {
         const k = Math.min(1, phaseT / dur);
         const e = smooth(k);
         pl.position.lerpVectors(hopFrom, hopTo, e);
-        pl.position.y += Math.sin(k * Math.PI) * 1.35;
-        const faceIn = yaw + Math.PI;
-        pl.yaw = phase === 'enter' ? faceIn + (k > 0.6 ? (k - 0.6) / 0.4 : 0) * Math.PI : chefYaw;
+        // Enter: a small hop in place on the chef's step (the cut already put the hero there).
+        pl.position.y += Math.sin(k * Math.PI) * (phase === 'enter' ? 0.45 : 1.35);
+        pl.yaw = chefYaw;
         pl.setAnimation(k < 0.85 ? 'jump' : 'idle');
         if (k >= 1) {
           if (phase === 'enter') {

@@ -31,7 +31,8 @@ import { ARROWS, alternateStarts, arrowTrail, nearestOnPolylines } from './arrow
 
 import type { ArrowPlace } from './arrowLogic';
 import { DOOR_RULES, DoorLock, PadStepper, SHAPES, fromDoorLocal, makeSequence, padAngle, padLocal, toDoorLocal } from './doorLogic';
-import { STONE, onStone } from './pathLogic';
+import { PathProgress, STONE, checkpointIndices, onStone } from './pathLogic';
+import { PLAYER } from '../../config';
 import type { Stone } from './pathLogic';
 import { TREASURE_STAR_Y, VAULT, arrowGeometry, buildButtons, buildPedestal, buildSign, buildVault, haloGeometry, layerBasic, stoneGeometry } from './models';
 import type { BoardPlace, ButtonsModel, PadLook, PadPlace, PedestalModel, SignModel, VaultModel } from './models';
@@ -78,6 +79,10 @@ export interface SecretsInfo {
     claimed: boolean;
     lit: number;
     start: [number, number];
+    /** Rest stone indices, the last one reached (−1 = none) and misses put back on one (all paths). */
+    checkpoints: number[];
+    checkpoint: number;
+    returns: number;
   }[];
   doors: {
     id: string;
@@ -145,6 +150,8 @@ interface PathRt {
   center: THREE.Vector3;
   reach: number;
   colliders: RAPIER.Collider[];
+  /** Rest stones (checkpoints), misses and coyote jumps (QA r7 m10). */
+  progress: PathProgress;
 }
 
 interface DoorRt {
@@ -233,6 +240,9 @@ export function createSecrets(ctx: GameContext): Secrets {
   let time = 0;
   let sessionCount = 0;
   const tmpM = new THREE.Matrix4();
+  const tmpV = new THREE.Vector3();
+  /** Times a miss put the hero back on a rest stone (test API). */
+  let returns = 0;
   const tmpQ = new THREE.Quaternion();
   const tmpS = new THREE.Vector3();
   const tmpP = new THREE.Vector3();
@@ -328,7 +338,7 @@ export function createSecrets(ctx: GameContext): Secrets {
     keepNear(startCull); // its own 140 m cull: the start sign is meant to be seen from afar
     ctx.scene.add(startCull);
 
-    const rt: PathRt = { def, group, stones, halos, lit: new Float32Array(n), lastOn: -1, pedestal, pedestalCull, start, startCull, claimed: false, pop: 0, spin: 0, center, reach, colliders };
+    const rt: PathRt = { def, group, stones, halos, lit: new Float32Array(n), lastOn: -1, pedestal, pedestalCull, start, startCull, claimed: false, pop: 0, spin: 0, center, reach, colliders, progress: new PathProgress(def.stones) };
     poseStar(rt);
     return rt;
   });
@@ -359,6 +369,18 @@ export function createSecrets(ctx: GameContext): Secrets {
     hud.flash({ icon: 'gem' }, [{ icon: 'hat' }, { icon: 'balloon' }]);
   }
 
+  /** Put the hero back on rest stone `i`, facing the next stone, with a soft boing (no penalty). */
+  function returnTo(p: PathRt, i: number): void {
+    const s = p.def.stones[i];
+    const next = p.def.stones[Math.min(p.def.stones.length - 1, i + 1)];
+    const yaw = Math.atan2(next.x - s.x, next.z - s.z);
+    ctx.player.teleport(tmpV.set(s.x, s.y + 0.05, s.z), yaw);
+    ctx.audio.play('boing', { pitch: 1.25, volume: 0.6 });
+    p.lit[i] = 1;
+    p.lastOn = i;
+    returns++;
+  }
+
   function updatePaths(dt: number, playing: boolean): void {
     const pl = ctx.player;
     const pp = pl.position;
@@ -376,6 +398,15 @@ export function createSecrets(ctx: GameContext): Secrets {
           }
         }
       }
+      if (near && canStand) {
+        // A miss past a rest stone: back onto it with a soft boing (QA r7 m10).
+        const back = p.progress.update(dt, on, pp);
+        if (back >= 0) returnTo(p, back);
+        // Path coyote time: a Jump just after walking off a stone's edge still jumps.
+        else if (on < 0 && ctx.input.state.jumpPressed && !pl.grounded && p.progress.coyote(pl.velocity.y)) {
+          pl.launch(tmpV.set(pl.velocity.x, PLAYER.jumpSpeed, pl.velocity.z));
+        }
+      } else p.progress.leave();
       if (on >= 0 && on !== p.lastOn) {
         p.lit[on] = 1;
         ctx.audio.play('gemNear', { pitch: 0.85 + (0.7 * on) / Math.max(1, stones.length - 1), volume: 0.55 });
@@ -407,9 +438,9 @@ export function createSecrets(ctx: GameContext): Secrets {
       }
       // Pedestal: spin the trophy, claim on arrival.
       const ped = p.def.pedestal;
-      if (!p.claimed && canStand && Math.hypot(pp.x - ped.x, pp.z - ped.z) < ped.r + 0.15 && Math.abs(pp.y - ped.y) < 0.5) {
-        claimPedestal(p);
-      }
+      const onPed = canStand && Math.hypot(pp.x - ped.x, pp.z - ped.z) < ped.r + 0.15 && Math.abs(pp.y - ped.y) < 0.5;
+      if (onPed) p.progress.leave();
+      if (!p.claimed && onPed) claimPedestal(p);
       if (p.pop > 0 && p.pop < 1) p.pop = Math.min(1, p.pop + dt / 1.6);
       p.spin += dt * (p.pop > 0 && p.pop < 1 ? 9 * (1 - p.pop) + 1.2 : 1.2);
       if (cam.distanceTo(p.pedestalCull.position) < ANIMATE_DIST) poseStar(p);
@@ -858,6 +889,7 @@ export function createSecrets(ctx: GameContext): Secrets {
       p.claimed = false;
       p.pop = 0;
       p.lastOn = -1;
+      p.progress.reset();
       p.lit.fill(0);
       poseStar(p);
     }
@@ -911,6 +943,9 @@ export function createSecrets(ctx: GameContext): Secrets {
           claimed: p.claimed,
           lit: p.lastOn,
           start: [p.def.start.x, p.def.start.z],
+          checkpoints: checkpointIndices(p.def.stones.length),
+          checkpoint: p.progress.checkpoint,
+          returns,
         })),
         doors: doors.map((d) => ({
           id: d.def.id,

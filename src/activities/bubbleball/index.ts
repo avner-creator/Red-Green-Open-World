@@ -58,6 +58,8 @@ export interface BubbleBallTestApi {
     bz: number;
   } | null;
   booth(): [number, number, number];
+  /** Where the hero stands at the booth (world, on the ground). */
+  boothPad(): [number, number, number];
   start(): void;
   /** Put a bonus ring at pitch (x, z) now (test: channel separation). */
   ring(x: number, z: number): void;
@@ -134,7 +136,8 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
     return mesh;
   })();
   for (const s of [-1, 1]) box(s * (PITCH.hx + PITCH.goalDepth + 0.25), site.deckY + 1.2, 0, 0.25, 1.2, PITCH.hz);
-  box(ARENA.booth.x, boothGround + 0.6, ARENA.booth.z, 1.15, 0.6, 0.6);
+  // The booth (turned a quarter: its 2.3 m width runs along Z).
+  box(ARENA.booth.x, boothGround + 0.6, ARENA.booth.z, 0.6, 0.6, 1.15);
 
   // ── Moving pieces ──
   const bubbles = createBubbles(6);
@@ -219,12 +222,11 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
   };
 
   function standBesideBooth(): void {
-    const local = { x: ARENA.booth.x, z: ARENA.booth.z - 2.2 };
-    const w = localToWorld(local.x, local.z, site.yaw);
+    const w = localToWorld(ARENA.boothPad.x, ARENA.boothPad.z, site.yaw);
     const x = site.x + w.x;
     const z = site.z + w.z;
     player.position.set(x, ctx.world.heightAt(x, z) + 0.05, z);
-    player.yaw = site.yaw + Math.PI; // facing away from the arena
+    player.yaw = site.yaw + Math.PI; // facing away from the arena, the ramp behind
   }
 
   function placeFriends(): void {
@@ -646,6 +648,12 @@ export function createBubbleBall(ctx: GameContext): GameSystem {
           bz: match.ball.z,
         },
       booth: () => [model.booth.x, model.booth.y, model.booth.z],
+      boothPad: () => {
+        const w = localToWorld(ARENA.boothPad.x, ARENA.boothPad.z, site.yaw);
+        const x = site.x + w.x;
+        const z = site.z + w.z;
+        return [x, ctx.world.heightAt(x, z), z];
+      },
       start: () => {
         // Same rule as E at the booth: never take the player from another ride.
         if (phase === 'idle' && player.mode === 'walk') begin();

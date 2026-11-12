@@ -190,6 +190,51 @@ test('stones are solid, chime and light up; a real jump reaches the next stone',
   expect(hop.y).toBeGreaterThan(ay + 0.3);
 });
 
+test('a miss past a rest stone puts the hero back on it with a boing; stones are bigger (QA r7 m10)', async () => {
+  const s = await info();
+  const tr = s.paths.find((p) => p.id === 'trampoline')!;
+  expect(tr.checkpoints.length).toBeGreaterThanOrEqual(2);
+  const cp = tr.checkpoints[0];
+  // The rest stone is wider than the stones beside it.
+  expect(tr.stones[cp][3]).toBeGreaterThan(tr.stones[cp + 1][3] + 0.2);
+  const before = tr.returns;
+  // Stand on the rest stone, then two stones on, then walk off the side and fall.
+  for (const i of [cp, cp + 1, cp + 2]) {
+    const [x, y, z] = tr.stones[i];
+    await put([x, y + 0.05, z], 0, 20);
+  }
+  const r = await page.evaluate(
+    ({ a, b }) => {
+      const rg = window.__rg!;
+      const pl = rg.ctx.player;
+      // Walk off sideways (perpendicular to the path, camera-relative).
+      const yaw = rg.ctx.cameraRig.yaw;
+      const dx = -(b[2] - a[2]);
+      const dz = b[0] - a[0];
+      const l = Math.hypot(dx, dz);
+      rg.inject({ moveY: (dx * Math.sin(yaw) + dz * Math.cos(yaw)) / l, moveX: (-dx * Math.cos(yaw) + dz * Math.sin(yaw)) / l });
+      let minY = pl.position.y;
+      for (let i = 0; i < 240; i++) {
+        rg.step(1 / 60, 1, false);
+        minY = Math.min(minY, pl.position.y);
+        if (i === 40) rg.inject(null);
+      }
+      rg.inject(null);
+      rg.step(1 / 60, 30, false);
+      return { p: pl.position.toArray(), minY, grounded: pl.grounded };
+    },
+    { a: tr.stones[cp + 2], b: tr.stones[cp + 3] },
+  );
+  const after = (await info()).paths.find((p) => p.id === 'trampoline')!;
+  const [cx, cy, cz] = tr.stones[cp];
+  expect(after.returns, JSON.stringify(r)).toBe(before + 1);
+  expect(r.minY).toBeLessThan(tr.stones[cp + 2][1] - 2);
+  expect(Math.hypot(r.p[0] - cx, r.p[2] - cz), JSON.stringify(r)).toBeLessThan(1.3);
+  expect(Math.abs(r.p[1] - cy)).toBeLessThan(0.15);
+  expect(r.grounded).toBe(true);
+  expect(after.checkpoint).toBe(cp);
+});
+
 test('a pedestal pays out once: confetti, stars and fanfare', async () => {
   const s = await info();
   await page.evaluate(() => {
