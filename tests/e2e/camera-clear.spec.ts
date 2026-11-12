@@ -362,7 +362,19 @@ async function wallSpots(p: Page): Promise<WallSpot[]> {
     const { world, physics } = window.__rg!.ctx;
     const a = world.anchors as unknown as Record<string, { position: { x: number; z: number }; yaw: number }>;
     const out: { name: string; x: number; z: number; yaws: number[] }[] = [];
-    out.push({ name: 'shack-board-16-0', x: 16, z: 0, yaws: Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2) });
+    // Beside the board's gift boxes, just outside the kiosk's slide-around hull (QA8 m1: the old
+    // spot (16, 0) between board and boxes is inside the hull now, out of reach).
+    {
+      const g = a.gearShack;
+      const lx = -4.1;
+      const lz = -1.5;
+      out.push({
+        name: 'shack-board-16-0',
+        x: g.position.x + lx * Math.cos(g.yaw) + lz * Math.sin(g.yaw),
+        z: g.position.z - lx * Math.sin(g.yaw) + lz * Math.cos(g.yaw),
+        yaws: Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2),
+      });
+    }
     const back = (name: string, cx: number, cz: number, dirYaw: number): void => {
       const dx = Math.sin(dirYaw);
       const dz = Math.cos(dirYaw);
@@ -463,13 +475,16 @@ test('QA6 M2 phone (750×342 touch): hero beside the Gear Shack board and with t
 test('QA6 M2: walking past the Gear Shack board from 8 directions never stalls for 3 s', async () => {
   test.setTimeout(240_000);
   const bad: string[] = [];
-  // Through the QA stall spot (16.4, 0.1), and out from (16, 0), like a child steering: head for the
+  const gy = Math.atan2(-14, -4); // ANCHORS.gearShack (14, 2) and its yaw
+  const BOARD: [number, number] = [14 - 4.1 * Math.cos(gy) - 1.5 * Math.sin(gy), 2 + 4.1 * Math.sin(gy) - 1.5 * Math.cos(gy)];
+  // Through the QA stall spot (16.4, 0.1), and out from beside the board, like a child steering: head for the
   // goal, veer off to one side for a moment when blocked.
   const runs: { from: [number, number]; to: [number, number] }[] = [];
   for (let i = 0; i < 8; i++) {
     const t = (i / 8) * Math.PI * 2;
     runs.push({ from: [16.4 + Math.sin(t) * 7, 0.1 + Math.cos(t) * 7], to: [16.4 - Math.sin(t) * 7, 0.1 - Math.cos(t) * 7] });
-    runs.push({ from: [16, 0], to: [16 + Math.sin(t) * 5, Math.cos(t) * 5] });
+    // Out from beside the gift boxes (QA8 m1: (16, 0) itself is inside the kiosk's hull now).
+    runs.push({ from: BOARD, to: [BOARD[0] + Math.sin(t) * 5, BOARD[1] + Math.cos(t) * 5] });
   }
   for (const run of runs) {
     const r = await page.evaluate(({ from, to }) => {

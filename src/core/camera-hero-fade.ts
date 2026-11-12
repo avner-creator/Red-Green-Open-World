@@ -58,6 +58,27 @@ export function coverFadeAmount(cover: number): number {
 }
 
 const corner = new THREE.Vector3();
+const meshBox = new THREE.Box3();
+
+/**
+ * World bounds of the meshes under `root` that are drawn (visible all the way up; sprites, hidden
+ * helpers and effect pools left out), in `out`. Empty when nothing is drawn.
+ */
+export function visibleBounds(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
+  out.makeEmpty();
+  root.updateWorldMatrix(true, true);
+  const walk = (o: THREE.Object3D): void => {
+    if (!o.visible) return;
+    const m = o as THREE.Mesh;
+    if (m.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh && m.geometry) {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      if (m.geometry.boundingBox) out.union(meshBox.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld));
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(root);
+  return out;
+}
 
 /**
  * Share of the screen (0..1 of width × height) the screen rectangle of world box `b` covers for

@@ -249,16 +249,22 @@ test('QA8 m11: ridden at the Foam Lava course from 8 directions, the horse is tu
       const a = (i / 8) * Math.PI * 2;
       const dx = Math.sin(a);
       const dz = Math.cos(a);
-      // Out of the pad along this direction, then up to 8 m more (less where the village's
-      // houses stand closer: this is about the course, not about them).
+      // Out of the pad along this direction, then 8 m more, on a lane with nothing else in the way
+      // (the village's fences and posts line the east side: this is about the course, not them):
+      // shifted sideways up to 12 m to find one.
       const t0 = Math.min(dx !== 0 ? C.hx / Math.abs(dx) : Infinity, dz !== 0 ? C.hz / Math.abs(dz) : Infinity);
-      const ex = C.x + dx * t0;
-      const ez = C.z + dz * t0;
-      const eye = rg.ctx.player.position.clone().set(ex, rg.ctx.world.heightAt(ex, ez) + 1.2, ez);
-      const hit = rg.ctx.physics.raycast(eye, eye.clone().set(dx, 0, dz), 8);
-      const t = t0 + (hit ? Math.max(3.5, hit.distance - 2) : 8);
-      const sx = C.x + dx * t;
-      const sz = C.z + dz * t;
+      let sx = C.x + dx * (t0 + 8);
+      let sz = C.z + dz * (t0 + 8);
+      for (const off of [0, 4, -4, 8, -8, 12, -12]) {
+        const ex = C.x + dx * t0 - dz * off;
+        const ez = C.z + dz * t0 + dx * off;
+        const eye = rg.ctx.player.position.clone().set(ex, rg.ctx.world.heightAt(ex, ez) + 1.2, ez);
+        if (!rg.ctx.physics.raycast(eye, eye.clone().set(dx, 0, dz), 9)) {
+          sx = ex + dx * 8;
+          sz = ez + dz * 8;
+          break;
+        }
+      }
       if (rg.ctx.player.mode !== 'walk') {
         rg.inject({ respawnPressed: true });
         rg.step(1 / 60, 1, false);

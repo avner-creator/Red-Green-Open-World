@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { FREE_UNSTICK, openYaw, WedgeWatch } from '../../src/core/vehicles/unstick';
 
 describe('free-ride unstick (QA7 M1)', () => {
-  it('fires once after pushing for 2.5 s without leaving a 1.2 m circle', () => {
+  it('fires once after pushing for FREE_UNSTICK.seconds without leaving a 1.2 m circle', () => {
     const w = new WedgeWatch();
     let fired = 0;
     let t = 0;
-    for (; t < 2.4; t += 1 / 60) if (w.update(1 / 60, 1, Math.sin(t * 20) * 0.4, 0)) fired++;
+    for (; t < FREE_UNSTICK.seconds - 0.1; t += 1 / 60) if (w.update(1 / 60, 1, Math.sin(t * 20) * 0.4, 0)) fired++;
     expect(fired).toBe(0);
-    for (; t < 2.7; t += 1 / 60) if (w.update(1 / 60, 1, 0.2, 0)) fired++;
+    for (; t < FREE_UNSTICK.seconds + 0.2; t += 1 / 60) if (w.update(1 / 60, 1, 0.2, 0)) fired++;
     expect(fired).toBe(1);
   });
 

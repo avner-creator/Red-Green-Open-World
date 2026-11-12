@@ -9,7 +9,7 @@ import { clamp, orbitOffset, resolveArm, steerOverrideYaw } from './camera-math'
 import { createCameraCutout } from './camera-cutout';
 import { createCameraOccluders } from './camera-occluders';
 import { createPropFade } from './camera-prop-fade';
-import { coverFadeAmount, createHeroFade, distToBody, heroAxisTop, heroFadeAmount, HERO_COVER_MAX, screenCover } from './camera-hero-fade';
+import { coverFadeAmount, createHeroFade, distToBody, heroAxisTop, heroFadeAmount, HERO_COVER_MAX, screenCover, visibleBounds } from './camera-hero-fade';
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
@@ -521,7 +521,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     topT -= dt;
     if (topT <= 0) {
       topT = 0.3;
-      heroBox.setFromObject(ctx.player.object);
+      visibleBounds(ctx.player.object, heroBox);
       heroTop = heroAxisTop(PLAYER.height, heroBox.isEmpty() ? null : heroBox.max.y - pp.y);
       if (!heroBox.isEmpty()) heroRel.copy(heroBox).translate(tmp.copy(pp).negate());
     }
