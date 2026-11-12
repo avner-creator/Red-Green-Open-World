@@ -319,6 +319,8 @@ export function createSilly(ctx: GameContext): Silly {
   let roundNo = 0;
   let padHold = 0;
   let goShown = 0;
+  /** The countdown camera override is ours (set at the start, released after "go"). */
+  let camHold = false;
   /** Random wobble gusts (seeded in test mode so frames repeat). */
   const gustRng = ctx.testMode ? rng(TEST_SEED) : Math.random;
   let gustIn = 3;
@@ -352,9 +354,22 @@ export function createSilly(ctx: GameContext): Silly {
     hud.show(true);
     padHold = 0;
     ctx.audio.play('click');
+    // QA r7 m3: whichever way the child walked onto the pad, turn them (and the camera, through the
+    // countdown) to the play area, so the lit tube people are in view at "go", not the rail.
+    player.yaw = Math.atan2(S.x - player.position.x, S.z - player.position.z);
+    ctx.cameraRig.setOverride({ yawOffset: 0 });
+    camHold = true;
+  }
+
+  /** The countdown camera hold ends shortly after "go" (or when the round ends). */
+  function releaseCamera(): void {
+    if (!camHold) return;
+    camHold = false;
+    ctx.cameraRig.setOverride(null);
   }
 
   function endRound(): void {
+    releaseCamera();
     round.cancel();
     hud.show(false);
     hud.count(null);
@@ -432,7 +447,10 @@ export function createSilly(ctx: GameContext): Silly {
     }
     if (goShown > 0) {
       goShown -= dt;
-      if (goShown <= 0) hud.count(null);
+      if (goShown <= 0) {
+        hud.count(null);
+        releaseCamera();
+      }
     }
     if (round.phase !== 'idle') hud.set(round.booped.size, round.total, round.timeLeft);
     // Sweeper speed follows the round (faster with every bop); a lazy spin between rounds.
@@ -934,6 +952,7 @@ export function createSilly(ctx: GameContext): Silly {
       confetti.update(dt);
     },
     dispose() {
+      releaseCamera();
       offPhase();
       offRespawn();
       offStep();
