@@ -19,8 +19,8 @@ export interface P3 {
 }
 
 export const STONE = {
-  /** Stone top radius, metres. */
-  radius: 0.8,
+  /** Stone top radius, metres (0.9 since QA r7 m10: 0.8 was hard for 8-year-olds). */
+  radius: 0.9,
   /** Slab thickness under the walkable top (collider + visual). */
   thickness: 0.42,
   /** Target centre-to-centre horizontal spacing. */
@@ -171,4 +171,102 @@ export function minClearance(stones: readonly Stone[], floor: (x: number, z: num
  */
 export function onStone(s: Stone, px: number, py: number, pz: number, grace = 0.25): boolean {
   return Math.hypot(px - s.x, pz - s.z) <= s.r + grace && py >= s.y - 0.15 && py <= s.y + 0.35;
+}
+
+/**
+ * Checkpoints (QA r7 m10: 17–26 stones where any miss meant the street and a restart). Every
+ * `every`-th stone is a wider rest stone (still weak-eye only, like every stone: nothing tells the
+ * strong eye where the path is). A miss after passing one puts the hero back on it with a soft
+ * boing. Jumping off the rest stone itself (or going back down the path) is a way off: no return.
+ */
+export const CHECKPOINT = {
+  every: 6,
+  /** Rest stone top radius (m). */
+  radius: 1.3,
+  /** A fall this far below the last stone stood on is a miss (the deepest planned drop is 1.4 m). */
+  fallBelow: 2.6,
+  /** Only within this long (s) and this far (m, horizontal) of the last stone: R or a ride is not a miss. */
+  memory: 8,
+  near: 10,
+  /** Path coyote time (s): a jump this long after walking off a stone's edge still counts. */
+  coyote: 0.28,
+  /** ...unless the hero is already going up faster than this (a real jump). */
+  maxVy: 0.5,
+} as const;
+
+/** Indices of the rest stones of a path with `n` stones (never the first or the last two). */
+export function checkpointIndices(n: number, every: number = CHECKPOINT.every): number[] {
+  const out: number[] = [];
+  for (let i = every; i <= n - 3; i += every) out.push(i);
+  return out;
+}
+
+/** The stones with the rest stones widened. */
+export function withCheckpoints(stones: readonly Stone[]): Stone[] {
+  const cps = new Set(checkpointIndices(stones.length));
+  return stones.map((s, i) => (cps.has(i) ? { ...s, r: Math.max(s.r, CHECKPOINT.radius) } : { ...s }));
+}
+
+/** Per-path progress: last stone stood on, last rest stone reached, misses and coyote jumps. */
+export class PathProgress {
+  /** Index of the last rest stone reached (−1 = none yet). */
+  checkpoint = -1;
+  /** Last stone stood on (−1 = not on the path). */
+  lastOn = -1;
+  sinceOn = Infinity;
+  private coyoteUsed = false;
+  private readonly cps: Set<number>;
+
+  constructor(
+    private readonly stones: readonly Stone[],
+    cps: readonly number[] = checkpointIndices(stones.length),
+  ) {
+    this.cps = new Set(cps);
+  }
+
+  reset(): void {
+    this.checkpoint = -1;
+    this.lastOn = -1;
+    this.sinceOn = Infinity;
+    this.coyoteUsed = false;
+  }
+
+  /** Leave the path (reached the pedestal, rode away…): no return until a stone is stood on again. */
+  leave(): void {
+    this.lastOn = -1;
+  }
+
+  /**
+   * One frame. `on`: the stone the hero stands on (−1 = none). Returns the rest stone to put the
+   * hero back on after a miss, or −1.
+   */
+  update(dt: number, on: number, feet: { x: number; y: number; z: number }): number {
+    if (on >= 0) {
+      this.lastOn = on;
+      this.sinceOn = 0;
+      this.coyoteUsed = false;
+      if (this.cps.has(on) && on > this.checkpoint) this.checkpoint = on;
+      return -1;
+    }
+    this.sinceOn += dt;
+    if (this.lastOn < 0) return -1;
+    const last = this.stones[this.lastOn];
+    const far = Math.hypot(feet.x - last.x, feet.z - last.z) > CHECKPOINT.near || this.sinceOn > CHECKPOINT.memory;
+    if (far) {
+      this.lastOn = -1;
+      return -1;
+    }
+    if (feet.y > last.y - CHECKPOINT.fallBelow) return -1;
+    // A miss. Back to the rest stone only when the hero had gone past it.
+    const back = this.checkpoint >= 0 && this.lastOn > this.checkpoint ? this.checkpoint : -1;
+    this.lastOn = -1;
+    return back;
+  }
+
+  /** May a Jump press now still jump (just walked off a stone's edge, not already rising)? Uses it up. */
+  coyote(vy: number): boolean {
+    if (this.lastOn < 0 || this.coyoteUsed || !(this.sinceOn > 0) || this.sinceOn > CHECKPOINT.coyote || vy > CHECKPOINT.maxVy) return false;
+    this.coyoteUsed = true;
+    return true;
+  }
 }

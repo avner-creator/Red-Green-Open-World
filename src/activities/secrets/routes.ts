@@ -5,7 +5,7 @@
 import { ANCHORS } from '../../world/layout';
 import { findShore } from '../../world/spots';
 import { LOTS, lotDims } from '../../world/village-data';
-import { STONE, helixStones, stonesAlong } from './pathLogic';
+import { STONE, helixStones, stonesAlong, withCheckpoints } from './pathLogic';
 import type { Stone } from './pathLogic';
 import { fromDoorLocal } from './doorLogic';
 
@@ -167,7 +167,8 @@ function lighthouse(h: HeightFn): RouteDef {
 }
 
 export function buildRoutes(h: HeightFn): RouteDef[] {
-  return [rooftops(h), trampoline(h), lake(h), lighthouse(h)];
+  // Every 6th stone is a wider rest stone (checkpoint, QA r7 m10).
+  return [rooftops(h), trampoline(h), lake(h), lighthouse(h)].map((r) => ({ ...r, stones: withCheckpoints(r.stones) }));
 }
 
 /** The full-size crag (door-local half width and back), and a slimmer one for a tight spot. */
