@@ -92,3 +92,13 @@ wallet emptied 0
   shot test-results/qa8b/carnival/056-paid-balloonPop-t0.png
   shot test-results/qa8b/carnival/057-paid-balloonPop-t4.png
   shot test-results/qa8b/carnival/058-paid-balloonPop-t8.png
+  shot test-results/qa8b/carnival/059-paid-balloonPop-t12.png
+  shot test-results/qa8b/carnival/060-paid-balloonPop-t16.png
+  shot test-results/qa8b/carnival/061-paid-balloonPop-t20.png
+  shot test-results/qa8b/carnival/062-paid-balloonPop-t24.png
+  shot test-results/qa8b/carnival/063-paid-balloonPop-t28.png
+[paid-balloonPop] round ended 31.5 s phase=result scores=[11,10,8] result={"place":1,"stars":1,"gems":0,"won":true} plush=5 wallet=5
+  shot test-results/qa8b/carnival/064-paid-balloonPop-result.png
+[paid-balloonPop] UI []
+[paid-balloonPop] after R active=null walk pos=22.1,18.4,-30.0 gems=0 wallet=5 prompt=E pip=
+CONSOLE ERRORS: [] RG ERRORS: []
