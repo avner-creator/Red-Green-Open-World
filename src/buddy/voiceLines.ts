@@ -7,7 +7,7 @@
 import { MISSION_POOL } from '../activities/economy/missions';
 import type { MissionState } from '../types';
 import { EARN_GOAL, missionGoal } from './goals';
-import { ATTRACTIONS, CHEST, CHUTE, COUNT, ECON, EXPLAIN, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, SUNSET, TIPS, follow, needGems, skillTip, suggest } from './script';
+import { ATTRACTIONS, CHEST, CHUTE, COUNT, ECON, GLASSES_WAIT, EXPLAIN, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, SUNSET, TIPS, follow, needGems, skillTip, suggest } from './script';
 import type { ScriptLine } from './script';
 import type { Attraction } from './types';
 
@@ -73,6 +73,7 @@ export function allVoiceLines(): VoiceLine[] {
     ...Object.values(POOLS).flatMap((ls) => ls.map((l) => l.text)),
     ...COUNT,
     SUNSET.text,
+    GLASSES_WAIT.text,
     ...Array.from({ length: NEED_GEMS_MAX }, (_, i) => needGems(i + 1).text),
     ...missionLines().map((l) => l.text),
     'Open a treasure chest!',
