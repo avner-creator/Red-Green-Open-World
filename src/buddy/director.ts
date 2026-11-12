@@ -88,11 +88,13 @@ export const PARK_CUE2 = 24;
 /** Still parked: "hop out, it's this way!" (the use key), then a lead on foot. */
 export const PARK_HOP = 40;
 /**
- * Later rounds of the parked cycle (QA8 M2: after two "hop out"s Pip fell silent for 68–117 s): the
- * same three cues again (drive, a place, hop out), one per call gap with the back-off, but never more
- * than this many seconds apart, so a child sitting still is never left alone for more than ~45 s.
+ * Later parked cues (QA8 M2: after two "hop out"s Pip fell silent for 68–117 s; then a cue every
+ * 36 s for ever was found repetitive): after the first round (PARK_CUE, PARK_CUE2, PARK_HOP), one
+ * cue about every PARK_GAP_LATE seconds, rotating through different lines (never the same line
+ * twice in a row, no line more than PARK_LINE_MAX times a session).
  */
-export const PARK_GAP_MAX = 36;
+export const PARK_GAP_LATE = 75;
+export const PARK_LINE_MAX = 3;
 /** Driving this long since the last suggestion: the race or a place to drive to (at the invitation rate). */
 export const DRIVE_SUGGEST = 20;
 /** A suggestion while driving counts as ignored when the hero has not got there in this long. */
@@ -323,6 +325,9 @@ export class Director {
   private parkCues = 0;
   /** Later parked rounds: the earliest time for the next cue. */
   private parkNextAt = 0;
+  /** Parked cues said this session, by text, and the last one (no repeats in a row). */
+  private readonly parkSaid = new Map<string, number>();
+  private lastParkText = '';
   private inVehicle = false;
   /** Menu open (QA8 m12): seconds with no input, and the time to the next "close it" cue. */
   private overlayNow: 'workshop' | 'wardrobe' | null = null;
@@ -392,6 +397,8 @@ export class Director {
     this.driveT = 0;
     this.parkCues = 0;
     this.parkNextAt = 0;
+    this.parkSaid.clear();
+    this.lastParkText = '';
     this.inVehicle = false;
     this.overlayNow = null;
     this.overlayIdle = 0;
@@ -1293,31 +1300,50 @@ export class Director {
     if (v.ride !== 'vehicle' || this.playT - this.lastHint < INVITE_BREATH) return false;
     const kind = v.vehicle ?? 'car';
     if (this.parkT > 0) {
-      // First round on a fixed schedule (PARK_CUE, PARK_CUE2, PARK_HOP); later rounds the same three
-      // cues again, one per call gap with the back-off, at most PARK_GAP_MAX apart (QA8 M2: a light
-      // cycle while parked, never silent for long, never a burst).
+      // First round on a fixed schedule (PARK_CUE, PARK_CUE2, PARK_HOP); later, one cue about every
+      // PARK_GAP_LATE, rotating lines (QA8 M2: a light cycle while parked, never a nag).
       const first = this.parkCues < 3;
       const due = first
         ? this.parkT >= [PARK_CUE, PARK_CUE2, PARK_HOP][this.parkCues] && (this.parkCues < 2 || !this.offer)
         : !this.offer && this.playT >= this.parkNextAt;
       if (!due) return false;
-      const step = this.parkCues % 3;
-      this.parkCues++;
-      if (step === 0) {
-        this.cue(null, 'drive', { ...line(DRIVE_CUE(kind), PRIORITY.tip, 'vehicle:drive'), valid: () => this.parkT > 0 });
-      } else if (step === 1) {
-        const to = this.driveTarget(v, kind);
-        if (!to) return false;
-        this.hopTo = to;
-        this.cue(to, 'drive', { ...line({ ...suggest(to), action: 'move' }, PRIORITY.tip, 'vehicle:suggest'), valid: () => this.parkT > 0 });
-      } else {
-        const to = (this.hopTo && !this.declined.has(this.hopTo) ? this.hopTo : null) ?? this.nextPlace(v);
-        if (!to) return false;
-        this.hopTo = to;
-        this.cue(to, 'hop', { ...line(HOP_OUT(to), PRIORITY.tip, 'vehicle:hop'), valid: () => this.parkT > 0 });
+      // The three kinds in turn (drive, a place, hop out); a kind whose line was said too often, or
+      // just now, gives way to the next (hop out also has the "follow me" lines).
+      const hopTo = (): Attraction | null => (this.hopTo && !this.declined.has(this.hopTo) ? this.hopTo : null) ?? this.nextPlace(v);
+      const ok = (text: string): boolean => text !== this.lastParkText && (this.parkSaid.get(text) ?? 0) < PARK_LINE_MAX;
+      let said = false;
+      for (let k = 0; k < 4 && !said; k++) {
+        const step = (this.parkCues + k) % 3;
+        if (step === 0) {
+          const l = DRIVE_CUE(kind);
+          if (!ok(l.text)) continue;
+          this.parkCue(null, 'drive', { ...line(l, PRIORITY.tip, 'vehicle:drive'), valid: () => this.parkT > 0 });
+        } else if (step === 1) {
+          const to = this.driveTarget(v, kind);
+          if (!to || !ok(suggest(to).text)) continue;
+          this.hopTo = to;
+          this.parkCue(to, 'drive', { ...line({ ...suggest(to), action: 'move' }, PRIORITY.tip, 'vehicle:suggest'), valid: () => this.parkT > 0 });
+        } else {
+          const to = hopTo();
+          if (!to) continue;
+          const pick = ok(HOP_OUT(to).text) ? HOP_OUT(to) : (() => {
+            const f = this.bag('follow').next((l) => ok(l.text));
+            return f ? { ...HOP_OUT(to), text: f.text } : null;
+          })();
+          if (!pick) continue;
+          this.hopTo = to;
+          this.parkCue(to, 'hop', { ...line(pick, PRIORITY.tip, 'vehicle:hop'), valid: () => this.parkT > 0 });
+        }
+        this.parkCues += k + 1;
+        said = true;
       }
-      const back = INVITE_BACKOFF[Math.min(Math.max(this.ignoredRun, 1), INVITE_BACKOFF.length) - 1];
-      this.parkNextAt = this.playT + Math.min(PARK_GAP_MAX, Math.max(INVITE_GAP, back));
+      if (!said) {
+        // Everything said often enough: stay quiet for a long while.
+        this.parkNextAt = this.playT + PARK_GAP_LATE;
+        return false;
+      }
+      // After the first round: about every PARK_GAP_LATE.
+      this.parkNextAt = this.playT + PARK_GAP_LATE;
       return true;
     }
     if (this.ignoredRun >= MAX_IGNORED) return false;
@@ -1330,6 +1356,13 @@ export class Director {
       return true;
     }
     return false;
+  }
+
+  /** A parked cue (counted for the no-repeat rule). */
+  private parkCue(to: Attraction | null, kind: Offer['kind'], l: Line): void {
+    this.parkSaid.set(l.text, (this.parkSaid.get(l.text) ?? 0) + 1);
+    this.lastParkText = l.text;
+    this.cue(to, kind, l);
   }
 
   private cue(to: Attraction | null, kind: Offer['kind'], l: Line): void {
