@@ -18,6 +18,7 @@ import { createPlayerFx } from './player-fx';
 import { createPlayerModel } from './player-model';
 import type { ModelAnim } from './player-model';
 import { createSkillFx } from './skill-fx';
+import { slideEdge, slideSteer, type SlideEdge } from './slide-around';
 import { chosenPower } from './skills-powers';
 import { SKILL, SkillMachine } from './skills';
 import type { SkillEvent } from './skills';
@@ -29,6 +30,8 @@ const easeOut = (k: number): number => 1 - (1 - Math.min(1, Math.max(0, k))) ** 
 const HALF = (PLAYER.height - 2 * PLAYER.radius) / 2;
 const CENTRE = HALF + PLAYER.radius;
 const MOVE_GROUPS = groups(GROUP_AVATAR, 0xffff & ~GROUP_AVATAR);
+/** A slide-around wall's hint holds this long after the last touch (s): no on/off flicker. */
+const SLIDE_HOLD = 0.3;
 
 /** The character picked last time (character select saves it), or null. Storage may be blocked. */
 /**
@@ -125,6 +128,9 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   cc.setSlideEnabled(true);
 
   let mode: PlayerMode = 'walk';
+  /** Last slide-around wall touched (slide-around.ts) and how long its hint still holds (s). */
+  let slideWall: SlideEdge | null = null;
+  let slideHold = 0;
   let grounded = false;
   let airTime = 0;
   let airPeak = 0;
@@ -583,7 +589,12 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     const hv = intended.valid ? { x: intended.x, z: intended.z } : { x: velocity.x, z: velocity.z };
     intended.valid = false;
     const startGrounded = grounded;
-    const dir = inputActive ? cameraRelative(input.moveX, input.moveY, cameraYaw()) : { x: 0, z: 0 };
+    let dir = inputActive ? cameraRelative(input.moveX, input.moveY, cameraYaw()) : { x: 0, z: 0 };
+    // Pushing into a slide-around wall (QA8 m1): go round it instead of standing at it.
+    if (slideHold > 0 && slideWall && grounded && mode === 'walk') {
+      const s = slideSteer(dir, slideWall);
+      if (s) dir = s;
+    }
     const mag = Math.min(1, Math.hypot(dir.x, dir.z));
     const top = (input.sprint && inputActive ? PLAYER.sprintSpeed : PLAYER.walkSpeed) * modK.speed;
 
@@ -680,6 +691,16 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     else cc.enableSnapToGround(CONTROLLER.snapDistance);
     cc.computeColliderMovement(collider, desired, R.QueryFilterFlags.EXCLUDE_SENSORS, MOVE_GROUPS);
     const moved = cc.computedMovement();
+    slideHold -= dt;
+    for (let i = 0, n = cc.numComputedCollisions(); i < n; i++) {
+      const h = cc.computedCollision(i)?.collider?.handle;
+      const e = h === undefined ? undefined : slideEdge(h);
+      if (e) {
+        slideWall = e;
+        slideHold = SLIDE_HOLD;
+      }
+    }
+    if (slideHold <= 0) slideWall = null;
     position.x += moved.x;
     position.y += moved.y;
     position.z += moved.z;

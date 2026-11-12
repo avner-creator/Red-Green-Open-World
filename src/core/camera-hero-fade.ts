@@ -40,6 +40,50 @@ export function heroAxisTop(height: number, wornTop: number | null): number {
   return Math.max(height - 0.2, Math.min(height + 1.5, wornTop) - 0.15);
 }
 
+/**
+ * Most of the screen (share of width × height) the hero's bounds, worn items included, may cover
+ * before the camera looks for a longer view and the hero starts to fade (QA8 m5: a top hat at a
+ * booth filled half the screen).
+ */
+export const HERO_COVER_MAX = 0.25;
+/** Cover at which the cover fade is complete, and how far it goes (the hero never vanishes). */
+const COVER_FROM = 0.25;
+const COVER_FULL = 0.36;
+const COVER_FADE = 0.7;
+
+/** Fade 0..`COVER_FADE` for a hero covering `cover` of the screen (pure). */
+export function coverFadeAmount(cover: number): number {
+  const t = Math.max(0, Math.min(1, (cover - COVER_FROM) / (COVER_FULL - COVER_FROM)));
+  return t * t * (3 - 2 * t) * COVER_FADE;
+}
+
+const corner = new THREE.Vector3();
+
+/**
+ * Share of the screen (0..1 of width × height) the screen rectangle of world box `b` covers for
+ * `camera` (matrices up to date). A box reaching behind the camera counts as covering it all.
+ */
+export function screenCover(camera: THREE.Camera, b: THREE.Box3): number {
+  if (b.isEmpty()) return 0;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < 8; i++) {
+    corner.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
+    corner.applyMatrix4(camera.matrixWorldInverse);
+    if (corner.z > -0.05) return 1;
+    corner.applyMatrix4(camera.projectionMatrix);
+    x0 = Math.min(x0, corner.x);
+    x1 = Math.max(x1, corner.x);
+    y0 = Math.min(y0, corner.y);
+    y1 = Math.max(y1, corner.y);
+  }
+  const w = Math.max(0, Math.min(1, x1) - Math.max(-1, x0));
+  const h = Math.max(0, Math.min(1, y1) - Math.max(-1, y0));
+  return (w * h) / 4;
+}
+
 export interface HeroFade {
   /** Patch any new hero materials and set this frame's fade (0 = solid, 1 = gone). */
   update(root: THREE.Object3D, amount: number): void;
