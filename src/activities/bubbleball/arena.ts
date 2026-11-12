@@ -16,8 +16,16 @@ export const ARENA = {
   hz: 6.6,
   wallR: 0.36,
   wallH: 1.25,
-  /** Booth: pitch-space position (on the ground, outside the deck). */
-  booth: { x: -6.5, z: -9.3 },
+  /**
+   * Booth: pitch-space position (on the ground, outside the deck) and turn. QA r7 m7: it used to
+   * stand square on the walk-in ramp's foot with its counter facing away, so a walk from the booth
+   * hit its back or the wall. Now it stands beside the ramp foot, its counter facing the ramp's
+   * line (+X): the hero at the counter turns to the pitch and walks straight up the ramp and in
+   * through the gate. Gate centre x = −6.64 (`gateSpan`), ramp foot z = −(hz + 2.6) = −9.2.
+   */
+  booth: { x: -7.95, z: -10.45, yaw: -Math.PI / 2 },
+  /** Where the hero stands to use the booth (pitch space): on the ramp's line, facing the counter. */
+  boothPad: { x: -6.6, z: -10.45 },
 } as const;
 
 /**
@@ -281,11 +289,11 @@ export function createArenaModel(opts: {
     }
   }
 
-  // ── Booth on the ground by the north side ──
+  // ── Booth on the ground beside the walk-in ramp ──
   const bx = ARENA.booth.x;
   const bz = ARENA.booth.z;
   const by = opts.boothDy;
-  const boothYaw = 0; // the counter's front is −Z: away from the arena, toward the approach
+  const boothYaw = ARENA.booth.yaw; // the counter's front (local −Z) faces +X: the ramp's line
   const B = (x: number, y: number, z: number, ry = 0, sx = 1, sy = 1, sz = 1, rx = 0): THREE.Matrix4 => {
     const local = TRS(x, y, z, ry, sx, sy, sz, rx);
     return TRS(bx, by, bz, boothYaw).multiply(local);

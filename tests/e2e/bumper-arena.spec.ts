@@ -115,10 +115,14 @@ test('Bubble Ball: a plain walk from the booth onto the pitch gets on (no lip to
     const rg = window.__rg!;
     const ctx = rg.ctx;
     const bb = window.__rgBubbleBall!;
-    const [bx, , bz] = bb.booth();
     const rows: { from: string; reached: boolean; t: number; local: number[] }[] = [];
-    // From in front of the booth and a few spots around it, straight at points on the pitch.
-    const starts: [string, number, number][] = [['booth', bx, bz - 1.2], ['booth-l', bx - 1.5, bz - 1.4], ['booth-r', bx + 1.5, bz - 1.4]];
+    // From the booth pad and a few spots in front of the walk-in ramp, straight at points on the pitch.
+    const at = (lx: number, lz: number): [number, number] => {
+      const w = bb.world(lx, 0, lz);
+      return [w[0], w[2]];
+    };
+    const [px, , pz] = bb.boothPad();
+    const starts: [string, number, number][] = [['pad', px, pz], ['pad-r', ...at(-5.2, -10.8)], ['meadow', ...at(-6.4, -12.5)]];
     // The centre spot (the ball) and points either side (straight through the booth itself is not a walk anyone takes).
     const targets = [bb.world(0, 0, 0), bb.world(-3, 0, -2), bb.world(3, 0, -1)];
     for (const [name, sx, sz] of starts) {
@@ -154,6 +158,37 @@ test('Bubble Ball: a plain walk from the booth onto the pitch gets on (no lip to
   });
   console.log('walk onto pitch', JSON.stringify(r));
   for (const row of r) expect(row.reached, JSON.stringify(row)).toBe(true);
+});
+
+test('Bubble Ball: from the booth pad, W only walks straight up the ramp, through the gate and onto the pitch (QA r7 m7)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const ctx = rg.ctx;
+    const bb = window.__rgBubbleBall!;
+    const [px, py, pz] = bb.boothPad();
+    // The hero turns from the counter to the pitch (local +Z, the ramp's line) and holds W.
+    const ahead = bb.world(bb.local(px, py, pz)[0], 0, 0);
+    rg.teleport(px, py + 0.1, pz, Math.atan2(ahead[0] - px, ahead[2] - pz));
+    rg.step(1 / 60, 40, false);
+    rg.inject({ moveY: 1, moveX: 0 });
+    let t = 0;
+    let local = bb.local(ctx.player.position.x, ctx.player.position.y, ctx.player.position.z);
+    while (t < 6) {
+      rg.step(1 / 60, 6, false);
+      t += 0.1;
+      local = bb.local(ctx.player.position.x, ctx.player.position.y, ctx.player.position.z);
+      if (local[2] > -4 && Math.abs(local[1]) < 0.6) break;
+    }
+    rg.inject(null);
+    rg.step(1 / 60, 2, false);
+    return { t: +t.toFixed(1), local: local.map((v: number) => +v.toFixed(2)), mode: ctx.player.mode };
+  });
+  console.log('W only from the booth pad', JSON.stringify(r));
+  // On the deck (feet at the deck top), inside the sidelines, within a few seconds, never hopped.
+  expect(r.local[2], JSON.stringify(r)).toBeGreaterThan(-4);
+  expect(Math.abs(r.local[1]), JSON.stringify(r)).toBeLessThan(0.6);
+  expect(r.t).toBeLessThan(4);
+  saveChannels(await canvasShot(page), 'e2e-bubble-gate-walk');
 });
 
 test('Bubble Ball: E at the booth, friends join, a full match (first to 3 or 75 s) to the result card, R leaves', async () => {
