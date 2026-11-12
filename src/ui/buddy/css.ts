@@ -75,6 +75,9 @@ const CSS = `
 .rg .pipbtn.talk>.ic{animation:pip-talk .32s ease-in-out infinite alternate}
 @keyframes pip-talk{to{transform:translateY(calc(var(--u)*-.5)) rotate(4deg)}}
 .rg:not([data-phase="playing"]) .pipbtn,.rg:not([data-phase="playing"]) .pipb,.rg:not([data-phase="playing"]) .pipring,.rg:not([data-phase="playing"]) .piparrow{display:none}
+/* QA8 m12: over the wardrobe / shop (play paused under it) only the "close it" cue shows */
+.rg:not([data-phase="playing"]) .pipb.over{display:flex}
+.rg:not([data-phase="playing"]) .pipring.over,.rg:not([data-phase="playing"]) .piparrow.over{display:block}
 .rg.touch-on .pipbtn{bottom:auto;top:52%;
   width:max(44px,calc(var(--u)*6.6));height:max(44px,calc(var(--u)*6.6))}
 .rg.touch-on .pipbtn .cap,.rg.touch-on .pipbtn .gp{display:none}

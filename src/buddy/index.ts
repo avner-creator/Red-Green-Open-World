@@ -1260,6 +1260,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         // The wardrobe / shop pauses play under it (QA8 m12): Pip may remind how to close it. Never
         // over the pause menu or the grown-up settings (those are not an overlay here).
         const ov = overlayOpen();
+        ui.setOverlay(!!ov);
         if (ov) {
           pollPad();
           director.update(dt, { ...directorView(), overlay: ov, input: takeInput() });
@@ -1292,6 +1293,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       if (playing) {
         pollPad();
         const ov = overlayOpen();
+        ui.setOverlay(!!ov);
         director.update(dt, { ...directorView(), overlay: ov, input: takeInput() });
         queue.update(dt);
       }
