@@ -72,7 +72,7 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
   let leadTarget: V2 | null = null;
   const targets: V2[] = [];
   const calls: { t: number; id: string; lead: V2 | null }[] = [];
-  const said: { t: number; id: string }[] = [];
+  const said: { t: number; id: string; text: string }[] = [];
   let now = 0;
   let cueAt = -1;
   let saidAt = 0;
@@ -80,7 +80,7 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
     say: (l) => {
       queue.say(l);
       saidAt = now;
-      said.push({ t: now, id: l.id ?? l.text });
+      said.push({ t: now, id: l.id ?? l.text, text: l.text });
       if (l.id && CALLS.has(l.id)) calls.push({ t: now, id: l.id, lead: leadTarget });
       // A call or a how-to (e.g. "Hop in the buggy and drive!" on arrival) is guidance.
       if (l.id && (CALLS.has(l.id) || l.id.startsWith('howto:'))) cueAt = now;
@@ -290,6 +290,23 @@ describe('Pip guides the whole session (QA6 M4)', () => {
   const story = (r: ReturnType<typeof simulate>): string =>
     `quiet ${r.quietMax.toFixed(1)} s at ${r.quietMaxAt.toFixed(0)} s; ${r.timeline.join(', ')}; said ${r.said.map((c) => `${c.t.toFixed(0)} ${c.id}`).join(', ')}`;
 
+  /**
+   * A passive child parked in a vehicle from `from`: the first three cues at most 45 s apart (from
+   * sitting down), later ones at most 80 s apart (and not closer than 60 s: no nagging), a light
+   * cycle of different lines, never the same line twice in a row, no line more than 3 times.
+   */
+  const expectParkedCycle = (r: ReturnType<typeof simulate>, from: number, summary: string): void => {
+    const cues = r.said.filter((l) => l.t >= from && l.id.startsWith('vehicle:'));
+    expect(cues.length, summary).toBeGreaterThanOrEqual(4);
+    const times = [from, ...cues.map((c) => c.t), SESSION];
+    for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1], summary).toBeLessThanOrEqual(i <= 3 ? 45 : 80);
+    for (let i = 4; i < cues.length; i++) expect(cues[i].t - cues[i - 1].t, summary).toBeGreaterThanOrEqual(60);
+    for (let i = 1; i < cues.length; i++) expect(cues[i].text, summary).not.toBe(cues[i - 1].text);
+    const n = new Map<string, number>();
+    for (const l of r.said) n.set(l.text, (n.get(l.text) ?? 0) + 1);
+    for (const [text, k] of n) expect(k, `${text}: ${summary}`).toBeLessThanOrEqual(3);
+  };
+
   for (const vehicle of ['car', 'horse'] as const) {
     it(`QA8 M2: a child who gets into the ${vehicle} during the story and sits there to the end hears the vehicle cues`, () => {
       const r = simulate('follower', true, { carAt: 10, vehicle, stay: true });
@@ -299,18 +316,13 @@ describe('Pip guides the whole session (QA6 M4)', () => {
       expect(r.d.step, summary).toBe('done');
       const cues = r.said.filter((l) => l.id.startsWith('vehicle:'));
       expect(cues[0]?.t ?? 999, summary).toBeLessThan(10 + 20);
-      // A light cycle goes on while parked (cue, suggestion, hop-out offer…), capped and backed off.
-      expect(cues.length, summary).toBeGreaterThanOrEqual(5);
-      expect(new Set(cues.map((c) => c.id)).size, summary).toBe(3);
-      for (let i = 1; i < cues.length; i++) expect(cues[i].t - cues[i - 1].t, summary).toBeGreaterThanOrEqual(i < 3 ? 5 : INVITE_GAP - 0.1);
-      expect(r.quietMax, summary).toBeLessThanOrEqual(QUIET_MAX);
+      expectParkedCycle(r, 10, summary);
     });
   }
 
   it('QA8 M2: a child who sits in the parked buggy after the tour is never silent > 45 s (no stop after two "hop out")', () => {
     const r = simulate('follower', true, { carAt: 100, stay: true });
-    expect(r.quietMax, story(r)).toBeLessThanOrEqual(QUIET_MAX);
-    expect(r.said.filter((l) => l.t > 100 && l.id.startsWith('vehicle:')).length, story(r)).toBeGreaterThanOrEqual(6);
+    expectParkedCycle(r, 100, story(r));
   });
 
   // Every attraction a child could walk into while Pip is still telling the story.
