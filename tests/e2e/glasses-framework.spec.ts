@@ -308,6 +308,9 @@ test('the play prompt is in clear view from the pad: central safe area, never un
   const report: string[] = [];
   const failures: string[] = [];
   for (const s of sites) {
+    // Dot signs: the E bubble shows only at the pedestal E would answer, never from the pad
+    // (QA8 m3; checked in glasses-botheyes.spec.ts).
+    if (s.id === 'dotsigns') continue;
     const view = await page.evaluate((id) => window.__rgGlasses!.boothPadView(id), s.id);
     if (!view) continue;
     await page.evaluate(({ id, v }) => {
