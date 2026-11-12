@@ -192,13 +192,13 @@ export const READ_ARM = {
   /** Camera at least this far behind the hero's centre, horizontally (m). */
   back: 3.4,
   /** ...and no further than this (a too steep view steps back, up to here). */
-  maxBack: 5,
+  maxBack: 6.5,
   /** The hero's top projects at least this far below the face's bottom edge (m, on the face plane). */
   margin: 0.4,
   minPitch: 0.25,
   maxPitch: 1.1,
   /** Longest arm (m). */
-  maxDistance: 10,
+  maxDistance: 14,
 } as const;
 
 /** A point of the hero's silhouette: `top` m above the feet, `reach` m out towards the board. */

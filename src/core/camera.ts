@@ -13,7 +13,7 @@ import { coverFadeAmount, createHeroFade, distToBody, heroAxisTop, heroFadeAmoun
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
-import { createReadState, readingArm, readingSpots, readWeight, stepReading, type HeroPoint } from './camera-read';
+import { createReadState, readingArm, readingSpots, readWeight, stepReading, type HeroPoint, type ReadingSpot } from './camera-read';
 import { CHARACTERS } from './characters/catalog';
 
 type Override = Parameters<CameraApi['setOverride']>[0];
@@ -99,7 +99,7 @@ const PROFILE_BINS = 20;
 const READ_FILL = 0.34;
 /** ...and how far below the screen centre its centre sits (NDC: 0.3 = 15% of the height). */
 const READ_DROP = 0.3;
-const READ_FOV_MIN = 30;
+const READ_FOV_MIN = 24;
 
 /** Swing candidates for the on-foot arm (yaw offsets in ± pairs, smallest first, then 180°). */
 const SWINGS = [1, 2, 3, 4, 5].flatMap((i) => [(i * Math.PI) / 6, (-i * Math.PI) / 6]).concat(Math.PI);
@@ -108,7 +108,7 @@ const SWINGS = [1, 2, 3, 4, 5].flatMap((i) => [(i * Math.PI) / 6, (-i * Math.PI)
 export interface CameraDebug {
   /** Set the orbit yaw/pitch as if the player had looked there (no auto-align for a while). */
   setView(yaw: number, pitch?: number): void;
-  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean; cover: number; reading: number; readingActive: boolean; readArm: { yaw: number; pitch: number; distance: number }; heroTop: number[] | null };
+  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean; cover: number; reading: number; readingActive: boolean; readArm: { yaw: number; pitch: number; distance: number }; spots: readonly ReadingSpot[]; heroTop: number[] | null };
   /**
    * Check the current view against the rendered scene (three.js raycasts against the real render
    * meshes, independent of the occluder proxies): `blocked` = fraction of rays from the camera to
@@ -740,7 +740,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         sinceLook = 0;
         viewSet = true;
       },
-      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null, cover, reading: readW, readingActive: read.active, readArm: lastArm, heroTop: profileOk ? [...profile].map((h) => (Number.isFinite(h) ? Math.round(h * 100) / 100 : -1)) : null }),
+      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null, cover, reading: readW, readingActive: read.active, readArm: lastArm, spots: readingSpots(), heroTop: profileOk ? [...profile].map((h) => (Number.isFinite(h) ? Math.round(h * 100) / 100 : -1)) : null }),
       probe() {
         // Instanced meshes cache their bounds; the scatter refills instances every view change.
         ctx.scene.traverse((o) => {

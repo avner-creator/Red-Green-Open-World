@@ -203,6 +203,14 @@ test.describe('ui wayfinding', () => {
     // eases the camera up to look over the hero's head. Frog, panda and rex, bare and in antlers and
     // a sombrero, 8 frozen frames across 20 s of idle each: the same frame with the hero hidden
     // changes no badge (≤ 5 px in its ring box), and every badge is ≥ 20 px tall and clear of the HUD.
+    // The badges are measured where the board really stands (the plaza fill may nudge it off
+    // MAP_BOARD: it registers itself as a reading spot, its face centre 0.1 m out from the board).
+    const real = await page.evaluate(() => {
+      const s = window.__rgCamera!.state().spots.find((p) => p.id === 'mapboard')!;
+      return { x: s.x - s.nx * 0.1, z: s.z - s.nz * 0.1 };
+    });
+    const rlay = boardLayout(real.x, real.z);
+    const rbadges = rlay.icons.map((a) => ({ name: a.anchor, u: a.u, v: a.v }));
     const looks: [string, string | null][] = [];
     for (const hero of ['frog', 'panda', 'rex']) for (const hat of [null, 'hat-antlers', 'hat-sombrero']) looks.push([hero, hat]);
     const fails: string[] = [];
@@ -278,7 +286,7 @@ test.describe('ui wayfinding', () => {
               }),
             };
           },
-          { badges, yaw: lay.yaw, yc: lay.yc, bx: MAP_BOARD.x, bz: MAP_BOARD.z, ring: MAP_RING + 0.04, half: MAP_BADGE / 2, first: f === 0 },
+          { badges: rbadges, yaw: rlay.yaw, yc: rlay.yc, bx: real.x, bz: real.z, ring: MAP_RING + 0.04, half: MAP_BADGE / 2, first: f === 0 },
         );
         if (f === 0 && hat === 'hat-sombrero') await page.screenshot({ path: `test-results/mapboard-reading-${hero}.png` });
         const withHero = await canvasShot(page);
