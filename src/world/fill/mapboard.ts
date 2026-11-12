@@ -30,14 +30,14 @@ import type { AnchorName } from '../../types';
  * It stands beside the spawn's forward run lane, not in it, and off the walk from spawn to the park
  * road (tests/world/spawn-lane.test.ts: at (6.6, 5.9) and 3.6 m wide its right post blocked the
  * first run/dash from spawn). The plaza is full there (spawn circle, plaza gem, Gear Shack): at
- * 3.4 m wide (QA7 m6: bigger badges) the Gear Shack's circle keeps it at x 7.75.
+ * 3.34 m wide (QA7 m6: bigger badges) it just clears the Gear Shack's circle (posts at ±(W/2 + 0.33)).
  */
-export const MAP_BOARD = { x: 7.75, z: 3.75, faceX: -4.5, faceZ: 10 } as const;
+export const MAP_BOARD = { x: 8.25, z: 3.75, faceX: -4.5, faceZ: 10 } as const;
 /** Board face (m) and its footprint radius for the fill guard. */
-const W = 3.4;
+const W = 3.34;
 const H = 3.3;
 /** Footprint radius: the face's half-width plus the posts. */
-export const BOARD_R = W / 2 + 0.35;
+export const BOARD_R = W / 2 + 0.33;
 export const MAP_FACE = { w: W, h: H } as const;
 /** Face bottom above the ground (m): the low middle is where the hero stands in front of it. */
 const FACE_BOTTOM = 0.2;
