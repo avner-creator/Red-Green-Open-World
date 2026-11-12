@@ -36,7 +36,7 @@ import { EXPLAIN } from './script';
 import type { HowToTopic, KeyNames } from './script';
 import { topicOfPrompt } from './topics';
 import { sniffSpot } from './sniff';
-import { Leader, planPath } from './guide';
+import { LEAD, Leader, planPath } from './guide';
 import { terrainClear, terrainRoute, type TerrainProbe } from './route';
 import type { LeadOut } from './guide';
 import { FOLLOW, angleDelta, arrive, catchUpSpeed, followSlot, forward, keepClear, right, shouldTeleport, teleportSpot, turnTowards, yawTo } from './steer';
@@ -79,6 +79,12 @@ const VISIT_RADIUS: Record<Attraction, number> = {
   dotsigns: 7,
 };
 const TRAMPOLINE_MAT = 9;
+/**
+ * The body Pip plans the hero's way with: an upright cylinder from just above the autostep (0.45 m)
+ * to head height, the hero's radius plus `margin` (planned legs) or `followMargin` (a child walking
+ * straight at Pip).
+ */
+const PATH_BODY = { low: 0.5, halfH: 0.6, margin: 0.5, followMargin: 0.15 } as const;
 /** Pip is drawn this much bigger than his model (easier to see, more expressive). */
 export const PIP_SCALE = 1.22;
 
@@ -145,6 +151,8 @@ export interface BuddyTestApi {
   invite(name: string): boolean;
   /** Pip's planned way for the current lead (corner points), if any. */
   route(): [number, number][] | null;
+  /** The planner's checks for one straight leg (debug): wide (planned), near (first leg), follow. */
+  leg(ax: number, az: number, bx: number, bz: number): { wide: boolean; near: boolean; follow: boolean; run: boolean };
   /** The way Pip would plan from (x, z) to a place's lead destination (corner points; null = none). */
   plan(x: number, z: number, name: string): [number, number][] | null;
 }
@@ -263,7 +271,44 @@ export function createBuddy(ctx: GameContext): GameSystem {
   // Planning round fences: strictly nothing in between, and not up or down a steep step.
   const clearRun = (from: V2, to: V2): boolean =>
     Math.abs(ctx.world.heightAt(to.x, to.z) - ctx.world.heightAt(from.x, from.z)) < 1.2 && walkable(from, to, 0.05);
-  const leader = new Leader(walkable, clearRun);
+  /**
+   * The hero's footprint (an upright cylinder from just above the autostep to head height) swept
+   * along a straight walk, `margin` metres wider than the hero: true when no fixed scenery (helper
+   * hulls included) touches it. QA m1 (first lead): with the hero's bare radius a planned leg could
+   * graze the map board's post or the Scoops counter, and a child following a few metres behind
+   * (who cuts corners) stuck there.
+   */
+  const cylinders = new Map<number, InstanceType<typeof ctx.physics.rapier.Cylinder>>();
+  const sweepClear = (from: V2, to: V2, margin: number): boolean => {
+    const d = Math.hypot(to.x - from.x, to.z - from.z);
+    const R = ctx.physics.rapier;
+    try {
+      const r = PLAYER.radius + margin;
+      let cyl = cylinders.get(r);
+      if (!cyl) {
+        cyl = new R.Cylinder(PATH_BODY.halfH, r);
+        cylinders.set(r, cyl);
+      }
+      const g0 = ctx.world.heightAt(from.x, from.z);
+      const g1 = ctx.world.heightAt(to.x, to.z);
+      const y = PATH_BODY.low + PATH_BODY.halfH;
+      const at = { x: from.x, y: g0 + y, z: from.z };
+      if (d < 1e-3) return !ctx.physics.world.intersectionWithShape(at, ROT, cyl, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, solid);
+      const hit = ctx.physics.world.castShape(at, ROT, { x: to.x - from.x, y: g1 - g0, z: to.z - from.z }, cyl, 0, 1, false, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, solid);
+      return !hit;
+    } catch {
+      return true;
+    }
+  };
+  const steppable = (from: V2, to: V2): boolean =>
+    ctx.world.isLand(to.x, to.z) && Math.abs(ctx.world.heightAt(to.x, to.z) - ctx.world.heightAt(from.x, from.z)) < 1.2;
+  /** Planning: a leg with PATH_BODY.margin of room round the hero's body all the way. */
+  const clearWide = (from: V2, to: V2): boolean => steppable(from, to) && sweepClear(from, to, PATH_BODY.margin) && clearRun(from, to);
+  /** The first leg (from where the hero stands, maybe right by a wall): the follow margin. */
+  const clearNear = (from: V2, to: V2): boolean => steppable(from, to) && clearRun(from, to) && sweepClear(from, to, PATH_BODY.followMargin);
+  /** A child walking straight from the hero to Pip's spot gets there. */
+  const followable = (h: V2, s: V2): boolean => steppable(h, s) && sweepClear(h, s, PATH_BODY.followMargin);
+  const leader = new Leader(walkable, clearWide, followable, clearNear);
 
   /**
    * Lead destinations, validated once at the start of play (QA6 M3) with the same planner Pip
@@ -967,7 +1012,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     let pose: Pose = 'stand';
     let clear: number = FOLLOW.personal;
     const dHero = Math.hypot(pos.x - h.x, pos.z - h.z);
-    leadOut = leader.active && p.mode === 'walk' ? leader.update(dt, { x: pos.x, z: pos.z }, h) : null;
+    leadOut = leader.active && p.mode === 'walk' ? leader.update(dt, { x: pos.x, z: pos.z }, h, Math.hypot(ctx.input.state.moveX, ctx.input.state.moveY) > 0.3) : null;
     if (leadOut?.state === 'arrived') leadOut = null;
     if (leader.gaveUp) {
       // Watchdog: this place cannot be reached; the director picks the next-nearest one.
@@ -1246,10 +1291,15 @@ export function createBuddy(ctx: GameContext): GameSystem {
       ask: () => ask(),
       dests: () => [...dests].map(([name, c]) => ({ name, raw: [c.raw.x, c.raw.z], dest: [c.dest.x, c.dest.z], moved: c.moved, ok: c.ok })),
       invite: (name) => director.testInvite(name as Attraction),
+      leg: (ax, az, bx, bz) => {
+        const a = { x: ax, z: az };
+        const b = { x: bx, z: bz };
+        return { wide: clearWide(a, b), near: clearNear(a, b), follow: followable(a, b), run: clearRun(a, b) };
+      },
       route: () => leader.route?.map((p) => [p.x, p.z] as [number, number]) ?? null,
       plan: (x, z, name) => {
         const d = sink.anchor(name as Attraction);
-        return d ? (planPath({ x, z }, d, clearRun)?.map((p) => [p.x, p.z] as [number, number]) ?? null) : null;
+        return d ? (planPath({ x, z }, d, clearWide, 2.5, 900, { reach: LEAD.reach, clearStart: clearNear })?.map((p) => [p.x, p.z] as [number, number]) ?? null) : null;
       },
       voice: () => voice.requests.slice(),
       lead: () => ({

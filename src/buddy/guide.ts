@@ -26,6 +26,18 @@ export const LEAD = {
   stallMove: 0.5,
   /** Running this long (s) without getting 1 m closer to the destination = give up on it. */
   giveUpSeconds: 10,
+  /**
+   * The planned way may end this far short of a destination that stands on something solid (m):
+   * the trampoline's mat edge is 4.4 m inside its kerb rings (which the hero steps up, but a
+   * straight body sweep does not).
+   */
+  reach: 6,
+  /** Follower watchdog: pushing without getting anywhere this long (s) = Pip leads on from the hero. */
+  heroStuckSeconds: 2,
+  /** The hero moved / got closer by less than this (m) = no progress. */
+  heroMove: 0.5,
+  /** The hero is this close to Pip (m): following fine (the follower stops ~2.5 m behind). */
+  closeFollow: 3.2,
 } as const;
 
 export type LeadState = 'run' | 'wait' | 'fetch' | 'arrived';
@@ -53,8 +65,43 @@ function toward(from: V2, to: V2, d: number): V2 {
  * goes straight). Pure: `clear` does the physics. QA round 5: Pip led over rail fences that the
  * hero could not cross, because every straight hop was blocked and he went through anyway.
  */
-export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, step = 2.5, maxExpand = 900): V2[] | null {
-  if (clear(from, dest)) return [{ x: dest.x, z: dest.z }];
+export interface PlanOpts {
+  /**
+   * The way may stop this far short of `dest` (m; on the straight line to it): a destination on or
+   * next to a solid thing (the trampoline's mat edge, a counter) is never "clear" itself. The path
+   * then ends [approach point, dest]; the last leg is Pip's to run, not the hero's.
+   */
+  reach?: number;
+  /**
+   * Edges out of `from` use this (looser) check: the hero may stand closer to a wall than the
+   * planning margin, and must still be able to walk away from it.
+   */
+  clearStart?: (a: V2, b: V2) => boolean;
+}
+
+/** The point `reach` metres short of `dest` on the line from `p` (or `dest` itself when that close). */
+function approach(p: V2, dest: V2, reach: number): V2 {
+  const d = dist(p, dest);
+  if (reach <= 0 || d <= reach) return reach > 0 ? { x: p.x, z: p.z } : { x: dest.x, z: dest.z };
+  return toward(p, dest, d - reach);
+}
+
+export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, step = 2.5, maxExpand = 900, opts: PlanOpts = {}): V2[] | null {
+  const reach = opts.reach ?? 0;
+  const startClear = opts.clearStart ?? clear;
+  /** `p` (a grid point, or `from`) sees the destination: straight to it, or to `reach` short of it. */
+  const sees = (p: V2, start: boolean): V2 | null => {
+    const c = start ? startClear : clear;
+    if (c(p, dest)) return { x: dest.x, z: dest.z };
+    if (reach > 0) {
+      const a = approach(p, dest, reach);
+      if (dist(a, p) < 0.05 || c(p, a)) return a;
+    }
+    return null;
+  };
+  const tail = (p: V2, seen: V2): V2[] => (dist(seen, dest) < 1e-6 || dist(seen, p) < 0.05 ? [] : [seen]);
+  const seen0 = sees(from, true);
+  if (seen0) return [...tail(from, seen0), { x: dest.x, z: dest.z }];
   const key = (i: number, j: number): string => `${i},${j}`;
   const at = (i: number, j: number): V2 => ({ x: from.x + i * step, z: from.z + j * step });
   const h = (p: V2): number => dist(p, dest);
@@ -65,6 +112,7 @@ export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, s
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
   let expanded = 0;
   let end: Node | null = null;
+  let endSeen: V2 | null = null;
   while (open.length && expanded < maxExpand) {
     let bi = 0;
     for (let k = 1; k < open.length; k++) if (open[k].f < open[bi].f) bi = k;
@@ -74,9 +122,13 @@ export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, s
     closed.add(nk);
     expanded++;
     const p = at(n.i, n.j);
-    if (dist(p, dest) < step * 4 && clear(p, dest)) {
-      end = n;
-      break;
+    const start = !n.parent;
+    if (!start && dist(p, dest) < step * 4 + reach) {
+      endSeen = sees(p, false);
+      if (endSeen) {
+        end = n;
+        break;
+      }
     }
     for (const [di, dj] of dirs) {
       const i = n.i + di;
@@ -86,21 +138,26 @@ export function planPath(from: V2, dest: V2, clear: (a: V2, b: V2) => boolean, s
       const q = at(i, j);
       const g = n.g + step * Math.hypot(di, dj);
       if (g >= (best.get(k) ?? Infinity)) continue;
-      if (!clear(p, q)) continue;
+      if (!(start ? startClear : clear)(p, q)) continue;
       best.set(k, g);
       open.push({ i, j, g, f: g + h(q), parent: n });
     }
   }
-  if (!end) return null;
-  const pts: V2[] = [{ x: dest.x, z: dest.z }];
+  if (!end || !endSeen) return null;
+  const endP = at(end.i, end.j);
+  const pts: V2[] = [...tail(endP, endSeen), { x: dest.x, z: dest.z }];
   for (let n: Node | null = end; n && n.parent; n = n.parent) pts.unshift(at(n.i, n.j));
+  const lastIdx = pts.length - 1;
   // Shortcuts: from each point, jump to the farthest later point that is in clear sight.
   const out: V2[] = [];
   let cur = from;
   let i = 0;
   while (i < pts.length) {
-    let j = pts.length - 1;
-    while (j > i && !clear(cur, pts[j])) j--;
+    const c = cur === from ? startClear : clear;
+    let j = lastIdx;
+    // The destination itself (on a solid thing) is only ever reached from its approach point.
+    if (pts.length > 1 && endSeen && dist(endSeen, dest) > 1e-6 && j > i) j--;
+    while (j > i && !c(cur, pts[j])) j--;
     out.push(pts[j]);
     cur = pts[j];
     i = j + 1;
@@ -140,9 +197,27 @@ export class Leader {
    * at the end is fine). `clear(from, to)` (optional): strictly nothing in between, used to plan a
    * way round fences (`planPath`); without it Pip goes straight with small detours.
    */
+  /** Follower watchdog: where the hero was (and how far from Pip) when the current stretch began. */
+  private heroRef: V2 | null = null;
+  private heroRefD = 0;
+  private heroStuckT = 0;
+  /** Times Pip came back to lead a stuck follower from where they stand (debug / tests). */
+  rejoins = 0;
+
+  /**
+   * `walkable(from, to)`: a hop from `from` to `to` ends on land and nothing blocks it (a wall right
+   * at the end is fine). `clear(from, to)` (optional): strictly nothing in between, with a margin
+   * round the hero's body, used to plan a way round fences (`planPath`); without it Pip goes
+   * straight with small detours. `follow(hero, spot)` (optional): a child walking in a straight
+   * line from `hero` to `spot` gets there (the hero's body swept along it). Pip only runs on to a
+   * spot the hero can follow him to. `clearStart`: the planner's looser check for the first leg
+   * (the hero may stand closer to a wall than the margin).
+   */
   constructor(
     private readonly walkable: (from: V2, to: V2) => boolean = () => true,
     private readonly clear: ((from: V2, to: V2) => boolean) | null = null,
+    private readonly follow: ((hero: V2, spot: V2) => boolean) | null = null,
+    private readonly clearStart: ((from: V2, to: V2) => boolean) | null = null,
   ) {}
 
   /** The planned way, if any (debug / tests). */
@@ -162,7 +237,79 @@ export class Leader {
       this.path = [...via.slice(k), { x: dest.x, z: dest.z }];
       return;
     }
-    this.path = this.clear ? planPath(from, dest, this.clear) : null;
+    this.path = this.clear
+      ? planPath(from, dest, this.clear, 2.5, 900, { reach: LEAD.reach, clearStart: this.clearStart ?? undefined })
+      : null;
+  }
+
+  /**
+   * The next hop spot from Pip's spot that the hero can follow him to in a straight line (QA m1:
+   * a child 2–6 m behind walks straight at Pip and cuts the corner). Shorter hops along the same
+   * leg when the full one is not followable; null when even a short one is not (keep waiting:
+   * the hero comes closer).
+   */
+  private nextSpot(from: V2, hero: V2, dest: V2): V2 | null {
+    const s = this.hopFrom(from, dest);
+    // The last few metres (onto a mat, up to a counter) are the place itself: straight in.
+    if (!this.follow || dist(from, dest) <= LEAD.reach + 0.5 || this.follow(hero, s)) return s;
+    const d = dist(from, s);
+    for (const k of [0.6, 0.35, 0.15]) {
+      const p = toward(from, s, d * k);
+      if (this.follow(hero, p)) return p;
+    }
+    return null;
+  }
+
+  /**
+   * Lead on from where the hero stands (a stuck follower, or a corner the hero cannot see round):
+   * plan afresh from the hero, and Pip comes back to the first spot of that way, in a clear
+   * straight line from the hero.
+   */
+  private rejoin(hero: V2, dest: V2, why: string): void {
+    this.plan(hero, dest);
+    this.spot = this.path ? this.hopFrom(hero, dest) : this.straightHop(hero, dest);
+    if (this.follow && !this.follow(hero, this.spot)) {
+      const d = dist(hero, this.spot);
+      for (const k of [0.6, 0.35]) {
+        const p = toward(hero, this.spot, d * k);
+        if (this.follow(hero, p)) {
+          this.spot = p;
+          break;
+        }
+      }
+    }
+    this.waiting = false;
+    this.rejoins++;
+    this.why = why;
+    this.heroRef = null;
+    this.heroStuckT = 0;
+    this.bestD = Infinity;
+    this.noProgT = 0;
+  }
+
+  /**
+   * Follower watchdog: the hero pushes the stick but gets no closer (to Pip while he waits, or
+   * anywhere while he runs) for LEAD.heroStuckSeconds: Pip comes back and leads from the hero.
+   */
+  private watchHero(dt: number, pip: V2, hero: V2, dest: V2, pushing: boolean | undefined): void {
+    const d = dist(pip, hero);
+    if (!this.heroRef || !pushing || d < LEAD.closeFollow) {
+      this.heroRef = { x: hero.x, z: hero.z };
+      this.heroRefD = d;
+      this.heroStuckT = 0;
+      return;
+    }
+    const moved = dist(hero, this.heroRef) > LEAD.heroMove;
+    if (moved && (!this.waiting || d < this.heroRefD - LEAD.heroMove)) {
+      this.heroRef = { x: hero.x, z: hero.z };
+      this.heroRefD = d;
+      this.heroStuckT = 0;
+      return;
+    }
+    this.heroStuckT += dt;
+    if (this.heroStuckT > LEAD.heroStuckSeconds) {
+      this.rejoin(hero, dest, `follower stuck at (${hero.x.toFixed(1)}, ${hero.z.toFixed(1)}): leading on from there`);
+    }
   }
 
   /** Metres left to go from `p`: along the planned way, else straight. */
@@ -195,6 +342,9 @@ export class Leader {
     this.why = null;
     this.path = null;
     this.pathIdx = 0;
+    this.heroRef = null;
+    this.heroStuckT = 0;
+    this.rejoins = 0;
   }
 
   get active(): boolean {
@@ -257,7 +407,8 @@ export class Leader {
     }
   }
 
-  update(dt: number, pip: V2, hero: V2): LeadOut | null {
+  /** `pushing`: the player holds the stick (feeds the follower watchdog; unknown = off). */
+  update(dt: number, pip: V2, hero: V2, pushing?: boolean): LeadOut | null {
     const dest = this.dest;
     if (!dest) return null;
     if (dist(hero, dest) < this.arriveRadius) {
@@ -288,10 +439,17 @@ export class Leader {
       }
       this.waitT += dt;
       if (dist(pip, hero) < LEAD.waitFor || dist(hero, dest) < dist(pip, dest)) {
-        // The hero caught up: next hop.
-        this.spot = this.hopFrom(this.spot, dest);
-        this.waiting = false;
-        started = false;
+        // The hero caught up: next hop, one the hero can walk straight to (else wait for them to
+        // come closer; right beside Pip and still no clear line: lead on from the hero).
+        const next = this.nextSpot(this.spot, hero, dest);
+        if (next) {
+          this.spot = next;
+          this.waiting = false;
+          started = false;
+        } else if (dist(pip, hero) < LEAD.closeFollow) {
+          this.rejoin(hero, dest, 'no clear line from the hero to the next hop: leading on from the hero');
+          started = false;
+        }
       } else if (this.waitT > LEAD.fetchAfter) {
         this.fetching = true;
         this.waiting = false;
@@ -302,6 +460,7 @@ export class Leader {
       this.stallFrom = null;
       this.stallT = 0;
     } else this.watch(dt, pip, dest);
-    return { target: this.spot, state: this.waiting ? 'wait' : 'run', startedWaiting: started };
+    this.watchHero(dt, pip, hero, dest, pushing);
+    return { target: this.spot!, state: this.waiting ? 'wait' : 'run', startedWaiting: started };
   }
 }
