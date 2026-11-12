@@ -101,3 +101,4 @@
 - Map board keeps its place; badges in rows of 3/3/2 with "you are here" bottom-centre, sized to clear the compass bar (20–24 px at 640×360).
 - Map board gets a "reading view" (camera eases up and over the hero in a zone in front of the board) instead of more layout changes: measured at 640×360, frog and panda cover the bottom badges and hats cover corners for almost every hero; 12 px clearance would need a 4.5 m face and the spawn lane allows 3.5 m.
 - Pip plans every lead with a hero-sized body + 0.5 m clearance and only hops to spots a follower can reach in a straight line: the first lead must not depend on centimetres of plaza layout.
+- Map board reading view: near the board the camera eases up over the hero so the badges are never covered (layout alone could not give clearance for big heroes/hats); player look input cancels it.
