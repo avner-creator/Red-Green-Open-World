@@ -61,9 +61,9 @@ interface RunResult {
  * turns 90° right for 1.1 s, then heads for the waypoint again; blocked again soon after (a corner),
  * it tries left, then back, a little longer each time.
  */
-async function walk(points: [number, number][], seconds = 22, straight = false): Promise<RunResult> {
+async function walk(points: [number, number][], seconds = 22, straight = false, ring = false): Promise<RunResult> {
   return page.evaluate(
-    ([pts, secs, straightOnly]) => {
+    ([pts, secs, straightOnly, ringEnds]) => {
       const rg = window.__rg!;
       const cam = window.__rgCamera!;
       const sc = window.__rgScoops!;
@@ -76,7 +76,31 @@ async function walk(points: [number, number][], seconds = 22, straight = false):
         const dz = wz - site.z;
         return [cy * dx - sy * dz, sy * dx + cy * dz];
       };
-      const wps = pts.map(([x, z]) => W(x, z));
+      // A ring point inside something solid nobody can stand in (the Gear Shack kiosk and its
+      // slide-around hull reach into the ring north of the stand) moves in toward the stand until a
+      // hero fits: the bot comes from (or heads for) that side, from where a child could stand.
+      const R = rg.ctx.physics.rapier;
+      const probe = new R.Capsule(0.45, 0.4);
+      const blocked = (x: number, z: number): boolean => {
+        let hit = false;
+        const at = { x, y: rg.ctx.world.heightAt(x, z) + 0.95, z };
+        rg.ctx.physics.world.intersectionsWithShape(at, { x: 0, y: 0, z: 0, w: 1 }, probe, (c) => {
+          const b = c.parent();
+          if (b ? !b.isFixed() : c.collisionGroups() >>> 16 === 0x0002) return true; // moving things, the hero
+          hit = true;
+          return false;
+        }, R.QueryFilterFlags.EXCLUDE_SENSORS);
+        return hit;
+      };
+      const wps = pts.map(([x, z], i) => {
+        if (ringEnds && (i === 0 || i === pts.length - 1)) {
+          for (let s = 1; s >= 0.3; s -= 0.025) {
+            const q = W(x * s, 0.75 + (z - 0.75) * s);
+            if (!blocked(q[0], q[1])) return q;
+          }
+        }
+        return W(x, z);
+      });
       const [x0, z0] = wps[0];
       const h0 = Math.atan2(wps[1][0] - x0, wps[1][1] - z0);
       rg.teleport(x0, rg.ctx.world.heightAt(x0, z0) + 0.3, z0, h0);
@@ -180,7 +204,7 @@ async function walk(points: [number, number][], seconds = 22, straight = false):
       res.end = [...L(e.x, e.z), e.y - site.y].map((v) => +v.toFixed(2)) as [number, number, number];
       return res;
     },
-    [points, seconds, straight] as const,
+    [points, seconds, straight, ring] as const,
   );
 }
 
@@ -192,7 +216,7 @@ test('walking bot from 16 directions: never stuck, never in a friend or behind t
     const R = 10;
     const start: [number, number] = [Math.sin(a) * R, 0.75 + Math.cos(a) * R];
     const far: [number, number] = [-start[0], 1.5 - start[1]];
-    const r = await walk([start, [0, 3.2], far]);
+    const r = await walk([start, [0, 3.2], far], 22, false, true);
     const tag = `dir ${i}: ${JSON.stringify(r)}`;
     if (r.stalls.length || r.minFriend < 0.45 || r.camInFriend > 0 || r.behind > 0 || r.onTop > 0) fails.push(tag);
   }

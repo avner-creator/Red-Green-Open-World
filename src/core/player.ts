@@ -32,6 +32,9 @@ const CENTRE = HALF + PLAYER.radius;
 const MOVE_GROUPS = groups(GROUP_AVATAR, 0xffff & ~GROUP_AVATAR);
 /** A slide-around wall's hint holds this long after the last touch (s): no on/off flicker. */
 const SLIDE_HOLD = 0.3;
+/** Steered by a hint but held still this long (s) mutes hints for `SLIDE_MUTE` s. */
+const SLIDE_STUCK = 0.4;
+const SLIDE_MUTE = 1.5;
 
 /** The character picked last time (character select saves it), or null. Storage may be blocked. */
 /**
@@ -131,6 +134,13 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
   /** Last slide-around wall touched (slide-around.ts) and how long its hint still holds (s). */
   let slideWall: SlideEdge | null = null;
   let slideHold = 0;
+  /**
+   * A hint must never hold a hero still: steered but (nearly) not moving for `SLIDE_STUCK` s (a
+   * corner where something else stands, a hero pushed inside the hull) mutes hints for a while.
+   */
+  let slideStuckT = 0;
+  let slideMute = 0;
+  let steered = false;
   let grounded = false;
   let airTime = 0;
   let airPeak = 0;
@@ -591,9 +601,14 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     const startGrounded = grounded;
     let dir = inputActive ? cameraRelative(input.moveX, input.moveY, cameraYaw()) : { x: 0, z: 0 };
     // Pushing into a slide-around wall (QA8 m1): go round it instead of standing at it.
-    if (slideHold > 0 && slideWall && grounded && mode === 'walk') {
+    steered = false;
+    slideMute -= dt;
+    if (slideHold > 0 && slideWall && grounded && mode === 'walk' && slideMute <= 0) {
       const s = slideSteer(dir, slideWall);
-      if (s) dir = s;
+      if (s) {
+        dir = s;
+        steered = true;
+      }
     }
     const mag = Math.min(1, Math.hypot(dir.x, dir.z));
     const top = (input.sprint && inputActive ? PLAYER.sprintSpeed : PLAYER.walkSpeed) * modK.speed;
@@ -695,12 +710,23 @@ export async function createPlayer(ctx: GameContext, cameraYaw: () => number): P
     for (let i = 0, n = cc.numComputedCollisions(); i < n; i++) {
       const h = cc.computedCollision(i)?.collider?.handle;
       const e = h === undefined ? undefined : slideEdge(h);
-      if (e) {
+      // Only the hull's outer face steers: a hero on the inside (pushed or dropped there) is
+      // never turned along it (the contact point must lie on the hero's inner side of the wall).
+      const c = e ? cc.computedCollision(i) : null;
+      if (e && c && (position.x - (c.witness1.x + c.witness2.x) / 2) * e.nx + (position.z - (c.witness1.z + c.witness2.z) / 2) * e.nz > 0) {
         slideWall = e;
         slideHold = SLIDE_HOLD;
       }
     }
     if (slideHold <= 0) slideWall = null;
+    const wantSlide = Math.hypot(desired.x, desired.z);
+    if (steered && wantSlide > 1e-5 && Math.hypot(moved.x, moved.z) < wantSlide * 0.25) {
+      slideStuckT += dt;
+      if (slideStuckT > SLIDE_STUCK) {
+        slideMute = SLIDE_MUTE;
+        slideStuckT = 0;
+      }
+    } else slideStuckT = 0;
     position.x += moved.x;
     position.y += moved.y;
     position.z += moved.z;
