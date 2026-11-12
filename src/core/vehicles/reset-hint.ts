@@ -1,21 +1,22 @@
 /**
  * Reset hint for free rides (QA7 M1): after an unstick hop a round "reset" button pulses at the
- * right edge for a few seconds, with the key cap (R / Y; none on touch, where a tap on it resets).
+ * bottom centre (clear of the HUD corners and side buttons) for a few seconds, with the key cap
+ * (R / Y; none on touch, where a tap on it resets).
  * Wordless; white arrow on navy with a yellow cap and black outlines, so it reads in the R-only and
  * G-only channels alike.
  */
 
 const CSS = `
-.rg-ride-reset{all:unset;position:absolute;right:max(12px,3vmin);top:50%;transform:translateY(-50%) scale(.6);opacity:0;
+.rg-ride-reset{all:unset;position:absolute;left:50%;bottom:max(14px,4vmin);transform:translateX(-50%) scale(.6);opacity:0;
   width:max(48px,10vmin);height:max(48px,10vmin);border-radius:50%;background:#2b3557;border:.55vmin solid #000;
   box-shadow:0 0 0 .5vmin #fff,0 .7vmin 0 .5vmin #000;display:grid;place-items:center;cursor:pointer;
   transition:opacity .25s,transform .25s;pointer-events:none;touch-action:none}
-.rg-ride-reset.on{opacity:1;transform:translateY(-50%) scale(1);pointer-events:auto;animation:rg-ride-reset 1s ease-in-out infinite}
+.rg-ride-reset.on{opacity:1;transform:translateX(-50%) scale(1);pointer-events:auto;animation:rg-ride-reset 1s ease-in-out infinite}
 .rg-ride-reset svg{width:62%;height:62%;color:#fff}
 .rg-ride-reset .key{position:absolute;right:-1.2vmin;top:-1.2vmin;min-width:3.6vmin;height:3.6vmin;padding:0 .4vmin;border-radius:1vmin;
   background:#ffd93b;color:#15110a;border:.4vmin solid #000;display:grid;place-items:center;font:700 2.6vmin system-ui,sans-serif}
 .rg-ride-reset .key:empty{display:none}
-@keyframes rg-ride-reset{0%,100%{transform:translateY(-50%) scale(1)}50%{transform:translateY(-50%) scale(1.12)}}
+@keyframes rg-ride-reset{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.12)}}
 `;
 
 export interface ResetHint {
