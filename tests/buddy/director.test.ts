@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Line } from '../../src/buddy/dialogue';
 import { PRIORITY } from '../../src/buddy/dialogue';
-import { Director, HINT_GAP, INVITE_IDLE, INVITE_PATIENCE, STUCK_PUSH_SECONDS, WANDER_SECONDS } from '../../src/buddy/director';
+import { Director, HINT_GAP, INVITE_GAP, INVITE_IDLE, INVITE_PATIENCE, MAX_IGNORED, STUCK_PUSH_SECONDS, WANDER_SECONDS } from '../../src/buddy/director';
 import { REPEAT_SECONDS, ShuffleBag, UNSOLICITED_GAP } from '../../src/buddy/pools';
 import type { DirectorSink, DirectorView, LeadOptions } from '../../src/buddy/director';
 import type { Attraction } from '../../src/buddy/types';
@@ -86,7 +86,8 @@ describe('Director: the spoken welcome story', () => {
     d.begin(true);
     expect(d.step).toBe('story');
     expect(said[0].id).toBe('intro:welcome');
-    play(40, { heroSpeed: 4, look: 0.1 });
+    // (Story told, then the child has INVITE_PATIENCE seconds to come along before the call counts as ignored.)
+    play(24 + INVITE_PATIENCE - 2, { heroSpeed: 4, look: 0.1 });
     const beats = said.filter((l) => l.id === 'intro:welcome' || l.id?.startsWith('story:')).map((l) => l.text);
     expect(beats).toEqual(STORY.map((l) => l.text));
     expect(glasses()).toBe(1);
@@ -116,7 +117,7 @@ describe('Director: the spoken welcome story', () => {
   it('reaching the trampoline gives the jump how-to; two bounces finish the tour and lead on', () => {
     const { d, said, leads, play } = talking();
     d.begin(true);
-    play(40);
+    play(18 + INVITE_PATIENCE - 2);
     expect(said.some((l) => l.id === 'intro:jump')).toBe(false);
     play(0.2, { hero: { x: 56, z: -22 }, nearAttraction: 'trampoline' });
     expect(d.step).toBe('jump');
@@ -288,17 +289,23 @@ describe('ShuffleBag', () => {
   });
 });
 describe('Director: rescues', () => {
-  it('"follow me" backs off (12 s, 25 s, 45 s) with varied lines, never the same twice', () => {
-    const { d, said, play } = talking(1);
+  it('a child who does not come: re-calls back off (one per 25 s, then longer), go somewhere nearer, stop after MAX_IGNORED', () => {
+    const { d, said, leads, play } = talking(1);
     d.begin(true);
-    play(40, { heroSpeed: 0, hero: { x: -30, z: 0 } });
+    play(14, { heroSpeed: 0, hero: { x: 70, z: 20 } });
     expect(d.step).toBe('follow');
-    const n = said.length;
-    play(120, { heroSpeed: 0, hero: { x: -30, z: 0 } });
-    const f = said.slice(n).filter((l) => l.id === 'intro:follow');
-    expect(f.length).toBeGreaterThanOrEqual(2);
-    expect(f.length).toBeLessThanOrEqual(4);
+    expect(d.leadTo).toBe('trampoline');
+    play(200, { heroSpeed: 0, hero: { x: 70, z: 20 } });
+    // Ignored: the story's tour step ends, Pip calls again (to the nearer bounce pads), then stops.
+    expect(d.step).toBe('done');
+    const f = said.filter((l) => l.id === 'guide:invite');
+    expect(f.length).toBeGreaterThanOrEqual(1);
+    expect(f.length).toBeLessThanOrEqual(MAX_IGNORED - 1);
     expect(new Set(f.map((l) => l.text)).size).toBe(f.length);
+    expect(leads.filter((p) => p).some((p) => p!.x === 84 && p!.z === -12)).toBe(true);
+    expect(d.ignoredRun).toBe(MAX_IGNORED);
+    expect(d.leadTo).toBeNull();
+    expect(d.offers).toBeLessThanOrEqual(MAX_IGNORED);
   });
 
   it('stuck at the same fence after two rescues: Pip hops the hero free towards an attraction', () => {
@@ -324,16 +331,19 @@ describe('Director: rescues', () => {
     expect(opts.at(-1)).toMatchObject({ fetch: true, assist: true });
   });
 
-  it('wandering away from everything for 15 s brings Pip over (while new)', () => {
-    const { d } = setup();
+  it('wandering away from everything brings Pip over (while new), within the call cap', () => {
+    const { d, opts } = setup();
     d.begin(true);
     tick(d, 1);
     let x = -30;
-    for (let i = 0; i < 30 * (WANDER_SECONDS + 1); i++) {
+    // (Calls keep at least INVITE_GAP apart: the story's lead came first.)
+    for (let i = 0; i < 30 * (WANDER_SECONDS + INVITE_GAP + 2); i++) {
       x -= 5 / 30;
       d.update(1 / 30, view({ hero: { x, z: 0 }, heroSpeed: 5, look: 0.1 }));
     }
-    expect(d.rescues).toBeGreaterThanOrEqual(1);
+    // Pip runs over to the child (a fetching lead): a wander rescue or the re-call after the ignored lead.
+    expect(opts.some((o) => o?.fetch)).toBe(true);
+    expect(d.offers).toBeLessThanOrEqual(3);
   });
 
   it('never more than one unsolicited hint per HINT_GAP seconds', () => {

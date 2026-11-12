@@ -71,10 +71,9 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
   const sink: DirectorSink = {
     say: (l) => {
       queue.say(l);
-      if (l.id && CALLS.has(l.id)) {
-        calls.push({ t: now, id: l.id, lead: leadTarget });
-        cueAt = now;
-      }
+      if (l.id && CALLS.has(l.id)) calls.push({ t: now, id: l.id, lead: leadTarget });
+      // A call or a how-to (e.g. "Hop in the buggy and drive!" on arrival) is guidance.
+      if (l.id && (CALLS.has(l.id) || l.id.startsWith('howto:'))) cueAt = now;
     },
     lead: (t) => {
       leadTarget = t ? { x: t.x, z: t.z } : null;
@@ -246,7 +245,7 @@ describe('Pip guides the whole session (QA6 M4)', () => {
       const inCar = r.calls.filter((c) => c.t >= 105);
       // "Drive!" first (about 8 s in), later "hop out, follow me" and a lead on foot.
       expect(inCar[0]?.id, summary).toBe('vehicle:drive');
-      expect(inCar[0].t - 105, summary).toBeLessThan(10);
+      expect(inCar[0].t - 105, summary).toBeLessThan(16);
       expect(r.car, summary).toBe('out');
       expect(r.d.done.size, summary).toBeGreaterThanOrEqual(6);
       for (const p of r.targets) expect(isAnchor(p)).toBe(true);

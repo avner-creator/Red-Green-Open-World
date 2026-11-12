@@ -14,6 +14,7 @@
  */
 import * as THREE from 'three';
 import { chestHintState } from '../activities/chests';
+import { getRaceView } from '../activities/race';
 import { GEMS, PLAYER } from '../config';
 import { RAY_GROUPS } from '../core/physics';
 import { GIFT_ITEM } from '../activities/gear/goofy';
@@ -707,6 +708,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         voice.bark('yip');
       }
     }),
+    on('glasses:wait', () => director.onGlassesWait()),
     on('shop:open', () => director.onShopOpen()),
     on('shop:purchased', () => director.onPurchased()),
     on('item:unlocked', (e) => {
@@ -1159,13 +1161,17 @@ export function createBuddy(ctx: GameContext): GameSystem {
       if (playing) {
         pollPad();
         const st = ctx.input.state;
+        const veh = ride === 'vehicle' ? ctx.player.vehicle : null;
+        const racing = (getRaceView(ctx)?.phase ?? 'idle') !== 'idle';
         const view: DirectorView = {
           pushing: Math.hypot(st.moveX, st.moveY) > 0.3,
           look: Math.abs(st.lookX) + Math.abs(st.lookY),
           hero: hero(),
-          heroSpeed: heroSpeed(),
+          // In a vehicle: its speed (parked or driving, QA7 M2).
+          heroSpeed: veh ? Math.abs(veh.speed) : heroSpeed(),
           onFoot: ctx.player.mode === 'walk',
           ride,
+          vehicle: veh ? (veh.kind === 'horse' ? 'horse' : 'car') : null,
           nearAttraction: nearAttraction(),
           topic: focusTopic,
           chestHint: chestHint(),
@@ -1173,7 +1179,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
           remaining: ctx.session.state.remaining,
           hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
           busy: queue.busy,
-          inGame: ctx.player.mode === 'external',
+          // A race drives the buggy for the child: a game too (no drive cues, no suggestions).
+          inGame: ctx.player.mode === 'external' || racing,
           // Only the balloon skydive has a parachute (a trampoline bounce or bungee fall does not).
           chute: ctx.player.mode === 'external' && extKind === 'balloon',
         };
