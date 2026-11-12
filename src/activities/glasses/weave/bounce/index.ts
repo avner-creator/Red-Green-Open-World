@@ -77,6 +77,8 @@ export function create(env: WeaveEnv): WeavePart {
   const fxSpot = new THREE.Vector3();
   /** A Jump/Use press was seen during the current rise (tapping: the next fall does not count). */
   let risePress = false;
+  /** This descent was already checked (planned or too short): one check per descent, never per frame. */
+  let descentSeen = false;
   let wasOn = false;
   /** Test hook: perfect moment as a share of the allowed range (sticky until reset / null). */
   let forcedShare: number | null = null;
@@ -244,6 +246,7 @@ export function create(env: WeaveEnv): WeavePart {
     fxLeft = 0;
     Object.assign(streak, freshStreak());
     risePress = false;
+    descentSeen = false;
     wasOn = false;
     forcedShare = null;
     lookOffset.set(0, 0, 0);
@@ -263,6 +266,7 @@ export function create(env: WeaveEnv): WeavePart {
       if (!on) {
         wasOn = false;
         risePress = false;
+        descentSeen = false;
         if (fall) endFall();
         return;
       }
@@ -272,10 +276,13 @@ export function create(env: WeaveEnv): WeavePart {
       if (f.vy > 0) {
         // Rising (or the dwell on the mat): a landing ends the fall.
         if (fall) endFall();
+        descentSeen = false;
         if (pressed) risePress = true;
         return;
       }
       if (!fall) {
+        if (descentSeen) return;
+        descentSeen = true;
         startFall(f);
         if (!fall) return;
       }

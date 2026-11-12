@@ -14,10 +14,11 @@ import type { GlassesTier } from '../../../../types';
 
 export const BOUNCE_RING = {
   /**
-   * Shortest fall (s) that gets a ring. 1.5 s = a 25 m bounce: the walk-on 12 m and the first held
-   * 18 m bounce have none (too short for a fair, hard-to-guess window); 27 m, 40 m and 45 m do.
+   * Shortest fall (s) that gets a ring. 1.2 s = a 16 m bounce: the walk-on 12 m (1.04 s) has none;
+   * the first held 18 m bounce (1.28 s) does, since a child who holds Space for ~2 s and lets go
+   * only ever meets 18 m falls (QA round 7 M4: the ring never appeared at 1.5 s).
    */
-  minFall: 1.5,
+  minFall: 1.2,
   /** A press this close (s) to touchdown is the ordinary landing press: never counted. */
   landingIgnore: 0.35,
   /** The perfect moment lies between these shares of the fall. */
