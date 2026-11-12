@@ -18,8 +18,10 @@ function gauss(rng: () => number): number {
 }
 
 describe('perfect-bounce plan', () => {
-  it('no ring for the walk-on 12 m fall; a ring from the first held 18 m bounce (QA r7 M4)', () => {
-    expect(planFall(fallOf(12), 1, 0.5)).toBeNull();
+  it('a ring on medium bounces too (walk-on 12 m, decaying 10.7 m), none on small hops (QA8 m9)', () => {
+    expect(planFall(fallOf(9), 1, 0.5)).toBeNull();
+    for (const t of TIERS) expect(planFall(fallOf(10.7), t, 0.5)).not.toBeNull();
+    for (const t of TIERS) expect(planFall(fallOf(12), t, 0.5)).not.toBeNull();
     expect(planFall(fallOf(18), 1, 0.5)).not.toBeNull();
     expect(planFall(fallOf(27), 1, 0.5)).not.toBeNull();
     expect(planFall(fallOf(45), 3, 0.5)).not.toBeNull();
@@ -38,9 +40,10 @@ describe('perfect-bounce plan', () => {
     }
   });
 
-  it('the window narrows by tier and stays humane (≥ ±90 ms at tier 1)', () => {
+  it('the window narrows by tier and stays easy for an 8-year-old (±180 ms at tier 1, QA8 m9)', () => {
     const f = fallOf(45);
-    expect(windowHalf(f, 1)).toBeGreaterThanOrEqual(0.09);
+    expect(windowHalf(f, 1)).toBeGreaterThanOrEqual(0.18);
+    expect(windowHalf(f, 3)).toBeGreaterThanOrEqual(0.11);
     expect(windowHalf(f, 1)).toBeGreaterThan(windowHalf(f, 2));
     expect(windowHalf(f, 2)).toBeGreaterThan(windowHalf(f, 3));
   });
@@ -170,19 +173,20 @@ describe('perfect-bounce simulation', () => {
       rows.push(`${F.toFixed(2)} s: ${v.map((x, i) => `t${i + 1} ${(x * 100).toFixed(1)} %`).join(', ')}${planFall(F, 1, 0.5) ? '' : ' (no ring)'}`);
     }
     console.info(`bounce best fixed strategy:\n${rows.join('\n')}`);
-    // The asserted maxima (true values + < 1 point margin). 1.3 s (the held 18 m bounce) is the
-    // most guessable fall; still under a third at tier 1.
-    expect(table[1.3][0]).toBeLessThanOrEqual(0.32);
-    expect(table[1.57][0]).toBeLessThanOrEqual(0.235);
-    expect(table[2.02][0]).toBeLessThanOrEqual(0.165);
-    expect(table[3][0]).toBeLessThanOrEqual(0.11);
+    // The asserted maxima (true values + < 1 point margin). Since QA8 m9 the window is ±180 ms at
+    // tier 1 (easy for 8-year-olds), so short falls are guessable more often; the ring still pays
+    // off over guessing on every fall and tier 3 halves the odds of a guess.
+    expect(table[1.3][0]).toBeLessThanOrEqual(0.745);
+    expect(table[1.57][0]).toBeLessThanOrEqual(0.52);
+    expect(table[2.02][0]).toBeLessThanOrEqual(0.345);
+    expect(table[3][0]).toBeLessThanOrEqual(0.205);
     for (const F of [1.3, 1.57, 2.02, 3]) {
       expect(table[F][1]).toBeLessThan(table[F][0]);
       expect(table[F][2]).toBeLessThan(table[F][1]);
     }
   });
 
-  it('random presses hit rarely; a child who presses when the ring closes hits ≥ 90 %', () => {
+  it('random presses hit a third at most; a child who presses when the ring closes hits ≥ 90 %', () => {
     const rng = mulberry32(11);
     let blindHits = 0;
     let blindN = 0;
@@ -202,7 +206,7 @@ describe('perfect-bounce simulation', () => {
       if (aimed.kind === 'hit') aimedHits++;
     }
     console.info(`bounce random press t1: ${((100 * blindHits) / blindN).toFixed(1)} %, aimed ${((100 * aimedHits) / aimedN).toFixed(1)} %`);
-    expect(blindHits / blindN).toBeLessThan(0.15);
+    expect(blindHits / blindN).toBeLessThan(0.35);
     expect(aimedHits / aimedN).toBeGreaterThanOrEqual(0.9);
   });
 });

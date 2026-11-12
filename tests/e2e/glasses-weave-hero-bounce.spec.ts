@@ -151,8 +151,8 @@ const pressAgain = pressJump;
 test('bounce: idle off the trampoline; bold ring mid-fall (tier 1 and 3) only in the weak channel; its timing hidden from the strong eye', async () => {
   expect(await dbg('bounce')).toMatchObject({ active: false, tracked: 0 });
   expect(await draws('bounce')).toBe(0);
-  // Walk onto the mat holding Jump (a hold is not a press): 12 m (no ring), then 18 m with a ring.
-  // Each descent counts once (QA r7 M4: `falls` went up once per frame and no ring ever came).
+  // Walk onto the mat holding Jump (a hold is not a press): the walk-on 12 m bounce already gets a
+  // ring (QA8 m9: medium bounces too), then 18 m. Each descent counts once (QA r7 M4).
   await page.evaluate(() => {
     const rg = window.__rg!;
     const c = window.__rgThrills!.trampoline();
@@ -162,8 +162,12 @@ test('bounce: idle off the trampoline; bold ring mid-fall (tier 1 and 3) only in
   });
   let d = await stepBounceUntil('d.ring === true');
   expect(d).toMatchObject({ ring: true, falling: true, tier: 1, decided: false });
-  expect(d.fall as number).toBeGreaterThan(1.2);
-  expect(d.falls as number).toBeLessThanOrEqual(2);
+  expect(d.fall as number).toBeGreaterThan(0.95);
+  expect(d.falls as number).toBeLessThanOrEqual(1);
+  // The pictures below are of a big (held) bounce.
+  d = await stepBounceUntil('d.ring === true && d.fall > 1.2 && d.at < 0.1');
+  expect(d).toMatchObject({ ring: true, falling: true, tier: 1, decided: false });
+  expect(d.falls as number).toBeLessThanOrEqual(3);
   // Mid-fall, with the perfect moment late in the fall (the closing band still well outside).
   await force('bounce', { perfectAt: 0.8 });
   d = await stepBounceUntil('d.at >= 0.35');
