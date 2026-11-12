@@ -1,0 +1,4 @@
+vault {"ch":{"weak":"r","strong":"g"},"weakLayer":{"weak":255,"strong":0,"blue":0,"px":8426},"strongLayer":{"strong":250,"weak":0,"blue":0,"px":4425}}
+trampoline {"ch":{"weak":"r","strong":"g"},"weakLayer":{"weak":246,"strong":0,"blue":0,"px":484},"strongLayer":{"strong":0,"weak":0,"blue":0,"px":0}}
+board {"ch":{"weak":"r","strong":"g"},"weakLayer":{"weak":242,"strong":0,"blue":0,"px":44666},"strongLayer":{"strong":244,"weak":0,"blue":0,"px":7447}}
+errors 0 []

@@ -1,0 +1,8 @@
+QA9 driver (RG_PORT=4424 QA_CTL=4524) results, copied from run output:
+vault (steps/95-vault.js): wrong pad 0 -> misses 1; pads 3,1,2 -> progress 3 open true; final treasure true wallet 6; sep weakLayer strong 0 blue 0, strongLayer 0/0
+hero ring (s8/b06-hero-ring.js, fire >=0.4 s into sparkle): hits 3 misses 0 fired 3 last skill:hit cancelled 0
+gear shack 12 dirs (s8/a07-shack12.js): all 12 promptEnd=true maxStuckNoPrompt=0s
+buggy (s9-buggy.js): walk tool cart -> buggy stall 0; drive W 6 s from (-13,9) to (63,16) no hit
+scoops (s9-scoops2.js): 5 angles d<=0.65 stall 0; s9-scoops.js keys-only cone 12.8 s, cones 1
+secret paths (s8/a06-hop.js, QA_PATHS=[1,3], QA_MAXJ=80): trampoline max stone 15/15 jumps 41 falls 5; lighthouse max stone 5/26 jumps 80 falls 38
+pedestal (s9-ped.js): jump from last trampoline stone -> claimed true

@@ -73,14 +73,14 @@ for (const k of paths) {
       falls++;
       cur = onStone((await H.s()).p);
     }
-    if (jumps % 15 === 0) await H.snap(`m10/${k}-j${jumps}`);
+    if (jumps % 15 === 0) await H.snap(`paths9/${k}-j${jumps}`);
     if (globalThis.QA_HOPLOG) log(`j${jumps} tgt=${Math.min(cur + 1, S.length - 1)} landed=${landed} at=${hp.join(',')} on=${j} cur=${cur}`);
   }
   log(k, p.id, 'stones', S.length, 'checkpoints', JSON.stringify(p.checkpoints), 'max stone', maxI, 'jumps', jumps, 'falls', falls, 'gameSecs', gameT.toFixed(0), 'returns', (await I()).paths[k].returns);
   log(k, 'to pedestal', JSON.stringify(await H.walkTo(p.pedestal[0], p.pedestal[2], 4, 0.6)));
   await tap('KeyE', 60); await st(90, false);
   p = (await I()).paths[k];
-  await H.snap(`m10/${k}-end`);
+  await H.snap(`paths9/${k}-end`);
   out.push([p.id, p.claimed, maxI, jumps, falls]);
 }
 log(JSON.stringify(out));
