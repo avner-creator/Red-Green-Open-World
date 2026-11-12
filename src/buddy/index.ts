@@ -149,6 +149,11 @@ export interface BuddyTestApi {
   dests(): { name: string; raw: [number, number]; dest: [number, number]; moved: boolean; ok: boolean }[];
   /** Start an invitation lead to an attraction now (as after "Now you choose!"). */
   invite(name: string): boolean;
+  /**
+   * Pip is showing a new player round (after the intro) and these places are done: the next one
+   * done starts the tour's next lead (QA9 M1). `lead` = lead there now (a tour lead).
+   */
+  tour(done: string[], lead?: string): boolean;
   /** Pip's planned way for the current lead (corner points), if any. */
   route(): [number, number][] | null;
   /** The planner's checks for one straight leg (debug): wide (planned), near (first leg), follow. */
@@ -1343,6 +1348,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
       ask: () => ask(),
       dests: () => [...dests].map(([name, c]) => ({ name, raw: [c.raw.x, c.raw.z], dest: [c.dest.x, c.dest.z], moved: c.moved, ok: c.ok })),
       invite: (name) => director.testInvite(name as Attraction),
+      tour: (done, to) => director.testTour(done as Attraction[], (to ?? null) as Attraction | null),
       leg: (ax, az, bx, bz) => {
         const a = { x: ax, z: az };
         const b = { x: bx, z: bz };

@@ -1336,6 +1336,16 @@ export class Director {
     return this.callTo(a, 'invite');
   }
 
+  /** Test hook (`__rgBuddy.tour`): the intro is over, Pip is showing the child round, `done` done. */
+  testTour(done: readonly Attraction[], to: Attraction | null): boolean {
+    this.step = 'done';
+    this.guiding = true;
+    this.done.clear();
+    for (const a of done) this.done.add(a);
+    this.stopLead();
+    return to ? this.callTo(to, 'tour') : true;
+  }
+
   /**
    * Idle time (no attraction game, no ride, no lead, little movement) and whether a child shown
    * the way by an invitation follows it: closer and closer = following; standing about (not
