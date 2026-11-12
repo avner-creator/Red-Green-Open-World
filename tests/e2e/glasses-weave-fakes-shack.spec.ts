@@ -143,7 +143,8 @@ test('shack: board and gift boxes at the kiosk, clear of the shop prompt; channe
   for (const b of d.boxes) expect(Math.hypot(b.x - kiosk[0], b.z - kiosk[2])).toBeGreaterThan(3.5);
   await standAt(kiosk[0] + (kiosk[0] - 14) * 0.6, kiosk[2] + (kiosk[2] - 2) * 0.6, 0, 10);
   expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id)).toBe('gearShack');
-  // Sight lines (the fingerpost and every other collider): from each standing spot, the play spot's
+  // Sight lines (the fingerpost and every other visible collider; invisible movement helpers such
+  // as the shack's slide fills are skipped): from each standing spot, the play spot's
   // camera and both approaches across the plaza, nothing solid hides any corner of the picture.
   // The play spot: the first spot in front of the boxes whose default camera has a clear view.
   const sight = await page.evaluate((dd) => {
@@ -156,7 +157,7 @@ test('shack: board and gift boxes at the kiosk, clear of the shop prompt; channe
       for (const c of targets) {
         const dir = new V(c.x - o.x, c.y - o.y, c.z - o.z);
         const len = dir.length();
-        const hit = ctx.physics.raycast(o, dir.normalize(), len - 0.3);
+        const hit = ctx.physics.raycast(o, dir.normalize(), len - 0.3, { visibleOnly: true });
         if (hit) out.push(`(${c.x.toFixed(1)}, ${c.y.toFixed(1)}) at ${hit.distance.toFixed(2)}`);
       }
       return out;

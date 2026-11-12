@@ -345,8 +345,12 @@ export interface PhysicsApi {
    */
   addHeightfield(nx: number, nz: number, heights: Float32Array, size: { x: number; z: number }): RAPIER.Collider;
   removeCollider(collider: RAPIER.Collider): void;
-  /** First hit of a ray against static+dynamic geometry, or null. */
-  raycast(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number): { point: THREE.Vector3; normal: THREE.Vector3; distance: number } | null;
+  /**
+   * First hit of a ray against static+dynamic geometry, or null. `visibleOnly` skips invisible
+   * movement helpers (colliders in `GROUP_HELPER`, see `src/core/physics.ts`): use it for
+   * sightline checks ("does something the player can see hide this?").
+   */
+  raycast(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, opts?: { visibleOnly?: boolean }): { point: THREE.Vector3; normal: THREE.Vector3; distance: number } | null;
   /** Fixed-step the world. Called by main once per frame. */
   step(dt: number): void;
 }

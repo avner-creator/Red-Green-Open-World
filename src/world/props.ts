@@ -1,6 +1,8 @@
 /** Reusable street furniture and small props, built into the shared batcher, plus collider helpers. */
 import * as THREE from 'three';
 import type { PhysicsApi } from '../types';
+import type RAPIER from '@dimforge/rapier3d-compat';
+import { GROUP_HELPER, groups } from '../core/physics';
 import { Batcher, M, T } from './batch';
 import { blobG, boxG, coneG, cylG, flagG, pennantG, rbox, sphereG, torusG } from './shapes';
 
@@ -44,16 +46,26 @@ export class Colliders {
   readonly circles: Footprint[] = [];
   constructor(private physics: PhysicsApi) {}
   /** Box in the local frame of `m` (rotation and translation only). */
-  box(m: THREE.Matrix4, cx: number, cy: number, cz: number, hx: number, hy: number, hz: number): void {
+  box(m: THREE.Matrix4, cx: number, cy: number, cz: number, hx: number, hy: number, hz: number): RAPIER.Collider {
     m.decompose(_p, _q, _s);
     const c = new THREE.Vector3(cx, cy, cz).applyQuaternion(_q).add(_p);
-    this.physics.addStaticBox(c, new THREE.Vector3(hx, hy, hz), _q.clone());
+    const col = this.physics.addStaticBox(c, new THREE.Vector3(hx, hy, hz), _q.clone());
     // Footprint rectangle (low kerbs and slabs a hero steps onto are left out).
     if (hy > 0.15) {
       const ax = new THREE.Vector3(1, 0, 0).applyQuaternion(_q);
       this.circles.push({ x: c.x, z: c.z, r: 0, hx, hz, cos: ax.x, sin: -ax.z });
     }
-    this.count++;
+    this.count++;  return col;
+  }
+  /**
+   * Invisible movement helper box (no mesh: a slide fill or wedge). Solid like `box`, but in
+   * `GROUP_HELPER`, so sightline checks (`raycast(..., { visibleOnly: true })`) see through it.
+   */
+  helperBox(m: THREE.Matrix4, cx: number, cy: number, cz: number, hx: number, hy: number, hz: number): RAPIER.Collider {
+    const col = this.box(m, cx, cy, cz, hx, hy, hz);
+    // Unit-test physics stubs hand back plain objects; real Rapier colliders get the group.
+    if (typeof col?.setCollisionGroups === 'function') col.setCollisionGroups(groups(GROUP_HELPER, 0xffff));
+    return col;
   }
   cyl(x: number, y: number, z: number, halfH: number, r: number): void {
     this.physics.addStaticCylinder(new THREE.Vector3(x, y + halfH, z), halfH, r);

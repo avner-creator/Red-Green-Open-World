@@ -11,11 +11,19 @@ import type { GameContext, PhysicsApi } from '../types';
 export const GROUP_AVATAR = 0x0002;
 /** Vehicle chassis: solid for the walking player and props, but skipped by `PhysicsApi.raycast`. */
 export const GROUP_VEHICLE = 0x0004;
+/**
+ * Invisible movement helpers (no mesh of their own: slide fills, wedges round a post). Solid for
+ * everything, and ordinary rays (camera, gameplay probes) still hit them, but a sightline query
+ * (`raycast(..., { visibleOnly: true })`: "can the player see that?") skips them.
+ */
+export const GROUP_HELPER = 0x0008;
 const ALL = 0xffff;
 /** membership << 16 | filter */
 export const groups = (membership: number, filter: number): number => ((membership & ALL) << 16) | (filter & ALL);
 /** Query groups for rays that ignore the avatar and vehicle bodies (camera, gameplay probes). */
 export const RAY_GROUPS = groups(ALL, ALL & ~GROUP_AVATAR & ~GROUP_VEHICLE);
+/** Sightline rays: like `RAY_GROUPS`, and also skip invisible helpers (`GROUP_HELPER`). */
+export const SIGHT_RAY_GROUPS = groups(ALL, ALL & ~GROUP_AVATAR & ~GROUP_VEHICLE & ~GROUP_HELPER);
 
 /**
  * Fixed-step hooks. `physics.step(dt)` runs whole 1/60 s steps; anything simulated in those
@@ -102,12 +110,12 @@ export function createPhysicsSync(): PhysicsApi {
       return world.createCollider(RAPIER.ColliderDesc.heightfield(nz, nx, h, { x: size.x, y: 1, z: size.z }));
     },
     removeCollider: (c) => world.removeCollider(c, true),
-    raycast(origin, dir, maxDist) {
+    raycast(origin, dir, maxDist, opts) {
       const len = dir.length();
       if (len < 1e-9 || !(maxDist > 0)) return null;
       dirN.copy(dir).divideScalar(len);
       const ray = new RAPIER.Ray({ x: origin.x, y: origin.y, z: origin.z }, { x: dirN.x, y: dirN.y, z: dirN.z });
-      const hit = world.castRayAndGetNormal(ray, maxDist, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS);
+      const hit = world.castRayAndGetNormal(ray, maxDist, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, opts?.visibleOnly ? SIGHT_RAY_GROUPS : RAY_GROUPS);
       if (!hit) return null;
       const p = ray.pointAt(hit.timeOfImpact);
       return {

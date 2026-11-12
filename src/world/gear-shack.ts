@@ -442,7 +442,7 @@ export function buildGearShack(k: Kit): Keepout[] {
   // the notch between such a post and the wall held a hero walking along the side (8.75 s at the
   // kiosk corner, no prompt). See SHACK_SIDE_FILL / SHACK_WEDGES.
   for (const [x0, x1, z0, z1, hh] of SHACK_SIDE_FILL) {
-    k.col.box(m, (x0 + x1) / 2, hh / 2, (z0 + z1) / 2, Math.abs(x1 - x0) / 2, hh / 2, Math.abs(z1 - z0) / 2);
+    k.col.helperBox(m, (x0 + x1) / 2, hh / 2, (z0 + z1) / 2, Math.abs(x1 - x0) / 2, hh / 2, Math.abs(z1 - z0) / 2);
   }
   for (const [ax, az, bx, bz, hh] of SHACK_WEDGES) {
     const dx = bx - ax;
@@ -457,7 +457,7 @@ export function buildGearShack(k: Kit): Keepout[] {
       nz = -nz;
     }
     const t = 0.12;
-    k.col.box(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, hh / 2, 0, t, hh / 2, len / 2);
+    k.col.helperBox(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, hh / 2, 0, t, hh / 2, len / 2);
   }
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
