@@ -8,7 +8,7 @@ import type { CameraApi, GameContext } from '../types';
 import { clamp, orbitOffset, resolveArm, steerOverrideYaw } from './camera-math';
 import { createCameraCutout } from './camera-cutout';
 import { createCameraOccluders } from './camera-occluders';
-import { createHeroFade, distToBody, heroFadeAmount } from './camera-hero-fade';
+import { createHeroFade, distToBody, heroAxisTop, heroFadeAmount } from './camera-hero-fade';
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
@@ -154,7 +154,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   const heroMid = new THREE.Vector3();
   const heroBox = new THREE.Box3();
   /** Top of the hero incl. hat, above the feet (m), and seconds to its next measurement. */
-  let heroTop: number = PLAYER.height;
+  let heroTop = heroAxisTop(PLAYER.height, null);
   let topT = 0;
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
@@ -488,9 +488,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     if (topT <= 0) {
       topT = 0.3;
       heroBox.setFromObject(ctx.player.object);
-      heroTop = heroBox.isEmpty() ? PLAYER.height : Math.min(PLAYER.height + 1.5, Math.max(PLAYER.height, heroBox.max.y - pp.y));
+      heroTop = heroAxisTop(PLAYER.height, heroBox.isEmpty() ? null : heroBox.max.y - pp.y);
     }
-    const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + Math.max(PLAYER.height - 0.2, heroTop - 0.15), PLAYER.radius * 0.8);
+    const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + heroTop, PLAYER.radius * 0.8);
     // On horseback too (QA7 m5: pinned against the foam-course rim, the camera sat in the hero's
     // head); the buggy keeps its own chase framing.
     const fadeOk = phase !== 'title' && (!chase || ctx.player.mode === 'riding');

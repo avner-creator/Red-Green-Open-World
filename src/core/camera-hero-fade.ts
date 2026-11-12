@@ -30,6 +30,16 @@ export function distToBody(p: { x: number; y: number; z: number }, hx: number, h
   return Math.max(0, Math.hypot(p.x - hx, p.y - y, p.z - hz) - r);
 }
 
+/**
+ * Top of the hero's body axis above the feet (m) for the fade: the head (`height` − 0.2), or up to
+ * just under the top of whatever they wear (`wornTop`: the hero's bounds incl. hats and held items,
+ * QA7 m2), at most 1.5 m above the head.
+ */
+export function heroAxisTop(height: number, wornTop: number | null): number {
+  if (wornTop === null || !Number.isFinite(wornTop)) return height - 0.2;
+  return Math.max(height - 0.2, Math.min(height + 1.5, wornTop) - 0.15);
+}
+
 export interface HeroFade {
   /** Patch any new hero materials and set this frame's fade (0 = solid, 1 = gone). */
   update(root: THREE.Object3D, amount: number): void;
