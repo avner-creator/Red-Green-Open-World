@@ -124,3 +124,14 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - Majors: vault door never visibly opens (pays, but the mesh stays up); hero ring sparkle can't be won (fire counted as cancelled); child entering the buggy during Pip's story hears nothing for 250 s; foam run once started with the hero stuck beside the deck (not reproduced).
 - Fix branches off deb82ed: `agent/act-r8` (vault door, hero ring, foam start by construction, spiral secret paths, bounce window, dot-signs prompt, carnival/sumo/silly/race minors), `agent/pip-r8` (story never blocks guidance, parked cue cycle, open-menu cue, map board under the compass bar, dot-signs trail end), `agent/core-r8` (Gear Shack from behind, buggy parking heading, hat filling the screen, horse at the foam rim).
 - QA 8's view of what stands before v1.0: these four majors, then a person on audio, real glasses and a real phone. QA 8 did not test audio, gamepad, touch, real devices.
+
+## Batch 8 on main (ecd82bf)
+
+- Full verify green: 395 e2e passed, 5 skipped (43.6 min). `perf:check`: every view within budget.
+- In this batch: Pip fixes (vehicles, first lead, planner clearance), activities round 8, core round 8
+  (camera, Gear Shack, buggy parking), wider map board plus the board reading view (camera eases up
+  over the hero near the board; rex no longer always faded).
+- Next: one final QA pass (blockers/majors in the first five minutes only), owner playtest, DoD check, tag v1.0.
+- Minor list for after 1.0: gates arch hides head; carnival balloon top row under HUD bar; Pip route near
+  Scoops; dragon roost lead; workshop "close it" cue only simulated; spiral secret path not proven as one
+  climb; trampoline window maybe easy; map-board e2e is slow (~5 min).
