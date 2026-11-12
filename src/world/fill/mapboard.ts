@@ -49,9 +49,9 @@ const H = 3.04;
 /** Footprint radius: the face's half-width plus the posts. */
 export const BOARD_R = W / 2 + 0.33;
 export const MAP_FACE = { w: W, h: H } as const;
-/** Face bottom above the ground (m): the low middle is where the hero stands in front of it. */
-const FACE_BOTTOM = 0;
-/** Face centre height (m). Its top (3.05 m) stays below the spawn camera's eye line (~3.5 m). */
+/** Face bottom above the ground (m): raised so the hero's ears/arms (up to ~0.85 m up, 4.5 m away) stay off the bottom-row badge centres in any idle pose. */
+const FACE_BOTTOM = 0.4;
+/** Face centre height (m). Its top (3.44 m) stays below the spawn camera's eye line (~3.5 m). */
 const YC = FACE_BOTTOM + H / 2;
 /** Badge (decal) size and its cream ring (m). */
 export const MAP_BADGE = 0.96;
