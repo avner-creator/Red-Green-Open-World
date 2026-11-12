@@ -207,14 +207,64 @@ export function createBuddy(ctx: GameContext): GameSystem {
     const b = c.parent();
     return !b || b.isFixed();
   };
+  /**
+   * Where the hero stands at `p` (QA9 M2): the terrain, or the top of fixed scenery the hero steps up
+   * onto (the trampoline's kerb rings: 3 × 0.33 m above the terrain). Planning from the terrain height
+   * there put every ray inside the kerbs, so no way out was found and Pip ran straight at a fence.
+   * Only a surface as wide as the hero counts (the four corner rays land on it too, at about the
+   * same height): a rail or a post top is never a floor. Cached per 0.25 m (fixed scenery; cleared
+   * each session). See `legEnds`: a leg never climbs onto a raised floor, so a table or a counter top
+   * never becomes a stepping stone of a plan.
+   */
+  const floorCache = new Map<number, number>();
+  const FLOOR = { up: 1.1, foot: 0.3, flat: 0.4 } as const;
+  const topAt = (x: number, z: number, g: number): number | null => {
+    const R = ctx.physics.rapier;
+    const ray = new R.Ray({ x, y: g + FLOOR.up, z }, { x: 0, y: -1, z: 0 });
+    const hit = ctx.physics.world.castRay(ray, FLOOR.up - 0.05, true, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, solid);
+    // Starting inside something (a wall) is not standing on it.
+    return hit && hit.timeOfImpact > 0.02 ? g + FLOOR.up - hit.timeOfImpact : null;
+  };
+  const floorAt = (x: number, z: number): number => {
+    const g = ctx.world.heightAt(x, z);
+    const key = Math.round(x * 4) * 100003 + Math.round(z * 4);
+    const c = floorCache.get(key);
+    if (c !== undefined) return c;
+    let f = g;
+    try {
+      const top = topAt(x, z, g);
+      if (top !== null) {
+        const k = FLOOR.foot;
+        const ok = [[k, 0], [-k, 0], [0, k], [0, -k]].every(([dx, dz]) => {
+          const t = topAt(x + dx, z + dz, g);
+          return t !== null && Math.abs(t - top) < FLOOR.flat;
+        });
+        if (ok) f = top;
+      }
+    } catch {
+      f = g;
+    }
+    if (floorCache.size > 60000) floorCache.clear();
+    floorCache.set(key, f);
+    return f;
+  };
+  /**
+   * Ground heights at both ends of a straight leg. The start stands on its floor; the end too when
+   * that is no higher than the start (along the same kerb or bed, or stepping down off it); going up
+   * onto something it is the terrain, as before (climbing on is the scenery's job, not a plan's).
+   */
+  const legEnds = (from: V2, to: V2): [number, number] => {
+    const g0 = floorAt(from.x, from.z);
+    const f1 = floorAt(to.x, to.z);
+    return [g0, f1 <= g0 + 0.05 ? f1 : ctx.world.heightAt(to.x, to.z)];
+  };
   const sweep = (from: V2, to: V2): number => {
     const d = Math.hypot(to.x - from.x, to.z - from.z);
     if (d < 1e-3) return Infinity;
     const R = ctx.physics.rapier;
     try {
       heroBall ??= new R.Ball(PLAYER.radius);
-      const g0 = ctx.world.heightAt(from.x, from.z);
-      const g1 = ctx.world.heightAt(to.x, to.z);
+      const [g0, g1] = legEnds(from, to);
       let best = Infinity;
       for (const up of [0.82, 1.3]) {
         const hit = ctx.physics.world.castShape(
@@ -249,8 +299,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     if (sweep(from, to) <= d - endSlack) return false;
     const ux = (to.x - from.x) / d;
     const uz = (to.z - from.z) / d;
-    const g0 = ctx.world.heightAt(from.x, from.z);
-    const g1 = ctx.world.heightAt(to.x, to.z);
+    const [g0, g1] = legEnds(from, to);
     for (const up of [0.45, 1]) {
       const y0 = g0 + up;
       const y1 = g1 + up;
@@ -289,8 +338,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
         cyl = new R.Cylinder(PATH_BODY.halfH, r);
         cylinders.set(r, cyl);
       }
-      const g0 = ctx.world.heightAt(from.x, from.z);
-      const g1 = ctx.world.heightAt(to.x, to.z);
+      const [g0, g1] = legEnds(from, to);
       const y = PATH_BODY.low + PATH_BODY.halfH;
       const at = { x: from.x, y: g0 + y, z: from.z };
       if (d < 1e-3) return !ctx.physics.world.intersectionWithShape(at, ROT, cyl, R.QueryFilterFlags.EXCLUDE_SENSORS, RAY_GROUPS, undefined, undefined, solid);
@@ -761,6 +809,9 @@ export function createBuddy(ctx: GameContext): GameSystem {
     if (director.introActive && !GAME_KEYS.has(e.code)) director.skip();
   };
   window.addEventListener('keydown', onKey);
+  // A game played on foot (the Silly Zone) reports its end: Pip may lead on (QA9 M1).
+  const onAttractionDone = (): void => director.onActivityEnd();
+  window.addEventListener('rg:attraction-done', onAttractionDone);
 
   // ───────── events ─────────
   const offs: (() => void)[] = [];
@@ -860,6 +911,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     on('session:phase', (e) => {
       if (e.phase === 'playing' && e.previous !== 'paused') {
         placeSoon = true;
+        floorCache.clear();
         carryingKey = false;
         openedChests.clear();
         focusTopic = null;
@@ -1395,6 +1447,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     dispose(): void {
       for (const off of offs) off();
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('rg:attraction-done', onAttractionDone);
       for (const ev of ['keydown', 'pointerdown', 'wheel'] as const) window.removeEventListener(ev, onAnyInput, { capture: true });
       ctx.scene.remove(model.object);
       model.dispose();

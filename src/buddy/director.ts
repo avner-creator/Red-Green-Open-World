@@ -137,6 +137,18 @@ const KIND_TRIED_PENALTY = 45;
 export const QUICK: readonly Attraction[] = ['trampoline', 'bouncePads', 'launchPads', 'bungee', ...GLASSES_ATTRACTIONS];
 /** Gem pickups between two "gem" cheers. */
 export const GEM_MILESTONE = 5;
+/**
+ * QA9 M2: a place a lead could not get to is skipped for this long (s), then offered again (a child
+ * or a prop in the way is not a wall forever). Each further failure doubles it.
+ */
+export const LEAD_RETRY = 60;
+/**
+ * QA9 M1: an activity started on foot (a ticket at a ring, a pad or a booth) holds every lead until
+ * the game takes the hero over and lets go, or, for a game played on foot (the Silly Zone), until it
+ * is done, the hero walks this far (m) from where it started, or ACTIVITY_HOLD_MAX s pass.
+ */
+export const ACTIVITY_LEAVE = 26;
+export const ACTIVITY_HOLD_MAX = 60;
 
 /** The first attraction of the tour (free, fun, no button needed but jump). */
 export const FIRST_ATTRACTION: Attraction = 'trampoline';
@@ -279,10 +291,20 @@ export class Director {
   frees = 0;
   /** Why the last lead changed target (debug: `__rgBuddy.lead().why`). */
   why: string | null = null;
-  /** Places a lead gave up on this session (unreachable). */
+  /**
+   * Places Pip does not lead to now: no walkable way from the plaza (all session), or a lead that
+   * gave up on it (until its retry time, LEAD_RETRY).
+   */
   readonly unreachable = new Set<Attraction>();
-  /** An attraction game is running (see DirectorView.inGame). */
+  /** Lead failures per place, and when a failed place may be led to again (play seconds). */
+  private readonly failures = new Map<Attraction, number>();
+  private readonly retryAt = new Map<Attraction, number>();
+  /** An attraction game is running (see DirectorView.inGame), or an activity was just started. */
   quiet = false;
+  /** The hero is in a game right now (DirectorView.inGame, last frame). */
+  private gameNow = false;
+  /** An activity started (QA9 M1): held until it ends (see ACTIVITY_HOLD_MAX). */
+  private hold: { t: number; from: V2 | null; tookOver: boolean } | null = null;
   private rescueTimes: number[] = [];
   private lastHero: V2 | null = null;
   private realSpeed = 0;
@@ -422,7 +444,11 @@ export class Director {
     this.frees = 0;
     this.why = null;
     this.unreachable.clear();
+    this.failures.clear();
+    this.retryAt.clear();
     this.quiet = false;
+    this.gameNow = false;
+    this.hold = null;
     this.rescueTimes = [];
     this.lastHero = null;
     this.realSpeed = 0;
@@ -598,14 +624,46 @@ export class Director {
   }
 
   onTicketPaid(free = false): void {
+    // A ticket = an activity starts right now (before it takes the hero over): no lead from here on.
+    this.onActivityStart();
     this.progress();
     this.didSomething();
     if (!free) this.econ('ticket');
   }
 
   onTicketDenied(price: number, wallet: number): void {
+    // Too few gems: the activity still starts (a practice round).
+    this.onActivityStart();
     this.say(line(needGems(Math.max(1, price - wallet)), PRIORITY.tip));
     this.sink.bark('whine');
+  }
+
+  /**
+   * QA9 M1: an activity was started (a ticket, a countdown, a game taking the hero over). From now
+   * until it ends Pip starts no lead and goes on with none: a lead already chosen is dropped, and
+   * the tour picks its next place once the activity is over.
+   */
+  onActivityStart(): void {
+    if (this.hold) {
+      this.hold.t = 0;
+    } else this.hold = { t: 0, from: this.lastHero ? { ...this.lastHero } : null, tookOver: false };
+    this.quiet = true;
+    this.cancelLeadForActivity();
+  }
+
+  /** An activity played on foot reported its end (`rg:attraction-done`): the hold is over. */
+  onActivityEnd(): void {
+    if (this.hold && !this.hold.tookOver) this.hold = null;
+  }
+
+  private cancelLeadForActivity(at: Attraction | null = this.at): void {
+    // (A lead to the very place the activity is at has got there.)
+    if (this.leadTo && this.leadTo !== at) {
+      // (Not the child ignoring a call: they are playing.)
+      if (this.offer?.kind === 'lead') this.acted();
+      this.stopLead();
+      if (this.guiding && this.step === 'done') this.pendingLead = true;
+    }
   }
 
   /** A Fun Pass stamp (or something that earns one) happened. */
@@ -636,7 +694,8 @@ export class Director {
   }
 
   onTick(remaining: number): void {
-    if (this.quiet) return;
+    // Not in the middle of a game (an activity just started on foot is fine: the sun matters).
+    if (this.gameNow) return;
     if (!this.sunsetSaid && remaining <= 30 && remaining > 0) {
       this.sunsetSaid = true;
       this.say(line(SUNSET, PRIORITY.tip, 'sunset'));
@@ -681,7 +740,13 @@ export class Director {
     this.sinceProgress += dt;
     this.fed = false;
     const wasQuiet = this.quiet;
-    this.quiet = !!v.inGame;
+    this.gameNow = !!v.inGame;
+    this.updateHold(dt, v);
+    this.quiet = !!v.inGame || !!this.hold;
+    // A game took the hero over at a place (also one with no ticket: the trampoline, the bungee):
+    // the same. (Not an emote or a super power on the way: the lead goes on after it.)
+    if (this.quiet && !wasQuiet && v.nearAttraction) this.cancelLeadForActivity(v.nearAttraction);
+    this.retryFailed();
     if (this.quiet) {
       // Nothing builds up during a game (no "stuck" or "idle" line right after it).
       this.sinceProgress = 0;
@@ -1195,7 +1260,11 @@ export class Director {
       this.leadToPlace(to, 'tour');
       return;
     }
+    // Skipped for a while, not for the session: offered again after LEAD_RETRY (longer each time).
+    const n = (this.failures.get(to) ?? 0) + 1;
+    this.failures.set(to, n);
     this.unreachable.add(to);
+    this.retryAt.set(to, this.playT + LEAD_RETRY * 2 ** (n - 1));
     const kind = this.leadKind;
     this.stopLead();
     // A call that cannot get there is not the child's doing (not counted as ignored).
@@ -1206,9 +1275,42 @@ export class Director {
     if (kind === 'tour' && this.guiding) {
       const next = this.nearestPlace(this.sink.anchor(to) ?? { x: 0, z: 0 }, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && !this.unreachable.has(p));
       if (next && this.leadToPlace(next, 'tour')) {
-        // The same call goes on to the next place (not a new one).
+        // The same call goes on to the next place (not a new one). Pip says so (QA9 M2: he turned
+        // round without a word and the child did not know he was going somewhere else).
         this.offer = o ? { ...o, to: next, best: Infinity, t: 0 } : null;
+        this.changedMind(next);
       } else this.guiding = false;
+    }
+  }
+
+  /** "This way, buddy!" with the new place's icon: the lead goes somewhere else now. */
+  private changedMind(to: Attraction): void {
+    this.lastHint = this.playT;
+    this.sink.bark('bark');
+    const pick = this.bag('follow').next((l) => this.fresh(l.text));
+    this.say({ ...line({ ...follow(to), ...(pick ? { text: pick.text } : {}) }, PRIORITY.tip, 'guide:change'), valid: () => this.leadTo === to });
+  }
+
+  /** QA9 M1: is the activity started on foot still going? (See ACTIVITY_HOLD_MAX.) */
+  private updateHold(dt: number, v: DirectorView): void {
+    const h = this.hold;
+    if (!h) return;
+    h.t += dt;
+    h.from ??= { x: v.hero.x, z: v.hero.z };
+    if (v.inGame) {
+      h.tookOver = true;
+      return;
+    }
+    const away = Math.hypot(v.hero.x - h.from.x, v.hero.z - h.from.z) > ACTIVITY_LEAVE;
+    if (h.tookOver || away || h.t > ACTIVITY_HOLD_MAX) this.hold = null;
+  }
+
+  /** A place a lead gave up on may be led to again once its retry time has come (QA9 M2). */
+  private retryFailed(): void {
+    for (const [a, t] of this.retryAt) {
+      if (this.playT < t) continue;
+      this.retryAt.delete(a);
+      this.unreachable.delete(a);
     }
   }
 
