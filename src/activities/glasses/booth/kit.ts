@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three';
 import type { GameContext, GlassesTier, Interactable } from '../../../types';
+import { FIXED_SITES } from '../sites';
 import { deviceFor } from './cells';
 import type { BoothPrompt } from './cells';
 import { createBoothController } from './booth';
@@ -294,6 +295,8 @@ export function createBoothKit(d: BoothDeps, setup: BoothSetup): BoothKit {
           waitCamT = WAIT_CAM_HOLD;
           ctx.audio.play('star', { volume: 0.7, pitch: 1.2 });
           ctx.events.emit('ui:toast', { icon: 'step' });
+          // Pip: "Back to the pad!"
+          ctx.events.emit('glasses:wait', { mechanic: FIXED_SITES[d.slot]?.id ?? 'booth' });
           break;
         case 'fetch':
           fetchToPad();

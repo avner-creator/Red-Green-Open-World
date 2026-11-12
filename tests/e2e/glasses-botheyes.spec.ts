@@ -443,8 +443,15 @@ test('gates: a child who stays past the arch: arrows lead back, then a boing pop
   expect(d.phase).toBe('wait');
   const trail = (d.kit as unknown as { trail: number }).trail;
   expect(trail, 'ground arrows lead back to the pad').toBeGreaterThan(2);
-  // The nudge (4 s): the camera swings round to show the arrows running back to the pad.
+  // The nudge (4 s): the camera swings round to show the arrows running back to the pad, and
+  // `glasses:wait` names the site (Pip: "Back to the pad!").
+  await page.evaluate(() => {
+    const w = window as unknown as { __waits: string[] };
+    w.__waits = [];
+    window.__rg!.ctx.events.on('glasses:wait', (e) => w.__waits.push(e.mechanic));
+  });
   await step(4 * 60);
+  expect(await page.evaluate(() => (window as unknown as { __waits: string[] }).__waits)).toEqual(['gates']);
   expect(await page.evaluate(() => window.__rg!.cameraOverridden()), 'camera shows the way back').toBe(true);
   await shots(BOOTH_OUT, 'gates-wait-trail', true);
   // No input at all: called back, then popped onto the pad and the next run starts.
