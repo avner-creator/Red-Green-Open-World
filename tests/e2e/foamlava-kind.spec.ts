@@ -189,6 +189,110 @@ test('result card camera: clear of the start-arch pillars wherever the hero fini
   }
 });
 
+test('QA8 M1: a blocker on the ring edge: the ring stays empty, GO puts the hero on the deck, dead input is rescued within 2 s', async () => {
+  // Idle, hero 9 m east of the start ring, a wall (like a parked horse) right on the ring's edge.
+  const setup = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = window.__rgFoam!;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 30, false);
+    const [x, y, z] = f.pad().at;
+    const V = rg.ctx.player.position.constructor as new (x: number, y: number, z: number) => typeof rg.ctx.player.position;
+    const wall = rg.ctx.physics.addStaticBox(new V(x + 2.3, y + 1, z), new V(0.35, 1.2, 2.6));
+    (window as unknown as { __m1Wall: unknown }).__m1Wall = wall;
+    const px = x + 9;
+    rg.teleport(px, rg.ctx.world.heightAt(px, z) + 0.3, z, -Math.PI / 2);
+    rg.step(1 / 60, 20, false);
+    return { phase: f.phase(), x, z };
+  });
+  expect(setup.phase).toBe('idle');
+  // Walk west into the wall with W held for 5 s: blocked outside the ring, which never fills.
+  await page.keyboard.down('KeyW');
+  let maxFill = 0;
+  for (let i = 0; i < 20; i++) {
+    const r = await page.evaluate(() => {
+      window.__rg!.step(1 / 60, 15, false);
+      return { fill: window.__rgFoam!.pad().fill, phase: window.__rgFoam!.phase() };
+    });
+    maxFill = Math.max(maxFill, r.fill);
+    expect(r.phase).toBe('idle');
+  }
+  const stuck = await page.evaluate(() => {
+    const p = window.__rg!.ctx.player.position;
+    const [x, , z] = window.__rgFoam!.pad().at;
+    return Math.hypot(p.x - x, p.z - z);
+  });
+  expect(stuck).toBeGreaterThan(1.4);
+  expect(maxFill).toBe(0);
+  // E at the booth starts it (the booth's own rule, from where the wall stopped the hero); W stays
+  // held through the countdown.
+  await page.evaluate(() => {
+    window.__rgFoam!.start();
+    window.__rg!.step(1 / 60, 3, false);
+  });
+  expect(await page.evaluate(() => window.__rgFoam!.phase())).toBe('countdown');
+  // Break the hero's spot during the countdown (as if something had moved them off the deck).
+  const deckAt = await page.evaluate(() => {
+    const f = window.__rgFoam!;
+    const at = [f.sim.p.x, f.sim.p.z];
+    f.sim.p.x += 6;
+    f.sim.p.z += 3;
+    return at;
+  });
+  for (let i = 0; i < 40 && (await page.evaluate(() => window.__rgFoam!.phase())) === 'countdown'; i++) {
+    await page.evaluate(() => window.__rg!.step(1 / 60, 6, false));
+  }
+  const go = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = window.__rgFoam!;
+    const s = f.sim.p;
+    const at = f.toWorld(s.x, s.y, s.z);
+    const p = rg.ctx.player.position;
+    return { phase: f.phase(), mode: rg.ctx.player.mode, follow: Math.hypot(at[0] - p.x, at[2] - p.z), local: [s.x, s.z] };
+  });
+  expect(go.phase).toBe('run');
+  expect(go.mode).toBe('external');
+  expect(go.follow).toBeLessThan(0.05);
+  // On the start deck (the sim's start spot), not where it was pushed to.
+  expect(Math.hypot(go.local[0] - deckAt[0], go.local[1] - deckAt[1])).toBeLessThan(0.3);
+  const p0 = await page.evaluate(() => [window.__rgFoam!.sim.p.x, window.__rgFoam!.sim.p.z]);
+  await page.evaluate(() => window.__rg!.step(1 / 60, 90, false));
+  const p1 = await page.evaluate(() => [window.__rgFoam!.sim.p.x, window.__rgFoam!.sim.p.z]);
+  expect(Math.hypot(p1[0] - p0[0], p1[1] - p0[1])).toBeGreaterThan(2);
+
+  // Dead input: the course sim stops answering. Within 2 s of pushing the guard hops the hero back.
+  const rescued = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const f = window.__rgFoam!;
+    const before = f.rescues();
+    const sim = f.sim as unknown as { step: (...a: unknown[]) => unknown[] };
+    sim.step = () => [];
+    let frames = 0;
+    while (f.rescues() === before && frames < 200) {
+      rg.step(1 / 60, 1, false);
+      frames++;
+    }
+    delete (sim as { step?: unknown }).step;
+    return { frames, n: f.rescues() - before, mode: rg.ctx.player.mode, phase: f.phase() };
+  });
+  expect(rescued.n).toBe(1);
+  expect(rescued.frames).toBeLessThanOrEqual(2 * 60 + 5);
+  expect(rescued.mode).toBe('external');
+  expect(rescued.phase).toBe('run');
+  await page.keyboard.up('KeyW');
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 20, false);
+    const w = (window as unknown as { __m1Wall: Parameters<typeof rg.ctx.physics.removeCollider>[0] }).__m1Wall;
+    rg.ctx.physics.removeCollider(w);
+  });
+});
+
 test('no errors', () => {
   expect(consoleErrors).toEqual([]);
 });
