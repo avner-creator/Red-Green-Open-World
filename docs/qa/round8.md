@@ -86,7 +86,22 @@ Understood = a non-reader knows what to do within 10 s. Fun 1–5.
 
 ## Part C: three 5-minute sessions as a follower
 
-PART_C_TABLE
+Follower bot (`first3.mjs`, `QA_E=1`): walks after Pip, jumps when told, presses E at prompts, obeys Pip's "hop out"
+in a vehicle. It does not play the games themselves (Part B covers those), so "fun" here means arriving at a place.
+
+| Run | Hero, glasses | First fun | Places Pip took the child | Longest stretch with no lead/invite | Pip lines said > 3 times | End screen |
+|---|---|---|---|---|---|---|
+| C1 | panda, red left, weak left | trampoline 26 s | trampoline, bounce pads, rocket pads, dot signs, buggy (sat in it from 110 s: bot did not yet obey "hop out") | **153 → 270 s** in the buggy: only tips, then "Hurry! Sunset" | none | reached; R-only and G-only readable (`first3-desktop-c1/zz-end.G.png`) |
+| C2 | bee, green left (red right), weak right | trampoline 26 s | + buggy (hopped out at 109 s), ice cream, race, soccer, dino sumo, toys, planes: 11 places | ≈ 25–35 s between invitations after 120 s | none | reached, readable in R and G |
+| C3 | pup, red left, weak right | trampoline 26 s | same as C2 plus Silly Zone at 297 s: 11 places | ≈ 25–35 s | none | reached, readable in R and G (`first3-desktop-c3/zz-end.R.png`) |
+
+- Pip now guides for the whole 5 minutes and offers a new place every 25–35 s; each place gets its spoken how-to. No line
+  repeats more than 3 times in any run (C2's first try, where the bot climbed straight back into the buggy, had "Zoom!" ×4
+  and "Let's go! It's this way!" ×4: `logs/c2a-bee-reenters.txt`).
+- All three runs are deterministic (same lines, same 16 gems, Fun Pass 3/25): visiting is not stamping; only playing
+  stamps the Fun Pass.
+- Console errors 0 in all runs. Misuse: E ×20 at the Gear Shack opens the shop once, buys nothing; E ×20 at the race booth
+  starts the race and the next E leaves it again (race idle, no charge); Esc pauses and resumes everywhere tried.
 
 ## Channel spot checks
 
@@ -135,6 +150,7 @@ None.
 - m11 (core/vehicles horse) Horse inside the foam course could not ride back out to the start ring (8 s stall).
 - m12 (buddy) Workshop menu left open: Pip silent the whole session (child opened the garage workshop at 10 s, 285 s no line).
 - m13 (world/wayfinding) Dot-signs stepping-stone trail still ends at the back of the booth sign.
+- m14 (activities/race) Spamming E at the race booth: the second E gets out of the buggy and the race is gone.
 
 ## Not tested
 Audio by ear. Real-time feel (all play stepped; Part 0 only measured). Real phone/touch and gamepad this round. Real
@@ -144,4 +160,11 @@ keys). Hoop gem in the skydive (fell beside it). Combo-number hero sparkle. A cl
 
 ## Release readiness
 
-RELEASE
+The build is close. Every round 7 major is fixed or reduced, the frame-time scare was the machine, the red-green core held
+at every place I checked (strong and blue delta exactly 0), there were no console errors, and a child who follows Pip
+now gets a guided tour of 10–11 places in 5 minutes with a readable end screen in both channels. Before handing it to a
+child I would fix four things: the vault door that never opens visibly (M3: the payoff of a whole puzzle), the hero ring
+that cannot be won (M4), Pip's silence for a child who climbs into the buggy early or stays in it (M2), and the foam
+freeze (M1, one sighting; needs a repro by the owner). After that the remaining risks are things only people can judge:
+audio by ear, real glasses on a real monitor (crosstalk), a real phone, and a real 8-year-old. The minors (Gear Shack back
+side, dot-signs facing rule, spiral secret paths, camera close-ups) are polish, not blockers.
