@@ -132,6 +132,8 @@ export class Leader {
   /** The planned way (corner points) and the next corner Pip heads for. */
   private path: V2[] | null = null;
   private pathIdx = 0;
+  /** A coarse way over the terrain (round a cliff, QA7 m14) to follow instead of a local plan. */
+  private via: V2[] | null = null;
 
   /**
    * `walkable(from, to)`: a hop from `from` to `to` ends on land and nothing blocks it (a wall right
@@ -150,8 +152,17 @@ export class Leader {
 
   /** Plan the way from `from` (the hero, or Pip after a stall). */
   private plan(from: V2, dest: V2): void {
-    this.path = this.clear ? planPath(from, dest, this.clear) : null;
     this.pathIdx = 0;
+    const via = this.via;
+    if (via?.length) {
+      // Along the terrain route from its point nearest to `from` (a cliff in the straight way).
+      let k = 0;
+      for (let i = 1; i < via.length; i++) if (dist(from, via[i]) < dist(from, via[k])) k = i;
+      if (dist(from, via[k]) < LEAD.hop * 0.5 && k < via.length) k++;
+      this.path = [...via.slice(k), { x: dest.x, z: dest.z }];
+      return;
+    }
+    this.path = this.clear ? planPath(from, dest, this.clear) : null;
   }
 
   /** Metres left to go from `p`: along the planned way, else straight. */
@@ -163,9 +174,13 @@ export class Leader {
     return d;
   }
 
-  /** Lead to `dest` (null = stop leading). `fetchFirst`: run to the hero before leading. */
-  set(dest: V2 | null, arriveRadius = 6, fetchFirst = false): void {
+  /**
+   * Lead to `dest` (null = stop leading). `fetchFirst`: run to the hero before leading. `via`: corner
+   * points of a terrain route to follow (when the straight way crosses a cliff).
+   */
+  set(dest: V2 | null, arriveRadius = 6, fetchFirst = false, via: readonly V2[] | null = null): void {
     this.dest = dest ? { x: dest.x, z: dest.z } : null;
+    this.via = dest && via?.length ? via.map((p) => ({ x: p.x, z: p.z })) : null;
     this.arriveRadius = arriveRadius;
     this.spot = null;
     this.waiting = false;
