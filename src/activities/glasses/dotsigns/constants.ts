@@ -13,9 +13,15 @@ export const DOTSIGNS = {
   frameW: 3.4,
   frameH: 2.8,
   legX: 1.5,
-  /** The pedestal right in front of it: centre z, width, height, depth. */
+  /**
+   * Three answer pedestals right in front of it, one per button (QA r7 m9: one long block was in
+   * the way, and E at its middle answered it): centre z, the span of the three (outer edge to outer
+   * edge), the width of each, height, depth. Gaps between them ≈ 1.05 m, so the hero (0.7 m wide)
+   * walks between them; colliders have round ends so the hero slides off the corners.
+   */
   pedZ: 0.92,
-  pedW: 5.6,
+  pedW: 5.4,
+  pedEach: 1.1,
   pedH: 0.8,
   pedD: 0.62,
   /** Button centres along X (wide, so they show left and right of the hero), radius, tilt. */
@@ -26,6 +32,14 @@ export const DOTSIGNS = {
   heroZ: 0.92 + 0.31 + 0.45,
   /** E prompt radius around each button. */
   reach: 1.25,
+  /**
+   * E answers a button only when the hero stands at its pedestal (in front of it, within this much
+   * of its centre sideways and `standDepth` of the front face) and faces it (within `faceCone` of
+   * straight at the sign).
+   */
+  standHalf: 0.75,
+  standDepth: 1.25,
+  faceCone: 1.05,
   /**
    * Start pad (a press pad: stand on it and press Use), a step behind the buttons and off the
    * centre line: from its camera the hero stands between the middle and the right button, so all

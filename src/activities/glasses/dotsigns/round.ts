@@ -7,6 +7,7 @@
 import { SHAPE_IDS } from '../../../vision/toolkit';
 import type { ShapeId } from '../../../vision/toolkit';
 import { randInt } from '../gates/kit';
+import { DOTSIGNS } from './constants';
 
 /**
  * The shapes a round uses. No circle: a filled disc on a round button face reads as a blank
@@ -47,4 +48,28 @@ export function isDotRound(v: unknown): v is DotRound {
     r.answer < 3 &&
     typeof r.seed === 'number'
   );
+}
+
+/**
+ * The button E answers (QA r7 m9), or -1: only the one whose pedestal the hero stands at, in front
+ * of it, facing the sign. Layout-local: `x`, `z` the hero's feet (+Z = the approach, the sign at
+ * z ≈ 0), `yaw` the hero's facing in the layout frame (facing (sin, cos) on x/z). Walking past or
+ * between the pedestals (beside them, behind them, or facing along them) answers nothing.
+ */
+export function standingButton(x: number, z: number, yaw: number): number {
+  const D = DOTSIGNS;
+  const front = D.pedZ + D.pedD / 2;
+  if (z < front || z > front + D.standDepth) return -1;
+  // Facing the sign: the facing vector points at −Z within the cone.
+  if (-Math.cos(yaw) < Math.cos(D.faceCone)) return -1;
+  let best = -1;
+  let bestD: number = D.standHalf;
+  D.buttonX.forEach((bx, i) => {
+    const d = Math.abs(x - bx);
+    if (d <= bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  return best;
 }
