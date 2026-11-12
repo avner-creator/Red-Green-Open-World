@@ -398,7 +398,7 @@ export function createSilly(ctx: GameContext): Silly {
           break;
         case 'go':
           hud.count('go');
-          goShown = 0.8;
+          goShown = 0.6;
           ctx.audio.play('start');
           break;
         case 'boop':

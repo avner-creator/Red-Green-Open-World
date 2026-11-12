@@ -366,6 +366,17 @@ test('Boop them all: at "go" the camera looks at the play area, whichever way th
     const started = s.round().phase;
     // Through 3-2-1 to "go".
     for (let i = 0; i < 200 && s.round().phase !== 'play'; i++) rg.step(1 / 30, 1, false);
+    // QA8 m10: the "go" star is small and off the screen centre, and gone within 0.6 s.
+    const star = (): { on: boolean; cx: number; cy: number; w: number } => {
+      const el = document.querySelector('.rg-boop-count') as HTMLElement | null;
+      const svg = el?.querySelector('svg');
+      if (!el || !svg || !el.classList.contains('on')) return { on: false, cx: 0, cy: 0, w: 0 };
+      const r = svg.getBoundingClientRect();
+      return { on: true, cx: (r.left + r.width / 2) / innerWidth, cy: (r.top + r.height / 2) / innerHeight, w: r.width / Math.min(innerWidth, innerHeight) };
+    };
+    const goStar = star();
+    rg.step(1 / 30, 19, false);
+    const goLater = star();
     rg.step(1 / 30, 3, false);
     const cam = ctx.camera;
     cam.updateMatrixWorld();
@@ -383,8 +394,12 @@ test('Boop them all: at "go" the camera looks at the play area, whichever way th
     // Walk away: leaving the zone ends the round quietly.
     rg.teleport(hub[0] + 60, ctx.world.heightAt(hub[0] + 60, hub[2]) + 0.5, hub[2], 0);
     rg.step(1 / 30, 10, false);
-    return { started, phase, off, inView, tubes: s.tubes().length };
+    return { started, phase, off, inView, tubes: s.tubes().length, goStar, goLater };
   });
+  expect(r.goStar.on).toBe(true);
+  expect(r.goStar.w, 'go star size (share of the short side)').toBeLessThanOrEqual(0.16);
+  expect(r.goStar.cy, 'go star sits above the centre').toBeLessThan(0.3);
+  expect(r.goLater.on, 'go star gone after 0.63 s').toBe(false);
   console.log('silly go camera', JSON.stringify(r));
   expect(r.started).toBe('countdown');
   expect(r.phase).toBe('play');
