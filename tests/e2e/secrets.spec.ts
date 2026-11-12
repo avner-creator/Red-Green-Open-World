@@ -235,6 +235,63 @@ test('a miss past a rest stone puts the hero back on it with a boing; stones are
   expect(after.checkpoint).toBe(cp);
 });
 
+test('QA8 m4: a hopper climbs all four paths with real running jumps; a miss onto the turn below boings back to the rest stone', async () => {
+  const s = await info();
+  for (const [k, p] of s.paths.entries()) {
+    const fails: number[] = [];
+    for (let i = 0; i + 1 < p.stones.length; i++) {
+      const res = await page.evaluate(
+        ({ k, a, b }) => {
+          const rg = window.__rg!;
+          const pl = rg.ctx.player;
+          rg.teleport(a[0], a[1] + 0.05, a[2], Math.atan2(b[0] - a[0], b[2] - a[2]));
+          rg.step(1 / 60, 8, false);
+          // Run at the next stone and jump at once; let go of the stick over its middle.
+          rg.inject({ moveY: 1, jump: true, jumpPressed: true });
+          rg.step(1 / 60, 1, false);
+          let held = true;
+          for (let f = 0; f < 120; f++) {
+            const d = Math.hypot(pl.position.x - b[0], pl.position.z - b[2]);
+            if (held && d < 0.45) held = false;
+            rg.inject({ moveY: held ? 1 : 0, jump: f < 14 });
+            rg.step(1 / 60, 1, false);
+            if (f > 6 && pl.grounded) break;
+          }
+          rg.inject(null);
+          rg.step(1 / 60, 4, false);
+          return window.__rgSecrets!.info().paths[k].lit;
+        },
+        { k, a: p.stones[i], b: p.stones[i + 1] },
+      );
+      // Landing on the next stone (or, where stones touch, the one after) is a made hop.
+      if (res !== i + 1 && res !== i + 2) fails.push(i);
+    }
+    expect(fails, `${p.id}: hops that missed`).toEqual([]);
+  }
+  // Spiral miss: past the trampoline path's rest stone, drop onto a stone of the turn below.
+  const tr = s.paths.find((p) => p.id === 'trampoline')!;
+  const cp = tr.checkpoints[0];
+  // A fresh session (the climb above reached the top rest stones).
+  await page.evaluate(() => {
+    const rg = window.__rg!;
+    rg.start();
+    rg.step(1 / 60, 3, false);
+  });
+  const before = (await info()).paths.find((p) => p.id === 'trampoline')!.returns;
+  for (const i of [cp, cp + 1, cp + 2]) {
+    const [x, y, z] = tr.stones[i];
+    await put([x, y + 0.05, z], 0, 12);
+  }
+  // The stone of the turn below that lies nearest under where the hero stands.
+  const hi = tr.stones[cp + 2];
+  const low = tr.stones.slice(0, cp).reduce((best, st) => (Math.hypot(st[0] - hi[0], st[2] - hi[2]) < Math.hypot(best[0] - hi[0], best[2] - hi[2]) ? st : best));
+  await put([low[0], low[1] + 1.2, low[2]], 0, 40);
+  const after = (await info()).paths.find((p) => p.id === 'trampoline')!;
+  const pl = await player();
+  expect(after.returns).toBe(before + 1);
+  expect(Math.hypot(pl.p[0] - tr.stones[cp][0], pl.p[2] - tr.stones[cp][2])).toBeLessThan(1.3);
+});
+
 test('a pedestal pays out once: confetti, stars and fanfare', async () => {
   const s = await info();
   await page.evaluate(() => {
