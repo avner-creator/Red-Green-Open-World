@@ -99,3 +99,5 @@
 - Pip's story yields the moment the child does anything else (vehicle, attraction, menu, wandering): guidance must never be blocked by a script.
 - Parked-in-vehicle cues: 3 cues at ~36 s, then one every ~75 s with varied lines. Never fully silent for a passive child, but the owner found repetition annoying, so no endless 36 s loop.
 - Map board keeps its place; badges in rows of 3/3/2 with "you are here" bottom-centre, sized to clear the compass bar (20–24 px at 640×360).
+- Map board gets a "reading view" (camera eases up and over the hero in a zone in front of the board) instead of more layout changes: measured at 640×360, frog and panda cover the bottom badges and hats cover corners for almost every hero; 12 px clearance would need a 4.5 m face and the spawn lane allows 3.5 m.
+- Pip plans every lead with a hero-sized body + 0.5 m clearance and only hops to spots a follower can reach in a straight line: the first lead must not depend on centimetres of plaza layout.
