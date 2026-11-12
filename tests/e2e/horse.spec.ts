@@ -227,3 +227,92 @@ test('E dismounts to a free side', async () => {
   expect(s.playerDist).toBeLessThan(3.5);
   expect(consoleErrors).toEqual([]);
 });
+
+test('QA8 m11: ridden at the Foam Lava course from 8 directions, the horse is turned away and never stalls 3 s', async () => {
+  test.setTimeout(240_000);
+  const rows = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const h = rg.ctx.vehicles.all.find((v) => v.kind === 'horse')! as unknown as {
+      id: string;
+      position: { x: number; y: number; z: number };
+      object: { quaternion: { x: number; y: number; z: number; w: number } };
+      teleport(p: { x: number; y: number; z: number }, yaw: number): void;
+    };
+    // The course pad (src/world/layout.ts PADS 'foamCourse'): centre and half extents.
+    const C = { x: -25.5, z: -38.75, hx: 7.5, hz: 26.5 };
+    const yawOf = (): number => {
+      const q = h.object.quaternion;
+      return Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+    };
+    const out: { dir: number; stillest: number; deepest: number; travelled: number; mode: string }[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const dx = Math.sin(a);
+      const dz = Math.cos(a);
+      // Out of the pad along this direction, then up to 8 m more (less where the village's
+      // houses stand closer: this is about the course, not about them).
+      const t0 = Math.min(dx !== 0 ? C.hx / Math.abs(dx) : Infinity, dz !== 0 ? C.hz / Math.abs(dz) : Infinity);
+      const ex = C.x + dx * t0;
+      const ez = C.z + dz * t0;
+      const eye = rg.ctx.player.position.clone().set(ex, rg.ctx.world.heightAt(ex, ez) + 1.2, ez);
+      const hit = rg.ctx.physics.raycast(eye, eye.clone().set(dx, 0, dz), 8);
+      const t = t0 + (hit ? Math.max(3.5, hit.distance - 2) : 8);
+      const sx = C.x + dx * t;
+      const sz = C.z + dz * t;
+      if (rg.ctx.player.mode !== 'walk') {
+        rg.inject({ respawnPressed: true });
+        rg.step(1 / 60, 1, false);
+        rg.inject(null);
+        rg.step(1 / 60, 20, false);
+      }
+      const face = Math.atan2(C.x - sx, C.z - sz);
+      h.teleport({ x: sx, y: rg.ctx.world.heightAt(sx, sz), z: sz }, face);
+      rg.step(1 / 60, 5, false);
+      const px = sx + Math.cos(face) * 1.8;
+      const pz = sz - Math.sin(face) * 1.8;
+      rg.teleport(px, rg.ctx.world.heightAt(px, pz) + 0.2, pz, face);
+      rg.step(1 / 60, 10, false);
+      // Straight into the saddle (an E here could pick a nearby booth's prompt instead).
+      (rg.ctx.vehicles as unknown as { board(id: string): boolean }).board(h.id);
+      rg.step(1 / 60, 120, false);
+      const mode = rg.state().playerMode;
+      const pts: [number, number][] = [];
+      let deepest = -99;
+      for (let k = 0; k < 44; k++) {
+        // Steer at the course centre, W held (a child who wants to ride in).
+        const p = h.position;
+        let d = Math.atan2(C.x - p.x, C.z - p.z) - yawOf();
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        rg.inject({ moveY: 1, moveX: Math.max(-1, Math.min(1, -d * 2)) });
+        rg.step(1 / 60, 15, false);
+        pts.push([p.x, p.z]);
+        // How far inside the pad the horse's middle got (m; negative = outside).
+        const ex = Math.abs(p.x - C.x) - C.hx;
+        const ez = Math.abs(p.z - C.z) - C.hz;
+        deepest = Math.max(deepest, ex < 0 && ez < 0 ? -Math.max(ex, ez) : -Math.hypot(Math.max(ex, 0), Math.max(ez, 0)));
+      }
+      rg.inject(null);
+      let stillest = 0;
+      let travelled = 0;
+      for (let k = 0; k < pts.length; k++) {
+        let j = k;
+        while (j + 1 < pts.length && Math.hypot(pts[j + 1][0] - pts[k][0], pts[j + 1][1] - pts[k][1]) < 1) j++;
+        stillest = Math.max(stillest, (j - k) * 0.25);
+        if (k > 0) travelled += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+      }
+      out.push({ dir: i, stillest, deepest, travelled, mode });
+    }
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 20, false);
+    return out;
+  });
+  console.log(rows.map((r) => JSON.stringify(r)).join('\n'));
+  for (const r of rows) {
+    const msg = JSON.stringify(r);
+    expect(r.mode, msg).toBe('riding');
+    expect(r.stillest, msg).toBeLessThanOrEqual(3);
+    expect(r.deepest, msg).toBeLessThan(0.5);
+  }
+});

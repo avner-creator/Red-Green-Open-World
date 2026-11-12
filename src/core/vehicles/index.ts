@@ -36,7 +36,7 @@ const PARK = {
   horse: { road: 7.5, off: 7.5, launch: 4, launchTime: 1.5 },
   carRoad: 60,
   carRadius: 90,
-  horseRadius: 24,
+  horseRadius: 10,
   apart: 5,
 } as const;
 
