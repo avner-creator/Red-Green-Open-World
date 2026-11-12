@@ -270,10 +270,14 @@ test('nothing of the world stands in front of a booth, seen from the arrival', a
       const mq = (g.debug(s.id) as { booth?: { x: number; y: number; z: number } }).booth;
       if (!d || !v || !mq || !s.arrival) continue;
       const l = Math.hypot(s.arrival.x - s.x, s.arrival.z - s.z) || 1;
+      // Dot signs face the plaza approach (the site's own heading; QA r7 M3), not the park path's
+      // trail end behind the sign: it is checked from that side.
+      const ux = s.id === 'dotsigns' ? Math.sin(s.yaw) : (s.arrival.x - s.x) / l;
+      const uz = s.id === 'dotsigns' ? Math.cos(s.yaw) : (s.arrival.z - s.z) / l;
       const blockers: string[] = [];
       for (const dd of [s.radius + 0.4, 12]) {
-        const ex = s.x + ((s.arrival.x - s.x) / l) * dd;
-        const ez = s.z + ((s.arrival.z - s.z) / l) * dd;
+        const ex = s.x + ux * dd;
+        const ez = s.z + uz * dd;
         const eye = { x: ex, y: Math.max(w.heightAt(ex, ez), w.waterLevel) + 1.6, z: ez };
         for (const [what, t] of [['lamps', { x: mq.x, y: mq.y + 3.9, z: mq.z }], ['banner', { x: mq.x, y: mq.y + 4.6, z: mq.z }], ['pad', { x: v.x, y: v.y + 0.5, z: v.z }]] as const) {
           const hit = g.sight(eye, t);
