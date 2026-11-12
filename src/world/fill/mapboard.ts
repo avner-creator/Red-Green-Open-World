@@ -21,6 +21,10 @@
  * its middle is free ("you are here": the reader, at the bottom of a forward-up map).
  * tests/e2e/ui-wayfinding.spec.ts measures the real screen: the live spawn camera with the HUD on,
  * and (pixel diff, hero shown / hidden) the hero standing 4.5 m in front.
+ *
+ * Up close no layout clears every hero and hat (12 px of clearance would need a 4.5 m face), so the
+ * board registers itself as a reading spot (src/core/camera-read.ts): a hero standing in front of it
+ * gets a raised camera that looks over their head at the face.
  */
 import * as THREE from 'three';
 import { M, T } from '../batch';
@@ -32,6 +36,7 @@ import type { ProcessedRoad } from '../terrain';
 import { coastRadius } from '../terrain';
 import { ANCHORS } from '../layout';
 import type { AnchorName } from '../../types';
+import { registerReadingSpot } from '../../core/camera-read';
 
 /**
  * Where the board stands and the point it faces (QA6 m10): on the plaza ahead-left of spawn, facing
@@ -138,6 +143,7 @@ export function mapBoard(k: Kit, d: Decals, roads: readonly ProcessedRoad[], x: 
   const { yaw, sc } = lay;
   const yc = lay.yc;
   const m = T(x, y, z, yaw);
+  registerReadingSpot({ id: 'mapboard', x: x + Math.sin(yaw) * 0.1, y: y + yc, z: z + Math.cos(yaw) * 0.1, nx: Math.sin(yaw), nz: Math.cos(yaw), w: W, h: H });
   // Frame, posts, roof.
   for (const s of [-1, 1]) {
     k.b.add('paint', rbox(0.3, yc + H / 2 + 0.6, 0.3, 0.05), C.woodDark, M(m, T(s * (W / 2 + 0.18), -0.1, 0)), { aoY: y, aoH: 0.5, ao: 0.35 });

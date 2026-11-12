@@ -60,9 +60,16 @@ export function coverFadeAmount(cover: number): number {
 const corner = new THREE.Vector3();
 const meshBox = new THREE.Box3();
 
+const skinPoint = new THREE.Vector3();
+/** Most vertices sampled per skinned mesh for its posed bounds. */
+const SKIN_SAMPLES = 500;
+
 /**
  * World bounds of the meshes under `root` that are drawn (visible all the way up; sprites, hidden
- * helpers and effect pools left out), in `out`. Empty when nothing is drawn.
+ * helpers and effect pools left out), in `out`. Empty when nothing is drawn. Skinned meshes count
+ * as posed (sampled vertices): a skinned geometry's own box is its bind pose, which for some
+ * models (the T-rex: 22 m across) has nothing to do with the hero on screen, so the hero always
+ * "covered the whole screen" and stayed faded.
  */
 export function visibleBounds(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
   out.makeEmpty();
@@ -71,8 +78,17 @@ export function visibleBounds(root: THREE.Object3D, out: THREE.Box3): THREE.Box3
     if (!o.visible) return;
     const m = o as THREE.Mesh;
     if (m.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh && m.geometry) {
-      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-      if (m.geometry.boundingBox) out.union(meshBox.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld));
+      const sm = o as THREE.SkinnedMesh;
+      const n = sm.isSkinnedMesh && sm.skeleton ? (sm.geometry.getAttribute('position')?.count ?? 0) : 0;
+      if (n > 0) {
+        const step = Math.max(1, Math.floor(n / SKIN_SAMPLES));
+        meshBox.makeEmpty();
+        for (let i = 0; i < n; i += step) meshBox.expandByPoint(sm.getVertexPosition(i, skinPoint));
+        out.union(meshBox.applyMatrix4(sm.matrixWorld));
+      } else {
+        if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+        if (m.geometry.boundingBox) out.union(meshBox.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld));
+      }
     }
     for (const c of o.children) walk(c);
   };

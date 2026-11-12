@@ -13,6 +13,8 @@ import { coverFadeAmount, createHeroFade, distToBody, heroAxisTop, heroFadeAmoun
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
+import { createReadState, readingArm, readingSpots, readWeight, stepReading, type HeroPoint } from './camera-read';
+import { CHARACTERS } from './characters/catalog';
 
 type Override = Parameters<CameraApi['setOverride']>[0];
 
@@ -89,6 +91,16 @@ const ARM = {
   slimPost: 0.16,
 } as const;
 
+/** Reading view: the hero profile's bands of reach towards the board (m), and where they start. */
+const PROFILE_BIN = 0.25;
+const PROFILE_BACK = 2.5;
+const PROFILE_BINS = 20;
+/** Reading view: share of the screen height the board fills (by zooming in), and the narrowest FOV (deg). */
+const READ_FILL = 0.34;
+/** ...and how far below the screen centre its centre sits (NDC: 0.3 = 15% of the height). */
+const READ_DROP = 0.3;
+const READ_FOV_MIN = 30;
+
 /** Swing candidates for the on-foot arm (yaw offsets in ± pairs, smallest first, then 180°). */
 const SWINGS = [1, 2, 3, 4, 5].flatMap((i) => [(i * Math.PI) / 6, (-i * Math.PI) / 6]).concat(Math.PI);
 
@@ -96,7 +108,7 @@ const SWINGS = [1, 2, 3, 4, 5].flatMap((i) => [(i * Math.PI) / 6, (-i * Math.PI)
 export interface CameraDebug {
   /** Set the orbit yaw/pitch as if the player had looked there (no auto-align for a while). */
   setView(yaw: number, pitch?: number): void;
-  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean; cover: number };
+  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean; cover: number; reading: number; readingActive: boolean; readArm: { yaw: number; pitch: number; distance: number }; heroTop: number[] | null };
   /**
    * Check the current view against the rendered scene (three.js raycasts against the real render
    * meshes, independent of the occluder proxies): `blocked` = fraction of rays from the camera to
@@ -120,6 +132,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   let override: Override = null;
   // Smoothed (blended) override values.
   let wantDistance: number = CAMERA.distance;
+  /** `wantDistance` before the reading view's blend. */
+  let baseWant: number = CAMERA.distance;
   let extraHeight = 0;
   let fov: number = CAMERA.fov;
   let lookAhead = 0;
@@ -184,6 +198,63 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   const seeTo = new THREE.Vector3();
   const seeDir = new THREE.Vector3();
   let lastHit: { phys: number | null; occ: number | null; collider: number } = { phys: null, occ: null, collider: -1 };
+  /** Board reading view (camera-read.ts): state, eased weight, a test `setView` this frame. */
+  const read = createReadState();
+  let readW = 0;
+  let viewSet = false;
+  const readLook = new THREE.Vector3();
+  /**
+   * The hero's side profile towards the board being read: the highest point (m above the feet) in
+   * each `PROFILE_BIN`-wide band of reach towards the board (from `-PROFILE_BACK`), posed, hat and
+   * all. Becomes the silhouette points the reading arm looks over. Empty bands are -Infinity.
+   */
+  const profile = new Float32Array(PROFILE_BINS).fill(-Infinity);
+  let profileOk = false;
+  const heroPts: HeroPoint[] = [];
+  let lastArm = { yaw: 0, pitch: 0, distance: 0 };
+  /** Field of view (deg) at which the board being read fills `READ_FILL` of the screen height. */
+  let readFov: number = CAMERA.fov;
+  const skinV = new THREE.Vector3();
+  /** Seconds to the next posed measurement of the hero for the reading view. */
+  let profileT = 0;
+  /**
+   * Measure `profile` for a reader at the feet `pp` looking along unit (ux, uz): rigid meshes by
+   * the corners of their geometry box, skinned ones posed (up to ~1000 sampled vertices each; a
+   * skinned geometry's own box is its bind pose, often in other units). Only drawn meshes count.
+   * Runs only near a readable board, four times a second.
+   */
+  const measureProfile = (root: THREE.Object3D, pp: THREE.Vector3, ux: number, uz: number, keep: boolean): void => {
+    // While the view is in, the profile only grows: the idle bob never makes the camera breathe.
+    if (!keep) profile.fill(-Infinity);
+    root.updateWorldMatrix(true, true);
+    const add = (p: THREE.Vector3): void => {
+      const r = (p.x - pp.x) * ux + (p.z - pp.z) * uz;
+      const b = Math.max(0, Math.min(PROFILE_BINS - 1, Math.floor((r + PROFILE_BACK) / PROFILE_BIN)));
+      const h = p.y - pp.y;
+      if (h > profile[b]) profile[b] = h;
+    };
+    const walk = (o: THREE.Object3D): void => {
+      if (!o.visible) return;
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !(o as THREE.InstancedMesh).isInstancedMesh && m.geometry && o.layers.test(camera.layers)) {
+        const sm = o as THREE.SkinnedMesh;
+        if (sm.isSkinnedMesh) {
+          const n = sm.geometry.getAttribute('position')?.count ?? 0;
+          const step = Math.max(1, Math.floor(n / 1000));
+          for (let i = 0; i < n; i += step) add(sm.getVertexPosition(i, skinV).applyMatrix4(sm.matrixWorld));
+        } else {
+          if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+          const bb = m.geometry.boundingBox;
+          if (bb) {
+            for (let c = 0; c < 8; c++) add(skinV.set(c & 1 ? bb.max.x : bb.min.x, c & 2 ? bb.max.y : bb.min.y, c & 4 ? bb.max.z : bb.min.z).applyMatrix4(m.matrixWorld));
+          }
+        }
+      }
+      for (const c of o.children) walk(c);
+    };
+    walk(root);
+    profileOk = profile.some((h) => Number.isFinite(h));
+  };
 
   /**
    * Physics colliders the arm may stop at: not slim upright posts (a sign pole, a lamp post, a
@@ -289,6 +360,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     lookVel.set(0, 0, 0);
     distance = wantDistance;
     lift = 0;
+    read.active = false;
+    read.t = 0;
+    readW = 0;
     first = false;
     occluders.refresh(pivot);
   }
@@ -313,10 +387,12 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       const extra = clamp(need - (override?.distance ?? baseDist), 0, COVER_EXTRA_MAX);
       coverExtra += (extra - coverExtra) * damp(2, dt);
     } else if (chase || phase === 'title') coverExtra = 0;
-    wantDistance += ((override?.distance ?? baseDist) + coverExtra - wantDistance) * k;
+    baseWant += ((override?.distance ?? baseDist) + coverExtra - baseWant) * k;
+    wantDistance = baseWant;
     extraHeight += ((override?.height ?? baseHeight) - CAMERA.height - extraHeight) * k;
     lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : run * CAM.sprintLookAhead)) - lookAhead) * k;
-    const fovTarget = override?.fov ?? baseFov;
+    // The board reading view zooms in until the board fills about half the screen height.
+    const fovTarget = (override?.fov ?? baseFov) + (readFov - (override?.fov ?? baseFov)) * readW;
     fovKick *= Math.exp(-10 * dt);
     if (Math.abs(fovKick) < 0.01) fovKick = 0;
     if (Math.abs(fovTarget - fov) > 0.01 || fovKick !== 0 || Math.abs(camera.fov - fov) > 1e-3) {
@@ -343,6 +419,22 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       pitch = clamp(pitch + input.lookY, CAM.minPitch, CAM.maxPitch);
       sinceLook = looking ? 0 : sinceLook + dt;
       yaw = steerOverrideYaw(yaw, ctx.player.yaw, override, sinceLook, CAM.autoAlignDelay, 2, dt);
+      // Board reading view: in front of the island map, ease up behind the hero and look over
+      // their head at it (the player's own look input always wins and keeps it off).
+      const pp0 = ctx.player.position;
+      stepReading(read, readingSpots(), {
+        heroX: pp0.x,
+        heroZ: pp0.z,
+        heroYaw: ctx.player.yaw,
+        vx: ctx.player.velocity.x,
+        vz: ctx.player.velocity.z,
+        mode: ctx.player.mode,
+        playing: phase === 'playing',
+        chase: !!chase,
+        override: !!override,
+        look: Math.abs(input.lookX) + Math.abs(input.lookY) + (viewSet ? 1 : 0),
+        dt,
+      });
       // Gently swing behind a player who runs forward-ish and isn't steering the camera.
       const hs = Math.hypot(ctx.player.velocity.x, ctx.player.velocity.z);
       if (chase) {
@@ -353,6 +445,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
           yaw += angleDelta(yaw, want) * damp(1.2 + 3 * Math.min(1, Math.abs(v) / 8), dt);
           pitch += (0.24 - pitch) * damp(1.5, dt);
         }
+      } else if (read.active && read.spot) {
+        // Turn to face the board (≈0.6 s); a scenery swing (arm blocked behind) cancels the view.
+        if (swingTo === null && !looking) yaw += angleDelta(yaw, Math.atan2(read.spot.x - pp0.x, read.spot.z - pp0.z)) * damp(5, dt);
       } else if (sinceLook > CAM.autoAlignDelay && hs > 1 && input.moveY > 0.3 && ctx.player.mode === 'walk') {
         yaw += angleDelta(yaw, ctx.player.yaw) * damp(CAM.autoAlignRate * Math.min(1, hs / 6), dt);
       }
@@ -365,6 +460,34 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       pivot.y = followMoving(pivot.y, prevTarget.y, target.y, rv, dt);
       tmp.subVectors(pivot, target);
       if (tmp.length() > CAM.maxLag) pivot.copy(target).addScaledVector(tmp.normalize(), CAM.maxLag);
+    }
+    viewSet = false;
+    if (phase === 'title') {
+      read.active = false;
+      read.t = 0;
+    }
+    readW = readWeight(read);
+    // The reading arm: pitch and length from the pivot (yaw is steered above).
+    let readPitch = pitch;
+    if (readW > 0 && read.spot) {
+      const pp1 = ctx.player.position;
+      const s = read.spot;
+      // The hero's silhouette towards the board: the posed profile (ears, a hat brim reaching
+      // forward), with a little room for the idle bob; until it is measured, the catalog body.
+      heroPts.length = 0;
+      if (profileOk) {
+        for (let b = 0; b < PROFILE_BINS; b++) {
+          if (Number.isFinite(profile[b])) heroPts.push({ top: profile[b] + 0.1, reach: (b + 1) * PROFILE_BIN - PROFILE_BACK });
+        }
+      } else {
+        const def = CHARACTERS.find((c) => c.id === ctx.player.characterId) ?? { height: PLAYER.height, length: PLAYER.radius * 2 };
+        heroPts.push({ top: def.height + 0.6, reach: Math.max(PLAYER.radius, def.length / 2) + 0.3 });
+      }
+      const arm = readingArm(s, pp1.x, pp1.y, pp1.z, heroPts, CAM.pivotHeight);
+      lastArm = arm;
+      readPitch = pitch + (arm.pitch - pitch) * readW;
+      wantDistance = baseWant + (arm.distance - baseWant) * readW;
+      readLook.set(s.x, s.y, s.z);
     }
 
     prevTarget.copy(target);
@@ -388,7 +511,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         // their path (and walking on clears the arm anyway), so it waits until they stop; the hero
         // fade covers the moment in between.
         const steering = Math.abs(input.moveX) + Math.abs(input.moveY) > 0.1;
-        const here = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+        const here = clearAlong(pivot, armDir(readPitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
         // The hero (hat and all) filling the screen counts as an arm that is too short: ask for one
         // long enough to bring them under the limit (size on screen goes as 1 / distance²).
         const big = cover > HERO_COVER_MAX && here < wantDistance * 0.9;
@@ -410,7 +533,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
           for (let i = 0; i < SWINGS.length && pick === null; i += 2) {
             for (let k = i; k < Math.min(i + 2, SWINGS.length); k++) {
               yaw = keep + SWINGS[k];
-              const d = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+              const d = clearAlong(pivot, armDir(readPitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
               if (d >= good && d > pickD) {
                 pick = yaw;
                 pickD = d;
@@ -423,6 +546,11 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
           }
           swingTo = pick ?? any;
           swingGood = pick !== null;
+          // Scenery right behind the hero: no reading view here (a swing would fight it).
+          if (swingTo !== null && read.active) {
+            read.active = false;
+            read.suppressed = true;
+          }
         }
         yaw = keep;
       }
@@ -430,7 +558,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     // Chase framing is the vehicle's own; the swing over/under is for the hero on foot or riding
     // (the horse's chase too: QA7 m5, a rim right behind the rider).
     if (phase !== 'title' && (!chase || ctx.player.mode === 'riding')) {
-      const base = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard);
+      const base = clearAlong(pivot, armDir(readPitch, probeDir), reach, ARM.hardRadius, ballHard);
       const baseD = base === null ? wantDistance : base;
       if (baseD < Math.min(ARM.liftWhenShorter, wantDistance * 0.5) || (cover > HERO_COVER_MAX && baseD < wantDistance * 0.9)) {
         if (!(footSwing && swingTo !== null && swingGood)) {
@@ -438,22 +566,22 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
           let bestD = baseD;
           // A big hero (QA8 m5): any rise that reaches the arm length they need will do.
           const coverNeed = cover > HERO_COVER_MAX ? Math.min(wantDistance * 0.9, baseD * Math.sqrt(cover / HERO_COVER_MAX) + 0.2) : Infinity;
-          for (const dp of [ARM.liftUp, CAM.maxPitch - pitch, ARM.liftDown]) {
-            const p = clamp(pitch + dp, CAM.minPitch, CAM.maxPitch);
-            if (Math.abs(p - pitch) < 0.05) continue;
+          for (const dp of [ARM.liftUp, CAM.maxPitch - readPitch, ARM.liftDown]) {
+            const p = clamp(readPitch + dp, CAM.minPitch, CAM.maxPitch);
+            if (Math.abs(p - readPitch) < 0.05) continue;
             const h = clearAlong(pivot, armDir(p, probeDir), reach, ARM.hardRadius, ballHard);
             const d = h === null ? wantDistance : h;
             if (d > bestD * 1.4 + 0.4 || (d >= coverNeed && d > bestD + 0.2)) {
               bestD = d;
-              liftTarget = p - pitch;
+              liftTarget = p - readPitch;
             }
           }
           // Keep the current swing while it is still needed (no flip-flopping between frames).
           if (liftTarget === 0 && Math.abs(lift) > 0.02) liftTarget = lift;
         }
-      } else if (bodyHidden(armDir(pitch, probeDir), Math.min(wantDistance, baseD))) {
+      } else if (bodyHidden(armDir(readPitch, probeDir), Math.min(wantDistance, baseD))) {
         // A planter, counter or bush between the camera and the hero's body: look over it.
-        liftTarget = Math.min(ARM.seeOver, CAM.maxPitch - pitch);
+        liftTarget = Math.min(ARM.seeOver, CAM.maxPitch - readPitch);
       }
     }
     // Scripted cameras (celebrations, results, countdowns: an override without a fixed yaw) may
@@ -464,14 +592,14 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       if (scanT <= 0) {
         scanT = 0.25;
         swingTo = null;
-        armDir(pitch, probeDir);
+        armDir(readPitch, probeDir);
         const here = clearAlong(pivot, probeDir, reach, ARM.hardRadius, ballHard) ?? reach;
         if (here < wantDistance * 0.7) {
           const keep = yaw;
           let best = here;
           for (let i = 1; i < 8; i++) {
             yaw = keep + (i * Math.PI) / 4;
-            const d = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+            const d = clearAlong(pivot, armDir(readPitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
             if (d > best + 0.5) {
               best = d;
               swingTo = yaw;
@@ -487,7 +615,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       if (!scripted && Math.abs(angleDelta(yaw, swingTo)) < 0.03) swingTo = null;
     }
     lift += (liftTarget - lift) * damp(ARM.liftRate, dt);
-    armDir(clamp(pitch + lift, CAM.minPitch, CAM.maxPitch), dir);
+    armDir(clamp(readPitch + lift, CAM.minPitch, CAM.maxPitch), dir);
     const hardHit = clearAlong(pivot, dir, reach, ARM.hardRadius, ballHard);
     const softHit = clearAlong(pivot, dir, reach, ARM.softRadius, ballSoft);
     const hard = hardHit === null ? null : Math.max(ARM.hardMin, hardHit - 0.04);
@@ -500,6 +628,13 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     camera.position.copy(pivot).addScaledVector(dir, distance);
     const ground = ctx.world.heightAt(camera.position.x, camera.position.z) + ARM.groundClearance;
     if (Number.isFinite(ground) && camera.position.y < ground) camera.position.y = ground;
+    if (readW > 0 && read.spot) {
+      // The face's angular height from where the camera really is (after collision): the zoom.
+      const s = read.spot;
+      const L = Math.max(0.5, Math.hypot(s.x - camera.position.x, s.z - camera.position.z));
+      const span = Math.atan2(camera.position.y - (s.y - s.h / 2), L) - Math.atan2(camera.position.y - (s.y + s.h / 2), L);
+      readFov = clamp(THREE.MathUtils.radToDeg(span) / READ_FILL, READ_FOV_MIN, CAMERA.fov);
+    }
 
     lookVel.lerp(ctx.player.velocity, damp(CAM.lookVelRate, dt));
     lookAt.copy(pivot);
@@ -509,7 +644,11 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       lookAt.addScaledVector(tmp, lookAhead * 0.1);
     }
     if (chaseK > 0.001) lookAt.y -= (chase?.lookDrop ?? 0.35) * chaseK; // frame the vehicle and its driver
+    if (readW > 0 && read.spot) lookAt.lerp(readLook, readW);
     camera.lookAt(lookAt);
+    // Reading: the board sits a little below the screen centre (the HUD lines the top; the hero
+    // stands under the board).
+    if (readW > 0 && read.spot) camera.rotateX(Math.atan(READ_DROP * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) * readW);
     heroMid.copy(ctx.player.position).setY(ctx.player.position.y + CAM.pivotHeight * 0.55);
     cutout.update(camera.position, heroMid, phase !== 'title');
     // Last resort: still pinned within reach of the hero's body → dither the hero away rather than
@@ -524,6 +663,15 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       visibleBounds(ctx.player.object, heroBox);
       heroTop = heroAxisTop(PLAYER.height, heroBox.isEmpty() ? null : heroBox.max.y - pp.y);
       if (!heroBox.isEmpty()) heroRel.copy(heroBox).translate(tmp.copy(pp).negate());
+    }
+    profileT -= dt;
+    if (!read.spot) {
+      profileT = 0;
+      profileOk = false;
+    } else if (profileT <= 0) {
+      profileT = 0.25;
+      const ul = Math.hypot(read.spot.x - pp.x, read.spot.z - pp.z) || 1;
+      measureProfile(ctx.player.object, pp, (read.spot.x - pp.x) / ul, (read.spot.z - pp.z) / ul, profileOk && (read.active || read.t > 0));
     }
     const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + heroTop, PLAYER.radius * 0.8);
     // Props flagged `cameraFade` (the Gear Shack rocket) between the camera and the hero: see-through.
@@ -590,8 +738,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         yaw = y;
         if (pt !== undefined) pitch = clamp(pt, CAM.minPitch, CAM.maxPitch);
         sinceLook = 0;
+        viewSet = true;
       },
-      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null, cover }),
+      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null, cover, reading: readW, readingActive: read.active, readArm: lastArm, heroTop: profileOk ? [...profile].map((h) => (Number.isFinite(h) ? Math.round(h * 100) / 100 : -1)) : null }),
       probe() {
         // Instanced meshes cache their bounds; the scatter refills instances every view change.
         ctx.scene.traverse((o) => {
