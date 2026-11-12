@@ -13,6 +13,16 @@ import { createToysLive, MUSHROOM_BOUNCE } from '../../src/world/fill/toys-live'
 import { U } from '../../src/world/materials';
 import { buildRoutes, buildVaults } from '../../src/activities/secrets/routes';
 import { PICTO_RECTS } from '../../src/world/pictograms';
+import { BOARD_R, MAP_BOARD } from '../../src/world/fill/mapboard';
+
+/** Distance from (x, z) to the map board's face line (its posts at ±BOARD_R), on the ground. */
+function boardDist(b: { x: number; z: number }, x: number, z: number): number {
+  const yaw = Math.atan2(MAP_BOARD.faceX - b.x, MAP_BOARD.faceZ - b.z);
+  const tx = Math.cos(yaw);
+  const tz = -Math.sin(yaw);
+  const along = Math.max(-BOARD_R, Math.min(BOARD_R, (x - b.x) * tx + (z - b.z) * tz));
+  return Math.hypot(x - (b.x + tx * along), z - (b.z + tz * along));
+}
 
 let t: TerrainData;
 let content: Content;
@@ -52,7 +62,9 @@ describe('island fill', () => {
       if (p.kind === 'arch' || p.kind === 'post') continue; // span a road / stand at a trail head (checked by the guard per pillar)
       for (const [name, a] of Object.entries(ANCHORS)) if (Math.hypot(p.x - a.x, p.z - a.z) < a.radius + p.r) bad.push(`${p.kind} ${p.name} in ${name}`);
       for (const g of GLASSES_WAY) if (Math.hypot(p.x - g.x, p.z - g.z) < g.r + p.r + 4) bad.push(`${p.kind} ${p.name} at glasses ${g.id}`);
-      for (const s of content.gemSpots) if (Math.hypot(p.x - s.x, p.z - s.z) < p.r + 1.2) bad.push(`${p.kind} ${p.name} on gem ${s.tag}`);
+      // (The map board is a thin slab: its gap is measured from its face line, posts included.)
+      const gemDist = (gx: number, gz: number): number => (p.kind === 'board' ? boardDist(p, gx, gz) + p.r : Math.hypot(p.x - gx, p.z - gz));
+      for (const s of content.gemSpots) if (gemDist(s.x, s.z) < p.r + 1.2) bad.push(`${p.kind} ${p.name} on gem ${s.tag}`);
       for (const c of content.chestSpots) if (Math.hypot(p.x - c.x, p.z - c.z) < p.r + 3) bad.push(`${p.kind} ${p.name} by a chest`);
       for (const r of routes) {
         for (const s of r.stones) if (Math.hypot(p.x - s.x, p.z - s.z) < p.r + 2) bad.push(`${p.kind} ${p.name} on secret ${r.id}`);
