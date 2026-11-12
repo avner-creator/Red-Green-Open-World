@@ -135,3 +135,14 @@ The fun and motivation pass is on `main` (economy, heroes, thrills, wayfinding, 
 - Minor list for after 1.0: gates arch hides head; carnival balloon top row under HUD bar; Pip route near
   Scoops; dragon roost lead; workshop "close it" cue only simulated; spiral secret path not proven as one
   climb; trampoline window maybe easy; map-board e2e is slow (~5 min).
+
+## QA round 9 (release gate) and Pip fixes on main
+
+- QA9 (`docs/qa/round9.md`): no blockers; ready for owner playtest; two Pip majors (lead started during
+  foam race; Carnival Row lead dead-ended at a fence and was dropped for the session).
+- `agent/pip-r9` fixed both: starting any activity holds all leads; planner starts from the real floor
+  under the hero; failed places retried after 60 s; Pip speaks when switching. Follower run: 9 places in 5 min.
+- Full verify green: 397 e2e passed, 5 skipped. `perf:check` within budget. Pushed to `main`.
+- Waiting on: owner playtest (glasses, phone, audio, a real child). Then fix what the owner flags, tag v1.0.
+- After-1.0 list adds: phone board roof clips top badge row; one 75 s Pip silence in the buggy; lighthouse
+  secret path not proven end to end.
