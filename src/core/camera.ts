@@ -152,6 +152,10 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   const occluders = createCameraOccluders(ctx.scene, (m) => cutout.patch(m.material));
   const heroFade = createHeroFade();
   const heroMid = new THREE.Vector3();
+  const heroBox = new THREE.Box3();
+  /** Top of the hero incl. hat, above the feet (m), and seconds to its next measurement. */
+  let heroTop: number = PLAYER.height;
+  let topT = 0;
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
   const ballSoft = new R.Ball(ARM.softRadius);
@@ -391,8 +395,9 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         yaw = keep;
       }
     }
-    // Chase framing is the vehicle's own; the swing over/under is for the hero on foot or riding.
-    if (phase !== 'title' && !chase) {
+    // Chase framing is the vehicle's own; the swing over/under is for the hero on foot or riding
+    // (the horse's chase too: QA7 m5, a rim right behind the rider).
+    if (phase !== 'title' && (!chase || ctx.player.mode === 'riding')) {
       const base = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard);
       const baseD = base === null ? wantDistance : base;
       if (baseD < Math.min(ARM.liftWhenShorter, wantDistance * 0.5)) {
@@ -475,9 +480,21 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     cutout.update(camera.position, heroMid, phase !== 'title');
     // Last resort: still pinned within reach of the hero's body → dither the hero away rather than
     // render the inside of their head (QA6 M2). Riding in a vehicle never fades the hero.
+    // Hats and held items count as the hero (QA7 m2: a camera in a top hat while waiting at a
+    // booth): the body axis reaches up to the top of everything the hero wears (re-measured a few
+    // times a second, kept relative to the feet in between).
     const pp = ctx.player.position;
-    const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + PLAYER.height - 0.2, PLAYER.radius * 0.8);
-    heroFade.update(ctx.player.object, phase !== 'title' && !chase ? heroFadeAmount(body) : 0);
+    topT -= dt;
+    if (topT <= 0) {
+      topT = 0.3;
+      heroBox.setFromObject(ctx.player.object);
+      heroTop = heroBox.isEmpty() ? PLAYER.height : Math.min(PLAYER.height + 1.5, Math.max(PLAYER.height, heroBox.max.y - pp.y));
+    }
+    const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + Math.max(PLAYER.height - 0.2, heroTop - 0.15), PLAYER.radius * 0.8);
+    // On horseback too (QA7 m5: pinned against the foam-course rim, the camera sat in the hero's
+    // head); the buggy keeps its own chase framing.
+    const fadeOk = phase !== 'title' && (!chase || ctx.player.mode === 'riding');
+    heroFade.update(ctx.player.object, fadeOk ? heroFadeAmount(body) : 0);
 
     if (trauma > 0) {
       shakeTime += dt;

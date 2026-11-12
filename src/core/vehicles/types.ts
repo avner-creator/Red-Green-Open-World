@@ -10,6 +10,8 @@ import type { ChaseSource } from '../camera';
 export interface VehiclePublic extends VehicleApi {
   /** Place upright at `position` (on the ground) facing `yaw`, at rest. */
   teleport(position: THREE.Vector3Like, yaw: number): void;
+  /** Free-ride unstick hops so far (QA7 M1): a new one shows the reset hint. */
+  readonly unsticks: number;
   /** Buggy-only extension hooks (workshop upgrades, race boosts). Absent on other kinds. */
   readonly buggy?: BuggyHooks;
 }

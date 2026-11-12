@@ -9,6 +9,7 @@ import type { CameraInternal } from '../camera';
 import type { PlayerInternal } from '../player';
 import { createCar } from './car';
 import { createHorse } from './horse';
+import { createResetHint } from './reset-hint';
 import type { VehicleInternal, VehiclesPublic } from './types';
 
 /**
@@ -57,11 +58,19 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
   const removers: (() => void)[] = [];
   let active: VehicleInternal | null = null;
   let sinceEnter = 0;
+  /** Unstick count of the active ride when last seen (a new hop shows the reset hint). */
+  let seenUnsticks = 0;
+  /** The reset hint was tapped (touch): reset on the next update. */
+  let hintTapped = false;
+  const hint = createResetHint(ctx.uiRoot ?? null, () => {
+    hintTapped = true;
+  });
 
   const enter = (v: VehicleInternal): boolean => {
     if (active || ctx.player.mode !== 'walk') return false;
     active = v;
     sinceEnter = 0;
+    seenUnsticks = v.api.unsticks;
     player.setVehicle(v.api, v.mode, v.seat, v.seatAnim);
     v.onEnter();
     camera.setChase(v.chase);
@@ -74,6 +83,8 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
     const v = active;
     if (!v) return null;
     active = null;
+    hint.hide();
+    hintTapped = false;
     v.onExit();
     camera.setChase(null);
     return v;
@@ -140,10 +151,21 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
       const input = ctx.input.state;
       for (const v of list) v.update(dt, v === active && playing ? input : null);
       for (const v of list) v.beforePlayer?.();
-      if (!active || !playing) return;
+      hint.update(dt, input.device);
+      if (!active || !playing) {
+        hintTapped = false;
+        return;
+      }
       sinceEnter += dt;
+      // Free ride hopped itself unstuck (QA7 M1): show how to reset for a few seconds.
+      const n = active.api.unsticks;
+      if (n !== seenUnsticks) {
+        seenUnsticks = n;
+        hint.show(6);
+      }
       // R: an activity may take it first (the race pops the buggy back onto the track).
-      if (input.respawnPressed) {
+      if (input.respawnPressed || hintTapped) {
+        hintTapped = false;
         if (!active.api.buggy?.onRescue?.()) rescue();
       }
       else if (input.usePressed && sinceEnter > 0.45) exit();
@@ -152,6 +174,7 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
       for (const v of list) v.lateUpdate?.(dt, v === active && ctx.player.vehicle === v.api);
     },
     dispose() {
+      hint.dispose();
       for (const r of removers) r();
       for (const v of list) v.dispose();
     },

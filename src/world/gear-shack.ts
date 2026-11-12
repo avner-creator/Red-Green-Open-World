@@ -33,6 +33,18 @@ export const SHACK = {
 /** Rocket collider (local x, z, radius) and the standing mat (local z, radius). */
 export const SHACK_ROCKET = { x: -2.05, z: 0.45, r: 0.3 } as const;
 export const SHACK_MAT = { z: SHACK.standZ - 0.4, r: 1.22 } as const;
+/** Paint bucket by the right wall (local x, z, radius of its collider). */
+export const SHACK_BUCKET = { x: 2.25, z: 0.35, r: 0.34 } as const;
+/**
+ * Slide-around wedges along the kiosk's sides (local x0, z0, x1, z1: outer faces on these lines):
+ * back corner → outside of the rocket / bucket → front corner.
+ */
+export const SHACK_WEDGES: readonly (readonly [number, number, number, number])[] = [
+  [-SHACK.hx, SHACK.zBack, SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z],
+  [SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z, -SHACK.hx, SHACK.zFront],
+  [SHACK.hx, SHACK.zBack, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z],
+  [SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z, SHACK.hx, SHACK.zFront],
+];
 
 /**
  * World-space footprint of a kiosk at (x, z, yaw): the body box as a polygon plus circles (rocket,
@@ -401,13 +413,13 @@ export function buildGearShack(k: Kit): Keepout[] {
   }
 
   // ── Around the stall: paint buckets, crates at the back, a welcome mat in front ──
-  const [bx0, bz0] = L(2.25, 0.35);
+  const [bx0, bz0] = L(SHACK_BUCKET.x, SHACK_BUCKET.z);
   const by = k.h(bx0, bz0);
   const bucketM = T(bx0, by, bz0, a.yaw);
   paintCan(k, bucketM, 0, 0, 0, 2.6, 0xf2c14e, 0.3);
   paintCan(k, bucketM, 0.02, 0.46, -0.04, 2.2, 0xe86a9a, 2.0);
   paintCan(k, bucketM, 0.1, 0, 0.62, 2.3, 0x2a9d8f, 1.0);
-  k.col.cyl(bx0, by, bz0, 0.45, 0.34);
+  k.col.cyl(bx0, by, bz0, 0.45, SHACK_BUCKET.r);
   const [cx0, cz0] = L(1.2, -1.75);
   crate(k, cx0, cz0, 0.85, a.yaw + 0.2);
   paintCan(k, T(cx0, k.h(cx0, cz0) + 0.85, cz0, a.yaw), 0, 0, 0, 2.2, 0x2a9d8f, 0.7);
@@ -420,6 +432,25 @@ export function buildGearShack(k: Kit): Keepout[] {
   k.col.box(m, 0, SHACK.height / 2, (SHACK.zBack + SHACK.zFront) / 2, SHACK.hx, SHACK.height / 2, (SHACK.zFront - SHACK.zBack) / 2);
   const [rx, rz] = L(SHACK_ROCKET.x, SHACK_ROCKET.z);
   k.col.cyl(rx, y, rz, 0.95, 0.3);
+  // Slide-around wedges (QA7 m4): the rocket and the paint bucket stick out of the side walls, and
+  // the notch between such a post and the wall held a hero walking along the side (8.75 s at the
+  // kiosk corner, no prompt). Thin boxes along the hull from the back corners to the post and on
+  // to the front corners make each side one convex slope the hero slides along to the counter.
+  for (const [ax, az, bx, bz] of SHACK_WEDGES) {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    let nx = dz / len;
+    let nz = -dx / len;
+    const mx = (ax + bx) / 2;
+    const mz = (az + bz) / 2;
+    if (nx * mx + nz * mz < 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    const t = 0.12;
+    k.col.box(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, SHACK.height / 2, 0, t, SHACK.height / 2, len / 2);
+  }
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
 }
