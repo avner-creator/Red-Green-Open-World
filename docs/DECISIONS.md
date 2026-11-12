@@ -96,3 +96,6 @@
 - Hero rigs whose feet hang on IK bones outside the leg chain (fox, alpaca) get chibi `sink` (lower the spine root) to shorten legs; frog/flamingo collar cut raised (0.42 / 0.36) to tuck the whole helmet ring.
 - Batch 5 pushed with Medium foam-round 4% over the triangle budget: one view, mid-round only; a blocker fix (Pip leading) should not wait for it.
 - `perf:check` is a separate npm script, not part of `verify`: it adds ~15 minutes; run it before each push that touches geometry.
+- Pip's story yields the moment the child does anything else (vehicle, attraction, menu, wandering): guidance must never be blocked by a script.
+- Parked-in-vehicle cues: 3 cues at ~36 s, then one every ~75 s with varied lines. Never fully silent for a passive child, but the owner found repetition annoying, so no endless 36 s loop.
+- Map board keeps its place; badges in rows of 3/3/2 with "you are here" bottom-centre, sized to clear the compass bar (20–24 px at 640×360).
