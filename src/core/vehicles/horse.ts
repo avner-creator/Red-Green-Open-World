@@ -29,6 +29,7 @@ import {
 } from './horse-math';
 import { createRiderPose, type RiderPose } from './rider-pose';
 import type { VehicleInternal, VehiclePublic } from './types';
+import { openYaw, WedgeWatch } from './unstick';
 
 /** Capsule: hooves at y = 0, wide enough for the barrel. */
 const RADIUS = 0.5;
@@ -133,6 +134,12 @@ export function createHorse(
   let steerSmooth = 0;
   let yawRate = 0;
   let ridden = false;
+  /** Rider holding W (or S) into a rim or a wall without getting anywhere (QA7 m5). */
+  const wedge = new WedgeWatch();
+  /** Unstick hops so far (the vehicles manager shows the reset hint on a new one). */
+  let unsticks = 0;
+  const unstickEye = new THREE.Vector3();
+  const unstickDir = new THREE.Vector3();
   let rearT = -1;
   let mountT = 0;
   let pitch = 0;
@@ -204,6 +211,28 @@ export function createHorse(
     syncModel(0);
   };
 
+  /** Hop back from what the horse pushes against (`dir` 1 = forward) and face the most open way. */
+  function unstick(dir: number): void {
+    const blocked = dir > 0 ? yaw : yaw + Math.PI;
+    unstickEye.set(position.x, position.y + 0.9, position.z);
+    unstickDir.set(-Math.sin(blocked), 0, -Math.cos(blocked));
+    const room = ctx.physics.raycast(unstickEye, unstickDir, 4)?.distance ?? 4;
+    const back = Math.max(0, Math.min(1.8, room - 1.3));
+    const bx = position.x + unstickDir.x * back;
+    const bz = position.z + unstickDir.z * back;
+    unstickEye.set(bx, position.y + 0.9, bz);
+    const to = openYaw(yaw, blocked, (y) => ctx.physics.raycast(unstickEye, unstickDir.set(Math.sin(y), 0, Math.cos(y)), 30)?.distance ?? 30);
+    placeAt({ x: bx, y: position.y, z: bz }, to);
+    // A comic little hop round to the new heading.
+    vy = jumpVelocity() * 0.7;
+    grounded = false;
+    sinceGround = 1;
+    heave.v -= 0.6;
+    model.play('jump', 1.1, true);
+    ctx.audio.play('neigh', { pitch: 1.1 });
+    unsticks++;
+  }
+
   function syncModel(dt: number): void {
     model.root.position.copy(position);
     model.root.rotation.set(0, yaw, 0);
@@ -223,6 +252,9 @@ export function createHorse(
     id,
     object: model.root,
     position,
+    get unsticks() {
+      return unsticks;
+    },
     get speed() {
       return Math.abs(speed);
     },
@@ -399,6 +431,7 @@ export function createHorse(
       }
     } else blockedFor = 0;
     syncCollider();
+    if (wedge.update(dt, ridden && rearT < 0 ? throttle : 0, position.x, position.z)) unstick(throttle >= 0 ? 1 : -1);
 
     // ── Deep water / lost: splash and back to the last safe spot.
     if (t.depthHere > HORSE.refuseDepth + 0.35) deepFor += dt;
@@ -545,6 +578,7 @@ export function createHorse(
     },
     onEnter() {
       ridden = true;
+      wedge.reset();
       blocker.setEnabled(false);
       mountT = 0;
       seatLocalValid = false;

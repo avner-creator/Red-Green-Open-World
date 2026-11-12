@@ -33,6 +33,24 @@ export const SHACK = {
 /** Rocket collider (local x, z, radius) and the standing mat (local z, radius). */
 export const SHACK_ROCKET = { x: -2.05, z: 0.45, r: 0.3 } as const;
 export const SHACK_MAT = { z: SHACK.standZ - 0.4, r: 1.22 } as const;
+/** Paint bucket by the right wall (local x, z, radius of its collider). */
+export const SHACK_BUCKET = { x: 2.25, z: 0.35, r: 0.34 } as const;
+/**
+ * Slide-around sides (QA7 m4). Each side post (rocket left, bucket right) gets a flat fill from the
+ * back corner out to the post (`SHACK_SIDE_FILL`: local x0, x1, z0, z1) and a wedge from the post
+ * on to the front corner (`SHACK_WEDGES`: local x0, z0, x1, z1, outer face on that line). Each side
+ * is then one flat face plus one forward-facing slope: a hero heading for the counter from the
+ * side always has a sideways component along it and slides round to the front (no notch, and no
+ * backward-tilted face that a push toward the counter could meet square on).
+ */
+export const SHACK_SIDE_FILL: readonly (readonly [number, number, number, number, number])[] = [
+  [SHACK_ROCKET.x - SHACK_ROCKET.r, -SHACK.hx, SHACK.zBack, SHACK_ROCKET.z, SHACK.height],
+  [SHACK.hx, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK.zBack, SHACK_BUCKET.z, SHACK.height],
+];
+export const SHACK_WEDGES: readonly (readonly [number, number, number, number, number])[] = [
+  [SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z, -SHACK.hx, SHACK.zFront, SHACK.height],
+  [SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z, SHACK.hx, SHACK.zFront, SHACK.height],
+];
 
 /**
  * World-space footprint of a kiosk at (x, z, yaw): the body box as a polygon plus circles (rocket,
@@ -401,13 +419,13 @@ export function buildGearShack(k: Kit): Keepout[] {
   }
 
   // ── Around the stall: paint buckets, crates at the back, a welcome mat in front ──
-  const [bx0, bz0] = L(2.25, 0.35);
+  const [bx0, bz0] = L(SHACK_BUCKET.x, SHACK_BUCKET.z);
   const by = k.h(bx0, bz0);
   const bucketM = T(bx0, by, bz0, a.yaw);
   paintCan(k, bucketM, 0, 0, 0, 2.6, 0xf2c14e, 0.3);
   paintCan(k, bucketM, 0.02, 0.46, -0.04, 2.2, 0xe86a9a, 2.0);
   paintCan(k, bucketM, 0.1, 0, 0.62, 2.3, 0x2a9d8f, 1.0);
-  k.col.cyl(bx0, by, bz0, 0.45, 0.34);
+  k.col.cyl(bx0, by, bz0, 0.45, SHACK_BUCKET.r);
   const [cx0, cz0] = L(1.2, -1.75);
   crate(k, cx0, cz0, 0.85, a.yaw + 0.2);
   paintCan(k, T(cx0, k.h(cx0, cz0) + 0.85, cz0, a.yaw), 0, 0, 0, 2.2, 0x2a9d8f, 0.7);
@@ -420,6 +438,27 @@ export function buildGearShack(k: Kit): Keepout[] {
   k.col.box(m, 0, SHACK.height / 2, (SHACK.zBack + SHACK.zFront) / 2, SHACK.hx, SHACK.height / 2, (SHACK.zFront - SHACK.zBack) / 2);
   const [rx, rz] = L(SHACK_ROCKET.x, SHACK_ROCKET.z);
   k.col.cyl(rx, y, rz, 0.95, 0.3);
+  // Slide-around sides (QA7 m4): the rocket and the paint bucket stick out of the side walls, and
+  // the notch between such a post and the wall held a hero walking along the side (8.75 s at the
+  // kiosk corner, no prompt). See SHACK_SIDE_FILL / SHACK_WEDGES.
+  for (const [x0, x1, z0, z1, hh] of SHACK_SIDE_FILL) {
+    k.col.box(m, (x0 + x1) / 2, hh / 2, (z0 + z1) / 2, Math.abs(x1 - x0) / 2, hh / 2, Math.abs(z1 - z0) / 2);
+  }
+  for (const [ax, az, bx, bz, hh] of SHACK_WEDGES) {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    let nx = dz / len;
+    let nz = -dx / len;
+    const mx = (ax + bx) / 2;
+    const mz = (az + bz) / 2;
+    if (nx * mx + nz * mz < 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    const t = 0.12;
+    k.col.box(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, hh / 2, 0, t, hh / 2, len / 2);
+  }
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
 }

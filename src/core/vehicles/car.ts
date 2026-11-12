@@ -12,6 +12,14 @@ import { CAR, NO_CONTROLS, createCarSim, headingOf, restHeight, type CarControls
 import { createDust } from './dust';
 import { isPaved, nearestRoad } from './surface';
 import { STOCK_TUNING, type BuggyHooks, type BuggyTuning, type VehicleInternal } from './types';
+import { openYaw, WedgeWatch } from './unstick';
+
+/**
+ * Parking heading relative to the garage anchor's yaw (QA7 M1): the anchor faces the race booth
+ * 15 m away; turned 60° the nose points down a clear lane of 30+ m across the forecourt to the east
+ * (tests/e2e/vehicle-unstick.spec.ts holds W from here for 20 s).
+ */
+export const PARK_YAW_TURN = -Math.PI / 3;
 
 /** Underdamped spring (body lean / heave): springy, a little wobble. */
 class Spring {
@@ -34,7 +42,8 @@ class Spring {
 
 export function createCar(ctx: GameContext, id: string, getCamera: () => CameraApi, snapCamera?: (yaw: number) => void): VehicleInternal {
   const anchor = ctx.world.anchors.garage;
-  const sim = createCarSim(ctx.physics, anchor.position, anchor.yaw);
+  const parkYaw = anchor.yaw + PARK_YAW_TURN;
+  const sim = createCarSim(ctx.physics, anchor.position, parkYaw);
   const model = createCarModel();
   ctx.scene.add(model.root);
   ctx.scene.add(model.blob);
@@ -89,7 +98,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   const heave = new Spring(190, 9);
   const position = new THREE.Vector3();
   const prompt = new THREE.Vector3();
-  const safe = { pos: anchor.position.clone(), yaw: anchor.yaw };
+  const safe = { pos: anchor.position.clone(), yaw: parkYaw };
   let safeTimer = 0;
   let deepFor = 0;
   let driven = false;
@@ -151,8 +160,10 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   };
   /** Seconds of ghost (no chassis collisions, blinking) left after a pop. */
   let ghostLeft = 0;
-  /** Seconds the throttle has been held with the car not going anywhere (free-drive unstick). */
-  let wedgedFor = 0;
+  /** Throttle held with the car not going anywhere (free-drive unstick). */
+  const wedge = new WedgeWatch();
+  /** Free-drive unstick hops so far (the vehicles manager shows the reset hint on a new one). */
+  let unsticks = 0;
   /** Camera cut behind the car after a pop (done once the rider sits at the new spot). */
   let pendingSnap: number | null = null;
 
@@ -185,6 +196,9 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     id,
     object: model.root,
     position,
+    get unsticks() {
+      return unsticks;
+    },
     get speed() {
       return Math.abs(sim.forwardSpeed);
     },
@@ -292,17 +306,10 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       model.root.visible = ghostLeft === 0 || Math.floor(ghostLeft * 12) % 2 === 0;
       if (ghostLeft === 0) sim.collider.setEnabled(true);
     }
-    // Free driving: pressing on against something with nothing happening → a hop backwards.
-    wedgedFor = driven && hooks.autoUnstick && !hooks.hold && controls.throttle > 0.5 && Math.abs(sim.forwardSpeed) < 0.6 ? wedgedFor + dt : 0;
-    if (wedgedFor > 2.5) {
-      wedgedFor = 0;
-      const h = sim.yaw();
-      const v = sim.body.linvel();
-      sim.body.setLinvel({ x: v.x - Math.sin(h) * 3, y: Math.max(v.y, 0) + 5, z: v.z - Math.cos(h) * 3 }, true);
-      heave.v += 1;
-      ctx.audio.play('boing');
-      getCamera().shake(0.2);
-    }
+    // Free driving: pressing on against something without getting anywhere → hop back and turn
+    // toward open space (QA7 M1: W from the garage wedged the nose in the race booth for 30 s).
+    const pushing = driven && hooks.autoUnstick && !hooks.hold && ghostLeft === 0 ? controls.throttle : 0;
+    if (wedge.update(dt, pushing, sim.position.x, sim.position.z)) unstick(controls.throttle >= 0 ? 1 : -1);
 
     sync();
     const vp = sim.visualPosition;
@@ -332,6 +339,22 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       ctx.audio.setLoop('engine', 0);
       engineOn = false;
     }
+  }
+
+  /** Hop back from what the car pushes against (`dir` 1 = it pushed forward) and face open space. */
+  function unstick(dir: number): void {
+    const h = sim.yaw();
+    const blocked = dir > 0 ? h : h + Math.PI;
+    const from = tmp.set(sim.position.x, sim.position.y + 0.3, sim.position.z);
+    const away = new THREE.Vector3(-Math.sin(blocked), 0, -Math.cos(blocked));
+    const room = ctx.physics.raycast(from, away, 4)?.distance ?? 4;
+    const back = Math.max(0, Math.min(2.2, room - 1.6));
+    const base = new THREE.Vector3(sim.position.x + away.x * back, sim.position.y, sim.position.z + away.z * back);
+    const eye = new THREE.Vector3(base.x, base.y + 0.5, base.z);
+    const d = new THREE.Vector3();
+    const yaw = openYaw(h, blocked, (y) => ctx.physics.raycast(eye, d.set(Math.sin(y), 0, Math.cos(y)), 30)?.distance ?? 30);
+    hooks.popTo(base, yaw, 0.7);
+    unsticks++;
   }
 
   function exitSpot(): { position: THREE.Vector3; yaw: number } {
@@ -366,7 +389,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     }
   }
 
-  placeAt(anchor.position, anchor.yaw);
+  placeAt(anchor.position, parkYaw);
 
   return {
     api,
@@ -389,6 +412,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     update,
     onEnter() {
       driven = true;
+      wedge.reset();
       sim.setBlocker(false);
     },
     onExit() {
@@ -410,8 +434,9 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       boostLeft = 0;
       pendingKick = 0;
       safe.pos.copy(anchor.position);
-      safe.yaw = anchor.yaw;
-      placeAt(anchor.position, anchor.yaw);
+      safe.yaw = parkYaw;
+      wedge.reset();
+      placeAt(anchor.position, parkYaw);
     },
     dispose() {
       unhookBefore();
