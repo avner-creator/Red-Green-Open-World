@@ -9,7 +9,9 @@ import type { CameraInternal } from '../camera';
 import type { PlayerInternal } from '../player';
 import { createCar } from './car';
 import { createHorse } from './horse';
+import { choosePark, pointsAlong, rapierProbe, ringPoints } from './parking';
 import { createResetHint } from './reset-hint';
+import { GROUND_ROADS, isPaved } from './surface';
 import type { VehicleInternal, VehiclesPublic } from './types';
 
 /**
@@ -21,6 +23,22 @@ const HORSES = [
   { id: 'horse-maple', dx: -3.2, dz: -3, dyaw: 0, coat: 0xc8622c, mane: 0xf4eee0 },
   { id: 'horse-pebble', dx: 3.6, dz: 2.8, dyaw: 2.5, coat: 0xf1eee7, mane: 0x34302d },
 ] as const;
+
+/**
+ * Parking search (parking.ts): W from a parked ride should last this many seconds before anything
+ * is in the way; the speed models (buggy: 20 m launch in 2 s, then 15.5 m/s on the road and 11 off
+ * it; horse: gallop 7.5 m/s); how much of the buggy's run should be road; how far from home a spot
+ * may move; and the gap between two parked rides.
+ */
+const PARK = {
+  seconds: 8.6,
+  car: { road: 15.5, off: 11, launch: 20, launchTime: 2 },
+  horse: { road: 7.5, off: 7.5, launch: 4, launchTime: 1.5 },
+  carRoad: 60,
+  carRadius: 90,
+  horseRadius: 10,
+  apart: 5,
+} as const;
 
 export interface VehiclesInternal {
   api: VehiclesPublic;
@@ -125,12 +143,34 @@ export function createVehicles(ctx: GameContext, player: PlayerInternal, camera:
     );
   }
 
+  // Parking poses by measurement (QA8 m2), once the whole island (activities too) has its
+  // colliders: the first time the rides are parked for a session.
+  let measured = false;
+  const measureParking = (): void => {
+    if (measured) return;
+    measured = true;
+    const taken: { x: number; z: number }[] = [];
+    for (const v of list) {
+      const home = v.parking();
+      const probe = rapierProbe(ctx, v.footprint.hw, v.footprint.hl, v.mode === 'driving' ? isPaved : undefined);
+      const car = v.mode === 'driving';
+      // The buggy: along the roads round the garage; a horse: round its paddock spot.
+      const cands = car ? [home, ...pointsAlong(GROUND_ROADS, home.x, home.z, PARK.carRadius, 5)] : ringPoints(home.x, home.z, PARK.horseRadius, 3);
+      const free = (x: number, z: number, yaw: number): boolean =>
+        !probe.overlaps(x, z, yaw) && taken.every((t) => Math.hypot(t.x - x, t.z - z) > PARK.apart);
+      const pose = choosePark(probe, cands, car ? PARK.car : PARK.horse, PARK.seconds, home.yaw, free, car ? PARK.carRoad : 0);
+      taken.push(pose);
+      v.setParking(pose.x, pose.z, pose.yaw);
+    }
+  };
+
   // New session: everything back to its parking spot.
   removers.push(
     ctx.events.on('session:phase', (e) => {
       if (e.phase === 'title' || (e.phase === 'playing' && e.previous === 'title')) {
         if (active && ctx.player.vehicle === active.api) player.setVehicle(null);
         detach();
+        measureParking();
         for (const v of list) v.park();
       }
     }),

@@ -362,7 +362,19 @@ async function wallSpots(p: Page): Promise<WallSpot[]> {
     const { world, physics } = window.__rg!.ctx;
     const a = world.anchors as unknown as Record<string, { position: { x: number; z: number }; yaw: number }>;
     const out: { name: string; x: number; z: number; yaws: number[] }[] = [];
-    out.push({ name: 'shack-board-16-0', x: 16, z: 0, yaws: Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2) });
+    // Beside the board's gift boxes, just outside the kiosk's slide-around hull (QA8 m1: the old
+    // spot (16, 0) between board and boxes is inside the hull now, out of reach).
+    {
+      const g = a.gearShack;
+      const lx = -4.1;
+      const lz = -1.5;
+      out.push({
+        name: 'shack-board-16-0',
+        x: g.position.x + lx * Math.cos(g.yaw) + lz * Math.sin(g.yaw),
+        z: g.position.z - lx * Math.sin(g.yaw) + lz * Math.cos(g.yaw),
+        yaws: Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2),
+      });
+    }
     const back = (name: string, cx: number, cz: number, dirYaw: number): void => {
       const dx = Math.sin(dirYaw);
       const dz = Math.cos(dirYaw);
@@ -463,13 +475,16 @@ test('QA6 M2 phone (750×342 touch): hero beside the Gear Shack board and with t
 test('QA6 M2: walking past the Gear Shack board from 8 directions never stalls for 3 s', async () => {
   test.setTimeout(240_000);
   const bad: string[] = [];
-  // Through the QA stall spot (16.4, 0.1), and out from (16, 0), like a child steering: head for the
+  const gy = Math.atan2(-14, -4); // ANCHORS.gearShack (14, 2) and its yaw
+  const BOARD: [number, number] = [14 - 4.1 * Math.cos(gy) - 1.5 * Math.sin(gy), 2 + 4.1 * Math.sin(gy) - 1.5 * Math.cos(gy)];
+  // Through the QA stall spot (16.4, 0.1), and out from beside the board, like a child steering: head for the
   // goal, veer off to one side for a moment when blocked.
   const runs: { from: [number, number]; to: [number, number] }[] = [];
   for (let i = 0; i < 8; i++) {
     const t = (i / 8) * Math.PI * 2;
     runs.push({ from: [16.4 + Math.sin(t) * 7, 0.1 + Math.cos(t) * 7], to: [16.4 - Math.sin(t) * 7, 0.1 - Math.cos(t) * 7] });
-    runs.push({ from: [16, 0], to: [16 + Math.sin(t) * 5, Math.cos(t) * 5] });
+    // Out from beside the gift boxes (QA8 m1: (16, 0) itself is inside the kiosk's hull now).
+    runs.push({ from: BOARD, to: [BOARD[0] + Math.sin(t) * 5, BOARD[1] + Math.cos(t) * 5] });
   }
   for (const run of runs) {
     const r = await page.evaluate(({ from, to }) => {
@@ -530,3 +545,141 @@ test('QA6 M2: walking past the Gear Shack board from 8 directions never stalls f
   }
   expect(bad).toEqual([]);
 });
+
+// ───────────── QA8 m1/m5: the Gear Shack from behind and in front, a big hat at the gates ─────────────
+
+/** Equip the tallest hat on the biggest hero (largest bounds); returns what was picked. */
+async function biggestHero(p: Page): Promise<string> {
+  return p.evaluate(async () => {
+    const rg = window.__rg!;
+    const c = rg.ctx;
+    type MeshLike = {
+      isMesh?: boolean;
+      geometry?: { boundingBox: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null; computeBoundingBox(): void };
+      matrixWorld: { elements: number[] };
+    };
+    let best = { score: -1, id: '', hat: '' };
+    // The big ones (a full sweep of all ten picked the pup in the wizard hat).
+    for (const id of ['pup', 'frog', 'alpaca', 'rex']) {
+      await c.player.setCharacter(id).catch(() => undefined);
+      if (c.player.characterId !== id) continue;
+      for (const hat of ['hat-tophat', 'hat-wizard']) {
+        c.profile.unlock(hat, 'shop');
+        c.economy.equip('head', hat);
+        // Hat models load asynchronously: give them a moment.
+        for (let k = 0; k < 4; k++) {
+          await new Promise((r) => setTimeout(r, 120));
+          rg.step(1 / 60, 2, false);
+        }
+        c.player.object.updateMatrixWorld(true);
+        const lo = [Infinity, Infinity, Infinity];
+        const hi = [-Infinity, -Infinity, -Infinity];
+        c.player.object.traverse((o) => {
+          const m = o as unknown as MeshLike;
+          if (!m.isMesh || !m.geometry) return;
+          if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+          const b = m.geometry.boundingBox!;
+          const e = m.matrixWorld.elements;
+          for (let i = 0; i < 8; i++) {
+            const px = i & 1 ? b.max.x : b.min.x;
+            const py = i & 2 ? b.max.y : b.min.y;
+            const pz = i & 4 ? b.max.z : b.min.z;
+            for (let k = 0; k < 3; k++) {
+              const w = e[k] * px + e[4 + k] * py + e[8 + k] * pz + e[12 + k];
+              lo[k] = Math.min(lo[k], w);
+              hi[k] = Math.max(hi[k], w);
+            }
+          }
+        });
+        const score = (hi[1] - lo[1]) * Math.max(hi[0] - lo[0], hi[2] - lo[2]);
+        if (score > best.score) best = { score, id, hat };
+      }
+    }
+    await c.player.setCharacter(best.id);
+    c.economy.equip('head', best.hat);
+    for (let k = 0; k < 4; k++) {
+      await new Promise((r) => setTimeout(r, 120));
+      rg.step(1 / 60, 2, false);
+    }
+    return `${best.id}+${best.hat}`;
+  });
+}
+
+/** Camera vs hero at a spot over 8 view yaws: inside / head hidden / near / screen cover. */
+async function frameChecks(p: Page, label: string, spot: { name: string; x: number; z: number; yaw: number }): Promise<string[]> {
+  const bad: string[] = [];
+  await p.evaluate(({ x, z, yaw }) => {
+    const rg = window.__rg!;
+    rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.3, z, yaw);
+    rg.step(1 / 60, 30, false);
+  }, spot);
+  for (let i = 0; i < 8; i++) {
+    const y = spot.yaw + (i / 8) * Math.PI * 2;
+    const r = await p.evaluate((vy) => {
+      const rg = window.__rg!;
+      const cam = window.__rgCamera!;
+      cam.setView(vy, 0.38);
+      rg.step(1 / 60, 50, false);
+      const pr = cam.probe();
+      const st = cam.state();
+      return { inside: pr.inside, head: pr.headHidden, blocked: pr.blocked, near: pr.near, cover: st.cover, fade: st.heroFade, d: st.distance, yaw: st.yaw, lift: st.lift, swinging: st.swinging, want: st.want, hits: pr.hits };
+    }, y);
+    const msg = `${label} ${spot.name} yaw ${y.toFixed(2)}: ${JSON.stringify(r)}`;
+    if (process.env.RG_CAMLOG) console.log(msg);
+    // The hero (hat and all) fills at most ~25% of the screen (0.3 with the box round a posed hero),
+    // or is faded part-way; at the counter the display rocket never hides them. (Looking back
+    // through a gates arch, its top bar may cover the head: the arch is the booth's own render-only
+    // mesh, outside the camera's obstacles; reported, not judged here.)
+    const archOnly = r.head && r.hits.every((h: string) => h.startsWith('glasses:gates'));
+    if (archOnly) console.log(`(info) ${msg}`);
+    if (r.inside || (r.head && !archOnly) || (spot.name === 'shack-front' && r.blocked > 0.34) || r.near <= 0.9 || (r.cover > 0.3 && r.fade < 0.3)) bad.push(msg);
+    if (SHOTS && i % 2 === 0) {
+      await p.evaluate(() => window.__rg!.render());
+      await canvasShot(p, `test-results/camera-qa8-${label}-${spot.name}-${i}.png`);
+    }
+  }
+  return bad;
+}
+
+/** The QA8 spots: behind the kiosk, at its counter, and the gates booth's wait spot past an arch. */
+async function qa8Spots(p: Page): Promise<{ name: string; x: number; z: number; yaw: number }[]> {
+  return p.evaluate(() => {
+    const rg = window.__rg!;
+    const a = rg.ctx.world.anchors.gearShack;
+    const L = (lx: number, lz: number): { x: number; z: number } => ({
+      x: a.position.x + lx * Math.cos(a.yaw) + lz * Math.sin(a.yaw),
+      z: a.position.z - lx * Math.sin(a.yaw) + lz * Math.cos(a.yaw),
+    });
+    const out = [
+      { name: 'shack-behind', ...L(0.2, -2.5), yaw: a.yaw },
+      { name: 'shack-front', ...L(-0.6, 1.75), yaw: a.yaw },
+    ];
+    const G = (window as unknown as { __rgGlasses: { debug(id: string): Record<string, unknown> } }).__rgGlasses;
+    const d = G.debug('gates') as { arches: { front: { x: number; z: number }; back: { x: number; z: number } }[] };
+    const { front: f, back: b } = d.arches[0];
+    const l = Math.hypot(b.x - f.x, b.z - f.z);
+    out.push({ name: 'gates-wait', x: b.x + ((b.x - f.x) / l) * 1.5, z: b.z + ((b.z - f.z) / l) * 1.5, yaw: Math.atan2(b.x - f.x, b.z - f.z) });
+    return out;
+  });
+}
+
+for (const phone of [false, true]) {
+  test(`QA8 m1/m5 ${phone ? 'phone' : 'desktop'}: Gear Shack behind and front, gates wait, biggest hero in the tallest hat`, async ({ browser }) => {
+    test.setTimeout(300_000);
+    const ph = await browser.newPage(phone ? { viewport: { width: 750, height: 342 }, hasTouch: true } : {});
+    const { consoleErrors: errs } = await boot(ph);
+    await ph.evaluate(() => {
+      const rg = window.__rg!;
+      rg.freeze(true);
+      rg.start();
+      rg.step(1 / 60, 20, false);
+    });
+    const who = await biggestHero(ph);
+    console.log(`(info) biggest hero: ${who}`);
+    const bad: string[] = [];
+    for (const s of await qa8Spots(ph)) bad.push(...(await frameChecks(ph, phone ? 'phone' : 'desktop', s)));
+    await ph.close();
+    expect(bad).toEqual([]);
+    expect(errs).toEqual([]);
+  });
+}

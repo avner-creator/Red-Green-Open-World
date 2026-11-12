@@ -87,7 +87,7 @@ async function getIn(p: Page): Promise<void> {
   await steps(page, 30);
 }
 
-test('the buggy is parked at the garage and you can get in with E', async () => {
+test('the buggy is parked by the garage (on the road with the longest clear run) and you can get in with E', async () => {
   await page.evaluate(() => {
     const rg = window.__rg!;
     rg.freeze(true);
@@ -102,7 +102,9 @@ test('the buggy is parked at the garage and you can get in with E', async () => 
   });
   expect(info.kind).toBe('car');
   expect(info.count).toBe(1);
-  expect(info.d).toBeLessThan(1.5);
+  // QA8 m2: the parking spot is measured (core/vehicles/parking.ts): at the garage, or moved along
+  // a nearby road when the garage has no long enough clear run.
+  expect(info.d).toBeLessThan(90);
   const parked = await carState(page);
   expect(parked.upY).toBeGreaterThan(0.98);
   expect(parked.mode).toBe('walk');

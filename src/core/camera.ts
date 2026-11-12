@@ -8,7 +8,8 @@ import type { CameraApi, GameContext } from '../types';
 import { clamp, orbitOffset, resolveArm, steerOverrideYaw } from './camera-math';
 import { createCameraCutout } from './camera-cutout';
 import { createCameraOccluders } from './camera-occluders';
-import { createHeroFade, distToBody, heroAxisTop, heroFadeAmount } from './camera-hero-fade';
+import { createPropFade } from './camera-prop-fade';
+import { coverFadeAmount, createHeroFade, distToBody, heroAxisTop, heroFadeAmount, HERO_COVER_MAX, screenCover, visibleBounds } from './camera-hero-fade';
 import { RAY_GROUPS } from './physics';
 import { angleDelta, damp, followMoving } from './motion-math';
 import { CAM } from './tuning';
@@ -49,6 +50,9 @@ export interface ChaseSource {
 }
 
 const BASE_PITCH = Math.atan2(CAMERA.height, CAMERA.distance);
+/** The on-foot camera pulls back (up to `COVER_EXTRA_MAX` m) until the hero covers this share of the screen. */
+const COVER_TARGET = 0.2;
+const COVER_EXTRA_MAX = 3;
 
 /** Spring arm: sphere casts from the pivot (head) to the wanted camera position. */
 const ARM = {
@@ -92,7 +96,7 @@ const SWINGS = [1, 2, 3, 4, 5].flatMap((i) => [(i * Math.PI) / 6, (-i * Math.PI)
 export interface CameraDebug {
   /** Set the orbit yaw/pitch as if the player had looked there (no auto-align for a while). */
   setView(yaw: number, pitch?: number): void;
-  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean };
+  state(): { yaw: number; pitch: number; lift: number; distance: number; want: number; triangles: number; capsules: number; lastHit: { phys: number | null; occ: number | null; collider: number }; heroFade: number; swinging: boolean; cover: number };
   /**
    * Check the current view against the rendered scene (three.js raycasts against the real render
    * meshes, independent of the occluder proxies): `blocked` = fraction of rays from the camera to
@@ -151,11 +155,26 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
   const cutout = createCameraCutout();
   const occluders = createCameraOccluders(ctx.scene, (m) => cutout.patch(m.material));
   const heroFade = createHeroFade();
+  const propFade = createPropFade(ctx.scene);
   const heroMid = new THREE.Vector3();
   const heroBox = new THREE.Box3();
   /** Top of the hero incl. hat, above the feet (m), and seconds to its next measurement. */
   let heroTop = heroAxisTop(PLAYER.height, null);
   let topT = 0;
+  /** The hero's bounds incl. worn items relative to the feet (re-measured with `heroTop`). */
+  const heroRel = new THREE.Box3(new THREE.Vector3(-0.4, 0, -0.4), new THREE.Vector3(0.4, PLAYER.height, 0.4));
+  /**
+   * Share of the screen (width × height) the hero's bounds covered last frame (QA8 m5): above
+   * `HERO_COVER_MAX` the arm swings or lifts for a longer view, and the hero fades a little.
+   */
+  let cover = 0;
+  const coverBox = new THREE.Box3();
+  /**
+   * Extra follow distance (m) that brings a big hero (a pup in a wizard hat) back under the cover
+   * limit with a clear arm: size on screen goes as 1 / distance², so the distance that gives the
+   * target cover is the same wherever the camera is now (no hunting).
+   */
+  let coverExtra = 0;
   const R = ctx.physics.rapier;
   const ballHard = new R.Ball(ARM.hardRadius);
   const ballSoft = new R.Ball(ARM.softRadius);
@@ -215,16 +234,19 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     return best;
   }
 
-  /** Is the hero's torso hidden from a camera at `pivot + d·dist` (physics or render occluders)? */
+  /** Is the hero's torso or head hidden from a camera at `pivot + d·dist` (physics or render occluders)? */
   function bodyHidden(d: THREE.Vector3, dist: number): boolean {
     seeFrom.copy(pivot).addScaledVector(d, dist);
-    seeTo.copy(ctx.player.position).setY(ctx.player.position.y + CAM.pivotHeight * 0.5);
-    seeDir.subVectors(seeTo, seeFrom);
-    // Stop short of the hero: whatever they stand in (a planter) is not the camera's to fix.
-    const len = seeDir.length() - 0.6;
-    if (len <= 0.1) return false;
-    seeDir.normalize();
-    return ctx.physics.raycast(seeFrom, seeDir, len) !== null || occluders.cast(seeFrom, seeDir, len, 0) !== null;
+    for (const h of [CAM.pivotHeight * 0.5, Math.max(CAM.pivotHeight, heroTop - 0.1)]) {
+      seeTo.copy(ctx.player.position).setY(ctx.player.position.y + h);
+      seeDir.subVectors(seeTo, seeFrom);
+      // Stop short of the hero: whatever they stand in (a planter) is not the camera's to fix.
+      const len = seeDir.length() - 0.6;
+      if (len <= 0.1) continue;
+      seeDir.normalize();
+      if (ctx.physics.raycast(seeFrom, seeDir, len) !== null || occluders.cast(seeFrom, seeDir, len, 0) !== null) return true;
+    }
+    return false;
   }
 
   /** Unit arm direction for `p` (pitch) at the current yaw, with the override's extra height. */
@@ -285,7 +307,13 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     const baseDist = chase ? chase.distance + sp * 1.3 : CAMERA.distance + footExtra + run * CAM.sprintExtraDistance;
     const baseHeight = chase ? chase.height : CAMERA.height;
     const baseFov = chase ? CAMERA.fov + 4 + sp * 9 : CAMERA.fov + run * CAM.sprintExtraFov;
-    wantDistance += ((override?.distance ?? baseDist) - wantDistance) * k;
+    // A big hero on a clear arm: pull back until they cover no more than the target share.
+    if (!chase && phase !== 'title' && distance >= wantDistance * 0.95 && cover > 0 && cover < 1) {
+      const need = distance * Math.sqrt(cover / COVER_TARGET);
+      const extra = clamp(need - (override?.distance ?? baseDist), 0, COVER_EXTRA_MAX);
+      coverExtra += (extra - coverExtra) * damp(2, dt);
+    } else if (chase || phase === 'title') coverExtra = 0;
+    wantDistance += ((override?.distance ?? baseDist) + coverExtra - wantDistance) * k;
     extraHeight += ((override?.height ?? baseHeight) - CAMERA.height - extraHeight) * k;
     lookAhead += ((override?.lookAhead ?? (chase ? 1.2 : run * CAM.sprintLookAhead)) - lookAhead) * k;
     const fovTarget = override?.fov ?? baseFov;
@@ -360,8 +388,11 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         // their path (and walking on clears the arm anyway), so it waits until they stop; the hero
         // fade covers the moment in between.
         const steering = Math.abs(input.moveX) + Math.abs(input.moveY) > 0.1;
-        const need = Math.min(ARM.swingBelow, wantDistance * 0.5);
         const here = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard) ?? reach;
+        // The hero (hat and all) filling the screen counts as an arm that is too short: ask for one
+        // long enough to bring them under the limit (size on screen goes as 1 / distance²).
+        const big = cover > HERO_COVER_MAX && here < wantDistance * 0.9;
+        const need = big ? Math.min(wantDistance * 0.9, here * Math.sqrt(cover / HERO_COVER_MAX) + 0.3) : Math.min(ARM.swingBelow, wantDistance * 0.5);
         // A swing under way runs to its end (it only stops early once the arm is all but clear).
         if (steering && swingTo === null) {
           // (no new swing while steering)
@@ -369,12 +400,13 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
           swingTo = null;
           swingGood = false;
         } else if (swingTo === null) {
-          const good = Math.min(wantDistance * 0.9, Math.max(ARM.swingGood, here * 1.5 + 0.5));
+          // A big hero only needs the arm that brings them under the cover limit.
+          const good = big ? need : Math.min(wantDistance * 0.9, Math.max(ARM.swingGood, here * 1.5 + 0.5));
           // The smallest swing (± pair: the longer side) that is clearly longer; else the longest.
           let pick: number | null = null;
           let pickD = -1;
           let any: number | null = null;
-          let anyD = here + 0.5;
+          let anyD = here + (big ? 0.3 : 0.5);
           for (let i = 0; i < SWINGS.length && pick === null; i += 2) {
             for (let k = i; k < Math.min(i + 2, SWINGS.length); k++) {
               yaw = keep + SWINGS[k];
@@ -400,16 +432,18 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     if (phase !== 'title' && (!chase || ctx.player.mode === 'riding')) {
       const base = clearAlong(pivot, armDir(pitch, probeDir), reach, ARM.hardRadius, ballHard);
       const baseD = base === null ? wantDistance : base;
-      if (baseD < Math.min(ARM.liftWhenShorter, wantDistance * 0.5)) {
+      if (baseD < Math.min(ARM.liftWhenShorter, wantDistance * 0.5) || (cover > HERO_COVER_MAX && baseD < wantDistance * 0.9)) {
         if (!(footSwing && swingTo !== null && swingGood)) {
           // Blocked right behind the hero: swing over (or under) it if that gives a clearly longer view.
           let bestD = baseD;
+          // A big hero (QA8 m5): any rise that reaches the arm length they need will do.
+          const coverNeed = cover > HERO_COVER_MAX ? Math.min(wantDistance * 0.9, baseD * Math.sqrt(cover / HERO_COVER_MAX) + 0.2) : Infinity;
           for (const dp of [ARM.liftUp, CAM.maxPitch - pitch, ARM.liftDown]) {
             const p = clamp(pitch + dp, CAM.minPitch, CAM.maxPitch);
             if (Math.abs(p - pitch) < 0.05) continue;
             const h = clearAlong(pivot, armDir(p, probeDir), reach, ARM.hardRadius, ballHard);
             const d = h === null ? wantDistance : h;
-            if (d > bestD * 1.4 + 0.4) {
+            if (d > bestD * 1.4 + 0.4 || (d >= coverNeed && d > bestD + 0.2)) {
               bestD = d;
               liftTarget = p - pitch;
             }
@@ -487,14 +521,20 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
     topT -= dt;
     if (topT <= 0) {
       topT = 0.3;
-      heroBox.setFromObject(ctx.player.object);
+      visibleBounds(ctx.player.object, heroBox);
       heroTop = heroAxisTop(PLAYER.height, heroBox.isEmpty() ? null : heroBox.max.y - pp.y);
+      if (!heroBox.isEmpty()) heroRel.copy(heroBox).translate(tmp.copy(pp).negate());
     }
     const body = distToBody(camera.position, pp.x, pp.z, pp.y + 0.25, pp.y + heroTop, PLAYER.radius * 0.8);
+    // Props flagged `cameraFade` (the Gear Shack rocket) between the camera and the hero: see-through.
+    propFade.update(camera.position, pp, heroTop, dt, phase !== 'title' && !chase);
+    camera.updateMatrixWorld();
+    cover = phase === 'title' || chase ? 0 : screenCover(camera, coverBox.copy(heroRel).translate(pp));
     // On horseback too (QA7 m5: pinned against the foam-course rim, the camera sat in the hero's
-    // head); the buggy keeps its own chase framing.
+    // head); the buggy keeps its own chase framing. A hero still filling the screen after the swing
+    // and lift (QA8 m5) fades part-way too.
     const fadeOk = phase !== 'title' && (!chase || ctx.player.mode === 'riding');
-    heroFade.update(ctx.player.object, fadeOk ? heroFadeAmount(body) : 0);
+    heroFade.update(ctx.player.object, fadeOk ? Math.max(heroFadeAmount(body), coverFadeAmount(cover)) : 0);
 
     if (trauma > 0) {
       shakeTime += dt;
@@ -525,6 +565,8 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
       for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return false;
       const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
       const mm = Array.isArray(m) ? m[0] : m;
+      // A see-through prop (camera-prop-fade.ts) dithered mostly away is not in the picture.
+      if (((o.userData as { cameraFaded?: number }).cameraFaded ?? 0) > 0.5) return false;
       return !!(o as THREE.Mesh).isMesh && !(mm && mm.transparent && mm.opacity < 0.5) && !(mm && !mm.colorWrite);
     };
     /** First rendered surface hit from `from` along `dir` within `max` (not the hero), or null. */
@@ -549,7 +591,7 @@ export function createCameraRig(ctx: GameContext): CameraInternal {
         if (pt !== undefined) pitch = clamp(pt, CAM.minPitch, CAM.maxPitch);
         sinceLook = 0;
       },
-      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null }),
+      state: () => ({ yaw, pitch, lift, distance, want: wantDistance, triangles: occluders.stats().triangles, capsules: occluders.stats().capsules, lastHit, heroFade: heroFade.amount, swinging: swingTo !== null, cover }),
       probe() {
         // Instanced meshes cache their bounds; the scatter refills instances every view change.
         ctx.scene.traverse((o) => {

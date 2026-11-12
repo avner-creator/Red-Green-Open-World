@@ -99,6 +99,75 @@ test('the parked buggy faces a clear lane: W from the garage drives off', async 
   expect(r.travelled).toBeGreaterThan(40);
 });
 
+test('QA8 m2: W held 15 s from every parked ride hits nothing in the first 8 s', async () => {
+  const rows = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const out: { i: number; kind: string; at: string; hitAt: number; unstickAt: number; travelled8: number; top: number }[] = [];
+    for (let i = 0; i < rg.ctx.vehicles.all.length; i++) {
+      const v = rg.ctx.vehicles.all[i] as unknown as {
+        kind: string;
+        position: { x: number; z: number };
+        speed: number;
+        object: { quaternion: { x: number; y: number; z: number; w: number } };
+        unsticks: number;
+      };
+      // Fresh session: every ride back on its (measured) parking spot.
+      rg.ctx.session.end();
+      rg.ctx.session.toTitle();
+      rg.step(1 / 60, 2, false);
+      rg.start();
+      rg.step(1 / 60, 20, false);
+      const q = v.object.quaternion;
+      const h = Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+      const at = `${v.position.x.toFixed(1)},${v.position.z.toFixed(1)} yaw ${h.toFixed(2)}`;
+      const sx = v.position.x + Math.cos(h) * 2.2;
+      const sz = v.position.z - Math.sin(h) * 2.2;
+      rg.teleport(sx, rg.ctx.world.heightAt(sx, sz) + 0.3, sz, h);
+      rg.step(1 / 60, 20, false);
+      rg.inject({ usePressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 40, false);
+      const n0 = v.unsticks;
+      const x0 = v.position.x;
+      const z0 = v.position.z;
+      let top = 0;
+      let hitAt = -1;
+      let unstickAt = -1;
+      let travelled8 = 0;
+      let px = x0;
+      let pz = z0;
+      for (let t = 0.25; t <= 15; t += 0.25) {
+        rg.inject({ moveY: 1 });
+        rg.step(1 / 60, 15, false);
+        const s = Math.abs(v.speed);
+        // A hit: the speed falls to under half of what it had built up (or an unstick hop).
+        if (t > 1 && s < top * 0.5 && hitAt < 0) hitAt = t;
+        top = Math.max(top, s);
+        if (v.unsticks !== n0 && unstickAt < 0) unstickAt = t;
+        if (t <= 8) travelled8 += Math.hypot(v.position.x - px, v.position.z - pz);
+        px = v.position.x;
+        pz = v.position.z;
+      }
+      rg.inject(null);
+      out.push({ i, kind: v.kind, at, hitAt, unstickAt, travelled8, top });
+      rg.inject({ respawnPressed: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 30, false);
+    }
+    return out;
+  });
+  console.log(JSON.stringify(rows));
+  expect(rows.length).toBe(3);
+  for (const r of rows) {
+    const msg = JSON.stringify(r);
+    if (r.hitAt >= 0) expect(r.hitAt, msg).toBeGreaterThan(8);
+    if (r.unstickAt >= 0) expect(r.unstickAt, msg).toBeGreaterThan(8);
+    expect(r.travelled8, msg).toBeGreaterThan(r.kind === 'car' ? 70 : 40);
+  }
+});
+
 test('W into the race booth: the buggy hops back, turns to open space, reset hint shows', async () => {
   // The old parking pose: nose at the race booth 15 m ahead (QA7 M1).
   const r = await holdW(page, 0, 14, { x: 34, z: 13, yaw: Math.PI });

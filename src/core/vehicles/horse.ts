@@ -27,6 +27,7 @@ import {
   waterResponse,
   type Gait,
 } from './horse-math';
+import { horseZones, keepOut } from './keepout';
 import { createRiderPose, type RiderPose } from './rider-pose';
 import type { VehicleInternal, VehiclePublic } from './types';
 import { openYaw, WedgeWatch } from './unstick';
@@ -38,6 +39,10 @@ const CENTRE = RADIUS + HALF;
 /** Nose-to-tail hero blocker (horse space): a lying capsule from rump to chest, at belly-to-back height. */
 const BLOCK = { half: 0.85, radius: 0.42, y: 1.05, forward: 0.2 } as const;
 const REAR_TIME = 1.6;
+/** How far ahead of the horse's middle a keep-out zone turns it (m: its nose and a bit). */
+const ZONE_REACH = 1.8;
+/** Seconds without getting anywhere along a keep-out edge before trying the other way round. */
+const ZONE_STUCK = 0.9;
 
 /** Underdamped spring (landing heave). */
 class Spring {
@@ -146,6 +151,18 @@ export function createHorse(
   let roll = 0;
   let deepFor = 0;
   let bumpCooldown = 0;
+  /** Keep-out zones (the Foam Lava course: keepout.ts) and the whinny's cooldown there (s). */
+  const zones = horseZones();
+  let zoneCooldown = 0;
+  /** Way along the zone edge being followed (0 = none yet), and seconds since the last contact. */
+  let zoneSide = 0;
+  let zoneAway = 0;
+  /** Edge-follow flips since the last clear stretch (both ways blocked: hop out instead). */
+  let zoneFlips = 0;
+  /** Seconds the horse has stayed within 0.8 m of (zoneX, zoneZ) while following an edge. */
+  let zoneStill = 0;
+  let zoneX = 0;
+  let zoneZ = 0;
   let gait: Gait = 'idle';
   let time = seedBase * 3.7;
   let idleTimer = 4 + seedBase * 2.3;
@@ -368,6 +385,48 @@ export function createHorse(
     desired.x = fwd.x * speed * dt;
     desired.z = fwd.z * speed * dt;
     desired.y = vy * dt;
+    // The Foam Lava course (QA8 m11): turned away along its edge with a whinny, never in.
+    zoneCooldown = Math.max(0, zoneCooldown - dt);
+    zoneAway += dt;
+    if (zoneAway > 1) {
+      zoneSide = 0;
+      zoneFlips = 0;
+    }
+    // Following an edge but going nowhere (a house at the corner): go round the other way; stuck
+    // both ways (a squeeze between the course and the village): hop out of it at once.
+    if (zoneSide !== 0 && zoneAway < 0.3 && throttle > 0.5) {
+      if (Math.hypot(position.x - zoneX, position.z - zoneZ) > 0.8) {
+        zoneX = position.x;
+        zoneZ = position.z;
+        zoneStill = 0;
+      } else if ((zoneStill += dt) > ZONE_STUCK) {
+        zoneStill = 0;
+        if (++zoneFlips >= 2) {
+          zoneFlips = 0;
+          zoneSide = 0;
+          wedge.reset();
+          unstick(1);
+        } else zoneSide = -zoneSide;
+      }
+    } else zoneStill = 0;
+    if (ridden && speed > 0.3) {
+      const ko = keepOut(zones, position.x, position.z, yaw, desired.x, desired.z, ZONE_REACH, zoneSide);
+      if (ko.yaw !== null) {
+        zoneSide = ko.side;
+        zoneAway = 0;
+        desired.x = ko.mx;
+        desired.z = ko.mz;
+        const d = Math.atan2(Math.sin(ko.yaw - yaw), Math.cos(ko.yaw - yaw));
+        yaw += d * Math.min(1, dt * 6);
+        fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
+        if (zoneCooldown === 0) {
+          zoneCooldown = 2.5;
+          ctx.audio.play('neigh', { pitch: 1.15 });
+          ctx.audio.play('boing', { volume: 0.5 });
+          heave.v += 0.5;
+        }
+      }
+    }
     syncCollider();
     if (vy > 0) cc.disableSnapToGround();
     else cc.enableSnapToGround(0.6);
@@ -602,6 +661,12 @@ export function createHorse(
       safe.yaw = home.yaw;
       placeAt(home.position, home.yaw);
     },
+    setParking(x, z, y) {
+      home.position.set(x, ctx.world.heightAt(x, z), z);
+      home.yaw = y;
+    },
+    parking: () => ({ x: home.position.x, z: home.position.z, yaw: home.yaw }),
+    footprint: { hw: 0.55, hl: 1.25 },
     dispose() {
       if (soundOn) ctx.audio.setLoop('gallop', 0);
       world.removeCharacterController(cc);

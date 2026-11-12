@@ -19,6 +19,13 @@ import { C, box, crate, type HeightFn, type Kit } from './props';
 import { boxG, coneG, cylG, rbox, sphereG } from './shapes';
 import { groundDisc } from './core-areas';
 import type { Keepout } from './scatter';
+import { markSlideAround, slideToward } from '../core/slide-around';
+
+/** A local direction (x, z) turned into world space by the rotation of `m`. */
+function dirToWorld(m: THREE.Matrix4, x: number, z: number): [number, number] {
+  const v = new THREE.Vector3(x, 0, z).transformDirection(m);
+  return [v.x, v.z];
+}
 
 /** Stall body half extents in the local frame (the collider), and where the player stands. */
 export const SHACK = {
@@ -36,31 +43,36 @@ export const SHACK_MAT = { z: SHACK.standZ - 0.4, r: 1.22 } as const;
 /** Paint bucket by the right wall (local x, z, radius of its collider). */
 export const SHACK_BUCKET = { x: 2.25, z: 0.35, r: 0.34 } as const;
 /**
- * Slide-around sides (QA7 m4). Each side post (rocket left, bucket right) gets a flat fill from the
- * back corner out to the post (`SHACK_SIDE_FILL`: local x0, x1, z0, z1) and a wedge from the post
- * on to the front corner (`SHACK_WEDGES`: local x0, z0, x1, z1, outer face on that line). Each side
- * is then one flat face plus one forward-facing slope: a hero heading for the counter from the
- * side always has a sideways component along it and slides round to the front (no notch, and no
- * backward-tilted face that a push toward the counter could meet square on).
+ * The whole kiosk as one convex slide-around shape (QA8 m1), local x, z, counter-clockwise from
+ * the counter's left front corner: the counter front, the rocket side out round the Gear Shack
+ * dot-picture board and its gift boxes (activities/glasses/weave/shack: board at local x ≈ −2,
+ * boxes out to x ≈ −3.52), one slanted back face, the paint-bucket side. Invisible helper walls
+ * (`k.col.helperBox`) on every edge but the counter front: there is no notch or flat back left to
+ * stop in, and every edge carries a slide hint (core/slide-around.ts) so a hero pushing at the
+ * middle from any side is steered round to the counter.
  */
-export const SHACK_SIDE_FILL: readonly (readonly [number, number, number, number, number])[] = [
-  [SHACK_ROCKET.x - SHACK_ROCKET.r, -SHACK.hx, SHACK.zBack, SHACK_ROCKET.z, SHACK.height],
-  [SHACK.hx, SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK.zBack, SHACK_BUCKET.z, SHACK.height],
-];
-export const SHACK_WEDGES: readonly (readonly [number, number, number, number, number])[] = [
-  [SHACK_ROCKET.x - SHACK_ROCKET.r, SHACK_ROCKET.z, -SHACK.hx, SHACK.zFront, SHACK.height],
-  [SHACK_BUCKET.x + SHACK_BUCKET.r, SHACK_BUCKET.z, SHACK.hx, SHACK.zFront, SHACK.height],
+export const SHACK_HULL: readonly (readonly [number, number])[] = [
+  [-SHACK.hx, SHACK.zFront],
+  [-3.58, -0.2],
+  [-3.58, -2.85],
+  [-1.9, -2.75],
+  [2.65, -1.0],
+  [2.68, 0.42],
+  [1.95, SHACK.zFront],
 ];
 
+/** Height of the helper walls (over the awning eaves and the board's top). */
+const HULL_H = 3.4;
+
 /**
- * World-space footprint of a kiosk at (x, z, yaw): the body box as a polygon plus circles (rocket,
- * mat). Pure, for layout tests (walking corridors must stay clear of it).
+ * World-space footprint of a kiosk at (x, z, yaw): its slide-around hull as a polygon plus circles
+ * (rocket, mat). Pure, for layout tests (walking corridors must stay clear of it).
  */
 export function shackFootprint(x: number, z: number, yaw: number): { poly: [number, number][]; circles: [number, number, number][] } {
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
   const w = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
-  const poly = [w(-SHACK.hx, SHACK.zBack), w(SHACK.hx, SHACK.zBack), w(SHACK.hx, SHACK.zFront), w(-SHACK.hx, SHACK.zFront)];
+  const poly = SHACK_HULL.map(([lx, lz]) => w(lx, lz));
   const r = w(SHACK_ROCKET.x, SHACK_ROCKET.z);
   const m = w(0, SHACK_MAT.z);
   return { poly, circles: [[r[0], r[1], SHACK_ROCKET.r], [m[0], m[1], SHACK_MAT.r]] };
@@ -400,23 +412,7 @@ export function buildGearShack(k: Kit): Keepout[] {
   bulbString(k, W3(-0.62, 4.62, -0.55), W3(-1.8, 3.32, 1.0), 6, 0.12);
   bulbString(k, W3(0.62, 4.62, -0.55), W3(1.8, 3.32, 1.0), 6, 0.12);
 
-  // ── Giant toy rocket leaning on the left wall ──
-  {
-    const rm = M(m, T(-2.2, 0.16, 0.45, 0, 1, 1, 1, 0, -0.14));
-    b.add('gloss', cylG(12), 0xf4f1ea, M(rm, T(0, 0.3, 0, 0, 0.23, 1.1, 0.23)), { aoY: y + 0.1, aoH: 0.8, ao: 0.3 });
-    b.add('gloss', coneG(12), 0xc8433a, M(rm, T(0, 1.4, 0, 0, 0.23, 0.5, 0.23)));
-    b.add('gloss', cylG(12, 1, true), NAVY, M(rm, T(0, 0.55, 0, 0, 0.235, 0.16, 0.235)));
-    b.add('gloss', cylG(12, 1, true), 0xc8433a, M(rm, T(0, 1.25, 0, 0, 0.235, 0.08, 0.235)));
-    b.add('metal', cylG(12, 0.75), 0x4a5058, M(rm, T(0, 0.12, 0, 0, 0.16, 0.2, 0.16)));
-    // Porthole facing out of the kiosk's left side.
-    const pm = M(rm, T(-0.225, 1.0, 0, -Math.PI / 2));
-    b.add('metal', cylG(12), 0xc9ced3, M(pm, T(0, 0, -0.02, 0, 0.11, 0.03, 0.11, Math.PI / 2)));
-    b.add('glass', cylG(12), 0x7fc4e8, M(pm, T(0, 0, -0.01, 0, 0.08, 0.03, 0.08, Math.PI / 2)));
-    for (let i = 0; i < 3; i++) {
-      const an = (i / 3) * Math.PI * 2 - Math.PI / 2;
-      b.add('gloss', finG(), 0xc8433a, M(rm, T(Math.sin(an) * 0.2, 0.42, Math.cos(an) * 0.2, an - Math.PI / 2)));
-    }
-  }
+  // ── Giant toy rocket leaning on the left wall: its own see-through mesh (createGearShackLive) ──
 
   // ── Around the stall: paint buckets, crates at the back, a welcome mat in front ──
   const [bx0, bz0] = L(SHACK_BUCKET.x, SHACK_BUCKET.z);
@@ -424,11 +420,16 @@ export function buildGearShack(k: Kit): Keepout[] {
   const bucketM = T(bx0, by, bz0, a.yaw);
   paintCan(k, bucketM, 0, 0, 0, 2.6, 0xf2c14e, 0.3);
   paintCan(k, bucketM, 0.02, 0.46, -0.04, 2.2, 0xe86a9a, 2.0);
-  paintCan(k, bucketM, 0.1, 0, 0.62, 2.3, 0x2a9d8f, 1.0);
+  paintCan(k, bucketM, 0.05, 0, -0.62, 2.3, 0x2a9d8f, 1.0);
   k.col.cyl(bx0, by, bz0, 0.45, SHACK_BUCKET.r);
-  const [cx0, cz0] = L(1.2, -1.75);
-  crate(k, cx0, cz0, 0.85, a.yaw + 0.2);
+  // Behind the kiosk, inside its slide-around hull (the camera never ends up in them: QA8 m1).
+  const [cx0, cz0] = L(-1.1, -1.68);
+  crate(k, cx0, cz0, 0.85, a.yaw);
   paintCan(k, T(cx0, k.h(cx0, cz0) + 0.85, cz0, a.yaw), 0, 0, 0, 2.2, 0x2a9d8f, 0.7);
+  for (const [lx, lz, col] of [[0.35, -1.62, 0xf2c14e], [1.35, -1.33, 0xe86a9a]] as const) {
+    const [px, pz] = L(lx, lz);
+    paintCan(k, T(px, k.h(px, pz), pz, a.yaw), 0, 0, 0, 1.9, col, lx);
+  }
   // Round mat where the player stands (flat paint, nothing to trip on).
   const [mx, mz] = L(0, SHACK_MAT.z);
   groundDisc(k, mx, mz, 0, 1.0, 0.1, () => TEAL, 1, 32);
@@ -438,29 +439,79 @@ export function buildGearShack(k: Kit): Keepout[] {
   k.col.box(m, 0, SHACK.height / 2, (SHACK.zBack + SHACK.zFront) / 2, SHACK.hx, SHACK.height / 2, (SHACK.zFront - SHACK.zBack) / 2);
   const [rx, rz] = L(SHACK_ROCKET.x, SHACK_ROCKET.z);
   k.col.cyl(rx, y, rz, 0.95, 0.3);
-  // Slide-around sides (QA7 m4): the rocket and the paint bucket stick out of the side walls, and
-  // the notch between such a post and the wall held a hero walking along the side (8.75 s at the
-  // kiosk corner, no prompt). See SHACK_SIDE_FILL / SHACK_WEDGES.
-  for (const [x0, x1, z0, z1, hh] of SHACK_SIDE_FILL) {
-    k.col.helperBox(m, (x0 + x1) / 2, hh / 2, (z0 + z1) / 2, Math.abs(x1 - x0) / 2, hh / 2, Math.abs(z1 - z0) / 2);
-  }
-  for (const [ax, az, bx, bz, hh] of SHACK_WEDGES) {
+  // Slide-around hull (QA8 m1): helper walls on every edge but the counter front, each with a
+  // slide hint toward the counter (the hero is steered round instead of held at a wall).
+  const front = { x: Math.sin(a.yaw), z: Math.cos(a.yaw) };
+  const n = SHACK_HULL.length;
+  for (let i = 0; i < n - 1; i++) {
+    const [ax, az] = SHACK_HULL[i];
+    const [bx, bz] = SHACK_HULL[i + 1];
     const dx = bx - ax;
     const dz = bz - az;
     const len = Math.hypot(dx, dz);
     let nx = dz / len;
     let nz = -dx / len;
-    const mx = (ax + bx) / 2;
-    const mz = (az + bz) / 2;
-    if (nx * mx + nz * mz < 0) {
+    if (nx * (ax + bx) + nz * (az + bz) < 0) {
       nx = -nx;
       nz = -nz;
     }
-    const t = 0.12;
-    k.col.helperBox(M(m, T(mx - nx * t, 0, mz - nz * t, Math.atan2(dx, dz))), 0, hh / 2, 0, t, hh / 2, len / 2);
+    // Half thickness: the short back edge behind the gift boxes is thick (inward) so its centre
+    // stays off the Scoops terrace's footprint (tests/world/sites.test.ts); the rest are thin.
+    const t = i === 2 ? 0.8 : 0.15;
+    const mx = (ax + bx) / 2 - nx * t;
+    const mz = (az + bz) / 2 - nz * t;
+    // Outer faces meet exactly at the corners (no bump sticks out of the hull).
+    const col = k.col.helperBox(M(m, T(mx, 0, mz, Math.atan2(dx, dz))), 0, HULL_H / 2, 0, t, HULL_H / 2, len / 2);
+    const [wnx, wnz] = dirToWorld(m, nx, nz);
+    const [wtx, wtz] = dirToWorld(m, dx / len, dz / len);
+    markSlideAround(col, { nx: wnx, nz: wnz, ...slideToward(wtx, wtz, front.x, front.z) });
   }
 
   return [{ x: a.x, z: a.z, r: 3.2 }];
+}
+
+/**
+ * The giant toy rocket leaning on the left wall, as one mesh of its own (local frame of the
+ * kiosk): a see-through prop (`userData.cameraFade`, core/camera-prop-fade.ts) so it never hides
+ * the hero standing at the counter (QA8 m1). Its own material: the fade is per material.
+ */
+function buildRocket(): THREE.Mesh {
+  const parts: THREE.BufferGeometry[] = [];
+  const c = new THREE.Color();
+  const add = (geo: THREE.BufferGeometry, color: number, mat: THREE.Matrix4): void => {
+    let g = geo.index ? geo.toNonIndexed() : geo.clone();
+    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    g = g.applyMatrix4(mat);
+    c.set(color);
+    const n = g.attributes.position.count;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) c.toArray(col, i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    parts.push(g);
+  };
+  const rm = T(SHACK_ROCKET.x - 0.15, 0.16, SHACK_ROCKET.z, 0, 1, 1, 1, 0, -0.14);
+  add(cylG(12), 0xf4f1ea, M(rm, T(0, 0.3, 0, 0, 0.23, 1.1, 0.23)));
+  add(coneG(12), 0xc8433a, M(rm, T(0, 1.4, 0, 0, 0.23, 0.5, 0.23)));
+  add(cylG(12, 1, true), NAVY, M(rm, T(0, 0.55, 0, 0, 0.235, 0.16, 0.235)));
+  add(cylG(12, 1, true), 0xc8433a, M(rm, T(0, 1.25, 0, 0, 0.235, 0.08, 0.235)));
+  add(cylG(12, 0.75), 0x4a5058, M(rm, T(0, 0.12, 0, 0, 0.16, 0.2, 0.16)));
+  // Porthole facing out of the kiosk's left side.
+  const pm = M(rm, T(-0.225, 1.0, 0, -Math.PI / 2));
+  add(cylG(12), 0xc9ced3, M(pm, T(0, 0, -0.02, 0, 0.11, 0.03, 0.11, Math.PI / 2)));
+  add(cylG(12), 0x7fc4e8, M(pm, T(0, 0, -0.01, 0, 0.08, 0.03, 0.08, Math.PI / 2)));
+  for (let i = 0; i < 3; i++) {
+    const an = (i / 3) * Math.PI * 2 - Math.PI / 2;
+    add(finG(), 0xc8433a, M(rm, T(Math.sin(an) * 0.2, 0.42, Math.cos(an) * 0.2, an - Math.PI / 2)));
+  }
+  const geo = mergeGeometries(parts, false) ?? new THREE.BufferGeometry();
+  for (const g of parts) g.dispose();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32 }));
+  mesh.name = 'gearShack:rocket';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.cameraFade = true;
+  return mesh;
 }
 
 export interface GearShackLive {
@@ -492,6 +543,9 @@ export function createGearShackLive(mats: Materials, h: HeightFn): GearShackLive
     occ.userData.cameraOccluder = true;
     group.add(occ);
   }
+
+  const rocket = buildRocket();
+  group.add(rocket);
 
   const gem = new THREE.Mesh(gemGeometry(), mats.get('gloss'));
   const gemBase = new THREE.Vector3(-Math.sin(0.07) * 1.5, 4.0 + Math.cos(0.07) * 1.5, -0.55);
@@ -553,6 +607,7 @@ export function createGearShackLive(mats: Materials, h: HeightFn): GearShackLive
     setQuality(q) {
       const shadows = q !== 'low';
       gem.castShadow = shadows;
+      rocket.castShadow = shadows;
       if (pins) pins.castShadow = shadows;
     },
   };

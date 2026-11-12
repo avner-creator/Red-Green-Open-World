@@ -102,6 +102,12 @@ export interface VehicleInternal {
   rescue(): void;
   /** Back to its parking spot (new session). */
   park(): void;
+  /** Where `park` puts it from now on (chosen by measurement: parking.ts). */
+  setParking(x: number, z: number, yaw: number): void;
+  /** Its current parking spot (ground x, z and heading). */
+  parking(): { x: number; z: number; yaw: number };
+  /** Footprint half extents (across, along) for the parking probe. */
+  readonly footprint: { hw: number; hl: number };
   /** R keeps the rider on board (the horse): `rescue` moves vehicle and rider together. */
   readonly rescueKeepsRider?: boolean;
   /** Called every frame before the player's animation update (undo procedural rider posing). */

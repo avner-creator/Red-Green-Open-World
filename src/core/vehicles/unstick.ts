@@ -5,8 +5,8 @@
  */
 
 export const FREE_UNSTICK = {
-  /** Seconds of pushing without progress before the hop. */
-  seconds: 2.5,
+  /** Seconds of pushing without progress before the hop (QA8 m11: no stall over 3 s). */
+  seconds: 2,
   /** Moving this far (m) from where the push started counts as getting somewhere. */
   progress: 1.2,
   /** |throttle| above this counts as pushing. */
