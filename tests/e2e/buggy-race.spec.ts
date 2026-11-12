@@ -216,6 +216,40 @@ test('race: booth → countdown → a full lap with two friends → podium → r
   expect(consoleErrors).toEqual([]);
 });
 
+test('race: spamming E at the booth never leaves the buggy in the countdown or the first 2 s (QA8 m14)', async () => {
+  const r = await page.evaluate(() => {
+    const rg = window.__rg!;
+    const race = window.__rgRace!;
+    rg.inject({ respawnPressed: true });
+    rg.step(1 / 60, 1, false);
+    rg.inject(null);
+    rg.step(1 / 60, 20, false);
+    const g = race.gridView();
+    rg.teleport(g[0] + 5, g[1] + 0.3, g[2] - 7);
+    rg.step(1 / 60, 10, false);
+    const started = race.start();
+    const log: string[] = [];
+    // E every 0.25 s through the countdown and the first 2 s of the race.
+    for (let i = 0; i < 20; i++) {
+      rg.inject({ usePressed: true, use: true });
+      rg.step(1 / 60, 1, false);
+      rg.inject(null);
+      rg.step(1 / 60, 14, false);
+      log.push(`${race.phase}/${rg.state().playerMode}`);
+    }
+    return { started, log, phase: race.phase, mode: rg.state().playerMode };
+  });
+  expect(r.started).toBe(true);
+  expect(r.log.every((l) => l === 'countdown/driving' || l === 'racing/driving'), r.log.join(' ')).toBe(true);
+  expect(r.log.some((l) => l.startsWith('racing'))).toBe(true);
+  expect([r.phase, r.mode]).toEqual(['racing', 'driving']);
+  // R still leaves.
+  await press({ respawnPressed: true }, 5);
+  await press({ respawnPressed: true }, 20);
+  const after = await page.evaluate(() => ({ phase: window.__rgRace!.phase, mode: window.__rg!.state().playerMode }));
+  expect(after.phase).toBe('idle');
+});
+
 const COMBOS: Array<{ eye: Pick<EyeSettings, 'leftLens' | 'weakEye'>; weak: 'r' | 'g'; strong: 'r' | 'g' }> = [
   { eye: { leftLens: 'red', weakEye: 'left' }, weak: 'r', strong: 'g' },
   { eye: { leftLens: 'red', weakEye: 'right' }, weak: 'g', strong: 'r' },

@@ -434,10 +434,24 @@ export function createRace(ctx: GameContext): Race {
   }
 
   const toNext = new THREE.Vector3();
+  /**
+   * QA8 m14: a child spamming E at the booth got out of the buggy with the second press and the
+   * race was gone. During the countdown and the race's first `E_GRACE` s, E does not leave: the
+   * hero is put straight back in the seat. R (or the leave button) still leaves.
+   */
+  const E_GRACE = 2;
+  function keepInSeat(): boolean {
+    if (!car || ctx.player.vehicle === car) return true;
+    const early = phase === 'countdown' || (phase === 'racing' && raceT < E_GRACE);
+    if (!early || ctx.input.state.respawnPressed || ctx.player.vehicle) return false;
+    // E just started the hop-out (an external controller): cancel it and sit back down.
+    if (ctx.player.mode === 'external') ctx.player.setExternalController(null);
+    return vehicles.board?.(car.id) === true && ctx.player.vehicle === car;
+  }
   function updateRacing(dt: number): void {
     if (!car || !hooks) return;
     raceT += dt;
-    if (ctx.player.vehicle !== car) {
+    if (!keepInSeat()) {
       abort();
       return;
     }
@@ -651,7 +665,7 @@ export function createRace(ctx: GameContext): Race {
           break;
         }
         case 'countdown': {
-          if (car && ctx.player.vehicle !== car) {
+          if (!keepInSeat()) {
             abort();
             break;
           }
