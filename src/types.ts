@@ -190,6 +190,8 @@ export interface GameEvents {
   'glasses:result': { mechanic: string; kind: GlassesKind; tier: GlassesTier; hit: boolean };
   /** The "Auto challenge" staircase moved or was reset. */
   'glasses:challenge': { modifiers: Readonly<ChallengeModifiers> };
+  /** A glasses booth waits for the hero to come back to its start pad (Pip: "Back to the pad!"). */
+  'glasses:wait': { mechanic: string };
   /** The playable character changed (after its model loaded and swapped in). */
   'player:character': { id: string };
   /** A character skill fired (double jump, glide start, dash, super-bounce spring, ground pound). */

@@ -295,6 +295,18 @@ export const DIZZY: ScriptLine = { text: 'Wibble wobble!', icon: 'step', mood: '
 /** At most one dizzy line per this many seconds. */
 export const DIZZY_GAP = 40;
 
+/** A magic-glasses booth waits for the hero to come back to its start pad (`glasses:wait`). */
+export const GLASSES_WAIT: ScriptLine = { text: 'Back to the pad!', icon: 'step', extra: 'glasses', action: 'move', mood: 'happy', hold: 1.2 };
+/** At most one "Back to the pad!" per this many seconds. */
+export const GLASSES_WAIT_GAP = 30;
+
+/**
+ * In a vehicle (buggy, pony) with the hero not moving: "Zoom!" with the move key (recorded clip,
+ * reused). After a while parked, Pip suggests hopping out (the use key) and leads on foot.
+ */
+export const DRIVE_CUE = (vehicle: 'car' | 'horse'): ScriptLine => ({ text: 'Zoom!', icon: vehicle === 'car' ? 'wCar' : 'horse', action: 'move', mood: 'excited', hold: 1.4 });
+export const HOP_OUT = (a: Attraction): ScriptLine => ({ text: "Let's go! It's this way!", icon: 'paw', action: 'use', extra: ATTRACTIONS[a].icon, mood: 'excited', hold: 1.6 });
+
 export const needGems = (n: number): ScriptLine => ({ text: `Need ${n} more gems!`, icon: 'gem', extra: 'ticket', mood: 'worried' });
 
 export const suggest = (a: Attraction): ScriptLine => ({ text: `Try the ${ATTRACTIONS[a].name}!`, icon: ATTRACTIONS[a].icon, extra: 'target', mood: 'curious' });

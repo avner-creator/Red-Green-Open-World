@@ -128,16 +128,21 @@ describe('Director: always progress, re-invite, no nagging', () => {
     expect(r.d.why).toMatch(/bouncePads/);
   });
 
-  it('a child who does nothing is re-invited a few times, further apart, then left in peace', () => {
+  it('a child who does nothing is re-invited a few times, further apart, somewhere else, then left in peace', () => {
     const r = setup();
     r.pastTrampoline();
     const n = r.said.length;
-    r.play(150, { hero: { x: 56, z: -22 }, nearAttraction: 'trampoline' });
+    const l0 = r.leads.length;
+    r.play(250, { hero: { x: 56, z: -22 }, nearAttraction: 'trampoline' });
     const inv = r.said.slice(n).filter((l) => l.id === 'guide:invite');
     expect(inv.length).toBeGreaterThanOrEqual(1);
-    expect(inv.length).toBeLessThanOrEqual(3);
+    expect(inv.length).toBeLessThanOrEqual(2);
     expect(new Set(inv.map((l) => l.text)).size).toBe(inv.length);
-    expect(r.d.leadTo).toBe('bouncePads');
+    // The re-call goes to another place (not the ignored bounce pads), then Pip stops calling.
+    const again = r.leads.slice(l0).filter((p): p is V2 => !!p);
+    expect(again.length).toBeGreaterThanOrEqual(1);
+    expect(again.every((p) => !(p.x === 84 && p.z === -12))).toBe(true);
+    expect(r.d.leadTo).toBeNull();
   });
 });
 

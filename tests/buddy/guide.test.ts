@@ -110,7 +110,7 @@ describe('Pip never leads towards layer objects', () => {
   });
 
   it('the director and the leader have no access to gem, key, lock or layer positions', () => {
-    for (const f of ['director.ts', 'guide.ts', 'steer.ts', 'sniff.ts']) {
+    for (const f of ['director.ts', 'guide.ts', 'steer.ts', 'sniff.ts', 'route.ts']) {
       const src = readFileSync(`src/buddy/${f}`, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
       expect(src, f).not.toMatch(/gemSpots|chestSpots|keySpot|lockSpot|VisionLayer|WeakOnly|StrongOnly|gemWay|ctx\./);
     }

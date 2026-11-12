@@ -98,6 +98,12 @@
    "spoken": "Back on the ground!",
    "dur": 1.08
   },
+  "back-to-the-pad": {
+   "file": "back-to-the-pad.mp3",
+   "text": "Back to the pad!",
+   "spoken": "Back to the pad!",
+   "dur": 1.01
+  },
   "beat-your-friends-to-win-prizes-and-gems": {
    "file": "beat-your-friends-to-win-prizes-and-gems.mp3",
    "text": "Beat your friends to win prizes and gems!",

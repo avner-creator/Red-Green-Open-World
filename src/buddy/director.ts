@@ -23,8 +23,8 @@ import type { Goal } from './goals';
 import type { BuddyStore } from './store';
 import type { EconId, HowToTopic, KeyNames, PoolId, ScriptLine, TipId } from './script';
 import {
-  CHEST, CHUTE, COUNT, DIZZY, DIZZY_GAP, ECON, FOLLOW_AGAIN, HOWTO, INTRO, POOLS, RESCUE, RETURNING, STORY, STORY_GLASSES_BEAT, SUNSET, TIPS,
-  follow, line, needGems, skillTip, suggest,
+  CHEST, CHUTE, COUNT, DIZZY, DIZZY_GAP, DRIVE_CUE, ECON, FOLLOW_AGAIN, GLASSES_WAIT, GLASSES_WAIT_GAP, HOP_OUT, HOWTO, INTRO, POOLS, RESCUE, RETURNING,
+  STORY, STORY_GLASSES_BEAT, SUNSET, TIPS, follow, line, needGems, skillTip, suggest,
 } from './script';
 import { MEGA_GAP, Memory, ShuffleBag, UNSOLICITED_GAP } from './pools';
 import type { V2 } from './steer';
@@ -32,9 +32,6 @@ import { GLASSES_ATTRACTIONS, type Attraction } from './types';
 
 export type IntroStep = 'story' | 'follow' | 'jump' | 'done';
 
-/** Seconds before each "follow me" re-prompt: it backs off so Pip never nags. */
-export const REPROMPT_STEPS = [12, 25, 45] as const;
-export const REPROMPT = REPROMPT_STEPS[0];
 /** Minimum seconds between stuck rescues, by how many came right before at the same spot. */
 export const RESCUE_GAPS = [0, 8, 12] as const;
 /** After this many rescues at the same spot (two did not help), Pip hops the hero free. */
@@ -42,8 +39,6 @@ export const HOP_AFTER = 3;
 /** At most this many rescues in RESCUE_WINDOW seconds (QA round 5: 14 in a row at one counter). */
 export const RESCUE_CAP = 4;
 export const RESCUE_WINDOW = 60;
-/** "Come on!" re-invites while the hero does not follow a tour lead (backs off; then only barks). */
-export const INVITE_STEPS = [10, 20, 40] as const;
 /** At most one unsolicited hint/reaction per this many seconds. */
 export const HINT_GAP = UNSOLICITED_GAP;
 /** The intro can be skipped after this many seconds. */
@@ -71,14 +66,33 @@ const JUMP_AWAY_SECONDS = 6;
 // ───────────── light-touch guide (after the tour, and for returning players) ─────────────
 /** Idle this long (no attraction, no ride, little movement) = Pip offers the next place (QA6 M4). */
 export const INVITE_IDLE = 13;
-/** Never more than one invitation per this many seconds. */
+/**
+ * ONE cap policy for every call to come along or do something (QA7 m8): the story's "follow me",
+ * tour leads, re-calls, invitations, rescues of a child standing about or wandering, vehicle cues.
+ * Never more than one new call per INVITE_GAP seconds (a tour lead right after an attraction is
+ * the child's own progress, and the parked-vehicle cues have their own short schedule).
+ */
 export const INVITE_GAP = 25;
-/** After an ignored invitation, wait this long before the next (by how many were ignored in a row). */
+/** After an ignored call, wait this long before the next (by how many were ignored in a row). */
 export const INVITE_BACKOFF = [25, 45, 90] as const;
-/** This many ignored in a row = Pip stops inviting until the child does something (or the last minute). */
+/** This many ignored in a row = Pip stops calling until the child does something (or the last minute). */
 export const MAX_IGNORED = 3;
-/** A child who does not come closer (and is not pushing) this long has ignored the invitation. */
+/** A child who does not come closer (and is not pushing) this long has ignored the call. */
 export const INVITE_PATIENCE = 12;
+
+// ───────────── vehicles (QA7 M2: a child parked in the buggy got no guidance for 3 minutes) ─────────────
+/** In a vehicle and not moving this long: Pip's "drive!" cue (the move key). */
+export const PARK_CUE = 8;
+/** Still parked: a second cue (the race, or a place to drive to). */
+export const PARK_CUE2 = 24;
+/** Still parked: "hop out, it's this way!" (the use key), then a lead on foot. */
+export const PARK_HOP = 40;
+/** Driving this long since the last suggestion: the race or a place to drive to (at the invitation rate). */
+export const DRIVE_SUGGEST = 20;
+/** A suggestion while driving counts as ignored when the hero has not got there in this long. */
+const DRIVE_PATIENCE = 40;
+/** Faster than this (m/s) in a vehicle = driving. */
+const DRIVING_SPEED = 1.2;
 /** Moving farther than this from where the idle stretch began = exploring (m): Pip stays quiet. */
 export const IDLE_MOVE = 6;
 /** An invitation waits this long after any other unsolicited line (s). */
@@ -153,6 +167,8 @@ export interface DirectorView {
    * Undefined = yes when in freefall.
    */
   chute?: boolean;
+  /** The vehicle the hero sits in (ride 'vehicle'): buggy or pony. `heroSpeed` is its speed. */
+  vehicle?: 'car' | 'horse' | null;
 }
 
 export interface LeadOptions {
@@ -190,6 +206,15 @@ export interface DirectorSink {
 }
 
 type LeadKind = 'tour' | 'rescue' | 'invite';
+
+/** A call Pip made and is watching: did the child come along / drive / hop out, or ignore it? */
+interface Offer {
+  to: Attraction | null;
+  kind: 'lead' | 'drive' | 'hop' | 'suggest';
+  /** Closest the hero got to `to` (m), and seconds since they last got closer. */
+  best: number;
+  t: number;
+}
 
 interface ChainItem {
   line: Line;
@@ -230,13 +255,9 @@ export class Director {
   private lastHero: V2 | null = null;
   private realSpeed = 0;
   private pendingLead = false;
-  private invites = 0;
-  private inviteT = 0;
-  private inviteBest = Infinity;
   private guiding = false;
   private lastChestHint = -99;
   private lastHint = -99;
-  private lastPrompt = -99;
   private lastMega = -99;
   private lastDizzy = -99;
   private sunsetSaid = false;
@@ -250,12 +271,30 @@ export class Director {
   private returning = false;
   /** Invitations offered by the light-touch guide this session (tests). */
   invitations = 0;
+  /** Every call this session: leads, re-calls, invitations, vehicle cues (tests, `__rgBuddy`). */
+  offers = 0;
   /** Seconds idle (no attraction game, ride or lead, little movement). */
   idleT = 0;
   private idleAt: V2 | null = null;
-  private lastInviteT = -99;
+  /** The call being watched (null = none), when the last one was made, and the earliest next one. */
+  private offer: Offer | null = null;
+  private lastOfferT = -99;
   private nextInviteAt = 0;
-  private ignoredRun = 0;
+  /** Calls ignored in a row (reset when the child does something). */
+  ignoredRun = 0;
+  /** The last call was ignored: the next one goes somewhere else, nearer (m), and fetches the hero. */
+  private ignoredDist = Infinity;
+  private afterIgnore = false;
+  /** What kind of call was ignored last (driving on does not end a run of ignored drive suggestions). */
+  private ignoredKind: Offer['kind'] | null = null;
+  /** Vehicle: seconds parked (not moving), seconds driven since the last suggestion, cues said while parked. */
+  private parkT = 0;
+  private driveT = 0;
+  private parkCues = 0;
+  private inVehicle = false;
+  /** Where Pip leads once the hero hops out of the vehicle (offered while in it). */
+  private hopTo: Attraction | null = null;
+  private lastGlassesWait = -99;
   private lastMinuteDone = false;
   /** Places invited to and ignored this session (offered again only when nothing else is left). */
   private readonly declined = new Set<Attraction>();
@@ -267,7 +306,6 @@ export class Director {
   private wanderT = 0;
   private beatT = 0;
   private lastNearest = Infinity;
-  private reprompts = 0;
   private lastRescue = -99;
   private stuckRun = 0;
   private stuckAt: V2 | null = null;
@@ -304,11 +342,22 @@ export class Director {
     this.visited.clear();
     this.done.clear();
     this.invitations = 0;
+    this.offers = 0;
     this.idleT = 0;
     this.idleAt = null;
-    this.lastInviteT = -99;
+    this.offer = null;
+    this.lastOfferT = -99;
     this.nextInviteAt = 0;
     this.ignoredRun = 0;
+    this.ignoredDist = Infinity;
+    this.afterIgnore = false;
+    this.ignoredKind = null;
+    this.parkT = 0;
+    this.driveT = 0;
+    this.parkCues = 0;
+    this.inVehicle = false;
+    this.hopTo = null;
+    this.lastGlassesWait = -99;
     this.lastMinuteDone = false;
     this.declined.clear();
     this.bounces = 0;
@@ -331,10 +380,6 @@ export class Director {
     this.lastHero = null;
     this.realSpeed = 0;
     this.pendingLead = false;
-    this.invites = 0;
-    this.inviteT = 0;
-    this.inviteBest = Infinity;
-    this.reprompts = 0;
     this.lastRescue = -99;
     this.stuckRun = 0;
     this.stuckAt = null;
@@ -372,6 +417,7 @@ export class Director {
     this.finishIntro();
     this.guiding = false;
     this.stopLead();
+    this.offer = null;
     this.say({ ...line(INTRO.skipped, PRIORITY.story, 'intro:skipped'), interrupt: true });
     return true;
   }
@@ -550,6 +596,17 @@ export class Director {
     }
   }
 
+  /**
+   * A glasses booth waits for the hero to come back to its start pad: "Back to the pad!" (at most
+   * once per GLASSES_WAIT_GAP; the booth's own trail and prompt show the way).
+   */
+  onGlassesWait(): void {
+    if (this.playT - this.lastGlassesWait < GLASSES_WAIT_GAP) return;
+    this.lastGlassesWait = this.playT;
+    this.lastHint = this.playT;
+    this.say({ ...line(GLASSES_WAIT, PRIORITY.tip, 'glasses:wait'), ttl: 3 });
+  }
+
   /** Called on every weak-eye game hit. */
   onGlassesHit(): void {
     this.progress();
@@ -572,7 +629,6 @@ export class Director {
       this.sinceProgress = 0;
       this.pushT = 0;
       this.wanderT = 0;
-      this.inviteT = 0;
     } else if (wasQuiet && this.pendingLead) {
       // The game is over: now lead on to the next place.
       this.pendingLead = false;
@@ -630,15 +686,14 @@ export class Director {
     this.onTick(v.remaining);
     this.updateLead(dt, v);
     this.track(dt, v);
+    this.watchOffer(dt, v);
+    this.vehicleTrack(dt, v);
     if (this.rescueCheck(dt, v, chestNear)) return;
 
     if (this.step !== 'done') {
       this.introT += dt;
       this.stepT += dt;
-      if (this.quiet) {
-        this.lastPrompt = this.playT;
-        return;
-      }
+      if (this.quiet) return;
       this.updateIntro(dt, v);
       return;
     }
@@ -666,7 +721,8 @@ export class Director {
 
     if (v.busy || chestNear || this.chain.length || this.quiet) return;
 
-    if (this.reinvite(dt, v)) return;
+    if (this.vehicleGuide(v)) return;
+    if (this.reoffer(v)) return;
     if (this.lightGuide(v)) return;
 
     // One-time HUD tips, spread over the first minutes (quiet while Pip shows the way, and while
@@ -706,7 +762,6 @@ export class Director {
   private enter(step: IntroStep): void {
     this.step = step;
     this.stepT = 0;
-    this.lastPrompt = this.playT;
     switch (step) {
       case 'story':
         this.beat = -1;
@@ -719,7 +774,7 @@ export class Director {
             this.beatT = 0;
             if (i === STORY_GLASSES_BEAT) this.sink.glasses(5);
             // The last beat says "follow me": Pip starts running ahead.
-            if (i === STORY.length - 1) this.leadToPlace(FIRST_ATTRACTION, 'tour');
+            if (i === STORY.length - 1) this.callTo(FIRST_ATTRACTION, 'tour');
           },
         }));
         // The first beat now (the session just started; nothing else is talking).
@@ -731,7 +786,7 @@ export class Director {
         }
         break;
       case 'follow':
-        if (this.leadTo !== FIRST_ATTRACTION) this.leadToPlace(FIRST_ATTRACTION, 'tour');
+        if (this.leadTo !== FIRST_ATTRACTION && !this.declined.has(FIRST_ATTRACTION)) this.callTo(FIRST_ATTRACTION, 'tour');
         break;
       case 'jump':
         this.bounces = 0;
@@ -769,8 +824,8 @@ export class Director {
         }
         break;
       case 'follow':
-        if (!this.leadTo) this.leadToPlace(FIRST_ATTRACTION, 'tour');
-        this.reprompt();
+        // (Re-calls, if the child does not come, go through the one cap policy: watchOffer/reoffer.)
+        if (!this.leadTo && !this.offer && !this.afterIgnore) this.callTo(FIRST_ATTRACTION, 'tour');
         break;
       case 'jump':
         if (v.nearAttraction === FIRST_ATTRACTION) this.awayT = 0;
@@ -781,16 +836,17 @@ export class Director {
     }
   }
 
-  /** "Follow me" again with a different line (or just a bark once they are used up). */
-  private reprompt(): void {
-    const wait = REPROMPT_STEPS[Math.min(this.reprompts, REPROMPT_STEPS.length - 1)];
-    if (this.playT - this.lastPrompt < wait || !this.canHint()) return;
-    this.reprompts++;
-    this.lastPrompt = this.playT;
-    this.lastHint = this.playT;
-    this.sink.bark('bark');
-    const text = this.bag('follow').next((l) => this.fresh(l.text));
-    if (text) this.say(line({ ...follow(FIRST_ATTRACTION), text: text.text }, PRIORITY.story, 'intro:follow'));
+  /**
+   * The child did not come to the trampoline: the story's tour step is over (no "jump" step), but
+   * Pip still shows the way, to somewhere nearer (QA7 m8). Its how-to comes when they get there.
+   */
+  private leaveIntro(): void {
+    if (this.step === 'done') return;
+    this.chain = this.chain.filter((c) => c.topic !== null);
+    if (this.beat < STORY.length) this.finishStory();
+    this.step = 'done';
+    this.store.setIntroSeen();
+    this.store.markTip('compass');
   }
 
   /** The story told (or cut short): its HUD topics count as explained. */
@@ -835,6 +891,126 @@ export class Director {
     return true;
   }
 
+  /** Lead to `a` as a call Pip watches (followed, or ignored → the cap policy). */
+  private callTo(a: Attraction, kind: LeadKind, opts: LeadOptions = {}): boolean {
+    if (!this.leadToPlace(a, kind, opts)) return false;
+    this.startOffer(a, 'lead');
+    return true;
+  }
+
+  // ───────────── one cap policy for every call (QA7 m8) ─────────────
+
+  private startOffer(to: Attraction | null, kind: Offer['kind']): void {
+    this.offers++;
+    this.lastOfferT = this.playT;
+    this.offer = { to, kind, best: Infinity, t: 0 };
+  }
+
+  /** The child did what Pip asked (or something else fun): the ignored run is over. */
+  private acted(): void {
+    this.offer = null;
+    this.ignoredRun = 0;
+    this.afterIgnore = false;
+    this.ignoredKind = null;
+    this.ignoredDist = Infinity;
+  }
+
+  /** May Pip make a new call now? (One per INVITE_GAP, a back-off after ignored ones, a cap.) */
+  private canOffer(): boolean {
+    return this.ignoredRun < MAX_IGNORED && this.playT >= this.nextInviteAt && this.playT - this.lastOfferT >= INVITE_GAP;
+  }
+
+  private distTo(a: Attraction | null, from: V2): number {
+    const p = a ? this.sink.anchor(a) : null;
+    return p ? Math.hypot(p.x - from.x, p.z - from.z) : Infinity;
+  }
+
+  /** The call was ignored: back to following; the next one waits longer and goes somewhere nearer. */
+  private ignored(v: DirectorView): void {
+    const o = this.offer;
+    if (!o) return;
+    this.offer = null;
+    if (o.to) {
+      this.declined.add(o.to);
+      this.ignoredDist = this.distTo(o.to, v.hero);
+    }
+    this.ignoredRun++;
+    this.afterIgnore = true;
+    this.ignoredKind = o.kind;
+    this.nextInviteAt = this.playT + INVITE_BACKOFF[Math.min(this.ignoredRun, INVITE_BACKOFF.length) - 1];
+    if (o.kind === 'lead' && this.leadTo === o.to) this.stopLead();
+    if (this.step === 'follow' || this.step === 'story') this.leaveIntro();
+    if (this.ignoredRun >= MAX_IGNORED) this.guiding = false;
+  }
+
+  /** Followed, did something, or ignored? (Every frame.) */
+  private watchOffer(dt: number, v: DirectorView): void {
+    const o = this.offer;
+    if (!o) return;
+    const driving = v.ride === 'vehicle' && v.heroSpeed > DRIVING_SPEED;
+    // On a ride, in a game or driving = doing something (an invitation lead ends there).
+    if (this.quiet || (v.ride !== 'none' && v.ride !== 'vehicle') || (driving && o.kind !== 'suggest')) {
+      if (o.kind === 'lead' && this.leadKind === 'invite') this.stopLead();
+      this.acted();
+      return;
+    }
+    switch (o.kind) {
+      case 'lead': {
+        if (this.leadTo !== o.to) {
+          // The lead ended: arrived (followed), or replaced / given up (not the child's doing).
+          if (o.to && v.nearAttraction === o.to) this.acted();
+          else this.offer = null;
+          return;
+        }
+        // (In a vehicle the vehicle cues take over; while the story is told the child listens.)
+        if (v.ride === 'vehicle' || this.step === 'story') return;
+        const d = this.distTo(o.to, v.hero);
+        if (d < o.best - 2) {
+          o.best = d;
+          o.t = 0;
+        } else if (!v.pushing || d > o.best + 15) o.t += dt;
+        if (o.t > INVITE_PATIENCE) this.ignored(v);
+        return;
+      }
+      case 'drive':
+      case 'hop':
+        // Hopped out: the lead on foot starts (vehicleTrack); not ignored.
+        if (v.ride !== 'vehicle') {
+          this.offer = null;
+          return;
+        }
+        if ((o.t += dt) > INVITE_PATIENCE) this.ignored(v);
+        return;
+      case 'suggest':
+        if (o.to && v.nearAttraction === o.to) {
+          this.acted();
+          return;
+        }
+        if ((o.t += dt) > DRIVE_PATIENCE) this.ignored(v);
+        return;
+    }
+  }
+
+  /**
+   * After an ignored call (Pip still showing a new player around): the next call, when the cap
+   * policy allows it, to a different place nearer to the child; Pip runs over first.
+   */
+  private reoffer(v: DirectorView): boolean {
+    if (!this.guiding || this.leadTo || this.offer || !this.afterIgnore || !v.onFoot || v.ride !== 'none') return false;
+    if (!this.canOffer() || this.playT - this.lastHint < INVITE_BREATH) return false;
+    const to = this.pickInvite(v.hero, false);
+    if (!to) {
+      this.guiding = false;
+      return false;
+    }
+    this.callTo(to, 'tour', { fetch: true });
+    this.sink.bark('bark');
+    this.lastHint = this.playT;
+    const pick = this.bag('follow').next((l) => this.fresh(l.text));
+    this.say({ ...line({ ...follow(to), ...(pick ? { text: pick.text } : {}) }, PRIORITY.tip, 'guide:invite'), valid: () => this.leadTo === to });
+    return true;
+  }
+
   private markDone(a: Attraction): void {
     if (this.done.has(a)) return;
     this.done.add(a);
@@ -851,8 +1027,9 @@ export class Director {
   /** After an attraction: lead to the next fun one, or let the child choose. */
   private nextLead(): void {
     if (!this.guiding) return;
-    if (this.quiet) {
-      // Never start a lead (or say "follow me") in the middle of a game: after it.
+    if (this.quiet || this.rideNow === 'vehicle') {
+      // Never start a lead (or say "follow me") in the middle of a game: after it. In a vehicle
+      // Pip cannot run ahead: the parked cues offer the way, the lead starts on foot.
       this.pendingLead = true;
       return;
     }
@@ -871,10 +1048,7 @@ export class Director {
       this.stopLead();
       return;
     }
-    this.leadToPlace(next, 'tour');
-    this.invites = 0;
-    this.inviteT = 0;
-    this.inviteBest = Infinity;
+    this.callTo(next, 'tour');
     this.lastHint = this.playT;
     this.say({ ...line(follow(next), PRIORITY.tip, 'guide:follow'), valid: () => this.leadTo !== null });
   }
@@ -895,43 +1069,18 @@ export class Director {
     this.unreachable.add(to);
     const kind = this.leadKind;
     this.stopLead();
-    // An invitation that cannot get there: offer another place soon (not counted as ignored).
+    // A call that cannot get there is not the child's doing (not counted as ignored).
+    const o = this.offer;
+    if (o?.to === to) this.offer = null;
+    // An invitation that cannot get there: offer another place soon.
     if (kind === 'invite') this.nextInviteAt = Math.min(this.nextInviteAt, this.playT + 3);
     if (kind === 'tour' && this.guiding) {
       const next = this.nearestPlace(this.sink.anchor(to) ?? { x: 0, z: 0 }, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && !this.unreachable.has(p));
-      if (next) {
-        this.leadToPlace(next, 'tour');
-        this.invites = 0;
-        this.inviteT = 0;
-        this.inviteBest = Infinity;
+      if (next && this.leadToPlace(next, 'tour')) {
+        // The same call goes on to the next place (not a new one).
+        this.offer = o ? { ...o, to: next, best: Infinity, t: 0 } : null;
       } else this.guiding = false;
     }
-  }
-
-  /**
-   * A child who does not follow the tour lead gets invited again, a few times, further and further
-   * apart (Pip keeps coming back to fetch them meanwhile); then he just waits and barks.
-   */
-  private reinvite(dt: number, v: DirectorView): boolean {
-    if (!this.guiding || this.leadKind !== 'tour' || !this.leadTo || this.invites >= INVITE_STEPS.length) return false;
-    const p = this.sink.anchor(this.leadTo);
-    if (!p) return false;
-    const d = Math.hypot(p.x - v.hero.x, p.z - v.hero.z);
-    if (d < this.inviteBest - 2) {
-      this.inviteBest = d;
-      this.inviteT = 0;
-      return false;
-    }
-    this.inviteT += dt;
-    if (this.inviteT < INVITE_STEPS[this.invites] || !this.canHint()) return false;
-    this.invites++;
-    this.inviteT = 0;
-    const pick = this.bag('follow').next((l) => this.fresh(l.text));
-    this.sink.bark('bark');
-    if (!pick) return false;
-    this.lastHint = this.playT;
-    this.say(line({ ...follow(this.leadTo), text: pick.text }, PRIORITY.tip, 'guide:invite'));
-    return true;
   }
 
   private updateLead(dt: number, v: DirectorView): void {
@@ -953,10 +1102,7 @@ export class Director {
   testInvite(a: Attraction): boolean {
     this.guiding = false;
     this.step = 'done';
-    this.inviteBest = Infinity;
-    this.inviteT = 0;
-    this.lastInviteT = this.playT;
-    return this.leadToPlace(a, 'invite');
+    return this.callTo(a, 'invite');
   }
 
   /**
@@ -965,8 +1111,12 @@ export class Director {
    * pushing) for INVITE_PATIENCE = ignored (back-off). Starting something else ends the invitation.
    */
   private track(dt: number, v: DirectorView): void {
+    const driving = v.ride === 'vehicle' && v.heroSpeed > DRIVING_SPEED;
+    // Doing something (a game, a ride, driving) ends an ignored run; sitting parked does not.
+    if (this.quiet || (v.ride !== 'none' && v.ride !== 'vehicle') || (driving && this.ignoredKind !== 'suggest')) {
+      if (this.ignoredRun || this.afterIgnore) this.acted();
+    }
     const active = this.quiet || v.ride !== 'none' || !v.onFoot;
-    if (active) this.ignoredRun = 0;
     if (active || this.leadTo) {
       this.idleT = 0;
       this.idleAt = { x: v.hero.x, z: v.hero.z };
@@ -974,25 +1124,108 @@ export class Director {
       this.idleAt = { x: v.hero.x, z: v.hero.z };
       this.idleT = 0;
     } else if (!this.chain.length) this.idleT += dt; // (listening to a how-to is not idling)
-    if (this.leadKind !== 'invite' || !this.leadTo) return;
-    if (active) {
-      this.stopLead();
+  }
+
+  // ───────────── vehicles (QA7 M2) ─────────────
+
+  /** Parked / driving time; hopping out starts the lead that was offered (or the tour's next one). */
+  private vehicleTrack(dt: number, v: DirectorView): void {
+    if (v.ride !== 'vehicle') {
+      if (this.inVehicle) {
+        this.inVehicle = false;
+        this.parkT = 0;
+        this.driveT = 0;
+        this.parkCues = 0;
+        const to = this.hopTo;
+        this.hopTo = null;
+        if (v.onFoot && !this.quiet) {
+          if (this.pendingLead && this.guiding) {
+            this.pendingLead = false;
+            this.nextLead();
+          } else if (to && !this.leadTo && this.callTo(to, 'invite')) {
+            this.invitations++;
+            this.lastHint = this.playT;
+            this.sink.bark('bark');
+            this.say({ ...line(follow(to), PRIORITY.tip, 'invite'), valid: () => this.leadTo === to });
+          }
+        }
+      }
       return;
     }
-    const p = this.sink.anchor(this.leadTo);
-    if (!p) return;
-    const d = Math.hypot(p.x - v.hero.x, p.z - v.hero.z);
-    if (d < this.inviteBest - 2) {
-      this.inviteBest = d;
-      this.inviteT = 0;
-    } else if (!v.pushing || d > this.inviteBest + 15) this.inviteT += dt;
-    if (this.inviteT > INVITE_PATIENCE) {
-      // Ignored: back to following; the next invitation waits longer (and goes somewhere else).
-      this.declined.add(this.leadTo);
-      this.ignoredRun++;
-      this.nextInviteAt = this.playT + INVITE_BACKOFF[Math.min(this.ignoredRun, INVITE_BACKOFF.length) - 1];
-      this.stopLead();
+    this.inVehicle = true;
+    if (this.quiet) return;
+    if (v.heroSpeed > DRIVING_SPEED) {
+      this.parkT = 0;
+      this.parkCues = 0;
+      this.driveT += dt;
+    } else this.parkT += dt;
+  }
+
+  /**
+   * In a vehicle: parked, "Zoom!" with the move key (PARK_CUE), then the race or a place to drive
+   * to (PARK_CUE2), then "hop out, it's this way!" (PARK_HOP) and a lead on foot; while driving,
+   * now and then the race or a place to drive to. Every cue counts in the one cap policy.
+   */
+  private vehicleGuide(v: DirectorView): boolean {
+    if (v.ride !== 'vehicle' || this.ignoredRun >= MAX_IGNORED || this.playT - this.lastHint < INVITE_BREATH) return false;
+    const kind = v.vehicle ?? 'car';
+    if (this.parkT > 0) {
+      if (this.parkCues === 0 && this.parkT >= PARK_CUE) {
+        this.parkCues = 1;
+        this.cue(null, 'drive', { ...line(DRIVE_CUE(kind), PRIORITY.tip, 'vehicle:drive'), valid: () => this.parkT > 0 });
+        return true;
+      }
+      if (this.parkCues === 1 && this.parkT >= PARK_CUE2) {
+        this.parkCues = 2;
+        const to = this.driveTarget(v, kind);
+        if (!to) return false;
+        this.hopTo = to;
+        this.cue(to, 'drive', { ...line({ ...suggest(to), action: 'move' }, PRIORITY.tip, 'vehicle:suggest'), valid: () => this.parkT > 0 });
+        return true;
+      }
+      // "Hop out!" at PARK_HOP; again (to somewhere else) only as the cap policy allows.
+      if (this.parkCues >= 2 && this.parkT >= PARK_HOP && !this.offer && (this.parkCues === 2 || this.canOffer())) {
+        this.parkCues = 3;
+        const to = (this.hopTo && !this.declined.has(this.hopTo) ? this.hopTo : null) ?? this.nextPlace(v);
+        if (!to) return false;
+        this.hopTo = to;
+        this.cue(to, 'hop', { ...line(HOP_OUT(to), PRIORITY.tip, 'vehicle:hop'), valid: () => this.parkT > 0 });
+        return true;
+      }
+      return false;
     }
+    if (this.driveT >= DRIVE_SUGGEST && !this.offer && this.canOffer()) {
+      const to = this.driveTarget(v, kind);
+      this.driveT = 0;
+      if (!to) return false;
+      this.hopTo = to;
+      this.cue(to, 'suggest', line(suggest(to), PRIORITY.tip, 'vehicle:suggest'));
+      return true;
+    }
+    return false;
+  }
+
+  private cue(to: Attraction | null, kind: Offer['kind'], l: Line): void {
+    this.startOffer(to, kind);
+    this.lastHint = this.playT;
+    this.sink.bark('yip');
+    this.say(l);
+  }
+
+  /** Where to drive: the race (in the buggy, not done yet), else the next place to offer. */
+  private driveTarget(v: DirectorView, kind: 'car' | 'horse'): Attraction | null {
+    const race = kind === 'car' && !this.done.has('raceStart') && !this.declined.has('raceStart') && !this.unreachable.has('raceStart');
+    if (race && this.sink.places().some((p) => p.name === 'raceStart')) return 'raceStart';
+    return this.nextPlace(v);
+  }
+
+  /** The tour's next fun place while guiding, else the next place to offer. */
+  private nextPlace(v: DirectorView): Attraction | null {
+    if (this.guiding) {
+      const t = this.nearestPlace(v.hero, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && !this.declined.has(p) && !this.unreachable.has(p) && p !== this.at);
+      if (t) return t;
+    }
+    return this.pickInvite(v.hero, false);
   }
 
   /** The child has been standing about and an invitation is coming soon (tips wait). */
@@ -1006,8 +1239,8 @@ export class Director {
    * beat leads to something quick. Only ever to attraction anchors (both-eye places).
    */
   private lightGuide(v: DirectorView): boolean {
-    if (this.guiding || this.step !== 'done' || this.leadTo || !v.onFoot || v.ride !== 'none') return false;
-    if (this.playT - this.lastInviteT < INVITE_GAP || this.playT - this.lastHint < INVITE_BREATH) return false;
+    if (this.guiding || this.step !== 'done' || this.leadTo || this.offer || !v.onFoot || v.ride !== 'none') return false;
+    if (this.playT - this.lastOfferT < INVITE_GAP || this.playT - this.lastHint < INVITE_BREATH) return false;
     if (!this.lastMinuteDone && v.remaining <= LAST_MINUTE && v.remaining > LAST_MINUTE_MIN) {
       this.lastMinuteDone = true;
       return this.invite(v, true);
@@ -1020,19 +1253,15 @@ export class Director {
     const to = this.pickInvite(v.hero, last);
     if (!to) return false;
     this.invitations++;
-    this.lastInviteT = this.playT;
     this.lastHint = this.playT;
-    this.nextInviteAt = this.playT + INVITE_GAP;
-    this.inviteBest = Infinity;
-    this.inviteT = 0;
-    this.leadToPlace(to, 'invite');
+    this.callTo(to, 'invite');
     this.sink.bark('bark');
     const still = (): boolean => this.leadTo === to;
     if (last) {
       // "Hurry! Sunset is coming!" now stands for the last minute (no second sunset line).
       this.sunsetSaid = true;
       this.say({ ...line(SUNSET, PRIORITY.tip, 'invite:last'), valid: still });
-      this.chain.push({ line: { ...line(suggest(to), PRIORITY.tip, 'invite:last'), valid: still }, topic: null });
+      this.chain.push({ line: { ...line(suggest(to), PRIORITY.tip, 'invite:last:to'), valid: still }, topic: null });
       return true;
     }
     const pick = this.fresh(suggest(to).text) ? suggest(to) : this.bag('follow').next((l) => this.fresh(l.text));
@@ -1040,11 +1269,24 @@ export class Director {
     return true;
   }
 
-  /** The next place to offer: nearest, a kind not tried yet first; never one done or just ignored. */
+  /**
+   * The next place to offer: nearest, a kind not tried yet first; never one done or just ignored.
+   * Right after an ignored call: simply the nearest other place, nearer than the ignored one if
+   * there is one (QA7 m8: eleven calls, all to the far trampoline).
+   */
   private pickInvite(from: V2, last: boolean): Attraction | null {
     const tried = new Set([...this.done].map((a) => KIND[a]));
+    const near = this.afterIgnore && !last;
     const ok = (a: Attraction, strict: boolean): boolean =>
-      a !== 'gearShack' && a !== this.at && !this.unreachable.has(a) && (!strict || (!this.done.has(a) && !this.declined.has(a))) && (!last || QUICK.includes(a));
+      a !== 'gearShack' && a !== this.at && !this.unreachable.has(a) && (!strict || (!this.done.has(a) && !this.declined.has(a))) && (!last || QUICK.includes(a)) &&
+      (!near || !this.declined.has(a));
+    if (near) {
+      // Nearer than the ignored place first, else the nearest one left.
+      for (const nearer of [true, false]) {
+        const a = this.nearestPlace(from, (p) => ok(p, true) && (!nearer || this.distTo(p, from) < this.ignoredDist));
+        if (a) return a;
+      }
+    }
     for (const strict of [true, false]) {
       let best: Attraction | null = null;
       let bestS = Infinity;
@@ -1057,7 +1299,7 @@ export class Director {
         }
       }
       if (best) return best;
-      if (!last) this.declined.clear();
+      if (!last && !near) this.declined.clear();
     }
     return null;
   }
@@ -1076,20 +1318,22 @@ export class Director {
     else this.wanderT = Math.max(0, this.wanderT - dt * 2);
     this.lastNearest = nearest;
     // During the story only a hero stuck at a fence gets help (Pip keeps telling it meanwhile).
-    if (!why && this.guiding && this.step !== 'story' && this.wanderT > WANDER_SECONDS) why = 'wander';
-    if (!why && this.guiding && this.stillT > IDLE_SECONDS && !v.nearAttraction && this.step !== 'story') why = 'idle';
+    // Wandering off is a call like any other (the cap policy); a child standing about is handled
+    // by the call watch (ignored -> a nearer place, at most MAX_IGNORED times).
+    if (!why && this.guiding && this.step !== 'story' && this.wanderT > WANDER_SECONDS) {
+      if (this.canOffer()) why = 'wander';
+      else this.wanderT = 0;
+    }
     if (!why) return false;
     // Cap: never a long run of rescues (the hop-free below should have helped by then).
     this.rescueTimes = this.rescueTimes.filter((t) => this.playT - t < RESCUE_WINDOW);
     if (this.rescueTimes.length >= RESCUE_CAP) {
       this.pushT = 0;
       this.wanderT = 0;
-      if (why === 'idle') this.stillT = -IDLE_SECONDS;
       return false;
     }
     this.pushT = 0;
     this.wanderT = 0;
-    if (why === 'idle') this.stillT = -IDLE_SECONDS;
     if (why === 'stuck') {
       // Stuck again near the last stuck spot = the last rescue did not help.
       const same = !!this.stuckAt && Math.hypot(v.hero.x - this.stuckAt.x, v.hero.z - this.stuckAt.z) < 6;
@@ -1111,7 +1355,10 @@ export class Director {
     if (!to) to = this.nearestPlace(v.hero, (p) => FUN_ATTRACTIONS.includes(p) && !this.done.has(p) && p !== v.nearAttraction);
     if (!to) return;
     const kind: LeadKind = this.leadKind === 'tour' || this.step !== 'done' ? 'tour' : this.leadKind === 'invite' && to === this.leadTo ? 'invite' : 'rescue';
+    const same = this.offer?.kind === 'lead' && this.offer.to === to;
     this.leadToPlace(to, kind, { fetch: true, assist });
+    // A stuck child is trying (no gap needed); either way the lead is a call Pip watches.
+    if (!same) this.startOffer(to, 'lead');
     this.sink.bark('bark');
     if (assist && this.stuckRun >= HOP_AFTER) {
       // Two rescues did not get the hero free: a friendly hop towards the way out.

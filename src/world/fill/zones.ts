@@ -498,7 +498,7 @@ export function buildFill(k: Kit, roads: readonly ProcessedRoad[], d: Decals, gu
       if (!best || Math.hypot(dx, dz) < Math.hypot(best[0] - MAP_BOARD.x, best[1] - MAP_BOARD.z)) best = [x, z];
     }
   }
-  if (best && place('board', 'map', best[0], best[1], BOARD_R, boardOpts)) mapBoard(k, d, roads, [...FILL_ZONES], best[0], best[1]);
+  if (best && place('board', 'map', best[0], best[1], BOARD_R, boardOpts)) mapBoard(k, d, roads, best[0], best[1]);
   else fill.refused.push({ name: 'board map', why: guard.why(MAP_BOARD.x, MAP_BOARD.z, BOARD_R, boardOpts) ?? '?' });
   // Lamps at the trail heads of the far zones so they glow at sunset.
   for (const t of TRAILS.slice(0, 7)) {
