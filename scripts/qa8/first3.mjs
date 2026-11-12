@@ -39,6 +39,8 @@ const rectOf = (tid) =>
     return r.width > 1 ? [r.left + r.width / 2, r.top + r.height / 2, r.width, r.height] : null;
   }, tid);
 const lines = [];
+const sitAt = process.env.QA_SIT ? Number(process.env.QA_SIT) : null;
+let sat = false;
 const ticks = [];
 try {
   await page.evaluate(() => window.__rg.freeze(true));
@@ -73,11 +75,28 @@ try {
       const b = document.querySelector('[data-testid="pip-bubble"]');
       return { hp, pp, f: [f.x, f.z], lead: B.lead(), act: b?.classList.contains('on') ? b.dataset.action : '', prompt: pv, mode: window.__rg.state().playerMode, phase: window.__rg.state().phase };
     });
+    if (sitAt !== null && gt >= sitAt && !sat) {
+      sat = true;
+      await setKeys(new Set());
+      await page.evaluate((k) => {
+        const rg = window.__rg;
+        const c = rg.ctx.vehicles.all.find((v) => v.kind === k);
+        const p = c.position;
+        const x = p.x + Math.sin(2.6) * 2.4;
+        const z = p.z + Math.cos(2.6) * 2.4;
+        rg.teleport(x, rg.ctx.world.heightAt(x, z) + 0.5, z, Math.atan2(p.x - x, p.z - z));
+        rg.step(1 / 60, 20, false);
+      }, process.env.QA_SITV ?? 'car');
+      await kb.press('KeyE');
+      console.log('SAT', gt, await page.evaluate(() => window.__rg.state().playerMode));
+    }
     let mx = 0;
     let my = 0;
     let jump = false;
     let use = false;
-    if (gt < follow) {
+    if (sat) {
+      /* sits still */
+    } else if (gt < follow) {
       if (st.act === 'jump' || jumpHold > 0) {
         jump = true;
         jumpHold = jumpHold > 0 ? jumpHold - 1 : 4;
