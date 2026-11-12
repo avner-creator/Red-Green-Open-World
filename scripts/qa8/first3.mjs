@@ -45,6 +45,9 @@ const ticks = [];
 try {
   await page.evaluate(() => window.__rg.freeze(true));
   await page.evaluate(() => window.__rg.step(1 / 60, 1, true));
+  if (process.env.QA_EYE) await page.evaluate((e) => { const [l, w] = e.split(','); window.__rg.setEye({ leftLens: l, weakEye: w }); }, process.env.QA_EYE);
+  if (process.env.QA_HERO) await page.evaluate(async (h) => { const c = window.__rg.ctx; c.economy.equip('character', h); await c.player.setCharacter(h); }, process.env.QA_HERO);
+  console.log('HERO/EYE', await page.evaluate(() => [window.__rg.ctx.player.characterId, JSON.stringify(window.__rg.ctx.settings.get().eye)]));
   await shot('00-title', { channels: true });
   if (phone) {
     touch = await touchSession(page);
@@ -176,6 +179,9 @@ try {
   }
   if (!phone) await setKeys(new Set());
   else if (stick) await touch.release();
+  await page.evaluate(() => window.__rg.step(1 / 60, 180, true));
+  await shot('zz-end', { channels: true });
+  console.log('END UI', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('[data-testid]')].filter((e) => e.offsetParent && /end|result|summary/i.test(e.dataset.testid)).map((e) => e.dataset.testid + ':' + e.textContent.trim().slice(0, 120)))));
   const raw = await readRecorder(page);
   const sum = summarize(raw);
   const voice = await page.evaluate(() => window.__rgBuddy.voice());

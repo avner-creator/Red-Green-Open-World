@@ -45,3 +45,10 @@ for (let j = 0; j < 4; j++) await st(60);
 i1 = (await info()).doors.find((x) => x.id === d.id);
 log('final', 'open', i1.open, 'treasure', JSON.stringify(i1.treasure), (await H.s()).wallet);
 await H.snap('v/03-open');
+// QA8: walk into the open vault and look at it.
+await H.walkTo(d.x + fx * 4, d.z + fz * 4, 6, 0.6);
+await H.walkTo(d.x, d.z, 6, 0.6);
+for (let j = 0; j < 3; j++) await st(60);
+await H.snap('v/04-inside');
+i1 = (await info()).doors.find((x) => x.id === d.id);
+log('inside', (await H.s()).p, 'open', i1.open, 'treasure', JSON.stringify(i1.treasure), 'wallet', (await H.s()).wallet, 'sep', JSON.stringify(await H.sep('v/04-sep')));
