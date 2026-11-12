@@ -147,3 +147,4 @@ Starting a different game? The reusable process is in `docs/playbook/`.
 - Camera collision only treats static world scenery as obstacles. Set `userData.cameraIgnore = true` on a mesh to opt out and `userData.cameraOccluder = true` to opt in. Layer objects and anything that moves must never affect the camera.
 - Downloaded models are added to the scene on a simulation step (in `update()`), never inside a promise callback, so a frozen frame stays identical between renders.
 - Commit often with clear messages. One concern per commit.
+- Invisible movement helpers (slide-around fills, wedges) are built with `k.col.helperBox` (`GROUP_HELPER`); sightline tests raycast with `{ visibleOnly: true }`.
