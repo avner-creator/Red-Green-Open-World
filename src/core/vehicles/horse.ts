@@ -602,6 +602,12 @@ export function createHorse(
       safe.yaw = home.yaw;
       placeAt(home.position, home.yaw);
     },
+    setParking(x, z, y) {
+      home.position.set(x, ctx.world.heightAt(x, z), z);
+      home.yaw = y;
+    },
+    parking: () => ({ x: home.position.x, z: home.position.z, yaw: home.yaw }),
+    footprint: { hw: 0.55, hl: 1.25 },
     dispose() {
       if (soundOn) ctx.audio.setLoop('gallop', 0);
       world.removeCharacterController(cc);

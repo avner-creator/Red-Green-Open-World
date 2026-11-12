@@ -28,6 +28,8 @@ for (const road of ROADS) {
     groundRoads.push(road.points.map((p) => [p[0], p[1]] as [number, number]));
   }
 }
+/** Ground-level road and street centrelines (no paths, no bridge decks). */
+export const GROUND_ROADS: readonly (readonly [number, number])[][] = groundRoads;
 /** Paved pads count as road (plaza, garage forecourt). */
 const paved = PADS.filter((p) => p.id === 'plaza' || p.id === 'garage');
 

@@ -15,7 +15,8 @@ import { STOCK_TUNING, type BuggyHooks, type BuggyTuning, type VehicleInternal }
 import { openYaw, WedgeWatch } from './unstick';
 
 /**
- * Parking heading relative to the garage anchor's yaw (QA7 M1): the anchor faces the race booth
+ * Default parking heading relative to the garage anchor's yaw (QA7 M1; the real pose is measured at
+ * session start: parking.ts, QA8 m2): the anchor faces the race booth
  * 15 m away; turned 60° the nose points down a clear lane of 30+ m across the forecourt to the east
  * (tests/e2e/vehicle-unstick.spec.ts holds W from here for 20 s).
  */
@@ -42,8 +43,9 @@ class Spring {
 
 export function createCar(ctx: GameContext, id: string, getCamera: () => CameraApi, snapCamera?: (yaw: number) => void): VehicleInternal {
   const anchor = ctx.world.anchors.garage;
-  const parkYaw = anchor.yaw + PARK_YAW_TURN;
-  const sim = createCarSim(ctx.physics, anchor.position, parkYaw);
+  let parkYaw = anchor.yaw + PARK_YAW_TURN;
+  const parkPos = anchor.position.clone();
+  const sim = createCarSim(ctx.physics, parkPos, parkYaw);
   const model = createCarModel();
   ctx.scene.add(model.root);
   ctx.scene.add(model.blob);
@@ -98,7 +100,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
   const heave = new Spring(190, 9);
   const position = new THREE.Vector3();
   const prompt = new THREE.Vector3();
-  const safe = { pos: anchor.position.clone(), yaw: parkYaw };
+  const safe = { pos: parkPos.clone(), yaw: parkYaw };
   let safeTimer = 0;
   let deepFor = 0;
   let driven = false;
@@ -389,7 +391,7 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
     }
   }
 
-  placeAt(anchor.position, parkYaw);
+  placeAt(parkPos, parkYaw);
 
   return {
     api,
@@ -433,11 +435,17 @@ export function createCar(ctx: GameContext, id: string, getCamera: () => CameraA
       model.root.visible = true;
       boostLeft = 0;
       pendingKick = 0;
-      safe.pos.copy(anchor.position);
+      safe.pos.copy(parkPos);
       safe.yaw = parkYaw;
       wedge.reset();
-      placeAt(anchor.position, parkYaw);
+      placeAt(parkPos, parkYaw);
     },
+    setParking(x, z, yaw) {
+      parkPos.set(x, ctx.world.heightAt(x, z), z);
+      parkYaw = yaw;
+    },
+    parking: () => ({ x: parkPos.x, z: parkPos.z, yaw: parkYaw }),
+    footprint: { hw: CAR.half.x + CAR.border + 0.1, hl: CAR.half.z + CAR.border + 0.05 },
     dispose() {
       unhookBefore();
       unhookAfter();
