@@ -203,12 +203,12 @@ const kitOf = async (): Promise<GatesKit> => (await debug<GatesDebug>('gates')).
  * A spot ~30 m out on the approach side with a clear line of sight to the booth (on land, not in
  * water), facing it.
  */
-async function farSpot(d: GatesDebug): Promise<P3 & { yaw: number }> {
-  return page.evaluate((d) => {
+async function farSpot(d: GatesDebug, dists: number[] = [30, 28, 32, 26]): Promise<P3 & { yaw: number }> {
+  return page.evaluate(({ d, dists }) => {
     const w = window.__rg!.ctx.world;
     const g = window.__rgGlasses!;
     const by = w.heightAt(d.booth.x, d.booth.z) + 3.8;
-    for (const dist of [30, 28, 32, 26]) {
+    for (const dist of dists) {
       for (const off of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2]) {
         const a = d.yaw + off;
         const x = d.pad.x + Math.sin(a) * dist;
@@ -223,7 +223,7 @@ async function farSpot(d: GatesDebug): Promise<P3 & { yaw: number }> {
       }
     }
     return d.far;
-  }, d);
+  }, { d, dists });
 }
 
 test('gates: a booth from 30 m, idle attract at the pad', async () => {
@@ -532,8 +532,9 @@ test('dot signs: a booth from 30 m, attract at the pad, Use on the pad → 3-2-1
   let d = await dots();
   expect(await page.evaluate(() => window.__rgGlasses!.isBooth('dotsigns'))).toBe(true);
   expect([d.phase, d.state, d.dotsShown]).toEqual(['idle', 'idle', false]);
-  // From ~30 m on the approach: the marquee reads in R-only and G-only.
-  const spot = await farSpot(d as unknown as GatesDebug);
+  // From ~20 m on the plaza approach (QA r7 M3; 30 m out is under the race gantry on the east
+  // road): the marquee reads in R-only and G-only.
+  const spot = await farSpot(d as unknown as GatesDebug, [20, 18, 22, 24]);
   await standAt(spot, spot.yaw);
   const far = await shots(BOOTH_OUT, 'dotsigns-30m', true);
   const rect = await page.evaluate(() => window.__rgGlasses!.boardRect('dotsigns'));
@@ -671,6 +672,81 @@ test('dot signs: a round of 5 through the buttons: a hit and a miss, lamps, cele
   expect(d.roundTier, '4 of 5: finer pictures next round').toBe(2);
   await step(120);
   expect((await dots()).kit.phase).toBe('idle');
+});
+
+test('dot signs: a straight walk to the pad from the plaza side, the lead point and the trail end; E only at the faced pedestal (QA r7 M3, m9)', async () => {
+  const d = await dots();
+  const site = await page.evaluate(() => window.__rgGlasses!.sites().find((s) => s.id === 'dotsigns')!);
+  const lead = (d as unknown as { lead: P3 }).lead;
+  // Pip's dot-signs destination reads the empty marker `glasses:dotsigns:lead`: it is the lead spot.
+  const marker = await page.evaluate(() => {
+    const o = window.__rg!.ctx.scene.getObjectByName('glasses:dotsigns:lead');
+    return o ? { x: o.position.x, z: o.position.z } : null;
+  });
+  expect(marker, 'lead marker').not.toBeNull();
+  expect(Math.hypot(marker!.x - lead.x, marker!.z - lead.z)).toBeLessThan(0.01);
+  // Walk with real move input, steered at the pad every frame (a child walking straight at it).
+  const walk = (from: { x: number; z: number }, via: { x: number; z: number } | null = null): Promise<{ t: number; d: number }> =>
+    page.evaluate(
+      ({ from, pad, via }) => {
+        const rg = window.__rg!;
+        const ctx = rg.ctx;
+        rg.teleport(from.x, ctx.world.heightAt(from.x, from.z) + 0.1, from.z, Math.atan2(pad.x - from.x, pad.z - from.z));
+        rg.step(1 / 60, 20, false);
+        const f = ctx.camera.position.clone();
+        let t = 0;
+        let dd = Infinity;
+        let goal = via ?? pad;
+        for (; t < 20; t += 1 / 60) {
+          const p = ctx.player.position;
+          if (goal !== pad && Math.hypot(goal.x - p.x, goal.z - p.z) < 0.8) goal = pad;
+          dd = Math.hypot(pad.x - p.x, pad.z - p.z);
+          if (dd < 0.6) break;
+          const dx = goal.x - p.x;
+          const dz = goal.z - p.z;
+          const dg = Math.hypot(dx, dz);
+          ctx.camera.getWorldDirection(f);
+          const yaw = Math.atan2(f.x, f.z);
+          const s = Math.sin(yaw);
+          const c = Math.cos(yaw);
+          rg.inject({ moveY: (s * dx + c * dz) / dg, moveX: (-c * dx + s * dz) / dg });
+          rg.step(1 / 60, 1, false);
+        }
+        rg.inject(null);
+        rg.step(1 / 60, 2, false);
+        return { t: +t.toFixed(2), d: +dd.toFixed(2) };
+      },
+      { from, pad: d.pad, via },
+    );
+  const plaza = await walk({ x: 62.5, z: 8 });
+  const fromLead = await walk(lead);
+  const fromRoad = await walk({ x: 50, z: 13 });
+  // The park path's trail end is behind the sign: a child walks round its end (the side away
+  // from the booth), then to the pad.
+  const side = { x: d.stand[2].x + Math.sin(d.yaw + Math.PI / 2) * 2.4 - Math.sin(d.yaw) * 1.2, z: d.stand[2].z + Math.cos(d.yaw + Math.PI / 2) * 2.4 - Math.cos(d.yaw) * 1.2 };
+  const fromTrail = await walk(site.arrival!, side);
+  console.log('dot signs walks', JSON.stringify({ lead, plaza, fromLead, fromRoad, fromTrail }));
+  expect(plaza.t, 'from Pip’s old point (62.5, 8)').toBeLessThan(4);
+  expect(fromLead.t, 'from the lead point').toBeLessThan(3);
+  expect(fromRoad.t, 'from the east road (plaza side)').toBeLessThan(6);
+  expect(fromTrail.t, 'from the trail end, round the sign').toBeLessThan(8);
+
+  // E answers only the pedestal the hero stands at and faces.
+  await force('dotsigns', { play: true, shapes: SHAPES, answer: 1, seed: 5 });
+  const misses0 = (await dots()).misses;
+  const sx = Math.sin(d.yaw + Math.PI);
+  const sz = Math.cos(d.yaw + Math.PI);
+  // Between two pedestals (on their line), facing the sign: no button.
+  const gap = { x: (d.stand[0].x + d.stand[1].x) / 2 + sx * 0.6, y: d.stand[0].y, z: (d.stand[0].z + d.stand[1].z) / 2 + sz * 0.6 };
+  await standAt(gap, d.yaw + Math.PI, 3);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).not.toMatch(/glasses-dotsigns/);
+  // In front of the middle pedestal but walking along the row: no button.
+  await standAt(d.stand[1], d.yaw + Math.PI / 2, 3);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).not.toMatch(/glasses-dotsigns/);
+  // At the right pedestal, facing it: that one.
+  await standAt(d.stand[2], d.yaw + Math.PI, 3);
+  expect(await page.evaluate(() => window.__rg!.ctx.interactions.focused?.id ?? '')).toBe('glasses-dotsigns-2');
+  expect((await dots()).misses).toBe(misses0);
 });
 
 test('dot signs: walking away mid-round cancels it with no misses for the pictures never shown', async () => {

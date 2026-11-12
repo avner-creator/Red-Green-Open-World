@@ -164,6 +164,16 @@ export function create(env: MechanicEnv): Mechanic {
   body.mesh.updateMatrixWorld(true);
   env.add(body.mesh, VisionLayer.Both);
 
+  // Pip's lead spot (QA r7 M3): in front of the start pad on the approach side, a straight clear
+  // walk to the pad. An empty marker the buddy reads by name; no draw call.
+  const leadMarker = new THREE.Object3D();
+  leadMarker.name = 'glasses:dotsigns:lead';
+  {
+    const w = frame.toWorld(D.pad.x, D.pad.z + D.leadOut);
+    leadMarker.position.set(w.x, env.groundAt(w.x, w.z), w.z);
+  }
+  ctx.scene.add(leadMarker);
+
   // ───────────── colliders ─────────────
   const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lay.yaw);
   const colliders: ReturnType<typeof ctx.physics.addStaticBox>[] = [];
@@ -506,6 +516,7 @@ export function create(env: MechanicEnv): Mechanic {
       for (const off of offs) off();
       for (const c of colliders) ctx.physics.removeCollider(c);
       colliders.length = 0;
+      leadMarker.removeFromParent();
       kit.dispose();
       for (const o of [body.mesh, weakRoot, strongRoot]) env.remove(o);
       body.dispose();
@@ -544,6 +555,8 @@ export function create(env: MechanicEnv): Mechanic {
         // The viewing spot the layout was chosen for (between the middle and the right button).
         view: pt(D.buttonX[2] / 2, D.heroZ),
         pad: pt(D.pad.x, D.pad.z),
+        /** Pip's best lead point: 3.5 m out from the pad on the approach (pad, sign and booth ahead). */
+        lead: pt(D.pad.x, D.pad.z + D.leadOut),
         /** A spot 2.6 m behind the pad (the camera then shows the pad, the sign and the booth). */
         padBack: pt(D.pad.x, D.pad.z + 2.6),
         /** A spot 7 m behind the sign (its dressed back: stripes and the magic-glasses mark). */

@@ -46,6 +46,8 @@ export const DOTSIGNS = {
    * three show beside the hero.
    */
   pad: { x: 1.1, z: 3.05, r: 0.85 },
+  /** Pip's lead spot: this far out from the pad on the approach (`glasses:dotsigns:lead`). */
+  leadOut: 3.5,
   flourish: 1.0,
   press: 0.6,
   wobble: 0.8,
