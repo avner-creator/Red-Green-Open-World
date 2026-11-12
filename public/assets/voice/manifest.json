@@ -62,6 +62,12 @@
    "spoken": "Aim at a balloon and throw! Misses make you wait.",
    "dur": 2.64
   },
+  "all-done-close-it-and-lets-play": {
+   "file": "all-done-close-it-and-lets-play.mp3",
+   "text": "All done? Close it and let's play!",
+   "spoken": "All done? Close it and let's play!",
+   "dur": 1.82
+  },
   "almost-there-follow-me": {
    "file": "almost-there-follow-me.mp3",
    "text": "Almost there! Follow me!",

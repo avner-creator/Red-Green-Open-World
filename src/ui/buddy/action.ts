@@ -18,12 +18,18 @@ const TOUCH: Record<ActionGlyph, PictoName> = {
   jump: 'wTrampoline',
   use: 'hand',
   skill: 'bolt',
+  close: 'close',
 };
 
 export function actionGlyph(a: ActionGlyph, device: Device): HTMLElement {
   const box = h('span', `pipact pipact-${a}`, { 'data-device': device });
   if (device === 'touch') {
     box.append(pictogram(TOUCH[a], 'tch'));
+    return box;
+  }
+  if (a === 'close') {
+    // Menus close with Esc on a keyboard and B (back) on a pad (src/ui/nav.ts); the ring shows the button.
+    box.append(device === 'gamepad' ? padButton('B') : cap('Esc'));
     return box;
   }
   if (device === 'gamepad') {

@@ -1152,12 +1152,68 @@ export function createBuddy(ctx: GameContext): GameSystem {
     let down = false;
     try {
       const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
-      for (const gp of pads) if (gp?.buttons[13]?.pressed) down = true;
+      for (const gp of pads) {
+        if (gp?.buttons[13]?.pressed) down = true;
+        if (gp && (gp.buttons.some((b) => b.pressed) || gp.axes.some((a) => Math.abs(a) > 0.5))) inputSeen = true;
+      }
     } catch {
       /* no gamepads */
     }
     if (down && !padDown) ask();
     padDown = down;
+  };
+
+  /** What the director sees this frame (no overlay: the caller adds it). */
+  const directorView = (): DirectorView => {
+    const st = ctx.input.state;
+    const veh = ride === 'vehicle' ? ctx.player.vehicle : null;
+    const racing = (getRaceView(ctx)?.phase ?? 'idle') !== 'idle';
+    return {
+      pushing: Math.hypot(st.moveX, st.moveY) > 0.3,
+      look: Math.abs(st.lookX) + Math.abs(st.lookY),
+      hero: hero(),
+      // In a vehicle: its speed (parked or driving, QA7 M2).
+      heroSpeed: veh ? Math.abs(veh.speed) : heroSpeed(),
+      onFoot: ctx.player.mode === 'walk',
+      ride,
+      vehicle: veh ? (veh.kind === 'horse' ? 'horse' : 'car') : null,
+      nearAttraction: nearAttraction(),
+      topic: focusTopic,
+      chestHint: chestHint(),
+      keys: keyNames(),
+      remaining: ctx.session.state.remaining,
+      hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
+      busy: queue.busy,
+      // A race drives the buggy for the child: a game too (no drive cues, no suggestions).
+      inGame: ctx.player.mode === 'external' || racing,
+      // Only the balloon skydive has a parachute (a trampoline bounce or bungee fall does not).
+      chute: ctx.player.mode === 'external' && extKind === 'balloon',
+    };
+  };
+
+  /**
+   * QA8 m12: a non-pause menu open over play: the buggy workshop (play runs under it) or the
+   * wardrobe / shop (play paused under it, the dressing room on top). Not the pause menu, not the
+   * grown-up gate or settings (then the dressing room is not the top screen).
+   */
+  const overlayOpen = (): 'workshop' | 'wardrobe' | null => {
+    const root = ctx.uiRoot;
+    if (ctx.player.mode === 'external' && root.querySelector('[data-testid="workshop"].on')) return 'workshop';
+    if (ctx.session.state.phase === 'paused' && root.querySelector('[data-screen="wardrobe"].on')) return 'wardrobe';
+    return null;
+  };
+
+  /** Any key, click, wheel, touch or pad input since the last frame. */
+  let inputSeen = false;
+  const onAnyInput = (): void => {
+    inputSeen = true;
+  };
+  for (const ev of ['keydown', 'pointerdown', 'wheel'] as const) window.addEventListener(ev, onAnyInput, { capture: true, passive: true });
+  const takeInput = (): boolean => {
+    const st = ctx.input.state;
+    const seen = inputSeen || Math.hypot(st.moveX, st.moveY) > 0.3 || st.usePressed || st.jumpPressed;
+    inputSeen = false;
+    return seen;
   };
 
   if (ctx.testMode) {
@@ -1199,7 +1255,20 @@ export function createBuddy(ctx: GameContext): GameSystem {
     update(rawDt: number): void {
       const phase = ctx.session.state.phase;
       const dt = Math.min(0.1, Math.max(0, rawDt));
-      if (phase === 'paused' || dt <= 0) return;
+      if (dt <= 0) return;
+      if (phase === 'paused') {
+        // The wardrobe / shop pauses play under it (QA8 m12): Pip may remind how to close it. Never
+        // over the pause menu or the grown-up settings (those are not an overlay here).
+        const ov = overlayOpen();
+        if (ov) {
+          pollPad();
+          director.update(dt, { ...directorView(), overlay: ov, input: takeInput() });
+          queue.update(dt);
+          ui.setDevice(ctx.input.state.device);
+          ui.update(dt, queue.revealFraction(), null, null);
+        }
+        return;
+      }
       t += dt;
       const playing = phase === 'playing';
       if (placeSoon && ctx.player) {
@@ -1222,31 +1291,8 @@ export function createBuddy(ctx: GameContext): GameSystem {
 
       if (playing) {
         pollPad();
-        const st = ctx.input.state;
-        const veh = ride === 'vehicle' ? ctx.player.vehicle : null;
-        const racing = (getRaceView(ctx)?.phase ?? 'idle') !== 'idle';
-        const view: DirectorView = {
-          pushing: Math.hypot(st.moveX, st.moveY) > 0.3,
-          look: Math.abs(st.lookX) + Math.abs(st.lookY),
-          hero: hero(),
-          // In a vehicle: its speed (parked or driving, QA7 M2).
-          heroSpeed: veh ? Math.abs(veh.speed) : heroSpeed(),
-          onFoot: ctx.player.mode === 'walk',
-          ride,
-          vehicle: veh ? (veh.kind === 'horse' ? 'horse' : 'car') : null,
-          nearAttraction: nearAttraction(),
-          topic: focusTopic,
-          chestHint: chestHint(),
-          keys: keyNames(),
-          remaining: ctx.session.state.remaining,
-          hasMissions: (ctx.economy?.missions.length ?? 0) > 0,
-          busy: queue.busy,
-          // A race drives the buggy for the child: a game too (no drive cues, no suggestions).
-          inGame: ctx.player.mode === 'external' || racing,
-          // Only the balloon skydive has a parachute (a trampoline bounce or bungee fall does not).
-          chute: ctx.player.mode === 'external' && extKind === 'balloon',
-        };
-        director.update(dt, view);
+        const ov = overlayOpen();
+        director.update(dt, { ...directorView(), overlay: ov, input: takeInput() });
         queue.update(dt);
       }
 
@@ -1279,6 +1325,7 @@ export function createBuddy(ctx: GameContext): GameSystem {
     dispose(): void {
       for (const off of offs) off();
       window.removeEventListener('keydown', onKey);
+      for (const ev of ['keydown', 'pointerdown', 'wheel'] as const) window.removeEventListener(ev, onAnyInput, { capture: true });
       ctx.scene.remove(model.object);
       model.dispose();
       voice.dispose();

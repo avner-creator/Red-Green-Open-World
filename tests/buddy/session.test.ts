@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DialogueQueue } from '../../src/buddy/dialogue';
-import { Director, INVITE_GAP, INVITE_IDLE, MAX_IGNORED, QUICK } from '../../src/buddy/director';
+import { Director, INVITE_GAP, INVITE_IDLE, MAX_IGNORED, OVERLAY_CUE, OVERLAY_REPEAT, QUICK } from '../../src/buddy/director';
 import type { DirectorSink } from '../../src/buddy/director';
 import type { V2 } from '../../src/buddy/steer';
 import { createBuddyStore } from '../../src/buddy/store';
@@ -57,6 +57,12 @@ interface SimOpts {
   /** At this second the child sits in a vehicle at the garage and does not drive (QA7 M2). */
   carAt?: number;
   vehicle?: 'car' | 'horse';
+  /** QA8 M2: the child never hops out of the vehicle (sits there to the end). */
+  stay?: boolean;
+  /** QA8 M2: at this second the child starts an attraction game at `place` and plays it `secs` s, then stands about. */
+  game?: { at: number; place: Attraction; secs: number };
+  /** QA8 m12: a non-pause menu is open from `at` (to `until`, else the end), with no input. */
+  overlay?: { at: number; until?: number; kind: 'workshop' | 'wardrobe' };
 }
 
 function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
@@ -66,11 +72,15 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
   let leadTarget: V2 | null = null;
   const targets: V2[] = [];
   const calls: { t: number; id: string; lead: V2 | null }[] = [];
+  const said: { t: number; id: string }[] = [];
   let now = 0;
   let cueAt = -1;
+  let saidAt = 0;
   const sink: DirectorSink = {
     say: (l) => {
       queue.say(l);
+      saidAt = now;
+      said.push({ t: now, id: l.id ?? l.text });
       if (l.id && CALLS.has(l.id)) calls.push({ t: now, id: l.id, lead: leadTarget });
       // A call or a how-to (e.g. "Hop in the buggy and drive!" on arrival) is guidance.
       if (l.id && (CALLS.has(l.id) || l.id.startsWith('howto:'))) cueAt = now;
@@ -104,9 +114,23 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
   let carGap = 0;
   let carMaxGap = 0;
   let carMaxAt = 0;
+  // QA8: the longest stretch with no line, no lead and no activity (a passive child is never left alone > 45 s).
+  let quietGap = 0;
+  let quietMax = 0;
+  let quietMaxAt = 0;
+  let gameLeft = 0;
+  let gameDone = false;
   const timeline: string[] = [];
   for (let t = 0; t < SESSION; t += dt) {
     now = t;
+    if (o.game && !gameDone && t >= o.game.at) {
+      gameDone = true;
+      gameLeft = o.game.secs;
+      const p = PLACES.find((q) => q.name === o.game!.place)!;
+      hero = { x: p.x, z: p.z };
+      timeline.push(`${t.toFixed(0)} plays ${p.name}`);
+    }
+    const overlay = o.overlay && t >= o.overlay.at && t < (o.overlay.until ?? Infinity) ? o.overlay.kind : null;
     if (o.carAt !== undefined && car === 'no' && t >= o.carAt) {
       // Into the parked buggy / onto the pony at the garage; the child does not drive.
       car = 'sit';
@@ -114,14 +138,14 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
       playing = 0;
       timeline.push(`${t.toFixed(0)} sits in the ${o.vehicle ?? 'car'}`);
     }
-    if (car === 'sit' && calls.at(-1)?.id === 'vehicle:hop') {
+    if (car === 'sit' && !o.stay && calls.at(-1)?.id === 'vehicle:hop') {
       car = 'out';
       timeline.push(`${t.toFixed(0)} hops out`);
     }
     const inCar = car === 'sit';
     const near = PLACES.find((p) => Math.hypot(p.x - hero.x, p.z - hero.z) < RADIUS(p.name))?.name ?? null;
     tourOver ||= d.step === 'done' && !d.isGuiding;
-    const follows = child === 'follower' && !(ignoreAfterTour && tourOver);
+    const follows = child === 'follower' && !(ignoreAfterTour && tourOver) && !o.game && !overlay;
     let pushing = false;
     let speed = 0;
     if (child === 'explorer') {
@@ -167,10 +191,19 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
       hasMissions: true,
       busy: queue.busy,
       pushing: pushing && !inCar,
-      inGame: playing > 0,
+      inGame: playing > 0 || gameLeft > 0 || overlay === 'workshop',
+      overlay,
+      input: false,
     });
     queue.update(dt);
     if (playing > 0) playing -= dt;
+    if (gameLeft > 0) gameLeft -= dt;
+    const doing = !!d.leadTo || playing > 0 || gameLeft > 0;
+    quietGap = doing || saidAt === t ? 0 : quietGap + dt;
+    if (quietGap > quietMax) {
+      quietMax = quietGap;
+      quietMaxAt = t;
+    }
     // "Without an active lead or an activity", once the intro tour has started its first lead.
     const busy = !!d.leadTo || playing > 0 || d.step !== 'done';
     gap = busy ? 0 : gap + dt;
@@ -187,7 +220,7 @@ function simulate(child: Child, intro: boolean, opt: SimOpts | boolean = {}) {
       }
     }
   }
-  return { d, maxGap, maxGapAt, targets, timeline, calls, car, carMaxGap, carMaxAt };
+  return { d, maxGap, maxGapAt, targets, timeline, calls, car, carMaxGap, carMaxAt, said, quietMax, quietMaxAt };
 }
 
 const isAnchor = (p: V2): boolean => PLACES.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.01);
@@ -249,6 +282,79 @@ describe('Pip guides the whole session (QA6 M4)', () => {
       expect(r.car, summary).toBe('out');
       expect(r.d.done.size, summary).toBeGreaterThanOrEqual(6);
       for (const p of r.targets) expect(isAnchor(p)).toBe(true);
+    });
+  }
+
+  // ───────────── QA8 M2 / m12: the intro never blocks; a passive child is never left alone > 45 s ─────────────
+  const QUIET_MAX = 45;
+  const story = (r: ReturnType<typeof simulate>): string =>
+    `quiet ${r.quietMax.toFixed(1)} s at ${r.quietMaxAt.toFixed(0)} s; ${r.timeline.join(', ')}; said ${r.said.map((c) => `${c.t.toFixed(0)} ${c.id}`).join(', ')}`;
+
+  for (const vehicle of ['car', 'horse'] as const) {
+    it(`QA8 M2: a child who gets into the ${vehicle} during the story and sits there to the end hears the vehicle cues`, () => {
+      const r = simulate('follower', true, { carAt: 10, vehicle, stay: true });
+      const summary = story(r);
+      // The story yields: no story line after the child sat down plus one clip; normal guidance takes over.
+      expect(r.said.filter((l) => l.t > 14 && /^(story|intro:welcome)/.test(l.id)), summary).toEqual([]);
+      expect(r.d.step, summary).toBe('done');
+      const cues = r.said.filter((l) => l.id.startsWith('vehicle:'));
+      expect(cues[0]?.t ?? 999, summary).toBeLessThan(10 + 20);
+      // A light cycle goes on while parked (cue, suggestion, hop-out offer…), capped and backed off.
+      expect(cues.length, summary).toBeGreaterThanOrEqual(5);
+      expect(new Set(cues.map((c) => c.id)).size, summary).toBe(3);
+      for (let i = 1; i < cues.length; i++) expect(cues[i].t - cues[i - 1].t, summary).toBeGreaterThanOrEqual(i < 3 ? 5 : INVITE_GAP - 0.1);
+      expect(r.quietMax, summary).toBeLessThanOrEqual(QUIET_MAX);
+    });
+  }
+
+  it('QA8 M2: a child who sits in the parked buggy after the tour is never silent > 45 s (no stop after two "hop out")', () => {
+    const r = simulate('follower', true, { carAt: 100, stay: true });
+    expect(r.quietMax, story(r)).toBeLessThanOrEqual(QUIET_MAX);
+    expect(r.said.filter((l) => l.t > 100 && l.id.startsWith('vehicle:')).length, story(r)).toBeGreaterThanOrEqual(6);
+  });
+
+  // Every attraction a child could walk into while Pip is still telling the story.
+  for (const place of PLACES.map((p) => p.name).filter((a) => a !== 'trampoline' && a !== 'gearShack')) {
+    it(`QA8 M2: entering ${place} during the story: the story yields, guidance takes over, never > 45 s alone`, () => {
+      const r = simulate('follower', true, { game: { at: 6, place, secs: 25 } });
+      const summary = story(r);
+      expect(r.said.filter((l) => l.t > 10 && /^(story|intro:welcome)/.test(l.id)), summary).toEqual([]);
+      expect(r.d.step, summary).toBe('done');
+      expect(r.quietMax, summary).toBeLessThanOrEqual(QUIET_MAX);
+      // Still an ignorer afterwards (stands about): the cap holds (plus the last-minute beat).
+      expect(r.calls.filter((c) => c.t > 31).length, summary).toBeLessThanOrEqual(MAX_IGNORED + 1);
+      for (const p of r.targets) expect(isAnchor(p)).toBe(true);
+    });
+  }
+
+  it('QA8 M2: wandering off during the story ends it; guidance takes over', () => {
+    const r = simulate('explorer', true);
+    expect(r.d.step, story(r)).toBe('done');
+  });
+
+  it('QA8: an ignoring child (new or returning) is never left > 45 s with no line, lead or activity', () => {
+    for (const intro of [true, false]) {
+      const r = simulate('ignorer', intro);
+      expect(r.quietMax, story(r)).toBeLessThanOrEqual(QUIET_MAX);
+      expect(r.calls.length, story(r)).toBeLessThanOrEqual(MAX_IGNORED + 1);
+    }
+  });
+
+  for (const kind of ['workshop', 'wardrobe'] as const) {
+    it(`QA8 m12: a ${kind} left open from 10 s: a gentle "close it" cue after ~12 s, then at a long interval; guidance resumes on close`, () => {
+      const r = simulate('follower', true, { overlay: { at: 10, kind } });
+      const summary = story(r);
+      const close = r.said.filter((l) => l.id === 'menu:close');
+      expect(close[0]?.t ?? 999, summary).toBeGreaterThanOrEqual(10 + OVERLAY_CUE - 0.1);
+      expect(close[0]?.t ?? 999, summary).toBeLessThan(10 + OVERLAY_CUE + 4);
+      for (let i = 1; i < close.length; i++) expect(close[i].t - close[i - 1].t, summary).toBeGreaterThanOrEqual(OVERLAY_REPEAT - 0.1);
+      // Nothing else while the menu is open (after the current story clip ends).
+      expect(r.said.filter((l) => l.t > 14 && l.id !== 'menu:close'), summary).toEqual([]);
+      expect(r.quietMax, summary).toBeLessThanOrEqual(QUIET_MAX);
+      // Closed at 120 s: Pip guides again.
+      const back = simulate('follower', true, { overlay: { at: 10, until: 120, kind } });
+      expect(back.said.some((l) => l.t > 120 && l.t < 120 + QUIET_MAX && l.id !== 'menu:close'), story(back)).toBe(true);
+      expect(back.d.done.size, story(back)).toBeGreaterThanOrEqual(3);
     });
   }
 

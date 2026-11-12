@@ -5,7 +5,7 @@ import type { PictoName } from '../ui/wayIcons';
 export type BuddyExtraIcon = 'paw' | 'wave' | 'question' | 'pip' | 'nose' | 'party';
 
 /** Actions a bubble can show as a key cap / pad button / touch gesture for the active device. */
-export type ActionGlyph = 'move' | 'look' | 'jump' | 'use' | 'skill';
+export type ActionGlyph = 'move' | 'look' | 'jump' | 'use' | 'skill' | 'close';
 
 export type BuddyPicto = PictoName | BuddyExtraIcon;
 
