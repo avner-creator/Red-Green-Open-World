@@ -68,6 +68,43 @@ export function stepAside(home: P2, hero: P2, table: P2 | null, out: P2 = { x: 0
   return clampToArea(out, table);
 }
 
+/**
+ * Move a friend at `pos` by `step` m along unit `(ux, uz)`, but never into the hero: once the hero
+ * has walked past, the friend's way home crosses them, so it goes round them (sideways, the way it
+ * was heading) instead of through. `pos` is updated in place.
+ */
+export function stepPast(pos: P2, hero: P2, ux: number, uz: number, step: number): P2 {
+  const keep = CROWD.friendR + PLAYER.radius + 0.1;
+  const nx = pos.x + ux * step;
+  const nz = pos.z + uz * step;
+  const d0 = Math.hypot(pos.x - hero.x, pos.z - hero.z);
+  const d1 = Math.hypot(nx - hero.x, nz - hero.z);
+  if (d1 >= keep || d1 >= d0 || d0 < 1e-4) {
+    pos.x = nx;
+    pos.z = nz;
+    return pos;
+  }
+  // Round the hero: tangent to the hero→friend line, on the side the friend was heading.
+  const rx = (pos.x - hero.x) / d0;
+  const rz = (pos.z - hero.z) / d0;
+  let tx = -rz;
+  let tz = rx;
+  if (tx * ux + tz * uz < 0) {
+    tx = -tx;
+    tz = -tz;
+  }
+  pos.x += tx * step;
+  pos.z += tz * step;
+  // ...and not closer than it already was.
+  const d2 = Math.hypot(pos.x - hero.x, pos.z - hero.z);
+  const r = Math.min(keep, d0);
+  if (d2 < r) {
+    pos.x = hero.x + ((pos.x - hero.x) / d2) * r;
+    pos.z = hero.z + ((pos.z - hero.z) / d2) * r;
+  }
+  return pos;
+}
+
 /** Keep a friend's centre on the customer side, off the counter, walls and terrace table. */
 export function clampToArea(p: P2, table: P2 | null): P2 {
   const a = CROWD.area;

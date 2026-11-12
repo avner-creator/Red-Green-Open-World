@@ -20,7 +20,7 @@ import type { LoadedCharacter } from '../../core/characters/load';
 import { ConeView } from './coneView';
 import type { ConeState } from './coneView';
 import { LAYOUT } from './parlour';
-import { CROWD, HERO_ONLY, blockerSolid, fadeFor, stepAside } from './crowd';
+import { CROWD, HERO_ONLY, blockerSolid, clampToArea, fadeFor, stepAside, stepPast } from './crowd';
 import type { P2 } from './crowd';
 import { CAMERA_IGNORE } from '../../core/camera-occluders';
 
@@ -266,7 +266,10 @@ export function createFriends(parent: THREE.Object3D, playerId: string, env?: Fr
         let wantYaw: number;
         if (d > 0.08) {
           const step = Math.min(d, (aside ? CROWD.stepSpeed : 1.7) * dt);
-          f.pos.addScaledVector(to.normalize(), step);
+          to.normalize();
+          // Never through the hero (they walk past, the friend heads home): round them instead.
+          if (heroHere) clampToArea(stepPast(f.pos, heroP, to.x, to.z, step), LAYOUT.table);
+          else f.pos.addScaledVector(to, step);
           wantYaw = Math.atan2(to.x, to.z);
           if (f.react <= 0) play(f, 'walk');
         } else {

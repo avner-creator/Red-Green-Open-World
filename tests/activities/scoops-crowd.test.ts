@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { PLAYER } from '../../src/config';
-import { CROWD, blockerSolid, clampToArea, fadeFor, stepAside } from '../../src/activities/scoops/crowd';
+import { CROWD, blockerSolid, clampToArea, fadeFor, stepAside, stepPast } from '../../src/activities/scoops/crowd';
 import { FRONT, LAYOUT, buildParlour } from '../../src/activities/scoops/parlour';
 import { BUILD_CAMERA } from '../../src/activities/scoops';
 
@@ -116,5 +116,27 @@ describe('scoops layout (QA6 M5 and the counter)', () => {
       expect(clampToArea({ x: s.x, z: s.z }, table)).toEqual({ x: s.x, z: s.z });
     }
     p.dispose();
+  });
+});
+
+describe('stepPast', () => {
+  it('a friend heading home through the hero goes round them, never closer than touching', () => {
+    const hero = { x: 2.0, z: 4.28 };
+    const pos = { x: 1.6, z: 4.27 };
+    const touch = CROWD.friendR + PLAYER.radius;
+    for (let i = 0; i < 40; i++) {
+      const dx = 2.6 - pos.x;
+      const dz = 4.3 - pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.05) break;
+      stepPast(pos, hero, dx / d, dz / d, Math.min(d, 2.6 / 60));
+      expect(Math.hypot(pos.x - hero.x, pos.z - hero.z)).toBeGreaterThanOrEqual(Math.min(0.4, touch));
+    }
+  });
+  it('moves straight when the hero is not in the way', () => {
+    const pos = { x: 0, z: 3 };
+    stepPast(pos, { x: 3, z: 3 }, -1, 0, 0.1);
+    expect(pos.x).toBeCloseTo(-0.1);
+    expect(pos.z).toBe(3);
   });
 });

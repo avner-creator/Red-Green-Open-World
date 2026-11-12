@@ -3,7 +3,8 @@
  *
  * - A walking bot sweeps the stand from 16 directions: to the counter, then out the far side,
  *   turning right along anything it bumps into (like a child would). Nowhere may the hero's real
- *   displacement stay under 0.3 m for 3 s while input is held; the hero never stands inside a
+ *   displacement stay under 0.3 m for 3 s while input is held (without leaving a 1 m circle in
+ *   between: a loop back to the same spot is not a stall); the hero never stands inside a
  *   friend; the camera never sits inside a visible friend; nobody gets behind or onto the counter.
  * - Walking straight at each friend: the hero slides round (or the friend steps aside), never
  *   stuck, never inside.
@@ -182,7 +183,11 @@ async function walk(points: [number, number][], seconds = 22, straight = false, 
         if (hist.length > 30) {
           const q = hist[hist.length - 31];
           const now = rg.ctx.player.position;
-          if (Math.hypot(now.x - q[0], now.z - q[1]) < 0.3 && k - lastStall > 30) {
+          // Held in place, not a loop that came back to its start (the bot going round the stand's
+          // end can pass the same spot 3 s apart): every sample of the window stays near it.
+          let roam = 0;
+          for (let j = hist.length - 31; j < hist.length; j++) roam = Math.max(roam, Math.hypot(hist[j][0] - q[0], hist[j][1] - q[1]));
+          if (Math.hypot(now.x - q[0], now.z - q[1]) < 0.3 && roam < 1 && k - lastStall > 30) {
             res.stalls.push({ at: L(now.x, now.z).map((v) => +v.toFixed(2)) as [number, number], t: +((k * TICK) / 60).toFixed(1) });
             lastStall = k;
           }
